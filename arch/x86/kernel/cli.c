@@ -1,3 +1,4 @@
+#include "cli.h"
 #include "stdbool.h"
 #include <stddef.h>
 #include "utils/framebuffer.h"
@@ -5,7 +6,7 @@
 #include "utils/color.h"
 
 int bufer_history = 0;
-char key_history[128][128];
+char *key_history[50];
 uint8_t key_history_it[128];
 
 uint16_t t_colums = 80;
@@ -77,13 +78,14 @@ char scancode_to_ascii[128] = {
 #define KEY_LEFT 0x82
 #define KEY_RIGHT 0x83
 
-char read_ps2_key()
+int read_ps2_key()
 {
 	uint8_t scancode = 0;
 	bool is_extended = false;
 
 	while (1)
 	{
+
 		// Чекаємо, поки з'являться дані
 		while (!(inb(0x64) & 1))
 			;
@@ -194,38 +196,43 @@ void read_line(char *buf, int max_len)
 {
 	int buf_it = bufer_history;
 	int i = 0;
-	while (i < max_len)
+	while (i < max_len - 1)
 	{
-		char c = read_ps2_key();
-
+		int c = read_ps2_key();
+		print_hex((uint8_t)c);
 		if ((uint8_t)c == KEY_UP)
 		{
 			handle_key_up(buf, &i, &buf_it);
 			continue;
 		}
-
-		if ((uint8_t)c == KEY_DOWN)
-		{
-			handle_key_down(buf, &i, &buf_it);
-			continue;
-		}
-
-		if (c == '\b')
-		{
-			handle_backspace(&i);
-			continue;
-		}
-
-		if (c == '\r' || c == '\n')
-		{
-			t_col = 0;
-			t_row++;
-			break;
-		}
-
-		handle_regular_char(c, buf, &i);
 	}
-	buf[i] = '\0';
+
+	if ((uint8_t)c == KEY_DOWN)
+	{
+		handle_key_down(buf, &i, &buf_it);
+		continue;
+	}
+
+	if (c == '\b')
+	{
+		handle_backspace(&i);
+		continue;
+	}
+
+	if (c == '\r' || c == '\n' || (uint32_t)c == 0x1C)
+	{
+		print("u");
+		t_col = 0;
+		t_row++;
+		print("u");
+		break;
+	}
+
+	handle_regular_char(c, buf, &i);
+}
+print("b");
+buffer[i] = '\0';
+print("b");
 }
 
 int atoi(const char *str)
@@ -334,6 +341,11 @@ void handle_change_y()
 
 int cli(framebuffer_info_t *fb)
 {
+	uint32_t *pixels = (uint32_t *)fb->base;
+	// for (int i = 0; i < (fb->pitch / 4) * fb->height; ++i)
+	// {
+	// 	pixels[i] = 0x000000;
+	// }
 	fbcli = fb;
 
 	handle_clear();
@@ -386,8 +398,6 @@ int cli(framebuffer_info_t *fb)
 			break;
 		}
 	}
-
-	return 0;
 }
 
 void print_hex(uint8_t value)
@@ -401,7 +411,7 @@ void print_hex(uint8_t value)
 	buf[3] = hex_digits[value & 0x0F];
 	buf[4] = '\0';
 
-	print(buf); // твоя функція print(const char*)
+	print(buf);
 }
 void print_char(char c)
 {
