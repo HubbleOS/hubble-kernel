@@ -1,5 +1,8 @@
-#include "framebuffer.h"
-#include "font.h"
+#include "stdbool.h"
+#include <stddef.h>
+#include "utils/framebuffer.h"
+#include "utils/font.h"
+#include "utils/color.h"
 
 int bufer_history = 0;
 char key_history[128][128];
@@ -12,8 +15,8 @@ uint8_t t_col = 0;
 uint8_t t_color = 0x0f;
 uint32_t t_color_char = 0xFFFFFF;
 
-uint8_t t_pos_x = 1000;
-uint8_t t_pos_y = 1000;
+uint16_t t_pos_x = 200;
+uint16_t t_pos_y = 200;
 
 uint16_t cursor_x = 0;
 uint16_t cursor_y = 0;
@@ -22,26 +25,20 @@ uint16_t t_width = 0;
 uint16_t t_height = 0;
 framebuffer_info_t *fbcli = 0;
 
-enum Color
-{
-	COLOR_BLACK = 0x0,
-	COLOR_RED = 0x4,
-	COLOR_GREEN = 0x32A852,
-	COLOR_YELLOW = 0x6,
-	COLOR_BLUE = 0x1,
-	COLOR_MAGENTA = 0x5,
-	COLOR_CYAN = 0x3,
-	COLOR_WHITE = 0xFFFFFF,
-	COLOR_LIGHT_GREY = 0x8,
-	COLOR_DEFAULT = 0x9
-};
+#define GET_MACRO(_1, _2, NAME, ...) NAME
+#define print(...) GET_MACRO(__VA_ARGS__, print_colored, print)(__VA_ARGS__)
 
-void neofetch(void);
 void print_char(char c);
 void print(const char *str);
+void print_colored(const char *str, color color);
 int strcmp(const char *s1, const char *s2);
 void print_hex(uint8_t value);
 uint8_t strlen(const char *str);
+
+void handle_key_up(char *buf, int *i, int *buf_it);
+void handle_key_down(char *buf, int *i, int *buf_it);
+void handle_backspace(int *i);
+void handle_regular_char(char c, char *buf, int *i);
 
 void wait(volatile unsigned int ticks)
 {
@@ -127,14 +124,72 @@ char read_ps2_key()
 	return scancode_to_ascii[scancode];
 }
 
-void terminal_putentryat(char c)
+void terminal_putentryat(char c) { draw_char(fbcli, c, t_pos_x + (t_col * 8), t_pos_y + (t_row * 8), t_color_char); }
+// void move_cursor(uint8_t row, uint8_t col) { return; }
+
+void clear_line(int len)
 {
-	draw_char(fbcli, c, t_pos_x + (t_col * 8), t_pos_y + (t_row * 8), t_color_char);
+	for (int j = 0; j < len; j++)
+		print_char(' ');
 }
-void move_cursor(uint8_t row, uint8_t col)
+
+void handle_key_up(char *buf, int *i, int *buf_it)
 {
-	return;
+	if (*buf_it == 0)
+		return;
+
+	(*buf_it)--;
+	t_col = 2;
+
+	clear_line(strlen(buf));
+
+	int len = strlen(key_history[*buf_it]);
+	for (int j = 0; j < len; j++)
+		buf[j] = key_history[*buf_it][j];
+	buf[len] = '\0';
+	*i = len;
+
+	t_col = 2;
+	print(buf);
 }
+
+void handle_key_down(char *buf, int *i, int *buf_it)
+{
+	if (*buf_it >= bufer_history - 1)
+		return;
+
+	(*buf_it)++;
+	t_col = 2;
+
+	clear_line(strlen(buf));
+
+	int len = strlen(key_history[*buf_it]);
+	for (int j = 0; j < len; j++)
+		buf[j] = key_history[*buf_it][j];
+	buf[len] = '\0';
+	*i = len;
+
+	t_col = 2;
+	print(buf);
+}
+
+void handle_backspace(int *i)
+{
+	if (*i > 0 && t_col > 0)
+	{
+		(*i)--;
+		t_col--;
+		terminal_putentryat(' ');
+		// move_cursor(t_row, t_col);
+	}
+}
+
+void handle_regular_char(char c, char *buf, int *i)
+{
+	buf[(*i)++] = c;
+	print_char(c);
+}
+
 void read_line(char *buf, int max_len)
 {
 	int buf_it = bufer_history;
@@ -145,48 +200,19 @@ void read_line(char *buf, int max_len)
 
 		if ((uint8_t)c == KEY_UP)
 		{
-			if (buf_it == 0)
-				continue;
-			t_col = 3;
-			i = 0;
-			for (int i = 0; i < strlen(buf); i++)
-				print(" ");
-			for (int j = 0; j < strlen(key_history[buf_it - 1]); j++)
-			{
-				buf[j] = key_history[buf_it - 1][j];
-				i++;
-			}
-			t_col = 3;
-			print(key_history[--buf_it]);
+			handle_key_up(buf, &i, &buf_it);
 			continue;
-		};
+		}
+
 		if ((uint8_t)c == KEY_DOWN)
 		{
-			if (buf_it == bufer_history)
-				continue;
-			t_col = 3;
-			i = 0;
-			for (int i = 0; i < strlen(buf); i++)
-				print(" ");
-			for (int j = 0; j < strlen(key_history[buf_it + 1]); j++)
-			{
-				buf[j] = key_history[buf_it + 1][j];
-				i++;
-			}
-			t_col = 3;
-			print(key_history[++buf_it]);
+			handle_key_down(buf, &i, &buf_it);
 			continue;
 		}
 
 		if (c == '\b')
 		{
-			if (i > 0 && t_col > 0)
-			{
-				i--;
-				t_col--;
-				terminal_putentryat(' ');
-				move_cursor(t_row, t_col);
-			}
+			handle_backspace(&i);
 			continue;
 		}
 
@@ -196,21 +222,12 @@ void read_line(char *buf, int max_len)
 			t_row++;
 			break;
 		}
-		buf[i++] = c;
-		print_char(buf[i - 1]);
+
+		handle_regular_char(c, buf, &i);
 	}
 	buf[i] = '\0';
 }
 
-void clear(void)
-{
-	uint32_t *pixels = (uint32_t *)fbcli->base;
-	for (int i = 0; i < (fbcli->pitch / 4) * fbcli->height; ++i)
-	{
-		pixels[i] = 0x000000;
-	}
-	t_col = t_row = 0;
-}
 int atoi(const char *str)
 {
 	int result = 0;
@@ -222,73 +239,157 @@ int atoi(const char *str)
 	return result;
 }
 
+bool is_blank(const char *str)
+{
+	while (*str)
+	{
+		if (*str != ' ' && *str != '\t')
+			return false;
+		str++;
+	}
+	return true;
+}
+
+typedef enum
+{
+	CMD_UNKNOWN,
+	CMD_EXIT,
+	CMD_HELLO,
+	CMD_NEOFETCH,
+	CMD_CLEAR,
+	CMD_CHANGE_X,
+	CMD_CHANGE_Y,
+	CMD_HELP
+} Command;
+
+Command command_from_string(const char *input)
+{
+	if (strcmp(input, "exit") == 0)
+		return CMD_EXIT;
+	if (strcmp(input, "hello") == 0)
+		return CMD_HELLO;
+	if (strcmp(input, "neofetch") == 0)
+		return CMD_NEOFETCH;
+	if (strcmp(input, "clear") == 0)
+		return CMD_CLEAR;
+	if (strcmp(input, "change-x") == 0)
+		return CMD_CHANGE_X;
+	if (strcmp(input, "change-y") == 0)
+		return CMD_CHANGE_Y;
+	if (strcmp(input, "help") == 0)
+		return CMD_HELP;
+	return CMD_UNKNOWN;
+}
+void handle_exit() { print("\nGoodbye!\n"); }
+void handle_hello() { print("\nHello!\n"); }
+
+void handle_clear()
+{
+	uint32_t *pixels = (uint32_t *)fbcli->base;
+	for (size_t i = 0; i < (fbcli->pitch / 4) * fbcli->height; ++i)
+		pixels[i] = 0x000000;
+
+	t_col = t_row = 0;
+}
+
+void handle_neofetch()
+{
+	print(
+		" _    _         _      _      _        \n"
+		"| |  | |       | |    | |    | |       \n"
+		"| |__| | _   _ | |__  | |__  | |  ___  \n"
+		"|  __  || | | || '_ \\ | '_ \\ | | / _ \\ \n"
+		"| |  | || |_| || |_) || |_) || ||  __/ \n"
+		"|_|  |_| \\__,_||_.__/ |_.__/ |_| \\___| \n",
+		rgb(255, 150, 80));
+}
+
+void handle_help()
+{
+	print("\nCommands:\n");
+	print("  exit\n");
+	print("  hello\n");
+	print("  neofetch\n");
+	print("  clear\n");
+	print("  help\n");
+	print("  change-x\n");
+	print("  change-y\n");
+}
+
+void handle_change_x()
+{
+	char input[100];
+	print("Enter new X: ");
+	read_line(input, 100);
+	t_pos_x = atoi(input);
+}
+
+void handle_change_y()
+{
+	char input[100];
+	print("Enter new Y: ");
+	read_line(input, 100);
+	t_pos_y = atoi(input);
+}
+
 int cli(framebuffer_info_t *fb)
 {
 	fbcli = fb;
 
-	clear();
-
-	neofetch();
+	handle_clear();
+	handle_neofetch();
 
 	while (1)
 	{
-		print("> ");
-		char buffer[100];
-		read_line(key_history[bufer_history++], 100);
+		t_col = 0;
+		print("> ", COLOR_GREEN);
 
-		if (key_history[bufer_history - 1][0] == '\0')
+		read_line(key_history[bufer_history], 100);
+
+		const char *input = key_history[bufer_history];
+		if (input[0] == '\0' || is_blank(input))
 		{
-			--bufer_history;
 			print("\n");
 			continue;
 		}
 
-		if (strcmp(key_history[bufer_history - 1], "exit") == 0)
+		++bufer_history;
+
+		Command cmd = command_from_string(input);
+
+		switch (cmd)
 		{
-			print("\nGoodbye!\n");
+		case CMD_EXIT:
+			handle_exit();
+			return 0;
+		case CMD_HELLO:
+			handle_hello();
 			break;
-		}
-		else if (strcmp(key_history[bufer_history - 1], "hello") == 0)
-		{
-			print("\nHello!\n");
-		}
-		else if (strcmp(key_history[bufer_history - 1], "neofetch") == 0)
-		{
-			neofetch();
-		}
-		else if (strcmp(key_history[bufer_history - 1], "clear") == 0)
-		{
-			clear();
-		}
-		else if (strcmp(key_history[bufer_history - 1], "change-y") == 0)
-		{
-			read_line(key_history[bufer_history - 1], 100);
-			t_pos_y = atoi(buffer);
-		}
-		else if (strcmp(key_history[bufer_history - 1], "change-x") == 0)
-		{
-			read_line(key_history[bufer_history - 1], 100);
-			t_pos_x = atoi(buffer);
-		}
-		else if (strcmp(key_history[bufer_history - 1], "help") == 0)
-		{
-			print("\n");
-			print("exit\n");
-			print("hello\n");
-			print("neofetch\n");
-			print("clear\n");
-			print("help\n");
-			print("change-x\n");
-			print("change-y\n");
-		}
-		else
-		{
+		case CMD_CLEAR:
+			handle_clear();
+			break;
+		case CMD_NEOFETCH:
+			handle_neofetch();
+			break;
+		case CMD_HELP:
+			handle_help();
+			break;
+		case CMD_CHANGE_X:
+			handle_change_x();
+			break;
+		case CMD_CHANGE_Y:
+			handle_change_y();
+			break;
+
+		default:
 			print("\nUnknown command!\n");
+			break;
 		}
 	}
 
 	return 0;
 }
+
 void print_hex(uint8_t value)
 {
 	char hex_digits[] = "0123456789ABCDEF";
@@ -308,6 +409,8 @@ void print_char(char c)
 	{
 		t_row++;
 		t_col = 0;
+		if (c == '\n')
+			return;
 	}
 	terminal_putentryat(c);
 	t_col++;
@@ -322,23 +425,13 @@ void print(const char *str)
 	}
 }
 
-void neofetch(void)
+void print_colored(const char *str, uint32_t color)
 {
-	t_color_char = COLOR_GREEN;
-	print(
-		"                \n"
-		"  _____                _              \n"
-		" / ____|              (_)             \n"
-		"| |       ___   _ __   _  _   _  _ __ ___\n"
-		"| |      / _ \\ | '_ \\ | || | | || '_ ` _ \\\n"
-		"| |____ | (_) || |_) || || |_| || | | | | |\n"
-		" \\_____| \\___/ | .__/ |_| \\__,_||_| |_| |_|\n"
-		"               | |                         \n"
-		"               |_|                         \n"
-		"\n");
-
+	t_color_char = color;
+	print(str);
 	t_color_char = COLOR_WHITE;
 }
+
 int strcmp(const char *s1, const char *s2)
 {
 	while (*s1 && (*s1 == *s2))
@@ -348,6 +441,7 @@ int strcmp(const char *s1, const char *s2)
 	}
 	return *(const unsigned char *)s1 - *(const unsigned char *)s2;
 }
+
 uint8_t strlen(const char *str)
 {
 	uint8_t len = 0;
