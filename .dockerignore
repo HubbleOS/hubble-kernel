@@ -1,0 +1,7 @@
+build/
+bin/
+*.iso
+*.o
+*.tar.gz
+node_modules/
+.git/

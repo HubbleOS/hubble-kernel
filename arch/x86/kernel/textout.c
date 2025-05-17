@@ -1,5 +1,5 @@
-#include "font.h"
-#include "framebuffer.h"
+#include "utils/font.h"
+#include "utils/framebuffer.h"
 #include <stdarg.h>
 
 uint8_t *get_glyph(char c)
@@ -45,6 +45,7 @@ void draw_char(framebuffer_info_t *fb, char c, int x, int y, uint32_t color, ...
 
     va_list args;
     uint8_t bg_color = 0x000000;
+
     if (args)
     {
         va_start(args, bg_color);
