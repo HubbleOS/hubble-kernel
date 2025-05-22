@@ -36,7 +36,7 @@ Darwin)
 	;;
 
 *)
-	echo "❌ Поддержка только для macOS и Linux. На Windows — записывай образ вручную через Rufus или BalenaEtcher."
+	echo "❌ WINDOWS - NOT SUPPORTED"
 	exit 1
 	;;
 esac
