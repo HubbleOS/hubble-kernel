@@ -2,21 +2,26 @@
 
 # Allow override from command line
 ARCH ?= x86
-BUILD_DIR := build/$(ARCH)
+BUILD_DIR := build
 ARCH_DIR := arch/$(ARCH)
 
-.PHONY: all clean run build help
+ISO_DIR := iso
+
+.PHONY: all clean run build help qemu
 
 all: build
 
 build:
-	$(MAKE) -C $(ARCH_DIR) BUILD_DIR=$(abspath $(BUILD_DIR))
+	@echo "Building kernel..."
+	$(MAKE) -C $(ARCH_DIR) BUILD_DIR=$(abspath $(BUILD_DIR)/$(ARCH)) ISO_DIR=$(abspath $(ISO_DIR)/$(ARCH))
 
 run:
-	$(MAKE) -C $(ARCH_DIR) run BUILD_DIR=$(abspath $(BUILD_DIR))
+	@echo "Running kernel..."
+	$(MAKE) -C $(ARCH_DIR) run BUILD_DIR=$(abspath $(BUILD_DIR)/$(ARCH)) ISO_DIR=$(abspath $(ISO_DIR)/$(ARCH))
 
 clean:
-	$(MAKE) -C $(ARCH_DIR) clean BUILD_DIR=$(abspath $(BUILD_DIR))
+	@echo "Cleaning build and bin directories..."
+	@rm -rf $(BUILD_DIR) $(ISO_DIR)
 
 help:
 	@echo "Usage:"
@@ -24,3 +29,16 @@ help:
 	@echo "  make run - to run the kernel"
 	@echo "  make clean - to clean the build directory"
 	@echo "  make help - to print this help message"
+
+QEMU = qemu-system-x86_64
+QEMU_FLAGs = -M pc \
+  -cpu Haswell \
+  -smp 2 \
+  -m 1024 \
+  -drive if=pflash,format=raw,readonly=on,file=ovmf/OVMF_CODE.fd \
+  -drive if=pflash,format=raw,file=ovmf/OVMF_VARS.fd \
+  -hda fat:rw:$(ISO_DIR) \
+  -serial stdio
+
+qemu:
+	$(QEMU) $(QEMU_FLAGS)

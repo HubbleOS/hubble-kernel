@@ -148,7 +148,6 @@ void handle_key_up(char *buf, int *i, int *buf_it)
 	int len = strlen(key_history[*buf_it]);
 	for (int j = 0; j < len; j++)
 		buf[j] = key_history[*buf_it][j];
-
 	buf[len] = '\0';
 	*i = len;
 
@@ -334,6 +333,14 @@ void handle_change_y()
 	t_pos_y = atoi(input);
 }
 
+typedef int (*app_entry_t)(void);
+
+void run_app(void *app_binary)
+{
+	app_entry_t app_main = (app_entry_t)app_binary;
+	app_main();
+}
+
 int cli(framebuffer_info_t *fb)
 {
 	fbcli = fb;
@@ -434,10 +441,7 @@ void print_char(char c)
 void print(const char *str)
 {
 	while (*str)
-	{
-		print_char(*str);
-		++str;
-	}
+		print_char(*str++);
 }
 
 void print_colored(const char *str, uint32_t color)
