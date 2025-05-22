@@ -6,9 +6,11 @@
 *.o
 *.EFI
 *.img
+
 bin/
 build/
 dist/
+output/
 
 test/
 
