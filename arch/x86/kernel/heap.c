@@ -7,6 +7,11 @@ void heap_init(uint64_t heap_start, uint64_t heap_size)
 {
     heap_ptr = heap_start;
     heap_end = heap_start + heap_size;
+    volatile uint8_t *ptr = (volatile uint8_t *)heap_start;
+    for (int i = 0; i < 1024; i++)
+    {
+        ptr[i] = 0xAA;
+    }
 }
 
 void *kmalloc(size_t size)

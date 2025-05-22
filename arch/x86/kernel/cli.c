@@ -5,7 +5,7 @@
 #include "utils/font.h"
 #include "utils/color.h"
 
-int bufer_history = 0;
+int *bufer_history;
 char *key_history[50];
 uint8_t key_history_it[128];
 
@@ -148,6 +148,7 @@ void handle_key_up(char *buf, int *i, int *buf_it)
 	int len = strlen(key_history[*buf_it]);
 	for (int j = 0; j < len; j++)
 		buf[j] = key_history[*buf_it][j];
+
 	buf[len] = '\0';
 	*i = len;
 
@@ -188,51 +189,44 @@ void handle_backspace(int *i)
 
 void handle_regular_char(char c, char *buf, int *i)
 {
+
 	buf[(*i)++] = c;
+
 	print_char(c);
 }
 
 void read_line(char *buf, int max_len)
 {
-	int buf_it = bufer_history;
+	int buf_it = *bufer_history;
 	int i = 0;
 	while (i < max_len - 1)
 	{
 		int c = read_ps2_key();
-		print_hex((uint8_t)c);
 		if ((uint8_t)c == KEY_UP)
 		{
 			handle_key_up(buf, &i, &buf_it);
 			continue;
 		}
-	}
+		if ((uint8_t)c == KEY_DOWN)
+		{
+			handle_key_down(buf, &i, &buf_it);
+			continue;
+		}
+		if (c == '\b')
+		{
+			handle_backspace(&i);
+			continue;
+		}
 
-	if ((uint8_t)c == KEY_DOWN)
-	{
-		handle_key_down(buf, &i, &buf_it);
-		continue;
-	}
+		if (c == '\n')
+		{
+			print("\n");
+			break;
+		}
 
-	if (c == '\b')
-	{
-		handle_backspace(&i);
-		continue;
+		handle_regular_char(c, buf, &i);
 	}
-
-	if (c == '\r' || c == '\n' || (uint32_t)c == 0x1C)
-	{
-		print("u");
-		t_col = 0;
-		t_row++;
-		print("u");
-		break;
-	}
-
-	handle_regular_char(c, buf, &i);
-}
-print("b");
-buffer[i] = '\0';
-print("b");
+	buf[i] = '\0';
 }
 
 int atoi(const char *str)
@@ -271,7 +265,8 @@ typedef enum
 
 Command command_from_string(const char *input)
 {
-	if (strcmp(input, "exit") == 0)
+
+	if (strcmp(input, "exit\0") == 0)
 		return CMD_EXIT;
 	if (strcmp(input, "hello") == 0)
 		return CMD_HELLO;
@@ -341,31 +336,41 @@ void handle_change_y()
 
 int cli(framebuffer_info_t *fb)
 {
-	uint32_t *pixels = (uint32_t *)fb->base;
-	// for (int i = 0; i < (fb->pitch / 4) * fb->height; ++i)
-	// {
-	// 	pixels[i] = 0x000000;
-	// }
 	fbcli = fb;
+	uint32_t *pixels = (uint32_t *)fb->base;
 
 	handle_clear();
 	handle_neofetch();
 
+	for (int i = 0; i < 50; i++)
+	{
+		key_history[i] = kmalloc(100);
+		key_history[i][0] = '\0';
+		if (key_history[i] == NULL)
+		{
+			print("Out of memory!\n");
+			return 0;
+		}
+	}
+
+	bufer_history = kmalloc(sizeof(int));
+	if (bufer_history != NULL)
+	{
+		*bufer_history = 0;
+	}
 	while (1)
 	{
 		t_col = 0;
 		print("> ", COLOR_GREEN);
-
-		read_line(key_history[bufer_history], 100);
-
-		const char *input = key_history[bufer_history];
+		read_line(key_history[*bufer_history], 100);
+		const char *input = key_history[*bufer_history];
 		if (input[0] == '\0' || is_blank(input))
 		{
 			print("\n");
 			continue;
 		}
 
-		++bufer_history;
+		++*bufer_history;
 
 		Command cmd = command_from_string(input);
 
@@ -446,6 +451,7 @@ int strcmp(const char *s1, const char *s2)
 {
 	while (*s1 && (*s1 == *s2))
 	{
+
 		s1++;
 		s2++;
 	}
