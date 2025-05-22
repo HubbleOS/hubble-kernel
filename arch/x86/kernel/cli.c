@@ -282,7 +282,7 @@ Command command_from_string(const char *input)
 	return CMD_UNKNOWN;
 }
 void handle_exit() { print("\nGoodbye!\n"); }
-void handle_hello() { print("\nHello!\n"); }
+void handle_hello() { print("\nHello123!\n"); }
 
 void handle_clear()
 {
