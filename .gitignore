@@ -13,4 +13,7 @@ dist/
 test/
 
 # IDE
-.vscode/*
+.vscode/
+
+# iso
+iso/
