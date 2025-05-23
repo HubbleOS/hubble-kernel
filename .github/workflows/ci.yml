@@ -11,5 +11,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Build gnu-efi
+        run: |
+          make -C arch/x86/gnu-efi
+
       - name: Build kernel
         run: make all
