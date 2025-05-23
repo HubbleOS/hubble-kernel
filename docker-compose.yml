@@ -1,4 +1,10 @@
 services:
+  base-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: base-builder:latest
+
   x86-builder:
     platform: linux/amd64 
     build:
