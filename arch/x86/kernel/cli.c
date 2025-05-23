@@ -1,11 +1,12 @@
+#include "cli.h"
 #include "stdbool.h"
 #include <stddef.h>
 #include "utils/framebuffer.h"
 #include "utils/font.h"
 #include "utils/color.h"
 
-int bufer_history = 0;
-char key_history[128][128];
+int *bufer_history;
+char *key_history[50];
 uint8_t key_history_it[128];
 
 uint16_t t_colums = 80;
@@ -77,13 +78,14 @@ char scancode_to_ascii[128] = {
 #define KEY_LEFT 0x82
 #define KEY_RIGHT 0x83
 
-char read_ps2_key()
+int read_ps2_key()
 {
 	uint8_t scancode = 0;
 	bool is_extended = false;
 
 	while (1)
 	{
+
 		// Чекаємо, поки з'являться дані
 		while (!(inb(0x64) & 1))
 			;
@@ -186,40 +188,38 @@ void handle_backspace(int *i)
 
 void handle_regular_char(char c, char *buf, int *i)
 {
+
 	buf[(*i)++] = c;
+
 	print_char(c);
 }
 
 void read_line(char *buf, int max_len)
 {
-	int buf_it = bufer_history;
+	int buf_it = *bufer_history;
 	int i = 0;
-	while (i < max_len)
+	while (i < max_len - 1)
 	{
-		char c = read_ps2_key();
-
+		int c = read_ps2_key();
 		if ((uint8_t)c == KEY_UP)
 		{
 			handle_key_up(buf, &i, &buf_it);
 			continue;
 		}
-
 		if ((uint8_t)c == KEY_DOWN)
 		{
 			handle_key_down(buf, &i, &buf_it);
 			continue;
 		}
-
 		if (c == '\b')
 		{
 			handle_backspace(&i);
 			continue;
 		}
 
-		if (c == '\r' || c == '\n')
+		if (c == '\n')
 		{
-			t_col = 0;
-			t_row++;
+			print("\n");
 			break;
 		}
 
@@ -264,7 +264,8 @@ typedef enum
 
 Command command_from_string(const char *input)
 {
-	if (strcmp(input, "exit") == 0)
+
+	if (strcmp(input, "exit\0") == 0)
 		return CMD_EXIT;
 	if (strcmp(input, "hello") == 0)
 		return CMD_HELLO;
@@ -281,7 +282,7 @@ Command command_from_string(const char *input)
 	return CMD_UNKNOWN;
 }
 void handle_exit() { print("\nGoodbye!\n"); }
-void handle_hello() { print("\nHello!\n"); }
+void handle_hello() { print("\nHello123!\n"); }
 
 void handle_clear()
 {
@@ -332,28 +333,51 @@ void handle_change_y()
 	t_pos_y = atoi(input);
 }
 
+typedef int (*app_entry_t)(void);
+
+void run_app(void *app_binary)
+{
+	app_entry_t app_main = (app_entry_t)app_binary;
+	app_main();
+}
+
 int cli(framebuffer_info_t *fb)
 {
 	fbcli = fb;
+	uint32_t *pixels = (uint32_t *)fb->base;
 
 	handle_clear();
 	handle_neofetch();
 
+	for (int i = 0; i < 50; i++)
+	{
+		key_history[i] = kmalloc(100);
+		key_history[i][0] = '\0';
+		if (key_history[i] == NULL)
+		{
+			print("Out of memory!\n");
+			return 0;
+		}
+	}
+
+	bufer_history = kmalloc(sizeof(int));
+	if (bufer_history != NULL)
+	{
+		*bufer_history = 0;
+	}
 	while (1)
 	{
 		t_col = 0;
 		print("> ", COLOR_GREEN);
-
-		read_line(key_history[bufer_history], 100);
-
-		const char *input = key_history[bufer_history];
+		read_line(key_history[*bufer_history], 100);
+		const char *input = key_history[*bufer_history];
 		if (input[0] == '\0' || is_blank(input))
 		{
 			print("\n");
 			continue;
 		}
 
-		++bufer_history;
+		++*bufer_history;
 
 		Command cmd = command_from_string(input);
 
@@ -386,8 +410,6 @@ int cli(framebuffer_info_t *fb)
 			break;
 		}
 	}
-
-	return 0;
 }
 
 void print_hex(uint8_t value)
@@ -401,7 +423,7 @@ void print_hex(uint8_t value)
 	buf[3] = hex_digits[value & 0x0F];
 	buf[4] = '\0';
 
-	print(buf); // твоя функція print(const char*)
+	print(buf);
 }
 void print_char(char c)
 {
@@ -419,10 +441,7 @@ void print_char(char c)
 void print(const char *str)
 {
 	while (*str)
-	{
-		print_char(*str);
-		++str;
-	}
+		print_char(*str++);
 }
 
 void print_colored(const char *str, uint32_t color)
@@ -436,6 +455,7 @@ int strcmp(const char *s1, const char *s2)
 {
 	while (*s1 && (*s1 == *s2))
 	{
+
 		s1++;
 		s2++;
 	}
