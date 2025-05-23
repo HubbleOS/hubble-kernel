@@ -26,12 +26,12 @@ services:
       - TARGET=${TARGET_X86:-x86_64-elf}
     container_name: ${X86_CONTAINER_NAME:-x86-cross}
 
-  arm64-builder:
-    <<: *common-builder
-    platform: linux/arm64
-    build:
-      context: .
-      dockerfile: ./docker/arm64.Dockerfile
-    environment:
-      - TARGET=${TARGET_ARM64:-arm-none-eabi}
-    container_name: ${ARM64_CONTAINER_NAME:-arm64-cross}
+  # arm64-builder:
+  #   <<: *common-builder
+  #   platform: linux/arm64
+  #   build:
+  #     context: .
+  #     dockerfile: ./docker/arm64.Dockerfile
+  #   environment:
+  #     - TARGET=${TARGET_ARM64:-arm-none-eabi}
+  #   container_name: ${ARM64_CONTAINER_NAME:-arm64-cross}

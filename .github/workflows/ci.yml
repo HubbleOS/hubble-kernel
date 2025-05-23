@@ -1,0 +1,15 @@
+name: Build Kernel
+
+on:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: artemka/x86-cross:latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build kernel
+        run: make all
