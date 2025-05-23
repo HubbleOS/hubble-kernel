@@ -1,2 +1,5 @@
 #pragma once
-void cli(framebuffer_info_t *fb);
+#include "utils/framebuffer.h"
+#include "stdbool.h"
+#include "heap.h"
+int cli(framebuffer_info_t *fb);
