@@ -17,10 +17,10 @@ git clone https://github.com/your-repo/hubbleos.git hubble-kernel
 # Change directory into the cloned folder
 cd hubble-kernel
 
-make # Build the kernel (default architecture is x86)
-make run # Run the kernel in QEMU
-make img # Build the kernel image
-make flash # Flash the kernel image to a USB device (e.g., /dev/sdX)
+make                # Build the kernel (default architecture is x86)
+make run            # Run the kernel in QEMU
+make img            # Build the kernel image
+make flash          # Flash the kernel image to a USB device (e.g., /dev/sdX)
 ```
 
 ## Commands
