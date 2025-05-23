@@ -2,14 +2,14 @@ services:
   base-builder:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: ./docker/base.Dockerfile
     image: base-builder:latest
 
   x86-builder:
     platform: linux/amd64 
     build:
       context: .
-      dockerfile: arch/x86/Dockerfile
+      dockerfile: ./docker/x86.Dockerfile
     volumes:
       - .:/kernel
       - /dev:/dev
@@ -26,7 +26,7 @@ services:
     platform: linux/arm64
     build:
       context: .
-      dockerfile: arch/arm64/Dockerfile
+      dockerfile: ./docker/arm64.Dockerfile
     volumes:
       - .:/kernel
       - /dev:/dev
