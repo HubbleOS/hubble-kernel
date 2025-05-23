@@ -2,7 +2,10 @@
 set -e
 
 WORKDIR="$(pwd)"
-IMAGE="$WORKDIR/output/fat.img"
+ARCH="x86"
+OUTPUT_DIR="$WORKDIR/out"
+
+IMAGE="$OUTPUT_DIR/$ARCH/fat.img"
 
 if [ ! -f "$IMAGE" ]; then
 	echo "❌ Image $IMAGE not found. Run make-image.sh first."

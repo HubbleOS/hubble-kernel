@@ -6,11 +6,15 @@ services:
       dockerfile: arch/x86/Dockerfile
     volumes:
       - .:/kernel
+      - /dev:/dev
     environment:
       - TARGET=x86_64-elf
       - PREFIX=/opt/cross
     container_name: x86-cross
     working_dir: /kernel
+    privileged: true
+    stdin_open: true
+    tty: true
 
   arm64-builder:
     platform: linux/arm64
@@ -19,8 +23,12 @@ services:
       dockerfile: arch/arm64/Dockerfile
     volumes:
       - .:/kernel
+      - /dev:/dev
     environment:
       - TARGET=arm-none-eabi
       - PREFIX=/opt/cross
     container_name: arm64-cross
     working_dir: /kernel
+    privileged: true
+    stdin_open: true
+    tty: true

@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
 	curl \
 	ca-certificates \
 	xz-utils \
+	mtools \
 	&& rm -rf /var/lib/apt/lists/*
 
 # Preparation

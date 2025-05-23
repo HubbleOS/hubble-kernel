@@ -8,6 +8,7 @@
 # ISO_DIR=$1
 
 WORKDIR="$(pwd)"
+ISO_DIR="$WORKDIR/out/x86/iso"
 
 qemu-system-x86_64 \
 	-M pc \
@@ -16,5 +17,5 @@ qemu-system-x86_64 \
 	-m 1024 \
 	-drive if=pflash,format=raw,readonly=on,file=$WORKDIR/ovmf/OVMF_CODE.fd \
 	-drive if=pflash,format=raw,file=$WORKDIR/ovmf/OVMF_VARS.fd \
-	-hda fat:rw:iso/x86 \
+	-hda fat:rw:$ISO_DIR \
 	-serial stdio
