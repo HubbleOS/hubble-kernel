@@ -4,6 +4,10 @@
 
 Kernel HubbleOS is a customizable operating system kernel with support for multiple architectures (x86 and ARM64). This repository contains the kernel source code, build tools, and instructions for running in the QEMU emulator.
 
+> **Recommended**: Use Docker to build and run HubbleOS without installing toolchains manually.  
+> For manual builds (Linux only), see [Required Technologies](#required-technologies--tools-without-docker).
+
+
 ## Quick Start
 
 ```bash
@@ -46,22 +50,35 @@ make [TARGET] ARCH=x86       # Build for x86 architecture (default)
 make [TARGET] ARCH=arm64     # Build for ARM64 architecture
 ```
 
-## Docker commands
+## Docker Build and Run
 
-### Build images
+### 1. Choose your environment
+
+Copy one of the example configs:
 
 ```bash
-docker-compose -f docker-compose.yml build
-
-#Or for specific arch:
-docker-compose build x86-builder
-docker-compose build arm64-builder
+cp config/dev.env .env  # For Linux/macOS
 ```
 
-### Run container (interactive shell)
+### 2. Build the Docker images
 
 ```bash
+docker-compose --env-file .env build
+```
+
+### 3. Run a container (interactive shell)
+
+```bash
+# With env file:
+docker-compose --env-file .env build x86-builder
+docker-compose --env-file .env build arm64-builder
+
+# Or without:
+docker-compose build x86-builder
+docker-compose build arm64-builder
+
 docker-compose run --rm x86-builder bash
+
 ```
 
 ### Run container with default command:

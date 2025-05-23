@@ -1,3 +1,14 @@
+x-common-builder: &common-builder
+  build:
+    context: .
+  volumes:
+    - .:/kernel
+  environment:
+    - PREFIX=${PREFIX:-/opt/cross}
+  working_dir: /kernel
+  stdin_open: true
+  tty: true
+
 services:
   base-builder:
     build:
@@ -6,35 +17,21 @@ services:
     image: base-builder:latest
 
   x86-builder:
-    platform: linux/amd64 
+    <<: *common-builder
+    platform: linux/amd64
     build:
       context: .
       dockerfile: ./docker/x86.Dockerfile
-    volumes:
-      - .:/kernel
-      - /dev:/dev
     environment:
-      - TARGET=x86_64-elf
-      - PREFIX=/opt/cross
-    container_name: x86-cross
-    working_dir: /kernel
-    privileged: true
-    stdin_open: true
-    tty: true
+      - TARGET=${TARGET_X86:-x86_64-elf}
+    container_name: ${X86_CONTAINER_NAME:-x86-cross}
 
   arm64-builder:
+    <<: *common-builder
     platform: linux/arm64
     build:
       context: .
       dockerfile: ./docker/arm64.Dockerfile
-    volumes:
-      - .:/kernel
-      - /dev:/dev
     environment:
-      - TARGET=arm-none-eabi
-      - PREFIX=/opt/cross
-    container_name: arm64-cross
-    working_dir: /kernel
-    privileged: true
-    stdin_open: true
-    tty: true
+      - TARGET=${TARGET_ARM64:-arm-none-eabi}
+    container_name: ${ARM64_CONTAINER_NAME:-arm64-cross}

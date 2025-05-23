@@ -25,6 +25,7 @@ test/
 .idea/
 *.swp
 *~
+.env
 
 # Logs and temporary files
 *.log
