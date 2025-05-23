@@ -20,27 +20,19 @@ all: build
 build:
 	@echo "Building kernel..."
 	$(MAKE) -C $(ARCH_DIR) \
-	BUILD_DIR=$(abspath $(BUILD_DIR)) \
-	ISO_DIR=$(abspath $(ISO_DIR))
+		BUILD_DIR=$(abspath $(BUILD_DIR)) \
+		ISO_DIR=$(abspath $(ISO_DIR))
 
 run:
 	@echo "Running kernel..."
 	$(MAKE) -C $(ARCH_DIR) run \
-	BUILD_DIR=$(abspath $(BUILD_DIR)) \
-	ISO_DIR=$(abspath $(ISO_DIR))
+		BUILD_DIR=$(abspath $(BUILD_DIR)) \
+		ISO_DIR=$(abspath $(ISO_DIR))
+	$(MAKE) -C scripts qemu
+
 
 clean:
 	@echo "Cleaning build and bin directories..."
 	@rm -rf $(OUT_DIR)
 
-img:
-	@echo "Creating ISO..."
-	@sh ./scripts/make-image.sh
-
-flash:
-	@echo "Flashing ISO..."
-	@sh ./scripts/make-flash.sh
-
-help:
-	@echo "Usage:"
-	@sh ./scripts/make-help.sh
+include scripts/Makefile
