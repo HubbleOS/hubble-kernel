@@ -5,6 +5,7 @@ OUT_DIR ?= out
 BUILD_DIR := $(abspath $(OUT_DIR)/$(ARCH)/build)
 ISO_DIR := $(abspath $(OUT_DIR)/$(ARCH)/iso)
 ARCH_DIR := arch/$(ARCH)
+SCRIPT_DIR := scripts
 
 # Cross compiler
 ifeq ($(ARCH),x86)

@@ -1,18 +1,16 @@
 #!/bin/bash
-
-# if [-z "$1"]; then
-# 	echo "Usage: $0 <iso>"
-# 	exit 1
-# fi
-
-# ISO_DIR=$1
+set -e
 
 WORKDIR="$(pwd)"
-ISO_DIR="$WORKDIR/out/x86/iso"
 
-if [ ! -d "$ISO_DIR" ]; then
-	echo "❌ Directory not found: $ISO_DIR"
+if [ -z "$1" ]; then
+	echo "❌ Missing ISO directory"
 	exit 1
+elif [ ! -d "$1" ]; then
+	echo "❌ Directory not found: $1"
+	exit 1
+else
+	ISO_DIR="$1"
 fi
 
 qemu-system-x86_64 \

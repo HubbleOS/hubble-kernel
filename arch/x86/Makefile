@@ -68,4 +68,3 @@ $(BOOT_SO): $(BOOT_OBJ)
 $(EFI_OUT): $(BOOT_SO)
 	@mkdir -p $(EFI_OUT_DIR)
 	$(HOST_OBJCOPY) $(EFI_SECTIONS) --target=efi-app-x86_64 --subsystem=10 $< $@
-

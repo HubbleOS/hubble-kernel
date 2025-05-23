@@ -13,4 +13,4 @@ help:
 	@sh $(SCRIPT_DIR)/cli/make-help.sh
 
 qemu:
-	@sh $(SCRIPT_DIR)/qemu/qemu.sh
+	@sh $(SCRIPT_DIR)/qemu/qemu.sh $(ISO_DIR)
