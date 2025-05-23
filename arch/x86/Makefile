@@ -1,22 +1,4 @@
-# Cross compiler
-CROSS = x86_64-elf-
-
-# Tools
-AS = $(CROSS)as
-CC = $(CROSS)gcc
-LD = $(CROSS)ld
-OBJCOPY = $(CROSS)objcopy
-HOST_OBJCOPY = objcopy
-
-# Flags
-CFLAGS = -ffreestanding -m64 -O2 -Wall -Wextra -c
-LDFLAGS = -nostdlib -T kernel/linker.ld
-OBJCPYFLAGS = binary
-
-# Libs
-LIBS := -lefi -lgnuefi
-
-INCLUDES := -Iinclude
+include $(CONFIG_MK)
 
 # Directories
 SRC_DIRS := kernel
@@ -41,11 +23,6 @@ BOOT_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(BOOT_SRCS))
 BOOT_SO  := $(BUILD_DIR)/boot/boot.so
 EFI_OUT  := $(ISO_DIR)/EFI/BOOT/BOOTx64.EFI
 EFI_OUT_DIR := $(ISO_DIR)/EFI/BOOT
-
-BOOT_CFLAGS := -Iinclude -Ignu-efi/inc -fpic -ffreestanding -fno-stack-protector -fno-stack-check -fshort-wchar -mno-red-zone -maccumulate-outgoing-args -c
-BOOT_LDFLAGS := -shared -Bsymbolic -Lgnu-efi/x86_64/lib -Lgnu-efi/x86_64/gnuefi -Tgnu-efi/gnuefi/elf_x86_64_efi.lds
-BOOT_LIBS := -lgnuefi -lefi
-EFI_SECTIONS := -j .text -j .sdata -j .data -j .rodata -j .dynamic -j .dynsym -j .rel -j .rela -j .rel.* -j .rela.* -j .reloc
 
 .PHONY: all run build bootloader qemu
 

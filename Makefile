@@ -1,38 +1,22 @@
-# Root Makefile
-ARCH ?= x86
+include config.mk
 
-OUT_DIR := out
-BUILD_DIR := $(OUT_DIR)/${ARCH}/build
-ISO_DIR := $(OUT_DIR)/${ARCH}/iso
-ARCH_DIR := arch/$(ARCH)
+CONFIG_MK := $(abspath config.mk)
 
-.PHONY: all \
-clean \
-run \
-build \
-img \
-qemu \
-flash \
-help
+.PHONY: all build run clean
 
 all: build
 
 build:
-	@echo "Building kernel..."
-	$(MAKE) -C $(ARCH_DIR) \
-		BUILD_DIR=$(abspath $(BUILD_DIR)) \
-		ISO_DIR=$(abspath $(ISO_DIR))
+	@echo "Building kernel for $(ARCH)..."
+	$(MAKE) -C $(ARCH_DIR) BUILD_DIR=$(BUILD_DIR) ISO_DIR=$(ISO_DIR) CONFIG_MK=$(CONFIG_MK)
 
 run:
-	@echo "Running kernel..."
-	$(MAKE) -C $(ARCH_DIR) run \
-		BUILD_DIR=$(abspath $(BUILD_DIR)) \
-		ISO_DIR=$(abspath $(ISO_DIR))
-	$(MAKE) -C scripts qemu
-
+	@echo "Running kernel for $(ARCH)..."
+	$(MAKE) -C $(ARCH_DIR) run BUILD_DIR=$(abspath $(BUILD_DIR)) ISO_DIR=$(abspath $(ISO_DIR))
+	$(MAKE) -C scripts qemu ARCH=$(ARCH)
 
 clean:
-	@echo "Cleaning build and bin directories..."
+	@echo "Cleaning build output for $(ARCH)..."
 	@rm -rf $(OUT_DIR)
 
 include scripts/Makefile
