@@ -2,17 +2,15 @@
 set -e
 
 WORKDIR="$(pwd)"
-
-# ARCH="$(uname -m)"
 ARCH="x86"
+OUTPUT_DIR="$WORKDIR/out"
 
-OUT_DIR="out"
-OUTPUT_DIR="$WORKDIR/$OUT_DIR/$ARCH"
+OUTPUT_DIR="$OUTPUT_DIR/$ARCH"
 ISO_DIR="$OUTPUT_DIR/iso"
 
 IMG_NAME="fat.img"
 IMG_SOURCE="$OUTPUT_DIR/$IMG_NAME"
-EFI_SOURCE="$OUTPUT_DIR/iso/EFI/BOOT/BOOTX64.EFI"
+EFI_SOURCE="$ISO_DIR/EFI/BOOT/BOOTX64.EFI"
 
 if [ ! -f "$EFI_SOURCE" ]; then
 	echo "❌ File not found: $EFI_SOURCE"

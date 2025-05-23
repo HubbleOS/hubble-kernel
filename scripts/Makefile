@@ -1,7 +1,16 @@
 # Scripts Makefile
 .PHONY: img flash help qemu
 
-TARGETS := img flash help qemu
+SCRIPT_DIR := scripts
 
-$(TARGETS):
-	@sh scripts/run.sh $@
+img:
+	@sh $(SCRIPT_DIR)/img/make-image.sh
+
+flash:
+	@sh $(SCRIPT_DIR)/img/make-flash.sh
+
+help:
+	@sh $(SCRIPT_DIR)/cli/make-help.sh
+
+qemu:
+	@sh $(SCRIPT_DIR)/qemu/qemu.sh

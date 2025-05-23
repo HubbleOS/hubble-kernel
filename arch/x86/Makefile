@@ -30,7 +30,6 @@ EFI_OUT_DIR := $(ISO_DIR)/EFI/BOOT
 all: run
 
 run: $(OUTPUT) $(ISO) bootloader
-	@echo "Build successful."
 
 # Kernel object files
 build: $(OBJ_FILES)

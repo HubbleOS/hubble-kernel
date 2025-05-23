@@ -1,5 +1,7 @@
+# MacOS system files
 .DS_Store
 
+# Compiled binaries and images
 *.elf
 *.bin
 *.iso
@@ -7,16 +9,39 @@
 *.EFI
 *.img
 
+# Build output directories
 bin/
 build/
 dist/
 output/
 out/
+iso/
 
+# Temporary test outputs
 test/
 
-# IDE
+# IDE/editor config
 .vscode/
+.idea/
+*.swp
+*~
 
-# iso
-iso/
+# Logs and temporary files
+*.log
+*.tmp
+
+# Kernel debug and dump files
+*.dmp
+*.map
+
+# Coverage reports (if you use any)
+coverage/
+*.gcda
+*.gcno
+*.gcov
+
+# Docker-related files
+docker-compose.override.yml
+
+# Other temp files
+*.bak

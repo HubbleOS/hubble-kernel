@@ -1,5 +1,4 @@
 # config.mk
-
 ARCH ?= x86
 
 OUT_DIR ?= out
