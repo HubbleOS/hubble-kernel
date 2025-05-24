@@ -1,0 +1,4 @@
+[submodule "arch/x86/gnu-efi"]
+	path = arch/x86/gnu-efi
+	url = https://git.code.sf.net/p/gnu-efi/code
+	

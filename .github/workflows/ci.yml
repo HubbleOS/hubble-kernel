@@ -1,0 +1,18 @@
+name: Build Kernel
+
+on:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: f1ash007/x86-cross:latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Build kernel
+        run: make all

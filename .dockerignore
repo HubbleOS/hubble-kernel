@@ -1,7 +1,26 @@
+.git/
+
+# Build and binary outputs
 build/
 bin/
+out/
+dist/
+
+# Disk images and ISOs
 *.iso
+
+# Object files and compiled artifacts
 *.o
+
+# Archives
 *.tar.gz
-node_modules/
-.git/
+
+# IDE files
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
