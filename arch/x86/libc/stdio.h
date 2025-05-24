@@ -13,9 +13,13 @@ extern "C"
 		int (*read)(struct FILE *stream, char *buffer, int len);
 	} FILE;
 
-	extern FILE *stdout;
-	extern FILE *stdin;
-	extern FILE *stderr;
+	extern FILE *__stdoutp;
+	extern FILE *__stdinp;
+	extern FILE *__stderrp;
+
+#define stdout __stdoutp
+#define stdin __stdinp
+#define stderr __stderrp
 
 	// output
 	int fprintf(FILE *stream, const char *format, ...);

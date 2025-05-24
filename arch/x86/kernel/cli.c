@@ -41,12 +41,6 @@
 // void handle_backspace(int *i);
 // void handle_regular_char(char c, char *buf, int *i);
 
-// void wait(volatile unsigned int ticks)
-// {
-// 	for (volatile unsigned int i = 0; i < ticks; i++)
-// 		;
-// }
-
 // static inline uint8_t inb(uint16_t port)
 // {
 // 	uint8_t ret;
@@ -331,14 +325,6 @@
 // 	print("Enter new Y: ");
 // 	read_line(input, 100);
 // 	t_pos_y = atoi(input);
-// }
-
-// typedef int (*app_entry_t)(void);
-
-// void run_app(void *app_binary)
-// {
-// 	app_entry_t app_main = (app_entry_t)app_binary;
-// 	app_main();
 // }
 
 // int cli(framebuffer_info_t *fb)

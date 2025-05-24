@@ -4,15 +4,33 @@
 #include <stddef.h>
 #include <stdarg.h>
 
-FILE __stdout;
-FILE *stdout = &__stdout;
+static FILE __stdout;
+static FILE __stdin;
+static FILE __stderr;
 
-FILE __stdin;
-FILE *stdin = &__stdin;
+FILE *__stdoutp = &__stdout;
+FILE *__stdinp = &__stdin;
+FILE *__stderrp = &__stderr;
 
 extern framebuffer_info_t *g_fb;
 extern int cursor_x;
 extern int cursor_y;
+
+// Упрощённая таблица сканкодов -> ASCII (без учёта Shift, Ctrl и т.п.)
+static const char scancode_to_ascii[128] = {
+	0, 27, '1', '2', '3', '4', '5', '6', '7', '8',	  // 0x00 - 0x09
+	'9', '0', '-', '=', '\b',						  // Backspace 0x0E
+	'\t',											  // Tab 0x0F
+	'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', // 0x10 - 0x19
+	'[', ']', '\n',									  // Enter key 0x1C
+	0,												  // Control 0x1D
+	'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', // 0x1E - 0x27
+	'\'', '`', 0,									  // Left Shift 0x2A
+	'\\', 'z', 'x', 'c', 'v', 'b', 'n',				  // 0x2B - 0x31
+	'm', ',', '.', '/', 0,							  // Right Shift 0x36
+	'*', 0, ' ',									  // Space 0x39
+													  // Остальное 0 — необработанные клавиши
+};
 
 int fb_write(struct FILE *stream, const char *buffer, int len)
 {
@@ -42,33 +60,50 @@ int fb_write(struct FILE *stream, const char *buffer, int len)
 	return len;
 }
 
-int fb_read(FILE *stream, char *buffer, int len)
+int kb_read(FILE *stream, char *buffer, int len)
 {
 	(void)stream;
-	for (int i = 0; i < len; i++)
+	int i = 0;
+
+	while (i < len)
 	{
-		int c;
+		int c = -1;
 		do
 		{
-			c = getchar();
-		} while (c == -1); // ждём валидный символ
+			uint8_t scancode = kbd_read_scancode();
 
-		buffer[i] = (char)c;
-		// Если считаем строку, можно выйти по '\n'
-		if (buffer[i] == '\n')
-		{
-			i++;
+			if (scancode & 0x80) // отпускание клавиши
+				continue;
+
+			c = scancode_to_ascii[scancode];
+			if (c == 0)
+				continue;
+
+		} while (c == -1);
+
+		buffer[i++] = (char)c;
+		putchar(c); // эхо-вывод
+
+		if (c == '\n')
 			break;
-		}
 	}
-	return len;
+
+	return i;
 }
 
 void stdio_init()
 {
 	stdout->write = fb_write;
-	stdout->read = fb_read;
+	stdout->read = NULL;
 	stdout->device = NULL;
+
+	stdin->read = kb_read;
+	stdin->write = NULL;
+	stdin->device = NULL;
+
+	stdout->device = NULL;
+	stdin->device = NULL;
+	stderr->device = NULL;
 }
 
 int putc(int c, struct FILE *stream)
@@ -194,30 +229,30 @@ int printf(const char *format, ...)
 
 // input
 
-// Упрощённая таблица сканкодов -> ASCII (без учёта Shift, Ctrl и т.п.)
-static const char scancode_to_ascii[128] = {
-	0, 27, '1', '2', '3', '4', '5', '6', '7', '8',	  // 0x00 - 0x09
-	'9', '0', '-', '=', '\b',						  // Backspace 0x0E
-	'\t',											  // Tab 0x0F
-	'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', // 0x10 - 0x19
-	'[', ']', '\n',									  // Enter key 0x1C
-	0,												  // Control 0x1D
-	'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', // 0x1E - 0x27
-	'\'', '`', 0,									  // Left Shift 0x2A
-	'\\', 'z', 'x', 'c', 'v', 'b', 'n',				  // 0x2B - 0x31
-	'm', ',', '.', '/', 0,							  // Right Shift 0x36
-	'*', 0, ' ',									  // Space 0x39
-													  // Остальное 0 — необработанные клавиши
-};
+int getc(FILE *stream)
+{
+	if (stream && stream->read)
+	{
+		static char input_buf[128];
+		static int buf_len = 0;
+		static int buf_pos = 0;
+
+		if (buf_pos >= buf_len)
+		{
+			buf_len = stream->read(stream, input_buf, sizeof(input_buf));
+			buf_pos = 0;
+
+			if (buf_len <= 0)
+				return -1;
+		}
+
+		return (unsigned char)input_buf[buf_pos++];
+	}
+
+	return -1;
+}
 
 int getchar(void)
 {
-	uint8_t scancode = kbd_read_scancode();
-
-	// Игнорируем отпускание клавиш (обычно сканкод > 0x80)
-	if (scancode & 0x80)
-		return -1; // можно и пропускать, или ждать следующего
-
-	char c = scancode_to_ascii[scancode];
-	return c ? c : -1;
+	return getc(stdin);
 }

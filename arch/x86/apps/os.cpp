@@ -55,11 +55,25 @@ extern "C" void os_main(framebuffer_info_t *fb)
 	printf("text = %d\n", "123");
 	printf("BUKVA = %c\n", 'A');
 
-	// scanf("%d", &x);
-	// printf("x = %d\n", x);
-	while (1)
+	char c;
+	while (c == getc(stdin))
 	{
-		int c = getchar();
-		printf("char = %c\n", c);
+		putc(c, stdout);
 	}
+
+	printf("first\n");
+
+	while (c == getchar())
+	{
+		putchar(c);
+	}
+
+	printf("\nsecond\n");
+
+	while ((c = getchar()) != -1)
+	{
+		putchar(c);
+	}
+
+	printf("END\n");
 }

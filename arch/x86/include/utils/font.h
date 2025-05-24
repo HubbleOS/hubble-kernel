@@ -19,10 +19,9 @@ void init_font(framebuffer_info_t *fb);
 // Вивід одного символу (тільки великі латинські літери)
 void draw_char(framebuffer_info_t *fb, char c, int x, int y);
 
-// Порт данных клавиатуры
 #define KBD_DATA_PORT 0x60
-// Порт статуса клавиатуры
 #define KBD_STATUS_PORT 0x64
+#define KBD_OBF 0x01 // Output buffer full
 
 static inline uint8_t inb(uint16_t port)
 {
@@ -33,9 +32,7 @@ static inline uint8_t inb(uint16_t port)
 
 static inline uint8_t kbd_read_scancode(void)
 {
-	// Ждем, пока в буфере данных клавиатуры появится символ
-	while (!(inb(KBD_STATUS_PORT) & 0x01))
-		;
-
+	while (!(inb(KBD_STATUS_PORT) & KBD_OBF))
+		; // ждем без таймаута
 	return inb(KBD_DATA_PORT);
 }
