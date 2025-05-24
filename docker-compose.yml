@@ -1,26 +1,37 @@
-services:
-  x86-builder:
-    platform: linux/amd64 
-    build:
-      context: .
-      dockerfile: arch/x86/Dockerfile
-    volumes:
-      - .:/kernel
-    environment:
-      - TARGET=x86_64-elf
-      - PREFIX=/opt/cross
-    container_name: x86-cross
-    working_dir: /kernel
+x-common-builder: &common-builder
+  build:
+    context: .
+  volumes:
+    - .:/kernel
+  environment:
+    - PREFIX=${PREFIX:-/opt/cross}
+  working_dir: /kernel
+  stdin_open: true
+  tty: true
 
-  arm64-builder:
-    platform: linux/arm64
+services:
+  base-builder:
     build:
       context: .
-      dockerfile: arch/arm64/Dockerfile
-    volumes:
-      - .:/kernel
+      dockerfile: ./docker/base.Dockerfile
+    image: base-builder:latest
+
+  x86-builder:
+    <<: *common-builder
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: ./docker/x86.Dockerfile
     environment:
-      - TARGET=arm-none-eabi
-      - PREFIX=/opt/cross
-    container_name: arm64-cross
-    working_dir: /kernel
+      - TARGET=${TARGET_X86:-x86_64-elf}
+    container_name: ${X86_CONTAINER_NAME:-x86-cross}
+
+  # arm64-builder:
+  #   <<: *common-builder
+  #   platform: linux/arm64
+  #   build:
+  #     context: .
+  #     dockerfile: ./docker/arm64.Dockerfile
+  #   environment:
+  #     - TARGET=${TARGET_ARM64:-arm-none-eabi}
+  #   container_name: ${ARM64_CONTAINER_NAME:-arm64-cross}

@@ -1,44 +1,32 @@
-# Root Makefile
+CONFIG_MK := $(abspath config/config.mk)
 
-# Allow override from command line
-ARCH ?= x86
-BUILD_DIR := build
-ARCH_DIR := arch/$(ARCH)
+include $(CONFIG_MK)
 
-ISO_DIR := iso
-
-.PHONY: all clean run build help qemu
+.PHONY: all build run clean
 
 all: build
 
-build:
-	@echo "Building kernel..."
-	$(MAKE) -C $(ARCH_DIR) BUILD_DIR=$(abspath $(BUILD_DIR)/$(ARCH)) ISO_DIR=$(abspath $(ISO_DIR)/$(ARCH))
+$(OUT_DIR)/$(ARCH)/gnu-efi/.built:
+	$(MAKE) -C $(ARCH_DIR)/gnu-efi
+	@mkdir -p $(dir $@)
+	@touch $@
 
-run:
-	@echo "Running kernel..."
-	$(MAKE) -C $(ARCH_DIR) run BUILD_DIR=$(abspath $(BUILD_DIR)/$(ARCH)) ISO_DIR=$(abspath $(ISO_DIR)/$(ARCH))
+
+build: $(OUT_DIR)/$(ARCH)/gnu-efi/.built
+	@echo "🛠️  Building kernel for $(ARCH)..."
+	$(MAKE) -C $(ARCH_DIR) \
+		BUILD_DIR=$(BUILD_DIR) \
+		ISO_DIR=$(ISO_DIR) \
+		CONFIG_MK=$(CONFIG_MK)
+	@echo "✅ Build complete for $(ARCH)"
+
+run: build
+	@echo "🚀 Running kernel for $(ARCH)..."
+	@make $(SCRIPT_DIR) qemu
 
 clean:
-	@echo "Cleaning build and bin directories..."
-	@rm -rf $(BUILD_DIR) $(ISO_DIR)
+	@echo "🧹 Cleaning build output for $(ARCH)..."
+	@rm -rf $(OUT_DIR)
+	@echo "✅ Clean complete"
 
-help:
-	@echo "Usage:"
-	@echo "  make all - to build and run"
-	@echo "  make run - to run the kernel"
-	@echo "  make clean - to clean the build directory"
-	@echo "  make help - to print this help message"
-
-QEMU = qemu-system-x86_64
-QEMU_FLAGs = -M pc \
-  -cpu Haswell \
-  -smp 2 \
-  -m 1024 \
-  -drive if=pflash,format=raw,readonly=on,file=ovmf/OVMF_CODE.fd \
-  -drive if=pflash,format=raw,file=ovmf/OVMF_VARS.fd \
-  -hda fat:rw:$(ISO_DIR) \
-  -serial stdio
-
-qemu:
-	$(QEMU) $(QEMU_FLAGS)
+include $(SCRIPT_DIR)/Makefile
