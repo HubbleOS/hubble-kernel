@@ -6,11 +6,16 @@
 *.o
 *.EFI
 *.img
+
 bin/
 build/
 dist/
+output/
 
 test/
 
 # IDE
-.vscode/*
+.vscode/
+
+# iso
+iso/
