@@ -1,6 +1,7 @@
-#ifndef FRAMEBUFFER_H
-#define FRAMEBUFFER_H
+#pragma once
+
 #include <stdint.h>
+
 typedef struct
 {
     void *base;
@@ -11,5 +12,3 @@ typedef struct
     uint64_t heap_start;
     uint64_t heap_size;
 } framebuffer_info_t;
-
-#endif

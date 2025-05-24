@@ -13,6 +13,20 @@ ISO := $(ISO_DIR)/kernel.bin
 SRC_FILES := $(shell find $(SRC_DIRS) -type f -name "*.c")
 OBJ_FILES := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRC_FILES))
 
+CPP_SRC_FILES := $(shell find apps -type f -name "*.cpp")
+CPP_OBJ_FILES := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SRC_FILES))
+
+OBJ_FILES += $(CPP_OBJ_FILES)
+
+LIBC_DIR := libc
+LIBC_SRC := $(shell find $(LIBC_DIR) -type f -name "*.c")
+LIBC_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(LIBC_SRC))
+
+SRC_FILES += $(LIBC_SRC)
+OBJ_FILES += $(LIBC_OBJ)
+
+INCLUDES += -I$(LIBC_DIR)
+
 KERNEL_OBJ := $(BUILD_DIR)/kernel/kernel.o
 LINK_OBJS := $(KERNEL_OBJ) $(filter-out $(KERNEL_OBJ),$(OBJ_FILES))
 
@@ -27,7 +41,7 @@ EFI_OUT_DIR := $(ISO_DIR)/EFI/BOOT
 .PHONY: all run build bootloader qemu
 
 # Default target
-all: run
+all: apps run
 
 run: $(OUTPUT) $(ISO) bootloader
 
@@ -38,6 +52,11 @@ $(BUILD_DIR)/%.o: %.c
 	@echo "Compiling C: $< -> $@"
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INCLUDES) $< -o $@
+
+$(BUILD_DIR)/%.o: %.cpp
+	@echo "Compiling C++: $< -> $@"
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 # Kernel linking
 $(OUTPUT): $(OBJ_FILES)

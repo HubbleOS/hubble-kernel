@@ -13,11 +13,13 @@ ifeq ($(ARCH),x86)
 
 	LD = $(CROSS)ld
 	CC = $(CROSS)gcc
+	CXX = $(CROSS)g++
 	AS = $(CROSS)as
 	OBJCOPY = $(CROSS)objcopy
 	HOST_OBJCOPY = objcopy
 
 	CFLAGS = -ffreestanding -m64 -O2 -Wall -Wextra -c
+	CXXFLAGS = -ffreestanding -m64 -O2 -Wall -Wextra -c
 	LDFLAGS = -nostdlib -T kernel/linker.ld
 	OBJCPYFLAGS = binary
 	
