@@ -1,5 +1,5 @@
 # MacOS system files
-.DS_Store
+*.DS_Store
 
 # Compiled binaries and images
 *.elf
