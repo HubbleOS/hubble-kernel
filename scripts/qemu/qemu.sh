@@ -13,6 +13,20 @@ else
 	ISO_DIR="$1"
 fi
 
+case "$(uname -s)" in
+MINGW* | MSYS* | CYGWIN*)
+	WIN_ISO_DIR=$(cygpath -w "$ISO_DIR")
+	QEMU_ISO_PATH="$WIN_ISO_DIR"
+	;;
+Linux | Darwin)
+	QEMU_ISO_PATH="$ISO_DIR"
+	;;
+*)
+	echo "❌ Unsupported OS: $(uname -s)"
+	exit 1
+	;;
+esac
+
 qemu-system-x86_64 \
 	-M pc \
 	-cpu Haswell \
@@ -20,5 +34,5 @@ qemu-system-x86_64 \
 	-m 1024 \
 	-drive if=pflash,format=raw,readonly=on,file=$WORKDIR/ovmf/OVMF_CODE.fd \
 	-drive if=pflash,format=raw,file=$WORKDIR/ovmf/OVMF_VARS.fd \
-	-hda fat:rw:$ISO_DIR \
+	-hda fat:rw:"$QEMU_ISO_PATH" \
 	-serial stdio
