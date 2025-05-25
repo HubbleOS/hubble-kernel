@@ -229,6 +229,17 @@ int printf(const char *format, ...)
 
 // input
 
+static int ungetc_buffer = -1;
+
+int ungetc(int c, FILE *stream)
+{
+	if (stream != stdin)
+		return -1;
+
+	ungetc_buffer = c;
+	return c;
+}
+
 int getc(FILE *stream)
 {
 	if (stream && stream->read)
@@ -236,6 +247,13 @@ int getc(FILE *stream)
 		static char input_buf[128];
 		static int buf_len = 0;
 		static int buf_pos = 0;
+
+		if (stream == stdin && ungetc_buffer != -1)
+		{
+			int c = ungetc_buffer;
+			ungetc_buffer = -1;
+			return c;
+		}
 
 		if (buf_pos >= buf_len)
 		{
@@ -252,7 +270,111 @@ int getc(FILE *stream)
 	return -1;
 }
 
-int getchar(void)
+int getchar(void) { return getc(stdin); }
+
+#include <ctype.h>
+
+static void skip_whitespace()
 {
-	return getc(stdin);
+	int c;
+	do
+	{
+		c = getchar();
+	} while (isspace(c));
+	ungetc(c, stdin);
+}
+
+int vscanf(const char *format, va_list args)
+{
+	int assigned = 0;
+	while (*format)
+	{
+		if (*format == '%')
+		{
+			format++;
+			switch (*format)
+			{
+			case 'd':
+			{
+				int *ptr = va_arg(args, int *);
+				int num = 0;
+				int sign = 1;
+
+				skip_whitespace();
+
+				int c = getchar();
+				if (c == '-')
+				{
+					sign = -1;
+					c = getchar();
+				}
+
+				if (!isdigit(c))
+					return assigned;
+
+				do
+				{
+					num = num * 10 + (c - '0');
+					c = getchar();
+				} while (isdigit(c));
+
+				*ptr = num * sign;
+				assigned++;
+				break;
+			}
+			case 's':
+			{
+				char *str = va_arg(args, char *);
+				skip_whitespace();
+				int c;
+				while ((c = getchar()) != EOF && !isspace(c))
+					*str++ = (char)c;
+				*str = '\0';
+				assigned++;
+				break;
+			}
+			case 'c':
+			{
+				char *ch = va_arg(args, char *);
+				int c = getchar();
+				if (c == EOF)
+					return assigned;
+				*ch = (char)c;
+				assigned++;
+				break;
+			}
+			default:
+				break;
+			}
+		}
+		else
+		{
+			format++;
+		}
+	}
+
+	return assigned;
+}
+
+int scanf(const char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	int ret = vscanf(format, args);
+	va_end(args);
+	return ret;
+}
+
+int fscanf(FILE *stream, const char *format, ...)
+{
+	FILE *old_stdin = stdin;
+	stdin = stream;
+
+	va_list args;
+	va_start(args, format);
+	int ret = vscanf(format, args);
+	va_end(args);
+
+	stdin = old_stdin;
+	return ret;
 }

@@ -1,8 +1,11 @@
-// // kernel/apps/os.cpp (C++)
+// kernel/apps/os.cpp
 #include "utils/framebuffer.h"
 #include "utils/color.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
+
+void handle_neofetch();
 
 class Screen
 {
@@ -10,19 +13,31 @@ private:
 	framebuffer_info_t *fb;
 
 public:
-	Screen(framebuffer_info_t *fb);
-	~Screen();
+	Screen(framebuffer_info_t *fb) : fb(fb) {}
+	~Screen() {}
 
-	void drawPixel(int x, int y, uint32_t color);
+	void drawPixel(int x, int y, uint32_t color)
+	{
+		auto pixel_ptr = (uint32_t *)fb->base;
+		pixel_ptr[y * fb->width + x] = color;
+	}
+
+	int getWidth() const { return fb->width; }
+	int getHeight() const { return fb->height; }
 };
 
-Screen::Screen(framebuffer_info_t *fb) : fb(fb) {}
-Screen::~Screen() {}
-
-void Screen::drawPixel(int x, int y, uint32_t color)
+extern "C" void os_main(framebuffer_info_t *fb)
 {
-	auto pixel_ptr = (uint32_t *)fb->base;
-	pixel_ptr[y * fb->width + x] = color;
+	Screen screen(fb);
+
+	for (int i = 0; i < fb->width * fb->height; i++)
+		screen.drawPixel(i % fb->width, i / fb->width, rgb(0, 0, 0));
+	handle_neofetch();
+
+	int x;
+	printf("Enter x: ");
+	scanf("%d", &x);
+	printf("x: %d\n", x);
 }
 
 void handle_neofetch()
@@ -34,46 +49,4 @@ void handle_neofetch()
 		"|  __  || | | || '_ \\ | '_ \\ | | / _ \\ \n"
 		"| |  | || |_| || |_) || |_) || ||  __/ \n"
 		"|_|  |_| \\__,_||_.__/ |_.__/ |_| \\___| \n");
-}
-
-extern "C" void os_main(framebuffer_info_t *fb)
-{
-	Screen screen(fb);
-	for (int i = 0; i < fb->width * fb->height; i++)
-		screen.drawPixel(i % fb->width, i / fb->width, rgb(0, 0, 0));
-
-	handle_neofetch();
-
-	int x = 123;
-	printf("x = %i\n", x);
-	printf("x = %d\n", 1);
-	printf("x = %d\n", 12);
-	printf("x = %d\n", 123);
-	printf("x = %d\n", 1234);
-	printf("x = %d\n", 12345);
-	printf("x = %d\n", -123456);
-	printf("text = %d\n", "123");
-	printf("BUKVA = %c\n", 'A');
-
-	char c;
-	while (c == getc(stdin))
-	{
-		putc(c, stdout);
-	}
-
-	printf("first\n");
-
-	while (c == getchar())
-	{
-		putchar(c);
-	}
-
-	printf("\nsecond\n");
-
-	while ((c = getchar()) != -1)
-	{
-		putchar(c);
-	}
-
-	printf("END\n");
 }
