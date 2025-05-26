@@ -44,7 +44,7 @@ int fb_write(struct FILE *stream, const char *buffer, int len)
 		if (c == '\n')
 		{
 			cursor_x = 0;
-			cursor_y += CHAR_HEIGHT;
+			cursor_y += CHAR_HEIGHT * 2;
 			continue;
 		}
 		draw_char(g_fb, c, cursor_x, cursor_y);
@@ -53,7 +53,7 @@ int fb_write(struct FILE *stream, const char *buffer, int len)
 		if ((unsigned int)cursor_x + CHAR_WIDTH > g_fb->width)
 		{
 			cursor_x = 0;
-			cursor_y += CHAR_HEIGHT;
+			cursor_y += CHAR_HEIGHT * 2;
 		}
 	}
 
