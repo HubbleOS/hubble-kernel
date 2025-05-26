@@ -30,13 +30,15 @@ extern "C"
 	int printf(const char *format, ...);
 
 	int putc(int c, FILE *stream);
-	void putchar(int c);
+	int putchar(int c);
 
 	// input
 	int fscanf(FILE *stream, const char *format, ...);
 	int scanf(const char *format, ...);
 	int vscanf(const char *format, va_list args);
 	int getc(FILE *stream);
+	char *fgets(char *s, int size, FILE *stream);
+	char *gets(char *s);
 	int getchar();
 
 	int ungetc(int c, FILE *stream);

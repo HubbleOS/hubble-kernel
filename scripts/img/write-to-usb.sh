@@ -39,7 +39,7 @@ Darwin)
 	;;
 
 *)
-	echo "❌ WINDOWS - NOT SUPPORTED"
+	echo "❌ OS NOT SUPPORTED"
 	exit 1
 	;;
 esac

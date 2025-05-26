@@ -32,4 +32,10 @@ void *kmalloc_aligned(size_t size, size_t align)
     heap_ptr = aligned_ptr + size;
     return ptr;
 }
+
 void kfree(void *ptr) {}
+
+memory_ops_t heap_memory_ops = {
+    .malloc = kmalloc,
+    .free = kfree,
+};

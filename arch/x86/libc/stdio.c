@@ -114,7 +114,7 @@ int putc(int c, struct FILE *stream)
 	return -1;
 }
 
-void putchar(int c) { putc(c, stdout); }
+int putchar(int c) { return putc(c, stdout); }
 
 #include <stdbool.h>
 
@@ -158,6 +158,31 @@ static void print_int(FILE *stream, int value)
 		stream->write(stream, &buf[j], 1);
 }
 
+static void print_hex(FILE *stream, uintptr_t value)
+{
+	char buf[2 * sizeof(uintptr_t) + 1];
+	int i = 0;
+
+	if (value == 0)
+	{
+		char zero = '0';
+		stream->write(stream, &zero, 1);
+		return;
+	}
+
+	while (value > 0)
+	{
+		buf[i++] = "0123456789abcdef"[value % 16];
+		value /= 16;
+	}
+
+	// Выводим цифры в обратном порядке
+	for (int j = i - 1; j >= 0; j--)
+	{
+		stream->write(stream, &buf[j], 1);
+	}
+}
+
 int vfprintf(FILE *stream, const char *format, va_list args)
 {
 	int written = 0;
@@ -185,6 +210,13 @@ int vfprintf(FILE *stream, const char *format, va_list args)
 			{
 				char c = (char)va_arg(args, int);
 				stream->write(stream, &c, 1);
+				break;
+			}
+			case 'p':
+			{
+				void *ptr = va_arg(args, void *);
+				print_string(stream, "0x");
+				print_hex(stream, (uintptr_t)ptr);
 				break;
 			}
 			case '%':
@@ -269,6 +301,23 @@ int getc(FILE *stream)
 
 	return -1;
 }
+
+char *fgets(char *s, int size, FILE *stream)
+{
+	int c;
+	int i = 0;
+	while ((c = getc(stream)) != EOF)
+	{
+		if (c == '\n')
+			break;
+		if (i < size - 1)
+			s[i++] = c;
+	}
+	s[i] = '\0';
+	return s;
+}
+
+char *gets(char *s) { return fgets(s, 256, stdin); }
 
 int getchar(void) { return getc(stdin); }
 

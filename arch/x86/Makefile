@@ -59,9 +59,13 @@ $(BUILD_DIR)/%.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 # Kernel linking
+# $(OUTPUT): $(OBJ_FILES)
+# 	@echo "Linking kernel ELF: $@"
+# 	$(LD) $(LDFLAGS) -o $@ $(LINK_OBJS)
+
 $(OUTPUT): $(OBJ_FILES)
-	@echo "Linking kernel ELF: $@"
-	$(LD) $(LDFLAGS) -o $@ $(LINK_OBJS)
+	@echo "Linking kernel ELF (via g++): $@"
+	$(CXX) $(LDFLAGS) -o $@ $(LINK_OBJS)
 
 # Kernel binary
 $(ISO): $(OUTPUT)

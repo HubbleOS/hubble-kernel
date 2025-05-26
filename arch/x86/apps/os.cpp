@@ -3,6 +3,7 @@
 #include "utils/color.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 void handle_neofetch();
@@ -24,20 +25,28 @@ public:
 
 	int getWidth() const { return fb->width; }
 	int getHeight() const { return fb->height; }
+	void clearScreen()
+	{
+		for (int i = 0; i < fb->width * fb->height; i++)
+			drawPixel(i % fb->width, i / fb->width, rgb(0, 0, 0));
+	}
 };
 
 extern "C" void os_main(framebuffer_info_t *fb)
 {
 	Screen screen(fb);
+	screen.clearScreen();
 
-	for (int i = 0; i < fb->width * fb->height; i++)
-		screen.drawPixel(i % fb->width, i / fb->width, rgb(0, 0, 0));
 	handle_neofetch();
+	putchar('\n');
 
-	int x;
-	printf("Enter x: ");
-	scanf("%d", &x);
-	printf("x: %d\n", x);
+	void *a = malloc(32);
+	void *b = malloc(32);
+	void *c = malloc(32);
+
+	printf("%p\n", a);
+	printf("%p\n", b);
+	printf("%p\n", c);
 }
 
 void handle_neofetch()

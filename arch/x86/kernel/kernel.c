@@ -7,6 +7,8 @@
 
 #include <stdio.h>
 
+#include <stdbool.h>
+
 extern framebuffer_info_t *g_fb;
 extern int cursor_x;
 extern int cursor_y;

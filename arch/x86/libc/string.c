@@ -1,13 +1,5 @@
 #include "string.h"
 
-size_t strlen(const char *s)
-{
-	size_t len = 0;
-	while (s[len])
-		len++;
-	return len;
-}
-
 char *strcpy(char *dest, const char *src)
 {
 	char *orig = dest;
@@ -29,6 +21,9 @@ char *strncpy(char *dest, const char *src, size_t n)
 	}
 	return dest;
 }
+
+// char *strcat(char *dest, const char *src);
+// char *strncat(char *dest, const char *src, size_t n);
 
 int strcmp(const char *s1, const char *s2)
 {
@@ -64,13 +59,24 @@ char *strchr(const char *s, int c)
 	return c == '\0' ? (char *)s : NULL;
 }
 
-void *memset(void *s, int c, size_t n)
+// char *strrchr(const char *s, int c);
+
+// size_t strspn(const char *s1, const char *s2);
+// size_t strcspn(const char *s1, const char *s2);
+// char *strpbrk(const char *s1, const char *s2);
+// char *strstr(const char *s1, const char *s2);
+
+size_t strlen(const char *s)
 {
-	unsigned char *p = s;
-	while (n--)
-		*p++ = (unsigned char)c;
-	return s;
+	size_t len = 0;
+	while (s[len])
+		len++;
+	return len;
 }
+
+// char *strerror(int errnum);
+
+// char *strtok(char *str, const char *delim);
 
 void *memcpy(void *dest, const void *src, size_t n)
 {
@@ -80,6 +86,8 @@ void *memcpy(void *dest, const void *src, size_t n)
 		*d++ = *s++;
 	return dest;
 }
+
+// void *memmove(void *dest, const void *src, size_t n);
 
 int memcmp(const void *s1, const void *s2, size_t n)
 {
@@ -93,4 +101,14 @@ int memcmp(const void *s1, const void *s2, size_t n)
 		p2++;
 	}
 	return 0;
+}
+
+// void *memchr(const void *s, int c, size_t n);
+
+void *memset(void *s, int c, size_t n)
+{
+	unsigned char *p = s;
+	while (n--)
+		*p++ = (unsigned char)c;
+	return s;
 }
