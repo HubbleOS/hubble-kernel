@@ -7,6 +7,8 @@ ISO_DIR := $(abspath $(OUT_DIR)/$(ARCH)/iso)
 ARCH_DIR := arch/$(ARCH)
 SCRIPT_DIR := scripts
 
+DOCKER_RUN := docker-compose run --rm $(ARCH)-builder
+
 # Cross compiler
 ifeq ($(ARCH),x86)
 	CROSS = x86_64-elf-

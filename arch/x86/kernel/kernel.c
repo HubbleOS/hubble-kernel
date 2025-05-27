@@ -1,6 +1,5 @@
 #include "utils/framebuffer.h"
 #include "utils/font.h"
-#include "cli.h"
 #include "heap.h"
 
 #include <stdint.h>

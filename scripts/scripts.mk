@@ -1,4 +1,5 @@
-# Scripts Makefile
+# scripts.mk
+
 .PHONY: img flash help qemu
 
 SCRIPT_DIR := scripts

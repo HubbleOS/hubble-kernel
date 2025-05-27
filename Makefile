@@ -1,8 +1,10 @@
+# Makefile
+
 CONFIG_MK := $(abspath config/config.mk)
 
 include $(CONFIG_MK)
 
-.PHONY: all build run clean
+.PHONY: all build run clean host-run 
 
 all: build
 
@@ -22,6 +24,10 @@ build: $(OUT_DIR)/$(ARCH)/gnu-efi/.built
 
 run: build
 	@echo "🚀 Running kernel for $(ARCH)..."
+	@make host-run
+
+host-run:
+	@echo "🖥  Launching QEMU from host..."
 	@make $(SCRIPT_DIR) qemu
 
 clean:
@@ -29,4 +35,6 @@ clean:
 	@rm -rf $(OUT_DIR)
 	@echo "✅ Clean complete"
 
-include $(SCRIPT_DIR)/Makefile
+
+include $(SCRIPT_DIR)/scripts.mk
+include $(SCRIPT_DIR)/docker.mk
