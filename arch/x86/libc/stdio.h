@@ -1,27 +1,29 @@
-#pragma once
+#ifndef _STDIO_H_
+#define _STDIO_H_
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #include <stdarg.h>
 
-typedef struct FILE
-{
-	void *device;
-	int (*write)(struct FILE *stream, const char *buffer, int len);
-	int (*read)(struct FILE *stream, char *buffer, int len);
-} FILE;
+	typedef struct FILE
+	{
+		void *device;
+		int (*write)(struct FILE *stream, const char *buffer, int len);
+		int (*read)(struct FILE *stream, char *buffer, int len);
+	} FILE;
 
-extern FILE *__stdoutp;
-extern FILE *__stdinp;
-extern FILE *__stderrp;
+	extern FILE *__stdoutp;
+	extern FILE *__stdinp;
+	extern FILE *__stderrp;
 
 #define EOF (-1)
 
 #define stdout __stdoutp
 #define stdin __stdinp
 #define stderr __stderrp
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 	// output
 	int fprintf(FILE *stream, const char *format, ...);
@@ -47,4 +49,6 @@ extern "C"
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <ctype.h>
 
 void handle_neofetch();
 
@@ -37,11 +38,8 @@ extern "C" void os_main(framebuffer_info_t *fb)
 
   handle_neofetch();
 
-  printf("\nsqrt: %d\n", (int)sqrt(144 * 144));
-  printf("\nsqrt: %f\n", sqrt(144));
-  printf("\nsqrt: %f\n", sqrt(165));
-  // printf("\npow: %d\n", pow(2, 3));
-  printf("\npow: %d\n", (int)pow(2, 3));
+  printf("\n isalpha: %d\n", isalpha('A'));
+  printf("\n isdigit: %d\n", isdigit('1'));
 
   // handle_neofetch();
   // putchar('\n');

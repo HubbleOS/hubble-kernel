@@ -1,10 +1,12 @@
-#pragma once
-#include <stddef.h>
+#ifndef _STDLIB_H_
+#define _STDLIB_H_
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+
+#include <stddef.h>
 
 	// double atof(const char *nptr);
 	// int atoi(const char *nptr);
@@ -34,10 +36,13 @@ extern "C"
 
 	int abs(int x);
 	long labs(long x);
+	long long llabs(long long x);
 
 	// div_t div(int numer, int denom); ??
 	// ldiv_t ldiv(long numer, long denom); ??
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

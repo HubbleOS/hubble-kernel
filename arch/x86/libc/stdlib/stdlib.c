@@ -32,10 +32,5 @@ void free(void *ptr) { memory_ops->free(ptr); }
 // void *bsearch(const void *key, const void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
 // void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
 
-static inline long __abs_common(long x) { return x < 0 ? -x : x; }
-
-int abs(int x) { return (int)__abs_common((long)x); }
-long labs(long x) { return __abs_common(x); }
-
 // div_t div(int numer, int denom); ??
 // ldiv_t ldiv(long numer, long denom); ??
