@@ -7,7 +7,29 @@ ISO_DIR := $(abspath $(OUT_DIR)/$(ARCH)/iso)
 ARCH_DIR := arch/$(ARCH)
 SCRIPT_DIR := scripts
 
-DOCKER_RUN := docker-compose run --rm $(ARCH)-builder
+UNAME_S := $(shell uname -s)
+
+WIN_NAMES := CYGWIN MINGW MSYS
+
+IS_WIN := $(filter-out ,$(foreach w,$(WIN_NAMES),$(findstring $(w),$(UNAME_S))))
+
+
+ifeq ($(IS_WIN),)
+  DOCKER_RUN := docker-compose run --rm $(ARCH)-builder
+else
+  DOCKER_RUN := powershell.exe -File $(SCRIPT_DIR)/docker/docker-run.ps1 $(ARCH)-builder
+endif
+
+IS_WSL := $(findstring Microsoft,$(UNAME_S))
+
+ifeq ($(IS_WSL),Microsoft)
+  $(warning ⚠️  You are running inside WSL. Please ensure Docker Desktop's WSL 2 integration is enabled:
+  $(warning https://docs.docker.com/docker-for-windows/wsl/)
+endif
+
+
+# DOCKER_RUN := docker-compose run --rm $(ARCH)-builder
+
 
 # Cross compiler
 ifeq ($(ARCH),x86)

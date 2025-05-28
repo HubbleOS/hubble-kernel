@@ -5,7 +5,8 @@
 DOCKER_CMDS := build run
 
 docker-build:
-	@${DOCKER_RUN} make
+	@echo "🛠️  Building kernel inside Docker..."
+	@$(DOCKER_RUN) make
 
 docker-run: docker-build
 	@make host-run
