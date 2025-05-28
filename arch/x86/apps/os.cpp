@@ -2,6 +2,7 @@
 #include "utils/color.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 void handle_neofetch();
 
@@ -35,15 +36,23 @@ extern "C" void os_main(framebuffer_info_t *fb)
   screen.clearScreen();
 
   handle_neofetch();
-  putchar('\n');
 
-  void *a = malloc(32);
-  void *b = malloc(32);
-  void *c = malloc(32);
+  printf("\nsqrt: %d\n", (int)sqrt(144 * 144));
+  printf("\nsqrt: %f\n", sqrt(144));
+  printf("\nsqrt: %f\n", sqrt(165));
+  // printf("\npow: %d\n", pow(2, 3));
+  printf("\npow: %d\n", (int)pow(2, 3));
 
-  printf("%p\n", a);
-  printf("%p\n", b);
-  printf("%p\n", c);
+  // handle_neofetch();
+  // putchar('\n');
+
+  // void *a = malloc(32);
+  // void *b = malloc(32);
+  // void *c = malloc(32);
+
+  // printf("%p\n", a);
+  // printf("%p\n", b);
+  // printf("%p\n", c);
 }
 
 void handle_neofetch()

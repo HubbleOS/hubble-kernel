@@ -3,6 +3,7 @@
 #include "utils/framebuffer.h"
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 static FILE __stdout;
 static FILE __stdin;
@@ -116,8 +117,6 @@ int putc(int c, struct FILE *stream)
 
 int putchar(int c) { return putc(c, stdout); }
 
-#include <stdbool.h>
-
 static void print_string(FILE *stream, const char *s)
 {
   while (*s)
@@ -125,6 +124,8 @@ static void print_string(FILE *stream, const char *s)
 }
 
 #define INT_BUF_SIZE 12
+#define DOUBLE_BUF_SIZE 24
+#define HEX_BUF_SIZE 2 * sizeof(uintptr_t)
 
 static void print_int(FILE *stream, int value)
 {
@@ -158,9 +159,52 @@ static void print_int(FILE *stream, int value)
     stream->write(stream, &buf[j], 1);
 }
 
+static void print_double(FILE *stream, double value)
+{
+  char buf[DOUBLE_BUF_SIZE];
+  int i = 0;
+  bool negative = false;
+
+  if (value == 0)
+  {
+    char c = '0';
+    stream->write(stream, &c, 1);
+    return;
+  }
+
+  if (value < 0)
+  {
+    negative = true;
+    value = -value;
+  }
+
+  double point_number = (value - (int)value) * 1000000;
+  int point_number_int = (int)point_number;
+
+  while (point_number_int >= 1)
+  {
+    buf[i++] = '0' + (point_number_int % 10);
+    point_number_int /= 10;
+  }
+
+  buf[i++] = '.';
+
+  while (value >= 1)
+  {
+    buf[i++] = '0' + ((int)value % 10);
+    value /= 10;
+  }
+
+  if (negative)
+    buf[i++] = '-';
+
+  for (int j = i - 1; j >= 0; j--)
+    stream->write(stream, &buf[j], 1);
+}
+
 static void print_hex(FILE *stream, uintptr_t value)
 {
-  char buf[2 * sizeof(uintptr_t) + 1];
+  char buf[HEX_BUF_SIZE + 1];
   int i = 0;
 
   if (value == 0)
@@ -178,9 +222,7 @@ static void print_hex(FILE *stream, uintptr_t value)
 
   // Выводим цифры в обратном порядке
   for (int j = i - 1; j >= 0; j--)
-  {
     stream->write(stream, &buf[j], 1);
-  }
 }
 
 int vfprintf(FILE *stream, const char *format, va_list args)
@@ -217,6 +259,12 @@ int vfprintf(FILE *stream, const char *format, va_list args)
         void *ptr = va_arg(args, void *);
         print_string(stream, "0x");
         print_hex(stream, (uintptr_t)ptr);
+        break;
+      }
+      case 'f':
+      {
+        double val = va_arg(args, double);
+        print_double(stream, val);
         break;
       }
       case '%':

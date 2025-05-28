@@ -19,7 +19,36 @@
 // double log(double x);
 // double log10(double x);
 
-// double pow(double x, double y);
+double pow(double x, double n) { return n == 0 ? 1 : x * pow(x, n - 1); }
+
+double sqrt(double x)
+{
+	double y;
+	int p, square, c;
+
+	/* find the surrounding perfect squares */
+	p = 0;
+	do
+	{
+		p++;
+		square = (p + 1) * (p + 1);
+	} while (x > square);
+
+	/* process the root */
+	y = (double)p;
+	c = 0;
+	while (c < 10)
+	{
+		/* divide and average */
+		y = (x / y + y) / 2;
+		/* test for success */
+		if (y * y == x)
+			return (y);
+		c++;
+	}
+	return (y);
+}
+
 // double sqrt(double x);
 
 // double ceil(double x);
