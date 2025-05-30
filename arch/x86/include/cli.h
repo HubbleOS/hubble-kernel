@@ -3,3 +3,4 @@
 #include "stdbool.h"
 #include "heap.h"
 int cli(framebuffer_info_t *fb);
+int strlen(const char *str);
