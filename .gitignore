@@ -1,6 +1,9 @@
 # MacOS system files
 *.DS_Store
 
+# Configuration files
+*.config
+
 # Compiled binaries and images
 *.elf
 *.bin

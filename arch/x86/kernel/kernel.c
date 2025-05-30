@@ -2,11 +2,7 @@
 #include "utils/font.h"
 #include "heap.h"
 
-#include <stdint.h>
-
-#include <stdio.h>
-
-#include <stdbool.h>
+// #include <stdint.h>
 
 extern framebuffer_info_t *g_fb;
 extern int cursor_x;

@@ -10,38 +10,41 @@ Kernel HubbleOS is a customizable operating system kernel with support for multi
 
 ## Quick Start
 
+### Clone the repository into a folder named 'hubble-kernel'
 ```bash
-# Clone the repository into a folder named 'hubble-kernel'
-git clone --recurse-submodules https://github.com/your-repo/hubbleos.git hubble
-
-# Change directory into the cloned folder
-cd hubble-kernel
-
+git clone --recurse-submodules https://github.com/your-repo/hubbleos.git hubble && cd hubble-kernel
+```
+### Basic commands for work
+```bash
 make                # Build the kernel (default architecture is x86)
 make run            # Run the kernel in QEMU
 make img            # Build the kernel image
 make flash          # Flash the kernel image to a USB device (e.g., /dev/sdX)
 ```
 
-## Commands
+## Makefile Targets
 
-```bash
-make                 # Build the kernel (default target)
-make build           # Same as 'make', builds the kernel
-make run             # Run the built kernel in QEMU
-make qemu            # Run QEMU using current build 
-make img             # Build the kernel image
-make flash           # Flash the kernel image to a USB device
-make clean           # Remove all build output
-make help            # Show help message
+| Command      | Description                                    |
+| ------------ | ---------------------------------------------- |
+| `make`       | Build the kernel (default target).             |
+| `make build` | Same as `make`, builds the kernel.             |
+| `make run`   | Run the built kernel in QEMU.                  |
+| `make qemu`  | Run QEMU using the current build output.       |
+| `make img`   | Build the kernel image.                        |
+| `make flash` | Flash the kernel image to a USB device.        |
+| `make clean` | Remove all build output.                       |
+| `make help`  | Show the help message with available commands. |
 
-# Docker-powered commands:
-make docker-build    # Build the kernel inside Docker container
-make docker-run      # Build inside Docker, run QEMU on host
-make docker-clean    # Clean build output via Docker
-make docker-<target> # Run any Makefile target inside Docker (e.g., docker-img, docker-flash)
-make host-run        # Run QEMU directly on host using previously built image
-```
+### Docker-powered commands
+
+| Command                | Description                                                 |
+| ---------------------- | ----------------------------------------------------------- |
+| `make docker-build`    | Build the kernel inside a Docker container.                 |
+| `make docker-run`      | Build inside Docker, then run QEMU on the host.             |
+| `make docker-clean`    | Clean build output inside Docker.                           |
+| `make docker-<target>` | Run any Makefile target inside Docker (e.g., `docker-img`). |
+| `make host-run`        | Run QEMU directly on host using the previously built image. |
+
 
 ## Usage
 

@@ -1,18 +1,19 @@
-# config.mk
+# tools/config/config.mk
 ARCH ?= x86
 
 OUT_DIR ?= out
 BUILD_DIR := $(abspath $(OUT_DIR)/$(ARCH)/build)
 ISO_DIR := $(abspath $(OUT_DIR)/$(ARCH)/iso)
 ARCH_DIR := arch/$(ARCH)
-SCRIPT_DIR := scripts
+
+TOOLS_DIR := tools
+SCRIPT_DIR := $(abspath $(TOOLS_DIR)/scripts)
 
 UNAME_S := $(shell uname -s)
 
 WIN_NAMES := CYGWIN MINGW MSYS
 
 IS_WIN := $(filter-out ,$(foreach w,$(WIN_NAMES),$(findstring $(w),$(UNAME_S))))
-
 
 ifeq ($(IS_WIN),)
   DOCKER_RUN := docker-compose run --rm $(ARCH)-builder
@@ -27,10 +28,6 @@ ifeq ($(IS_WSL),Microsoft)
   $(warning https://docs.docker.com/docker-for-windows/wsl/)
 endif
 
-
-# DOCKER_RUN := docker-compose run --rm $(ARCH)-builder
-
-
 # Cross compiler
 ifeq ($(ARCH),x86)
 	CROSS = x86_64-elf-
@@ -39,6 +36,7 @@ ifeq ($(ARCH),x86)
 	CC = $(CROSS)gcc
 	CXX = $(CROSS)g++
 	AS = $(CROSS)as
+	AR = $(CROSS)ar
 	OBJCOPY = $(CROSS)objcopy
 	HOST_OBJCOPY = objcopy
 

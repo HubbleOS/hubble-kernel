@@ -1,6 +1,6 @@
 # Makefile
 
-CONFIG_MK := $(abspath config/config.mk)
+CONFIG_MK := $(abspath tools/config/config.mk)
 
 include $(CONFIG_MK)
 
@@ -12,7 +12,6 @@ $(OUT_DIR)/$(ARCH)/gnu-efi/.built:
 	$(MAKE) -C $(ARCH_DIR)/gnu-efi
 	@mkdir -p $(dir $@)
 	@touch $@
-
 
 build: $(OUT_DIR)/$(ARCH)/gnu-efi/.built
 	@echo "🛠️  Building kernel for $(ARCH)..."
