@@ -5,6 +5,8 @@
 #include <math.h>
 #include <ctype.h>
 
+#include <iso646.h>
+
 void handle_neofetch();
 
 class Screen
@@ -36,10 +38,33 @@ extern "C" void os_main(framebuffer_info_t *fb)
   Screen screen(fb);
   screen.clearScreen();
 
-  handle_neofetch();
+  // handle_neofetch();
 
-  printf("\n isalpha: %d\n", isalpha('A'));
-  printf("\n isdigit: %d\n", isdigit('1'));
+  int r, g, b;
+  while (1)
+  {
+    printf("Enter red value:");
+    scanf("%d", &r);
+    printf("Enter green value:");
+    scanf("%d", &g);
+    printf("Enter blue value:");
+    scanf("%d", &b);
+    if (r < 0 or r > 255 or g < 0 or g > 255 or b < 0 or b > 255)
+    {
+      printf("Invalid color values. Please enter values between 0 and 255.\n");
+      continue;
+    }
+    uint32_t color = rgb(r, g, b);
+    screen.clearScreen();
+    for (int y = 0; y < screen.getHeight(); y++)
+    {
+      for (int x = 0; x < screen.getWidth(); x++)
+      {
+        screen.drawPixel(x, y, color);
+      }
+    }
+    printf("Screen cleared with color RGB(%d, %d, %d).\n", r, g, b);
+  }
 
   // handle_neofetch();
   // putchar('\n');

@@ -1,4 +1,6 @@
-#pragma once
+#ifndef _STRING_H
+#define _STRING_H
+
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -33,4 +35,6 @@ extern "C"
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

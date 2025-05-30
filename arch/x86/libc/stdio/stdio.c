@@ -5,6 +5,9 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#include "sys/syscall.h"
+#include "sys/syscall_numbers.h"
+
 static FILE __stdout;
 static FILE __stdin;
 static FILE __stderr;
@@ -17,79 +20,16 @@ extern framebuffer_info_t *g_fb;
 extern int cursor_x;
 extern int cursor_y;
 
-// Упрощённая таблица сканкодов -> ASCII (без учёта Shift, Ctrl и т.п.)
-static const char scancode_to_ascii[128] = {
-    0, 27, '1', '2', '3', '4', '5', '6', '7', '8',    // 0x00 - 0x09
-    '9', '0', '-', '=', '\b',                         // Backspace 0x0E
-    '\t',                                             // Tab 0x0F
-    'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', // 0x10 - 0x19
-    '[', ']', '\n',                                   // Enter key 0x1C
-    0,                                                // Control 0x1D
-    'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', // 0x1E - 0x27
-    '\'', '`', 0,                                     // Left Shift 0x2A
-    '\\', 'z', 'x', 'c', 'v', 'b', 'n',               // 0x2B - 0x31
-    'm', ',', '.', '/', 0,                            // Right Shift 0x36
-    '*', 0, ' ',                                      // Space 0x39
-                                                      // Остальное 0 — необработанные клавиши
-};
-
 int fb_write(struct FILE *stream, const char *buffer, int len)
 {
   (void)stream;
-  if (!g_fb)
-    return -1;
-
-  for (int i = 0; i < len; i++)
-  {
-    char c = buffer[i];
-    if (c == '\n')
-    {
-      cursor_x = 0;
-      cursor_y += CHAR_HEIGHT;
-      continue;
-    }
-    draw_char(g_fb, c, cursor_x, cursor_y);
-    cursor_x += CHAR_WIDTH;
-
-    if ((unsigned int)cursor_x + CHAR_WIDTH > g_fb->width)
-    {
-      cursor_x = 0;
-      cursor_y += CHAR_HEIGHT;
-    }
-  }
-
-  return len;
+  return syscall_dispatcher(SYS_WRITE, 1, (long)buffer, len, 0, 0, 0);
 }
 
 int kb_read(FILE *stream, char *buffer, int len)
 {
   (void)stream;
-  int i = 0;
-
-  while (i < len)
-  {
-    int c = -1;
-    do
-    {
-      uint8_t scancode = kbd_read_scancode();
-
-      if (scancode & 0x80) // отпускание клавиши
-        continue;
-
-      c = scancode_to_ascii[scancode];
-      if (c == 0)
-        continue;
-
-    } while (c == -1);
-
-    buffer[i++] = (char)c;
-    putchar(c); // эхо-вывод
-
-    if (c == '\n')
-      break;
-  }
-
-  return i;
+  return syscall_dispatcher(SYS_READ, 0, (long)buffer, len, 0, 0, 0);
 }
 
 void stdio_init()
