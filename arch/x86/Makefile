@@ -51,12 +51,12 @@ build: $(OBJ_FILES)
 $(BUILD_DIR)/%.o: %.c
 	@echo "Compiling C: $< -> $@"
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(INCLUDES) $< -o $@
+	$(CC) -g $(CFLAGS) $(INCLUDES) $< -o $@
 
 $(BUILD_DIR)/%.o: %.cpp
 	@echo "Compiling C++: $< -> $@"
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+	$(CXX) -g $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 # Kernel linking
 # $(OUTPUT): $(OBJ_FILES)
@@ -65,12 +65,12 @@ $(BUILD_DIR)/%.o: %.cpp
 
 $(OUTPUT): $(OBJ_FILES)
 	@echo "Linking kernel ELF (via g++): $@"
-	$(CXX) $(LDFLAGS) -o $@ $(LINK_OBJS)
+	$(CXX) -g $(LDFLAGS) -o $@ $(LINK_OBJS)
 
 # Kernel binary
 $(ISO): $(OUTPUT)
 	@mkdir -p $(dir $@)
-	$(OBJCOPY) -O $(OBJCPYFLAGS) $< $@
+	$(OBJCOPY) -o $(OBJCPYFLAGS) $< $@
 
 # Bootloader
 bootloader: $(EFI_OUT)

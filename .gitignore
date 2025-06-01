@@ -26,6 +26,7 @@ test/
 # IDE/editor config
 .vscode/
 .idea/
+.fleet/
 *.swp
 *~
 .env

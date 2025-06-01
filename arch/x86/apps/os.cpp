@@ -38,7 +38,7 @@ extern "C" void os_main(framebuffer_info_t *fb)
   Screen screen(fb);
   screen.clearScreen();
 
-  // handle_neofetch();
+  handle_neofetch();
 
   int r, g, b;
   while (1)
