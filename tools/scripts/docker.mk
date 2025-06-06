@@ -1,9 +1,4 @@
 # docker.mk
-
-.PHONY: docker-build docker-run docker-%
-
-DOCKER_CMDS := build run
-
 docker-build:
 	@echo "🛠️  Building kernel inside Docker..."
 	@$(DOCKER_RUN) make

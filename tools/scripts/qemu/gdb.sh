@@ -6,7 +6,9 @@ WORKDIR="$(pwd)"
 CONFIG_FILE="$WORKDIR/.config"
 DEFAULT_PORT=1234
 
-GDBINIT_FILE="$WORKDIR/.gdbinit"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+GDBINIT_FILE="$SCRIPT_DIR/gdbinit.sh"
 
 if [ -f "$GDBINIT_FILE" ]; then
 	GDB_OPTS="--command=$GDBINIT_FILE"
