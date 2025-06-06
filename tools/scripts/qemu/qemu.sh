@@ -51,5 +51,5 @@ qemu-system-x86_64 \
 	-m 1024 \
 	-drive if=pflash,format=raw,readonly=on,file=$WORKDIR/ovmf/OVMF_CODE.fd \
 	-hda fat:rw:"$QEMU_ISO_PATH" \
-	-serial stdio \
-	-S -gdb tcp::${PORT}
+	-serial stdio
+# -S -gdb tcp::${PORT}
