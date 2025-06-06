@@ -1,5 +1,5 @@
 #include "stdlib.h"
-#include "heap.h"
+// #include "heap.h"
 
 // double atof(const char *nptr);
 // int atoi(const char *nptr);
@@ -12,10 +12,14 @@
 // int rand(void);
 // void srand(unsigned int seed);
 
-memory_ops_t *memory_ops = &heap_memory_ops;
+//*
 
-void *malloc(size_t size) { return memory_ops->malloc(size); }
-void free(void *ptr) { memory_ops->free(ptr); }
+// memory_ops_t *memory_ops = &heap_memory_ops;
+
+// void *malloc(size_t size) { return memory_ops->malloc(size); }
+// void free(void *ptr) { memory_ops->free(ptr); }
+
+//*
 
 // void *calloc(size_t nmemb, size_t size);
 // void *malloc(size_t size);

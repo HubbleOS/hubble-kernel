@@ -4,7 +4,11 @@ ARCH ?= x86
 OUT_DIR ?= out
 BUILD_DIR := $(abspath $(OUT_DIR)/$(ARCH)/build)
 ISO_DIR := $(abspath $(OUT_DIR)/$(ARCH)/iso)
-ARCH_DIR := arch/$(ARCH)
+ARCH_DIR := $(abspath arch/$(ARCH))
+
+LIBS_DIR := $(abspath libs)
+LIBC_DIR := $(abspath $(LIBS_DIR)/libc)
+CONFIG_MK := $(abspath tools/config/config.mk)
 
 TOOLS_DIR := tools
 SCRIPT_DIR := $(abspath $(TOOLS_DIR)/scripts)
@@ -54,6 +58,3 @@ endif
 ifeq ($(ARCH),arm64)
 endif
 
-INCLUDES := -Iinclude
-
-LIBS := -lefi -lgnuefi

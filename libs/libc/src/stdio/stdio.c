@@ -4,9 +4,10 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "sys/syscall.h"
-#include "sys/syscall_numbers.h"
+#include "sys/syscall_nums.h"
 
 static FILE __stdout;
 static FILE __stdin;

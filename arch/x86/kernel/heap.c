@@ -12,6 +12,7 @@ void heap_init(uint64_t heap_start, uint64_t heap_size)
     {
         ptr[i] = 0xAA;
     }
+    return;
 }
 
 void *kmalloc(size_t size)

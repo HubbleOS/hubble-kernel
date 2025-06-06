@@ -1,3 +1,4 @@
+# arch/x86/Makefile
 include $(CONFIG_MK)
 
 # Directories
@@ -16,16 +17,11 @@ OBJ_FILES := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRC_FILES))
 CPP_SRC_FILES := $(shell find apps -type f -name "*.cpp")
 CPP_OBJ_FILES := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SRC_FILES))
 
-OBJ_FILES += $(CPP_OBJ_FILES)
-
-LIBC_DIR := libc
-LIBC_SRC := $(shell find $(LIBC_DIR) -type f -name "*.c")
+LIBC_SRC := $(shell find $(LIBC_DIR)/src -type f -name "*.c")
 LIBC_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(LIBC_SRC))
 
 SRC_FILES += $(LIBC_SRC)
-OBJ_FILES += $(LIBC_OBJ)
-
-INCLUDES += -I$(LIBC_DIR)
+OBJ_FILES += $(LIBC_OBJ) $(CPP_OBJ_FILES)
 
 KERNEL_OBJ := $(BUILD_DIR)/kernel/kernel.o
 LINK_OBJS := $(KERNEL_OBJ) $(filter-out $(KERNEL_OBJ),$(OBJ_FILES))
@@ -38,17 +34,19 @@ BOOT_SO  := $(BUILD_DIR)/boot/boot.so
 EFI_OUT  := $(ISO_DIR)/EFI/BOOT/BOOTx64.EFI
 EFI_OUT_DIR := $(ISO_DIR)/EFI/BOOT
 
-.PHONY: all run build bootloader qemu
+INCLUDES += include
+
+.PHONY: all bootloader 
 
 # Default target
-all: apps run
-
-run: $(OUTPUT) $(ISO) bootloader
+all: build $(ISO) bootloader
 
 # Kernel object files
 build: $(OBJ_FILES)
 
 $(BUILD_DIR)/%.o: %.c
+	@echo "INCLUDES := $(INCLUDES)"
+	@echo "LIBC_DIR := $(LIBC_DIR)"
 	@echo "Compiling C: $< -> $@"
 	@mkdir -p $(dir $@)
 	$(CC) -g $(CFLAGS) $(INCLUDES) $< -o $@
@@ -59,18 +57,18 @@ $(BUILD_DIR)/%.o: %.cpp
 	$(CXX) -g $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 # Kernel linking
-# $(OUTPUT): $(OBJ_FILES)
-# 	@echo "Linking kernel ELF: $@"
-# 	$(LD) $(LDFLAGS) -o $@ $(LINK_OBJS)
+$(OUTPUT): $(OBJ_FILES)
+	@echo "Linking kernel ELF: $@"
+	$(LD) $(LDFLAGS) -o $@ $(LINK_OBJS)
 
 $(OUTPUT): $(OBJ_FILES)
 	@echo "Linking kernel ELF (via g++): $@"
-	$(CXX) -g $(LDFLAGS) -o $@ $(LINK_OBJS)
+	$(CXX) $(LDFLAGS) -o $@ $(LINK_OBJS)
 
 # Kernel binary
 $(ISO): $(OUTPUT)
 	@mkdir -p $(dir $@)
-	$(OBJCOPY) -o $(OBJCPYFLAGS) $< $@
+	$(OBJCOPY) -O $(OBJCPYFLAGS) $< $@
 
 # Bootloader
 bootloader: $(EFI_OUT)

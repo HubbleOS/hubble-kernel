@@ -54,28 +54,14 @@ extern "C" void os_main(framebuffer_info_t *fb)
       printf("Invalid color values. Please enter values between 0 and 255.\n");
       continue;
     }
-    uint32_t color = rgb(r, g, b);
+    color color = rgb(r, g, b);
     screen.clearScreen();
     for (int y = 0; y < screen.getHeight(); y++)
-    {
       for (int x = 0; x < screen.getWidth(); x++)
-      {
         screen.drawPixel(x, y, color);
-      }
-    }
+
     printf("Screen cleared with color RGB(%d, %d, %d).\n", r, g, b);
   }
-
-  // handle_neofetch();
-  // putchar('\n');
-
-  // void *a = malloc(32);
-  // void *b = malloc(32);
-  // void *c = malloc(32);
-
-  // printf("%p\n", a);
-  // printf("%p\n", b);
-  // printf("%p\n", c);
 }
 
 void handle_neofetch()
