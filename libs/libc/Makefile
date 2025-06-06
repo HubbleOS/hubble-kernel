@@ -1,7 +1,7 @@
 # libs/libc/Makefile
+include $(CONFIG_MK)
 
-LIBC_DIR := src
-BUILD_DIR ?= build
+LIBC_DIR := $(abspath src)
 LIBC_SRC := $(shell find $(LIBC_DIR) -type f -name "*.c")
 LIBC_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(LIBC_SRC))
 LIBC_OUT := $(BUILD_DIR)/libc.a

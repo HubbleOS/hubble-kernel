@@ -1,7 +1,7 @@
 # arch/x86/Makefile
+# Directories
 include $(CONFIG_MK)
 
-# Directories
 SRC_DIRS := kernel
 BUILD_DIR ?= build
 
@@ -19,7 +19,7 @@ CPP_OBJ_FILES := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SRC_FILES))
 
 OBJ_FILES += $(CPP_OBJ_FILES)
 
-KERNEL_OBJ := $(BUILD_DIR)/kernel/kernel.o
+KERNEL_OBJ := $(BUILD_DIR)/kernel/kmain.o
 LINK_OBJS := $(KERNEL_OBJ) $(filter-out $(KERNEL_OBJ),$(OBJ_FILES))
 
 # UEFI bootloader
@@ -32,7 +32,7 @@ EFI_OUT_DIR := $(ISO_DIR)/EFI/BOOT
 
 INCLUDES += include
 
-.PHONY: all bootloader 
+.PHONY: all bootloader libc build
 
 LIBC_A := $(BUILD_DIR)/libc.a
 
