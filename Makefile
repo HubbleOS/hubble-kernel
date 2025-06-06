@@ -11,17 +11,7 @@ INCLUDES := \
 
 .PHONY: all build run clean host-run libc
 
-all: build libc 
-
-libc:
-	@echo "🔧 Building libc..."
-	$(MAKE) -C libs/libc \
-		BUILD_DIR=$(BUILD_DIR) \
-		ISO_DIR=$(ISO_DIR) \
-		ARCH=$(ARCH) \
-		CONFIG_MK=$(CONFIG_MK)\
-		INCLUDES=$(INCLUDES) 
-	@echo "✅ libc build complete"
+all: build 
 
 $(OUT_DIR)/$(ARCH)/gnu-efi/.built:
 	$(MAKE) -C $(ARCH_DIR)/gnu-efi
