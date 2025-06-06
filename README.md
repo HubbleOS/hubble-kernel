@@ -24,16 +24,17 @@ make flash          # Flash the kernel image to a USB device (e.g., /dev/sdX)
 
 ## Makefile Targets
 
-| Command      | Description                                    |
-| ------------ | ---------------------------------------------- |
-| `make`       | Build the kernel (default target).             |
-| `make build` | Same as `make`, builds the kernel.             |
-| `make run`   | Run the built kernel in QEMU.                  |
-| `make qemu`  | Run QEMU using the current build output.       |
-| `make img`   | Build the kernel image.                        |
-| `make flash` | Flash the kernel image to a USB device.        |
-| `make clean` | Remove all build output.                       |
-| `make help`  | Show the help message with available commands. |
+| Command       | Description                                    |
+| ------------- | ---------------------------------------------- |
+| `make`        | Build the kernel (default target).             |
+| `make build`  | Same as `make`, builds the kernel.             |
+| `make run`    | Run the built kernel in QEMU.                  |
+| `make qemu`   | Run QEMU using the current build output.       |
+| `make img`    | Build the kernel image.                        |
+| `make flash`  | Flash the kernel image to a USB device.        |
+| `make clean`  | Remove all build output.                       |
+| `make mkvars` | Print key build variables (debug info)         |
+| `make help`   | Show the help message with available commands. |
 
 ### Docker-powered commands
 

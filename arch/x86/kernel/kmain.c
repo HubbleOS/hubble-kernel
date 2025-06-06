@@ -17,7 +17,7 @@ void kernel_main(framebuffer_info_t *fb)
     stdio_init();
 
     os_main(fb);
-
+    return;
     while (1)
         ;
 }

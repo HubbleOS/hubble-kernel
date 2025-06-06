@@ -1,15 +1,12 @@
 # scripts.mk
 
-.PHONY: img flash help qemu
+.PHONY: img flash qemu
 
 img:
 	@sh $(SCRIPT_DIR)/img/make-image.sh
 
 flash:
 	@sh $(SCRIPT_DIR)/img/make-flash.sh
-
-help:
-	@sh $(SCRIPT_DIR)/cli/make-help.sh
 
 qemu:
 	@sh $(SCRIPT_DIR)/qemu/qemu.sh $(ISO_DIR)
