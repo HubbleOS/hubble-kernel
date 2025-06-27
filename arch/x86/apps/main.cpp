@@ -5,8 +5,6 @@
 #include <math.h>
 #include <ctype.h>
 
-// #include <iso646.h>
-
 void handle_neofetch();
 
 class Screen

@@ -7,7 +7,7 @@
 #define CHAR_HEIGHT 8
 
 // Шрифт для символів 'A' до 'Z'
-extern const uint8_t font[131][8];
+extern const uint8_t font[256][8];
 
 extern framebuffer_info_t *g_fb;
 extern int cursor_x;
@@ -18,6 +18,8 @@ void init_font(framebuffer_info_t *fb);
 
 // Вивід одного символу (тільки великі латинські літери)
 void draw_char(framebuffer_info_t *fb, char c, int x, int y);
+
+void clear_char_area(framebuffer_info_t *fb, int x, int y);
 
 #define KBD_DATA_PORT 0x60
 #define KBD_STATUS_PORT 0x64

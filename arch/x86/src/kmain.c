@@ -4,11 +4,7 @@
 
 #include <stdint.h>
 
-extern framebuffer_info_t *g_fb;
-extern int cursor_x;
-extern int cursor_y;
-
-void os_main(framebuffer_info_t *fb);
+extern void os_main(framebuffer_info_t *fb);
 
 extern void libc_init(void);
 
