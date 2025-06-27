@@ -1,5 +1,5 @@
-#include "stdio.h"
-#include "ctype.h"
+#include <stdio.h>
+#include <ctype.h>
 
 static void skip_whitespace()
 {

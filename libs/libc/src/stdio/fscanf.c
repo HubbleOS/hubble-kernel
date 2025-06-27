@@ -1,4 +1,4 @@
-#include "stdio.h"
+#include <stdio.h>
 
 int fscanf(FILE *stream, const char *format, ...)
 {

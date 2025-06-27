@@ -1,5 +1,5 @@
-#include "stdio.h"
-#include "stdbool.h"
+#include <stdio.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 static void print_string(FILE *stream, const char *s)
@@ -83,6 +83,9 @@ static void print_double(FILE *stream, double value)
 		stream->write(stream, &buf[j], 1);
 }
 
+// static const char xdigits[16] = {"0123456789ABCDEF"};
+static const char xdigits[16] = {"0123456789abcdef"};
+
 static void print_hex(FILE *stream, uintptr_t value)
 {
 	char buf[HEX_BUF_SIZE + 1];
@@ -97,7 +100,7 @@ static void print_hex(FILE *stream, uintptr_t value)
 
 	while (value > 0)
 	{
-		buf[i++] = "0123456789abcdef"[value % 16];
+		buf[i++] = xdigits[value % 16];
 		value /= 16;
 	}
 
