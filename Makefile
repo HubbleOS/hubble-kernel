@@ -22,13 +22,26 @@ INCLUDES := \
 PHONY := all
 all: build
 
+#########!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+PHONY += libc
+libc:
+	@echo "🔧 Building libc..."
+	$(MAKE) -C $(LIBC_DIR) \
+		BUILD_DIR=$(BUILD_DIR) \
+		ARCH=$(ARCH) \
+		CONFIG_MK=$(CONFIG_MK) \
+		INCLUDES="$(INCLUDES)"
+
+gnu-efi: $(OUT_DIR)/$(ARCH)/gnu-efi/.built
+
 $(OUT_DIR)/$(ARCH)/gnu-efi/.built:
 	$(MAKE) -C $(ARCH_DIR)/gnu-efi
 	@mkdir -p $(dir $@)
 	@touch $@
 
 PHONY += build
-build: $(OUT_DIR)/$(ARCH)/gnu-efi/.built
+build: gnu-efi libc
 	@echo "🛠️  Building kernel for $(ARCH)..."
 	$(MAKE) -C $(ARCH_DIR) \
 		BUILD_DIR=$(BUILD_DIR) \
@@ -37,6 +50,7 @@ build: $(OUT_DIR)/$(ARCH)/gnu-efi/.built
 		LIBS_DIR=$(LIBS_DIR) \
 		INCLUDES="$(INCLUDES)" 
 	@echo "✅ Build complete for $(ARCH)"
+#########!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 PHONY += run
 run: build
