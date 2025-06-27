@@ -2,12 +2,34 @@
 #include <sys/syscall.h>
 #include <sys/syscall_nums.h>
 
+#include <stdbool.h>
+
 #include "stddef.h"
 
 #include "utils/font.h"
 
 extern framebuffer_info_t *g_fb;
 extern int cursor_x, cursor_y;
+
+void backspace()
+{
+	if (cursor_x >= CHAR_WIDTH)
+	{
+		cursor_x -= CHAR_WIDTH;
+	}
+	else if (cursor_y >= CHAR_HEIGHT)
+	{
+		cursor_y -= CHAR_HEIGHT;
+		cursor_x = g_fb->width - CHAR_WIDTH;
+	}
+	else
+	{
+		return;
+	}
+
+	// draw_char(g_fb, ' ', cursor_x, cursor_y);
+	clear_char_area(g_fb, cursor_x, cursor_y);
+}
 
 long sys_write(int fd, const char *buffer, size_t len)
 {
@@ -26,6 +48,12 @@ long sys_write(int fd, const char *buffer, size_t len)
 			cursor_y += CHAR_HEIGHT;
 			continue;
 		}
+		if (c == '\b')
+		{
+			backspace();
+			continue;
+		}
+
 		draw_char(g_fb, c, cursor_x, cursor_y);
 		cursor_x += CHAR_WIDTH;
 
@@ -38,7 +66,6 @@ long sys_write(int fd, const char *buffer, size_t len)
 	return len;
 }
 
-// Упрощённая таблица сканкодов -> ASCII (без учёта Shift, Ctrl и т.п.)
 static const char scancode_to_ascii[128] = {
 	0, 27, '1', '2', '3', '4', '5', '6', '7', '8',	  // 0x00 - 0x09
 	'9', '0', '-', '=', '\b',						  // Backspace 0x0E
@@ -51,8 +78,63 @@ static const char scancode_to_ascii[128] = {
 	'\\', 'z', 'x', 'c', 'v', 'b', 'n',				  // 0x2B - 0x31
 	'm', ',', '.', '/', 0,							  // Right Shift 0x36
 	'*', 0, ' ',									  // Space 0x39
-													  // Остальное 0 — необработанные клавиши
 };
+
+static const char scancode_shift_ascii[128] = {
+	0, 27, '!', '@', '#', '$', '%', '^', '&', '*',	  // 0x00 - 0x09
+	'(', ')', '_', '+', '\b',						  // Backspace
+	'\t',											  // Tab
+	'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', // 0x10 - 0x19
+	'{', '}', '\n',									  // Enter
+	0,												  // Control
+	'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', // 0x1E - 0x27
+	'"', '~', 0,									  // Left Shift
+	'|', 'Z', 'X', 'C', 'V', 'B', 'N',				  // 0x2B - 0x31
+	'M', '<', '>', '?', 0,							  // Right Shift
+	'*', 0, ' ',									  // Space
+};
+
+typedef struct
+{
+	uint8_t scancode;
+	bool extended;
+	bool released;
+	bool is_shift;
+} key_event_t;
+
+static key_event_t read_key_event()
+{
+	static bool extended = false;
+	static bool shift_pressed = false;
+
+	while (1)
+	{
+		uint8_t sc = kbd_read_scancode();
+		uint8_t scancode = sc & 0x7F;
+
+		if (sc == 0xE0)
+		{
+			extended = true;
+			continue;
+		}
+
+		bool released = sc & 0x80;
+
+		if (scancode == 0x2A || scancode == 0x36)
+		{
+			shift_pressed = !released;
+		}
+
+		key_event_t evt = {
+			.scancode = scancode,
+			.extended = extended,
+			.released = released,
+			.is_shift = shift_pressed};
+
+		extended = false;
+		return evt;
+	}
+}
 
 long sys_read(int fd, char *buffer, size_t len)
 {
@@ -60,36 +142,42 @@ long sys_read(int fd, char *buffer, size_t len)
 		return -1;
 
 	size_t i = 0;
-
 	while (i < len)
 	{
-		int c = -1;
-		do
+		key_event_t evt = read_key_event();
+		if (evt.released || evt.extended)
+			continue;
+
+		char c = evt.is_shift ? scancode_shift_ascii[evt.scancode] : scancode_to_ascii[evt.scancode];
+		if (c == 0)
+			continue;
+
+		if (c == '\b')
 		{
-			uint8_t scancode = kbd_read_scancode();
+			if (i > 0)
+			{
+				i--;
+				char backspace = '\b';
+				sys_write(1, &backspace, 1);
+			}
+			continue;
+		}
 
-			if (scancode & 0x80) // отпускание клавиши
-				continue;
-
-			c = scancode_to_ascii[scancode];
-			if (c == 0)
-				continue;
-
-		} while (c == -1);
-
-		buffer[i++] = (char)c;
-		char ch = (char)c;
-		sys_write(1, &ch, 1);
+		buffer[i++] = c;
+		sys_write(1, &c, 1);
 
 		if (c == '\n')
 			break;
 	}
-
 	return i;
 }
 
 long syscall_dispatcher(long n, long a1, long a2, long a3, long a4, long a5, long a6)
 {
+	(void)a4;
+	(void)a5;
+	(void)a6;
+
 	switch (n)
 	{
 	case SYS_WRITE:

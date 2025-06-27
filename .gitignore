@@ -9,6 +9,8 @@
 *.bin
 *.iso
 *.o
+*.so
+*.a
 *.EFI
 *.img
 

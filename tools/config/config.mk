@@ -56,7 +56,7 @@ HOST_OBJCOPY = objcopy
 
 CFLAGS = -ffreestanding -m64 -O2 -Wall -Wextra -c
 CXXFLAGS = -ffreestanding -m64 -O2 -Wall -Wextra -c
-LDFLAGS = -nostdlib -T kernel/linker.ld
+LDFLAGS = -nostdlib -T
 OBJCPYFLAGS = binary
 
 BOOT_CFLAGS = -Iinclude -Ignu-efi/inc -fpic -ffreestanding -fno-stack-protector -fno-stack-check -fshort-wchar -mno-red-zone -maccumulate-outgoing-args -c
