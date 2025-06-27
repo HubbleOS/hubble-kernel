@@ -34,8 +34,6 @@ INCLUDES += include
 
 .PHONY: all bootloader libc build
 
-LIBC_A := $(BUILD_DIR)/libc.a
-
 # Default target
 all: build $(ISO) bootloader
 
@@ -43,16 +41,6 @@ build: libc $(OBJ_FILES)
 
 # Kernel object files
 build: $(OBJ_FILES)
-
-libc: $(LIBC_A)
-
-$(LIBC_A):
-	@echo "🔧 Building libc.a..."
-	$(MAKE) -C $(LIBC_DIR) \
-		BUILD_DIR=$(BUILD_DIR) \
-		ARCH=$(ARCH) \
-		CONFIG_MK=$(CONFIG_MK) \
-		INCLUDES="$(INCLUDES)"
 
 $(BUILD_DIR)/%.o: %.c
 	@echo "Compiling C: $< -> $@"
@@ -69,11 +57,10 @@ $(BUILD_DIR)/%.o: %.cpp
 # 	@echo "Linking kernel ELF: $@"
 # 	$(LD) $(LDFLAGS) -o $@ $(LINK_OBJS) $(LIBC_A)
 
-$(OUTPUT): $(OBJ_FILES) $(LIBC_A)
+$(OUTPUT): $(OBJ_FILES)
 	@echo "LINK_OBJS: $(LINK_OBJS)"
-	@echo "LIBC_A: $(LIBC_A)"
 	@echo "Linking kernel ELF (via g++): $@"
-	$(CXX) $(LDFLAGS) -o $@ $(LINK_OBJS) $(LIBC_A)
+	$(CXX) $(LDFLAGS) -o $@ $(LINK_OBJS) $(BUILD_DIR)/libc.a
 
 # Kernel binary
 $(ISO): $(OUTPUT)
