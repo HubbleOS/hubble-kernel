@@ -1,4 +1,4 @@
-#include "stdio.h"
+#include <stdio.h>
 
 int putc(int c, struct FILE *stream)
 {
