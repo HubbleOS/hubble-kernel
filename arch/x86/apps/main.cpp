@@ -28,7 +28,7 @@ public:
   int getHeight() const { return fb->height; }
   void clearScreen()
   {
-    for (int i = 0; i < fb->width * fb->height; i++)
+    for (size_t i = 0; i < fb->width * fb->height; i++)
       drawPixel(i % fb->width, i / fb->width, rgb(0, 0, 0));
   }
 };

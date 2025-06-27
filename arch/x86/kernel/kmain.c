@@ -10,11 +10,13 @@ extern int cursor_y;
 
 void os_main(framebuffer_info_t *fb);
 
+extern void libc_init(void);
+
 void kernel_main(framebuffer_info_t *fb)
 {
     heap_init(fb->heap_start, fb->heap_size);
     init_font(fb);
-    stdio_init();
+    libc_init();
 
     os_main(fb);
     return;

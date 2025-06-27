@@ -34,7 +34,7 @@ void *kmalloc_aligned(size_t size, size_t align)
     return ptr;
 }
 
-void kfree(void *ptr) {}
+void kfree(void *ptr) { (void)ptr; }
 
 memory_ops_t heap_memory_ops = {
     .malloc = kmalloc,
