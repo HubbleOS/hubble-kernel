@@ -36,8 +36,6 @@ static color blend_colors(color src, color dst)
 {
   uint8_t alpha = get_alpha(src);
 
-  // Если альфа == 0, считаем, что в цвете нет альфа-канала (т.е. формат RGB)
-  // В этом случае считаем цвет полностью непрозрачным.
   if (alpha == 0)
     alpha = 255;
 
@@ -54,29 +52,6 @@ static color blend_colors(color src, color dst)
   return make_color(a, r, g, b);
 }
 
-// void draw_pixel_array(uint8_t *glyph, int pitch, framebuffer_info_t *fb, int
-// x, int y)
-// {
-//     for (int row = 0; row < CHAR_HEIGHT; ++row)
-//     {
-//         uint8_t line = glyph[row];
-
-//         for (int col = 0; col < CHAR_WIDTH; ++col)
-//             if (line & (0x80 >> col))
-//             {
-//                 unsigned int px = (unsigned int)(x + col);
-//                 unsigned int py = (unsigned int)(y + row);
-
-//                 if (px < fb->width && py < fb->height)
-//                 {
-//                     uint32_t *pixel = &((uint32_t *)fb->base)[py * pitch +
-//                     px]; color dst_color = *pixel; color blended =
-//                     blend_colors(font_color, dst_color); *pixel = blended;
-//                 }
-//             }
-//     }
-// }
-
 void draw_pixel_array_scaled(uint8_t *glyph, int pitch, framebuffer_info_t *fb,
                              int x, int y, int scale_x, int scale_y)
 {
@@ -87,10 +62,7 @@ void draw_pixel_array_scaled(uint8_t *glyph, int pitch, framebuffer_info_t *fb,
     for (int col = 0; col < CHAR_WIDTH; ++col)
     {
       if (line & (0x80 >> col))
-      {
-        // Рисуем масштабированный блок пикселя
         for (int dy = 0; dy < scale_y; ++dy)
-        {
           for (int dx = 0; dx < scale_x; ++dx)
           {
             unsigned int px = (unsigned int)(x + col * scale_x + dx);
@@ -104,8 +76,6 @@ void draw_pixel_array_scaled(uint8_t *glyph, int pitch, framebuffer_info_t *fb,
               *pixel = blended;
             }
           }
-        }
-      }
     }
   }
 }
@@ -114,10 +84,30 @@ void draw_char(framebuffer_info_t *fb, char c, int x, int y)
 {
   uint8_t *glyph = (uint8_t *)get_glyph(c); // Отримуємо гліф символу
   if (glyph == 0)
-    get_glyph('!');
+    glyph = (uint8_t *)get_glyph('!');
+
   int pitch = fb->pitch / 4; // Вираховуємо ширину рядка в пікселях (з
                              // урахуванням 32 біт на піксель)
-
-  // draw_pixel_array(glyph, pitch, fb, x, y);
   draw_pixel_array_scaled(glyph, pitch, fb, x, y, 1, 1);
+}
+
+// crutch
+void clear_char_area(framebuffer_info_t *fb, int x, int y)
+{
+  int pitch = fb->pitch / 4;
+  color bg_color = rgb(0, 0, 0);
+
+  for (int row = 0; row < CHAR_HEIGHT; ++row)
+  {
+    for (int col = 0; col < CHAR_WIDTH; ++col)
+    {
+      int px = x + col;
+      int py = y + row;
+
+      if (px < fb->width && py < fb->height)
+      {
+        ((uint32_t *)fb->base)[py * pitch + px] = bg_color;
+      }
+    }
+  }
 }

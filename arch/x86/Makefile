@@ -2,7 +2,7 @@
 # Directories
 include $(CONFIG_MK)
 
-SRC_DIRS := kernel
+SRC_DIR := src
 BUILD_DIR ?= build
 
 # Output ELF and ISO
@@ -11,7 +11,7 @@ ISO_DIR ?= iso
 ISO := $(ISO_DIR)/kernel.bin
 
 # Kernel object files
-SRC_FILES := $(shell find $(SRC_DIRS) -type f -name "*.c")
+SRC_FILES := $(shell find $(SRC_DIR) -type f -name "*.c")
 OBJ_FILES := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRC_FILES))
 
 CPP_SRC_FILES := $(shell find apps -type f -name "*.cpp")
@@ -19,7 +19,7 @@ CPP_OBJ_FILES := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SRC_FILES))
 
 OBJ_FILES += $(CPP_OBJ_FILES)
 
-KERNEL_OBJ := $(BUILD_DIR)/kernel/kmain.o
+KERNEL_OBJ := $(BUILD_DIR)/$(SRC_DIR)/kmain.o
 LINK_OBJS := $(KERNEL_OBJ) $(filter-out $(KERNEL_OBJ),$(OBJ_FILES))
 
 # UEFI bootloader
@@ -60,7 +60,7 @@ $(BUILD_DIR)/%.o: %.cpp
 $(OUTPUT): $(OBJ_FILES)
 	@echo "LINK_OBJS: $(LINK_OBJS)"
 	@echo "Linking kernel ELF (via g++): $@"
-	$(CXX) $(LDFLAGS) -o $@ $(LINK_OBJS) $(BUILD_DIR)/libc.a
+	$(CXX) $(LDFLAGS) $(SRC_DIR)/linker.ld -o $@ $(LINK_OBJS) $(BUILD_DIR)/libc.a
 
 # Kernel binary
 $(ISO): $(OUTPUT)

@@ -68,7 +68,6 @@ clean:
 	@rm -rf $(OUT_DIR)
 	@echo "✅ Clean complete"
 
-
 DOCKER_TARGETS := build run
 PHONY += $(patsubst %,docker-%,$(DOCKER_TARGETS))
 PHONY += docker-%
@@ -97,10 +96,10 @@ help:
 	@echo "  docker-clean   - Clean build output via Docker"
 	@echo "  docker-<target>- Run any target inside Docker, e.g., 'make docker-img'"
 	@echo ""
-	@echo "🖥  Host-only Targets:"
+	@echo "🖥 Host-only Targets:"
 	@echo "  host-run       - Run QEMU from host using current build output"
 	@echo ""
-	@echo "🛠  Variables:"
+	@echo "🛠 Variables:"
 	@echo "  ARCH           - Target architecture (e.g. x86, arm64). Default: x86"
 	@echo "  DOCKER_RUN     - Override Docker run command if needed"
 	@echo ""
