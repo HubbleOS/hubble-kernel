@@ -8,6 +8,9 @@ extern "C"
 
 	long syscall_dispatcher(long n, long a1, long a2, long a3, long a4, long a5, long a6);
 
+	long sys_read(int, char *, size_t);
+	long sys_write(int, const char *, size_t);
+
 #ifdef __cplusplus
 }
 #endif
