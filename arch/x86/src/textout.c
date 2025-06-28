@@ -101,8 +101,8 @@ void clear_char_area(framebuffer_info_t *fb, int x, int y)
   {
     for (int col = 0; col < CHAR_WIDTH; ++col)
     {
-      int px = x + col;
-      int py = y + row;
+      unsigned int px = x + col;
+      unsigned int py = y + row;
 
       if (px < fb->width && py < fb->height)
       {
