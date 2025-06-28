@@ -3,6 +3,7 @@
 #include <sys/syscall_nums.h>
 
 #include <stdbool.h>
+#include <ctype.h>
 
 #include "stddef.h"
 
@@ -100,17 +101,35 @@ typedef struct
 	bool extended;
 	bool released;
 	bool is_shift;
+	bool is_ctrl;
+	bool is_alt;
+	bool is_caps_lock;
 } key_event_t;
+
+#define KEY_SHIFT_LEFT 0x2A
+#define KEY_SHIFT_RIGHT 0x36
+#define KEY_CAPS_LOCK 0x3A
+#define KEY_CONTROL 0x1D
+#define KEY_ALT 0x38
+
+#define KEY_LEFT 0x4B
+#define KEY_UP 0x48
+#define KEY_RIGHT 0x4D
+#define KEY_DOWN 0x50
 
 static key_event_t read_key_event()
 {
 	static bool extended = false;
 	static bool shift_pressed = false;
+	static bool ctrl_pressed = false;
+	static bool alt_pressed = false;
+	static bool caps_lock_active = false;
 
 	while (1)
 	{
 		uint8_t sc = kbd_read_scancode();
 		uint8_t scancode = sc & 0x7F;
+		bool released = sc & 0x80;
 
 		if (sc == 0xE0)
 		{
@@ -118,18 +137,35 @@ static key_event_t read_key_event()
 			continue;
 		}
 
-		bool released = sc & 0x80;
-
+		// Shift (left or right)
 		if (scancode == 0x2A || scancode == 0x36)
 		{
 			shift_pressed = !released;
+		}
+		// Ctrl (left or right)
+		else if ((scancode == 0x1D && !extended) || (scancode == 0x1D && extended))
+		{
+			ctrl_pressed = !released;
+		}
+		// Alt (left or right)
+		else if ((scancode == 0x38 && !extended) || (scancode == 0x38 && extended))
+		{
+			alt_pressed = !released;
+		}
+		// Caps Lock toggle
+		else if (scancode == 0x3A && !released)
+		{
+			caps_lock_active = !caps_lock_active;
 		}
 
 		key_event_t evt = {
 			.scancode = scancode,
 			.extended = extended,
 			.released = released,
-			.is_shift = shift_pressed};
+			.is_shift = shift_pressed,
+			.is_ctrl = ctrl_pressed,
+			.is_alt = alt_pressed,
+			.is_caps_lock = caps_lock_active};
 
 		extended = false;
 		return evt;
@@ -145,12 +181,47 @@ long sys_read(int fd, char *buffer, size_t len)
 	while (i < len)
 	{
 		key_event_t evt = read_key_event();
-		if (evt.released || evt.extended)
+
+		if (evt.released)
 			continue;
 
-		char c = evt.is_shift ? scancode_shift_ascii[evt.scancode] : scancode_to_ascii[evt.scancode];
-		if (c == 0)
-			continue;
+		char c = 0;
+
+		if (evt.extended)
+		{
+			switch (evt.scancode)
+			{
+			case KEY_LEFT:
+				c = '<';
+				break;
+			case KEY_UP:
+				c = '^';
+				break;
+			case KEY_RIGHT:
+				c = '>';
+				break;
+			case KEY_DOWN:
+				c = 'v';
+				break;
+
+			default:
+				break;
+			}
+			// continue;
+		}
+		else
+		{
+			char base = scancode_to_ascii[evt.scancode];
+			char shifted = scancode_shift_ascii[evt.scancode];
+
+			bool is_letter = isalpha(base);
+			bool upper = evt.is_shift ^ (evt.is_caps_lock && is_letter);
+
+			c = upper ? shifted : base;
+		}
+
+		// if (c == 0)
+		// continue;
 
 		if (c == '\b')
 		{
