@@ -11,6 +11,26 @@ static uint8_t *fs_base;
 static FAT32_BPB *bpb;
 static uint32_t fat_start, cluster_heap_start, root_cluster;
 static uint32_t cluster_size;
+void itos(int num, char *str)
+{
+    int i = 0;
+    do
+    {
+        str[i] = '0' + (num % 10);
+        num /= 10;
+        i++;
+    } while (num > 0);
+    str[i] = '\0';
+}
+void stoi(char *str, int *num)
+{
+    *num = 0;
+    while (*str >= '0' && *str <= '9')
+    {
+        *num = *num * 10 + (*str - '0');
+        str++;
+    }
+}
 
 void uint_to_str(uint32_t num, char *buf, size_t bufsize)
 {
@@ -158,86 +178,155 @@ void format_filename_fat(const char *in, char *out11)
 
 char **format_folder_path(const char *in)
 {
-    static char *out[11];
-    int num_of_slashes = 0;
-    for (int i = 0; i < strlen(in); i++)
-    {
-        if (in[i] == '/')
-            num_of_slashes++;
-    }
-    if (num_of_slashes == 0)
-    {
-        // formath inputh file like TEST.TXT TESTTXT
-        out[0] = (char *)kmalloc(1);
-        out[1] = (char *)kmalloc(11);
-        out[0][0] = 0;
-        format_filename_fat(in, out[1]);
-        return out;
-    }
-    else
-    {
-        out[0] = (char *)kmalloc(1);
-        out[0][0] = num_of_slashes + 1;
-        int j = 1;
-        for (int i = 0; i < strlen(in); i++)
-        {
-            if (in[i] == '/')
-            {
-                out[j] = (char *)kmalloc(11);
-                j++;
-                out[j - 1][0] = 0;
-            }
+    static char *out[16]; // макс 15 сегментів + 1 для лічильника
+    int count = 0;
 
-            // formath inputh file like /ROOT/TEST.TXT ROOT TESTTXT
+    const char *start = in;
+    while (*start == '/')
+        start++; // Пропустити початкові '/'
+
+    while (*start && count < 15)
+    {
+        const char *end = start;
+        while (*end && *end != '/')
+            end++;
+
+        int len = end - start;
+        if (len > 0)
+        {
+            char name[12] = {0};
+            for (int i = 0; i < len && i < 11; i++)
+                name[i] = start[i];
+            out[count + 1] = kmalloc(11);
+            format_filename_fat(name, out[count + 1]);
+            count++;
         }
-        out[j] = (char *)kmalloc(11);
-        format_filename_fat(in, out[j]);
-        return out;
+
+        start = end;
+        while (*start == '/')
+            start++;
     }
+
+    out[0] = kmalloc(2);
+    itos(count, out[0]);
+    return out;
 }
 
-int fat32_read_file(const char *filename, void *out_buf, size_t *out_size, framebuffer_info_t *fb)
+uint32_t fat32_find_dir(const char *path)
 {
+    char **folder_path = format_folder_path(path);
+    int count = atoi(folder_path[0]);
+
     uint32_t cluster = root_cluster;
-    uint8_t col = 0;
-    uint8_t row = 0;
-    int cluster_steps = 0;
-    char **folder_path = format_folder_path(filename);
-    char target[11];
-    memcpy(target, folder_path[1], 11);
 
-    while (cluster < 0x0FFFFFF8 && cluster_steps++ < MAX_CLUSTER_CHAIN)
+    for (int level = 0; level < count; level++)
     {
+        char *target = folder_path[1 + level];
+        int cluster_steps = 0;
+        int found = 0;
 
-        if (cluster < 2)
-            return -1; // помилка
+        while (cluster < 0x0FFFFFF8 && cluster_steps++ < MAX_CLUSTER_CHAIN)
+        {
+            uint8_t *cluster_ptr = get_cluster_ptr(cluster);
+            if (!cluster_ptr)
+                return 0;
 
-        uint8_t *cluster_ptr = get_cluster_ptr(cluster);
+            for (int i = 0; i < cluster_size / sizeof(FAT32_DirectoryEntry); i++)
+            {
+                FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)(cluster_ptr + i * sizeof(FAT32_DirectoryEntry));
+
+                if (entry->name[0] == 0x00)
+                    return 0; // Кінець директорії
+
+                if ((entry->attr & 0x0F) == 0x0F)
+                    continue; // long name
+                if (!(entry->attr & 0x10))
+                    continue; // не директорія
+
+                if (memcmp(entry->name, target, 11) == 0)
+                {
+                    cluster = ((entry->first_cluster_high << 16) | entry->first_cluster_low);
+                    found = 1;
+                    break;
+                }
+            }
+
+            if (found)
+                break;
+            cluster = get_next_cluster(cluster);
+        }
+
+        if (!found)
+            return 0;
+    }
+
+    return cluster;
+}
+
+int fat32_read_file(const char *path, void *out_buf, size_t *out_size, framebuffer_info_t *fb)
+{
+    char **folder_path = format_folder_path(path);
+    int depth = atoi(folder_path[0]);
+
+    int column = 0;
+    if (depth == 0)
+        return -1; // некоректний шлях
+    print_text(fb, "                                                                               ", column++, 0, 0xFFFFFF);
+    print_text(fb, "before dir", column++, 0, 0xFFFFFF);
+    // 1. Знайти директорію, де знаходиться файл (усе, крім останнього елемента)
+    uint32_t dir_cluster = root_cluster;
+    if (depth > 1)
+    {
+        print_text(fb, "                                                                               ", column++, 0, 0xFFFFFF);
+        print_text(fb, folder_path[0], column++, 0, 0xFFFFFF);
+
+        char temp_path[256] = {0};
+        int offset = 0;
+        for (int i = 1; i < depth; i++)
+        {
+            int len = strlen(folder_path[i]);
+            memcpy(temp_path + offset, folder_path[i], len);
+            offset += len;
+            temp_path[offset++] = '/';
+        }
+        temp_path[offset - 1] = '\0'; // Видаляємо останній "/"
+        print_text(fb, "                                                                               ", column++, 0, 0xFFFFFF);
+        print_text(fb, "temp path", column++, 0, 0xFFFFFF);
+        dir_cluster = fat32_find_dir(temp_path);
+        if (dir_cluster == 0)
+            return -1;
+    }
+    print_text(fb, "                                                                               ", column++, 0, 0xFFFFFF);
+    print_text(fb, "before file", column++, 0, 0xFFFFFF);
+
+    // 2. Отримати останній компонент (ім'я файлу)
+    char *target_name = folder_path[depth];
+    int cluster_steps = 0;
+
+    while (dir_cluster < 0x0FFFFFF8 && cluster_steps++ < MAX_CLUSTER_CHAIN)
+    {
+        print_text(fb, "                                                                               ", column++, 0, 0xFFFFFF);
+        print_text(fb, "dir", column++, 0, 0xFFFFFF);
+        print_text(fb, target_name, column++, 0, 0xFFFFFF);
+        uint8_t *cluster_ptr = get_cluster_ptr(dir_cluster);
         if (!cluster_ptr)
-            return -1; // помилка
+            return -1;
 
         for (int i = 0; i < cluster_size / sizeof(FAT32_DirectoryEntry); i++)
         {
-
             FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)(cluster_ptr + i * sizeof(FAT32_DirectoryEntry));
 
             if (entry->name[0] == 0x00)
                 return -1; // кінець директорії
-            if ((entry->attr & 0x0F) == 0x0F)
-                continue; // long file name, пропускаємо
 
-            char name[12] = {0};
-            memcpy(name, entry->name, 11);
-            for (int i = 0; i < 11; i++)
+            if ((entry->attr & 0x0F) == 0x0F)
+                continue; // long file name
+
+            if (entry->attr & 0x10)
+                continue; // директорія — пропустити
+
+            if (memcmp(entry->name, target_name, 11) == 0)
             {
-                if (name[i] == ' ')
-                    name[i] = 0;
-            }
-            print_text(fb, "name", row * 10, col++ * 10, 0xFFFFFF);
-            print_text(fb, name, row * 10, col++ * 10, 0xFFFFFF);
-            if (memcmp(entry->name, target, 11) == 0)
-            {
-                print_text(fb, "clusters", row * 10, col++ * 10, 0xFFFFFF);
                 uint32_t file_cluster = (entry->first_cluster_high << 16) | entry->first_cluster_low;
                 uint32_t bytes_read = 0;
                 uint8_t *out = (uint8_t *)out_buf;
@@ -245,27 +334,34 @@ int fat32_read_file(const char *filename, void *out_buf, size_t *out_size, frame
                 while (file_cluster < 0x0FFFFFF8)
                 {
                     uint8_t *src = get_cluster_ptr(file_cluster);
+                    if (!src)
+                        return -1;
+
                     uint32_t to_copy = cluster_size;
                     if (bytes_read + to_copy > entry->file_size)
                         to_copy = entry->file_size - bytes_read;
 
                     memcpy(out + bytes_read, src, to_copy);
                     bytes_read += to_copy;
+
+                    if (bytes_read >= entry->file_size)
+                        break;
+
                     file_cluster = get_next_cluster(file_cluster);
                 }
 
                 if (out_size)
                     *out_size = bytes_read;
-                return 0;
+                return 0; // успіх
             }
         }
-        cluster = get_next_cluster(cluster);
-        if (cluster >= 0x0FFFFFF8)
-            break;
+
+        dir_cluster = get_next_cluster(dir_cluster);
     }
 
     return -1; // файл не знайдено
 }
+
 int fat32_write_file(const char *filename, const void *data, size_t size)
 {
     // 1. Підготовка
