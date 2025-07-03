@@ -49,7 +49,7 @@ qemu-system-x86_64 \
 	-cpu Haswell \
 	-smp 2 \
 	-m 1024 \
-	-drive if=pflash,format=raw,readonly=on,file=$WORKDIR/ovmf/OVMF_CODE.fd \
+	-drive if=pflash,format=raw,readonly=on,file=$WORKDIR/tools/scripts/qemu/ovmf/OVMF_CODE.fd \
 	-hda fat:rw:"$QEMU_ISO_PATH" \
 	-serial stdio
 # -S -gdb tcp::${PORT}

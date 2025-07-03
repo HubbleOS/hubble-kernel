@@ -1,13 +1,9 @@
 # arch/x86/Makefile
-# Directories
-include $(CONFIG_MK)
-
-SRC_DIR := src
+SRC_DIR := kernel
 BUILD_DIR ?= build
 
 # Output ELF and ISO
 OUTPUT := $(BUILD_DIR)/kernel.elf
-ISO_DIR ?= iso
 ISO := $(ISO_DIR)/kernel.bin
 
 # Kernel object files
@@ -32,12 +28,10 @@ EFI_OUT_DIR := $(ISO_DIR)/EFI/BOOT
 
 INCLUDES += include
 
-.PHONY: all bootloader libc build
+.PHONY: all bootloader build iso
 
 # Default target
-all: build $(ISO) bootloader
-
-build: libc $(OBJ_FILES)
+all: build iso bootloader
 
 # Kernel object files
 build: $(OBJ_FILES)
@@ -53,16 +47,14 @@ $(BUILD_DIR)/%.o: %.cpp
 	$(CXX) -g $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 # Kernel linking
-# $(OUTPUT): $(OBJ_FILES) $(LIBC_A)
-# 	@echo "Linking kernel ELF: $@"
-# 	$(LD) $(LDFLAGS) -o $@ $(LINK_OBJS) $(LIBC_A)
-
 $(OUTPUT): $(OBJ_FILES)
 	@echo "LINK_OBJS: $(LINK_OBJS)"
 	@echo "Linking kernel ELF (via g++): $@"
 	$(CXX) $(LDFLAGS) $(SRC_DIR)/linker.ld -o $@ $(LINK_OBJS) $(BUILD_DIR)/libc.a
 
 # Kernel binary
+iso: $(ISO)
+
 $(ISO): $(OUTPUT)
 	@mkdir -p $(dir $@)
 	$(OBJCOPY) -O $(OBJCPYFLAGS) $< $@

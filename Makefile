@@ -1,54 +1,125 @@
+Q = @
+
+ARCH ?= x86
+
+OUT_DIR ?= $(abspath out)
+BUILD_DIR := $(abspath $(OUT_DIR)/$(ARCH)/build)
+ISO_DIR := $(abspath $(OUT_DIR)/$(ARCH)/iso)
+ARCH_DIR := $(abspath arch/$(ARCH))
+
+LIBS_DIR := $(abspath libs)
+LIBC_DIR := $(abspath $(LIBS_DIR)/libc)
 CONFIG_MK := $(abspath tools/config/config.mk)
 
-include $(CONFIG_MK)
+TOOLS_DIR := tools
+SCRIPT_DIR := $(abspath $(TOOLS_DIR)/scripts)
+
+UNAME_S := $(shell uname -s)
+
+WIN_NAMES := CYGWIN MINGW MSYS
+
+IS_WIN := $(filter-out ,$(foreach w,$(WIN_NAMES),$(findstring $(w),$(UNAME_S))))
+
+ifeq ($(IS_WIN),)
+  DOCKER_RUN := docker-compose run --rm $(ARCH)-builder
+else
+  DOCKER_RUN := powershell.exe -File $(SCRIPT_DIR)/docker/docker-run.ps1 $(ARCH)-builder
+endif
+
+IS_WSL := $(findstring Microsoft,$(UNAME_S))
+
+ifeq ($(IS_WSL),Microsoft)
+  $(warning ⚠️  You are running inside WSL. Please ensure Docker Desktop's WSL 2 integration is enabled:
+  $(warning https://docs.docker.com/docker-for-windows/wsl/)
+endif
+
+SUPPORTED_ARCHES := x86 arm64
+ifneq ($(ARCH),$(filter $(ARCH),$(SUPPORTED_ARCHES)))
+  $(error Unsupported architecture: $(ARCH). Supported architectures are: $(SUPPORTED_ARCHES))
+endif
+
+# Cross compiler
+ifeq ($(ARCH),x86)
+	CROSS = x86_64-elf-
+endif
+
+ifeq ($(ARCH),arm64)
+	CROSS = aarch64-elf-
+endif
+
+LD = $(CROSS)ld
+CC = $(CROSS)gcc
+CXX = $(CROSS)g++
+AS = $(CROSS)as
+AR = $(CROSS)ar
+OBJCOPY = $(CROSS)objcopy
+
+HOST_LD = ld
+HOST_CC = gcc
+HOST_CXX = g++
+HOST_AS = as
+HOST_AR = ar
+HOST_OBJCOPY = objcopy
+
+CFLAGS = -ffreestanding -m64 -O2 -Wall -Wextra -c
+CXXFLAGS = -ffreestanding -m64 -O2 -Wall -Wextra -c
+LDFLAGS = -nostdlib -T
+OBJCPYFLAGS = binary
+
+BOOT_CFLAGS = -Iinclude -Ignu-efi/inc -fpic -ffreestanding -fno-stack-protector -fno-stack-check -fshort-wchar -mno-red-zone -maccumulate-outgoing-args -c
+BOOT_LDFLAGS = -shared -Bsymbolic -Lgnu-efi/x86_64/lib -Lgnu-efi/x86_64/gnuefi -Tgnu-efi/gnuefi/elf_x86_64_efi.lds
+BOOT_LIBS = -lgnuefi -lefi
+EFI_SECTIONS = -j .text -j .sdata -j .data -j .rodata -j .dynamic -j .dynsym -j .rel -j .rela -j .rel.* -j .rela.* -j .reloc
+
+export LD CC CXX AS AR OBJCOPY
+export HOST_LD HOST_CC HOST_CXX HOST_AS HOST_AR HOST_OBJCOPY
+
+export CFLAGS CXXFLAGS LDFLAGS OBJCPYFLAGS
+export BOOT_CFLAGS BOOT_LDFLAGS BOOT_LIBS EFI_SECTIONS
 
 # export ARCH
-# export OUT_DIR
-# export BUILD_DIR
-# export ISO_DIR
-# export ARCH_DIR
-# export LIBS_DIR
-# export LIBC_DIR
-# export CONFIG_MK
-# export TOOLS_DIR
-# export SCRIPT_DIR
-# export INCLUDES
+export OUT_DIR
+export BUILD_DIR
+export ISO_DIR
+export ARCH_DIR
+export LIBS_DIR
+export LIBC_DIR
+export CONFIG_MK
+export TOOLS_DIR
+export SCRIPT_DIR
 
-INCLUDES := \
-	-I $(abspath include) \
-	-I $(LIBC_DIR)/include \
-	-I $(ARCH_DIR)/include 
+INCLUDES_DIR += $(abspath include)
+INCLUDES_DIR += $(LIBC_DIR)/include 
+INCLUDES_DIR += $(ARCH_DIR)/include 
 
-PHONY := all
+INCLUDES := $(addprefix -I,$(INCLUDES_DIR))
+
+export INCLUDES
+
+PHONY += all
 all: build
 
 #########!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-PHONY += libc
-libc:
-	@echo "🔧 Building libc..."
-	$(MAKE) -C $(LIBC_DIR) \
-		BUILD_DIR=$(BUILD_DIR) \
-		ARCH=$(ARCH) \
-		CONFIG_MK=$(CONFIG_MK) \
-		INCLUDES="$(INCLUDES)"
+subdirs += $(LIBC_DIR)
+subdirs += $(ARCH_DIR) 
 
-gnu-efi: $(OUT_DIR)/$(ARCH)/gnu-efi/.built
+GNU_EFI_BUILD_DIR := $(OUT_DIR)/$(ARCH)/gnu-efi
+GNU_EFI_BUILT_MARK := $(GNU_EFI_BUILD_DIR)/.built
 
-$(OUT_DIR)/$(ARCH)/gnu-efi/.built:
+gnu-efi: $(GNU_EFI_BUILT_MARK)
+
+$(GNU_EFI_BUILT_MARK):
 	$(MAKE) -C $(ARCH_DIR)/gnu-efi
 	@mkdir -p $(dir $@)
 	@touch $@
 
 PHONY += build
-build: gnu-efi libc
-	@echo "🛠️  Building kernel for $(ARCH)..."
-	$(MAKE) -C $(ARCH_DIR) \
-		BUILD_DIR=$(BUILD_DIR) \
-		ISO_DIR=$(ISO_DIR) \
-		CONFIG_MK=$(CONFIG_MK) \
-		LIBS_DIR=$(LIBS_DIR) \
-		INCLUDES="$(INCLUDES)" 
+build: gnu-efi
+	$(Q)set -e; \
+	for dir in $(subdirs); do \
+        $(MAKE) -C $$dir; \
+    done
 	@echo "✅ Build complete for $(ARCH)"
 #########!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -67,10 +138,6 @@ clean:
 	@echo "🧹 Cleaning build output for $(ARCH)..."
 	@rm -rf $(OUT_DIR)
 	@echo "✅ Clean complete"
-
-DOCKER_TARGETS := build run
-PHONY += $(patsubst %,docker-%,$(DOCKER_TARGETS))
-PHONY += docker-%
 
 PHONY += help
 help:
@@ -122,6 +189,7 @@ mkvars:
 	@echo "  SCRIPT_DIR   = $(SCRIPT_DIR)"
 	@echo "  INCLUDES     = $(INCLUDES)"
 	@echo "  DOCKER_RUN   = $(DOCKER_RUN)"
+	@echo "  subdirs      = $(subdirs)"
 
 include $(SCRIPT_DIR)/scripts.mk
 include $(SCRIPT_DIR)/docker.mk

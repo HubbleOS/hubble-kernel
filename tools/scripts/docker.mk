@@ -1,4 +1,8 @@
 # docker.mk
+DOCKER_TARGETS := build run
+PHONY += $(patsubst %,docker-%,$(DOCKER_TARGETS))
+PHONY += docker-%
+
 docker-build:
 	@echo "🛠️  Building kernel inside Docker..."
 	@$(DOCKER_RUN) make
