@@ -1,4 +1,5 @@
 Q = @
+export Q
 
 ARCH ?= x86
 
@@ -8,7 +9,6 @@ ISO_DIR := $(abspath $(OUT_DIR)/$(ARCH)/iso)
 ARCH_DIR := $(abspath arch/$(ARCH))
 
 LIBS_DIR := $(abspath libs)
-LIBC_DIR := $(abspath $(LIBS_DIR)/libc)
 CONFIG_MK := $(abspath tools/config/config.mk)
 
 TOOLS_DIR := tools
@@ -83,13 +83,12 @@ export BUILD_DIR
 export ISO_DIR
 export ARCH_DIR
 export LIBS_DIR
-export LIBC_DIR
 export CONFIG_MK
 export TOOLS_DIR
 export SCRIPT_DIR
 
 INCLUDES_DIR += $(abspath include)
-INCLUDES_DIR += $(LIBC_DIR)/include 
+INCLUDES_DIR += $(LIBS_DIR)/libc/include
 INCLUDES_DIR += $(ARCH_DIR)/include 
 
 INCLUDES := $(addprefix -I,$(INCLUDES_DIR))
@@ -101,7 +100,7 @@ all: build
 
 #########!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-subdirs += $(LIBC_DIR)
+subdirs += $(LIBS_DIR)
 subdirs += $(ARCH_DIR) 
 
 GNU_EFI_BUILD_DIR := $(OUT_DIR)/$(ARCH)/gnu-efi
@@ -183,7 +182,6 @@ mkvars:
 	@echo "  ISO_DIR      = $(ISO_DIR)"
 	@echo "  ARCH_DIR     = $(ARCH_DIR)"
 	@echo "  LIBS_DIR     = $(LIBS_DIR)"
-	@echo "  LIBC_DIR     = $(LIBC_DIR)"
 	@echo "  CONFIG_MK    = $(CONFIG_MK)"
 	@echo "  TOOLS_DIR    = $(TOOLS_DIR)"
 	@echo "  SCRIPT_DIR   = $(SCRIPT_DIR)"
@@ -192,6 +190,6 @@ mkvars:
 	@echo "  subdirs      = $(subdirs)"
 
 include $(SCRIPT_DIR)/scripts.mk
-include $(SCRIPT_DIR)/docker.mk
+include $(SCRIPT_DIR)/docker/docker.mk
 
 .PHONY: $(PHONY)
