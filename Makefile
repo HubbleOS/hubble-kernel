@@ -66,10 +66,19 @@ CXXFLAGS = -ffreestanding -m64 -O2 -Wall -Wextra -c
 LDFLAGS = -nostdlib -T
 OBJCPYFLAGS = binary
 
-BOOT_CFLAGS = -Iinclude -Ignu-efi/inc -fpic -ffreestanding -fno-stack-protector -fno-stack-check -fshort-wchar -mno-red-zone -maccumulate-outgoing-args -c
-BOOT_LDFLAGS = -shared -Bsymbolic -Lgnu-efi/x86_64/lib -Lgnu-efi/x86_64/gnuefi -Tgnu-efi/gnuefi/elf_x86_64_efi.lds
+BOOT_CFLAGS = -Iinclude -Ignu-efi/inc \
+			-fpic -ffreestanding -fno-stack-protector \
+			-fno-stack-check -fshort-wchar -mno-red-zone \
+			-maccumulate-outgoing-args -c
+
+BOOT_LDFLAGS = -shared -Bsymbolic -Lgnu-efi/x86_64/lib \
+		 -Lgnu-efi/x86_64/gnuefi -Tgnu-efi/gnuefi/elf_x86_64_efi.lds
+
 BOOT_LIBS = -lgnuefi -lefi
-EFI_SECTIONS = -j .text -j .sdata -j .data -j .rodata -j .dynamic -j .dynsym -j .rel -j .rela -j .rel.* -j .rela.* -j .reloc
+
+EFI_SECTIONS = -j .text -j .sdata -j .data -j .rodata \
+		-j .dynamic -j .dynsym -j .rel -j .rela \
+		-j .rel.* -j .rela.* -j .reloc
 
 export LD CC CXX AS AR OBJCOPY
 export HOST_LD HOST_CC HOST_CXX HOST_AS HOST_AR HOST_OBJCOPY
@@ -87,11 +96,9 @@ export CONFIG_MK
 export TOOLS_DIR
 export SCRIPT_DIR
 
-INCLUDES_DIR += $(abspath include)
-INCLUDES_DIR += $(LIBS_DIR)/libc/include
-INCLUDES_DIR += $(ARCH_DIR)/include 
-
-INCLUDES := $(addprefix -I,$(INCLUDES_DIR))
+INCLUDES += -I$(abspath include)
+INCLUDES += -I$(LIBS_DIR)/libc/include
+INCLUDES += -I$(ARCH_DIR)/include 
 
 export INCLUDES
 
