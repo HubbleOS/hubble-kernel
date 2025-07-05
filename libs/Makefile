@@ -1,6 +1,4 @@
-LIBC_DIR := libc
-
-subdirs += $(LIBC_DIR)
+subdirs += libc
 
 .PHONY: build
 build: 
