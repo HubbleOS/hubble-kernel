@@ -1,10 +1,9 @@
-#ifndef _CSTDIO_H_
-#define _CSTDIO_H_
+#pragma once
 
-extern "C"
-{
+#include <_cheader.h>
 #include <stdio.h>
-}
+
+_Begin_C_Header;
 
 namespace std
 {
@@ -20,4 +19,4 @@ namespace std
 
 }
 
-#endif
+_End_C_Header;

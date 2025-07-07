@@ -1,18 +1,12 @@
-#ifndef _SYSCALL_H_
-#define _SYSCALL_H_
+#pragma once
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
+#include <_cheader.h>
 
-	long syscall_dispatcher(long n, long a1, long a2, long a3, long a4, long a5, long a6);
+_Begin_C_Header;
 
-	long sys_read(int, char *, size_t);
-	long sys_write(int, const char *, size_t);
+long syscall_dispatcher(long n, long a1, long a2, long a3, long a4, long a5, long a6);
 
-#ifdef __cplusplus
-}
-#endif
+long sys_read(int, char *, size_t);
+long sys_write(int, const char *, size_t);
 
-#endif
+_End_C_Header;

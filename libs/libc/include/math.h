@@ -1,45 +1,40 @@
-#ifndef _MATH_H_
-#define _MATH_H_
+#pragma once
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
+#include <_cheader.h>
 
-	// #define M_PI 3.14159265358979323846264338327
+_Begin_C_Header;
 
-	// double sin(double x);
-	// double cos(double x);
-	// double tan(double x);
+// #define M_PI 3.14159265358979323846264338327
 
-	// double asin(double x);
-	// double acos(double x);
-	// double atan(double x);
-	// double atan2(double y, double x);
+// double sin(double x);
+// double cos(double x);
+// double tan(double x);
 
-	// double sinh(double x);
-	// double cosh(double x);
-	// double tanh(double x);
+// double asin(double x);
+// double acos(double x);
+// double atan(double x);
+// double atan2(double y, double x);
 
-	// double exp(double x);
-	// double log(double x);
-	// double log10(double x);
+// double sinh(double x);
+// double cosh(double x);
+// double tanh(double x);
 
-	double pow(double x, double n);
-	double sqrt(double x);
+// double exp(double x);
+// double log(double x);
+// double log10(double x);
 
-	// double ceil(double x);
-	// double floor(double x);
+double
+pow(double x, double n);
+double sqrt(double x);
 
-	// double fabs(double x);
-	// double ldexp(double x, int n);
-	// double frexp(double x, int *n);
+// double ceil(double x);
+// double floor(double x);
 
-	// double modf(double x, double *iptr);
-	// double fmod(double x, double y);
+// double fabs(double x);
+// double ldexp(double x, int n);
+// double frexp(double x, int *n);
 
-#ifdef __cplusplus
-}
-#endif
+// double modf(double x, double *iptr);
+// double fmod(double x, double y);
 
-#endif
+_End_C_Header;
