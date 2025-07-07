@@ -31,19 +31,83 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
     status = uefi_call_wrapper(systab->BootServices->LocateProtocol, 3, &fs_guid, NULL, (void **)&FileIO);
     if (EFI_ERROR(status))
+    {
+        Print(L"[3] FS not found: %r\n", status);
         return status;
+    }
 
     status = uefi_call_wrapper(FileIO->OpenVolume, 2, FileIO, &RootFS);
     if (EFI_ERROR(status))
+    {
+        Print(L"OpenVolume failed: %r\n", status);
         return status;
+    }
 
     status = uefi_call_wrapper(RootFS->Open, 5, RootFS, &KernelFile, L"kernel.bin", EFI_FILE_MODE_READ, 0);
     if (EFI_ERROR(status))
+    {
+        Print(L"Open failed kernel: %r\n", status);
         return status;
+    }
 
     status = uefi_call_wrapper(KernelFile->Read, 3, KernelFile, &kernel_size, kernel_addr);
     if (EFI_ERROR(status))
+    {
+        Print(L"Read failed: %r\n", status);
         return status;
+    }
+    EFI_FILE_PROTOCOL *RamdiskFile;
+    UINTN ramdisk_size;
+    void *ramdisk_addr;
+
+    // Відкрити файл ramdisk.img
+    status = uefi_call_wrapper(RootFS->Open, 5, RootFS, &RamdiskFile, L"ramdisk.img", EFI_FILE_MODE_READ, 0);
+    if (EFI_ERROR(status))
+    {
+        Print(L"Open failed ramdisk: %r\n", status);
+        return status;
+    }
+
+    // Отримати розмір файлу (через FileInfo)
+    EFI_GUID FileInfoGuid = EFI_FILE_INFO_ID;
+    EFI_FILE_INFO *FileInfo;
+    UINTN FileInfoSize = sizeof(EFI_FILE_INFO) + 256;
+
+    status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, FileInfoSize, (void **)&FileInfo);
+    if (EFI_ERROR(status))
+    {
+        Print(L"AllocatePool failed: %r\n", status);
+        return status;
+    }
+
+    status = uefi_call_wrapper(RamdiskFile->GetInfo, 4, RamdiskFile, &FileInfoGuid, &FileInfoSize, FileInfo);
+    if (EFI_ERROR(status))
+    {
+        Print(L"GetInfo failed: %r\n", status);
+        return status;
+    }
+
+    ramdisk_size = FileInfo->FileSize;
+
+    // Виділити пам’ять під RAM-диск
+    status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages, EfiLoaderData,
+                               (ramdisk_size + 0xFFF) / 0x1000, (EFI_PHYSICAL_ADDRESS *)&ramdisk_addr);
+    if (EFI_ERROR(status))
+    {
+        Print(L"AllocatePages failed: %r\n", status);
+        return status;
+    }
+
+    // Зчитати в пам’ять
+    status = uefi_call_wrapper(RamdiskFile->Read, 3, RamdiskFile, &ramdisk_size, ramdisk_addr);
+    if (EFI_ERROR(status))
+    {
+        Print(L"Read failed: %r\n", status);
+        return status;
+    }
+
+    // Закрити файл
+    uefi_call_wrapper(RamdiskFile->Close, 1, RamdiskFile);
 
     uefi_call_wrapper(KernelFile->Close, 1, KernelFile);
     uefi_call_wrapper(RootFS->Close, 1, RootFS);
@@ -51,11 +115,18 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
     // === [4] Виділення місця для framebuffer_info ===
     framebuffer_info_t *fb_info = (framebuffer_info_t *)((uint8_t *)kernel_addr + kernel_size + 0x1000);
 
+    // === [4] Виділення місця для ram_info ===
+    ram_info_t *ram_info = (ram_info_t *)((uint8_t *)fb_info + sizeof(framebuffer_info_t));
+    ramdisk_info_t *ramdisk_info = (ramdisk_info_t *)((uint8_t *)ram_info + sizeof(ram_info_t));
+
     fb_info->base = (void *)gop->Mode->FrameBufferBase;
     fb_info->width = gop->Mode->Info->HorizontalResolution;
     fb_info->height = gop->Mode->Info->VerticalResolution;
     fb_info->pitch = gop->Mode->Info->PixelsPerScanLine * 4;
     fb_info->bpp = 32;
+
+    ramdisk_info->ramdisk_base = ramdisk_addr;
+    ramdisk_info->ramdisk_size = ramdisk_size;
 
     // === [5] Find largest EfiConventionalMemory region for heap ===
     EFI_MEMORY_DESCRIPTOR *mem_map = NULL;
@@ -64,16 +135,25 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
     status = uefi_call_wrapper(BS->GetMemoryMap, 5, &mem_map_size, mem_map, &map_key, &desc_size, &desc_version);
     if (status != EFI_BUFFER_TOO_SMALL)
+    {
+        Print(L"[Debug] GetMemoryMap failed: %r\n", status);
         return status;
+    }
 
     mem_map_size += desc_size * 10;
     status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, mem_map_size, (void **)&mem_map);
     if (EFI_ERROR(status))
+    {
+        Print(L"[Debug] AllocatePool failed: %r\n", status);
         return status;
+    }
 
     status = uefi_call_wrapper(BS->GetMemoryMap, 5, &mem_map_size, mem_map, &map_key, &desc_size, &desc_version);
     if (EFI_ERROR(status))
+    {
+        Print(L"[Debug] GetMemoryMap failed: %r\n", status);
         return status;
+    }
 
     EFI_MEMORY_DESCRIPTOR *best = NULL;
     UINTN entry_count = mem_map_size / desc_size;
@@ -87,10 +167,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
         }
     }
 
-    fb_info->heap_start = best->PhysicalStart;
-    fb_info->heap_size = best->NumberOfPages * EFI_PAGE_SIZE;
+    ram_info->heap_start = best->PhysicalStart;
+    ram_info->heap_size = best->NumberOfPages * EFI_PAGE_SIZE;
 
-    Print(L"[Debug] heap_start=%lx, heap_size=%lx\n", fb_info->heap_start, fb_info->heap_size);
+    Print(L"[Debug] heap_start=%lx, heap_size=%lx\n", ram_info->heap_start, ram_info->heap_size);
+
+    BootInfo boot_info = {fb_info, ram_info, ramdisk_info};
 
     // === [6] Final memory map & ExitBootServices ===
     mem_map_size = 0;
@@ -122,8 +204,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
     }
 
     // === [7] Передача керування ядру ===
-    void (*kernel_entry)(framebuffer_info_t *) = (void *)kernel_addr;
-    kernel_entry(fb_info);
+    void (*kernel_entry)(BootInfo *) = (void *)kernel_addr;
+    kernel_entry(&boot_info);
 
     return EFI_SUCCESS;
 }
