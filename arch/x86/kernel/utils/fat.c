@@ -3,7 +3,9 @@
 #include "utils/framebuffer.h"
 #include "utils/font.h"
 #include "heap.h"
-#include "cli.h"
+
+#include <stdio.h>
+#include <string.h>
 
 #define MAX_CLUSTER_CHAIN 1024
 
@@ -114,20 +116,20 @@ int fat32_init(void *ramdisk_base)
 
 void debug_fat32(framebuffer_info_t *fb)
 {
-    char buf[4096];
-    print_text(fb, "FAT32", 0, 0, 0xFFFFFF);
-    print_text(fb, "FAT Start: ", 0, 20, 0xFFFFFF);
-    uint_to_str(fat_start, buf, sizeof(buf));
-    print_text(fb, buf, 150, 20, 0xFFFFFF);
-    print_text(fb, "Cluster Heap Start: ", 0, 40, 0xFFFFFF);
-    uint_to_str(cluster_heap_start, buf, sizeof(buf));
-    print_text(fb, buf, 150, 40, 0xFFFFFF);
-    print_text(fb, "Root Cluster: ", 0, 60, 0xFFFFFF);
-    uint_to_str(root_cluster, buf, sizeof(buf));
-    print_text(fb, buf, 150, 60, 0xFFFFFF);
-    print_text(fb, "Cluster Size: ", 0, 80, 0xFFFFFF);
-    uint_to_str(cluster_size, buf, sizeof(buf));
-    print_text(fb, buf, 150, 80, 0xFFFFFF);
+    // char buf[4096];
+    // print_text(fb, "FAT32", 0, 0, 0xFFFFFF);
+    // print_text(fb, "FAT Start: ", 0, 20, 0xFFFFFF);
+    // uint_to_str(fat_start, buf, sizeof(buf));
+    // print_text(fb, buf, 150, 20, 0xFFFFFF);
+    // print_text(fb, "Cluster Heap Start: ", 0, 40, 0xFFFFFF);
+    // uint_to_str(cluster_heap_start, buf, sizeof(buf));
+    // print_text(fb, buf, 150, 40, 0xFFFFFF);
+    // print_text(fb, "Root Cluster: ", 0, 60, 0xFFFFFF);
+    // uint_to_str(root_cluster, buf, sizeof(buf));
+    // print_text(fb, buf, 150, 60, 0xFFFFFF);
+    // print_text(fb, "Cluster Size: ", 0, 80, 0xFFFFFF);
+    // uint_to_str(cluster_size, buf, sizeof(buf));
+    // print_text(fb, buf, 150, 80, 0xFFFFFF);
 }
 
 static uint8_t *get_cluster_ptr(uint32_t cluster)
@@ -231,7 +233,7 @@ uint32_t fat32_find_dir(const char *path)
             if (!cluster_ptr)
                 return 0;
 
-            for (int i = 0; i < cluster_size / sizeof(FAT32_DirectoryEntry); i++)
+            for (size_t i = 0; i < cluster_size / sizeof(FAT32_DirectoryEntry); i++)
             {
                 FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)(cluster_ptr + i * sizeof(FAT32_DirectoryEntry));
 
@@ -268,17 +270,16 @@ int fat32_read_file(const char *path, void *out_buf, size_t *out_size, framebuff
     char **folder_path = format_folder_path(path);
     int depth = atoi(folder_path[0]);
 
-    int column = 0;
     if (depth == 0)
         return -1; // некоректний шлях
-    print_text(fb, "                                                                               ", column++, 0, 0xFFFFFF);
-    print_text(fb, "before dir", column++, 0, 0xFFFFFF);
+    printf("                                                                               \n");
+    printf("before dir\n");
     // 1. Знайти директорію, де знаходиться файл (усе, крім останнього елемента)
     uint32_t dir_cluster = root_cluster;
     if (depth > 1)
     {
-        print_text(fb, "                                                                               ", column++, 0, 0xFFFFFF);
-        print_text(fb, folder_path[0], column++, 0, 0xFFFFFF);
+        printf("                                                                               \n");
+        printf("%s\n", folder_path[0]);
 
         char temp_path[256] = {0};
         int offset = 0;
@@ -290,14 +291,16 @@ int fat32_read_file(const char *path, void *out_buf, size_t *out_size, framebuff
             temp_path[offset++] = '/';
         }
         temp_path[offset - 1] = '\0'; // Видаляємо останній "/"
-        print_text(fb, "                                                                               ", column++, 0, 0xFFFFFF);
-        print_text(fb, "temp path", column++, 0, 0xFFFFFF);
+
+        printf("                                                                               \n");
+        printf("temp path: %s\n", temp_path);
+
         dir_cluster = fat32_find_dir(temp_path);
         if (dir_cluster == 0)
             return -1;
     }
-    print_text(fb, "                                                                               ", column++, 0, 0xFFFFFF);
-    print_text(fb, "before file", column++, 0, 0xFFFFFF);
+    printf("                                                                               \n");
+    printf("before file\n");
 
     // 2. Отримати останній компонент (ім'я файлу)
     char *target_name = folder_path[depth];
@@ -305,14 +308,15 @@ int fat32_read_file(const char *path, void *out_buf, size_t *out_size, framebuff
 
     while (dir_cluster < 0x0FFFFFF8 && cluster_steps++ < MAX_CLUSTER_CHAIN)
     {
-        print_text(fb, "                                                                               ", column++, 0, 0xFFFFFF);
-        print_text(fb, "dir", column++, 0, 0xFFFFFF);
-        print_text(fb, target_name, column++, 0, 0xFFFFFF);
+        printf("                                                                               \n");
+        printf("dir\n");
+        printf("%s\n", target_name);
+
         uint8_t *cluster_ptr = get_cluster_ptr(dir_cluster);
         if (!cluster_ptr)
             return -1;
 
-        for (int i = 0; i < cluster_size / sizeof(FAT32_DirectoryEntry); i++)
+        for (size_t i = 0; i < cluster_size / sizeof(FAT32_DirectoryEntry); i++)
         {
             FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)(cluster_ptr + i * sizeof(FAT32_DirectoryEntry));
 
@@ -377,7 +381,7 @@ int fat32_write_file(const char *filename, const void *data, size_t size)
     while (cluster < 0x0FFFFFF8 && cluster_steps++ < MAX_CLUSTER_CHAIN)
     {
         uint8_t *cluster_ptr = get_cluster_ptr(cluster);
-        for (int i = 0; i < cluster_size / sizeof(FAT32_DirectoryEntry); i++)
+        for (size_t i = 0; i < cluster_size / sizeof(FAT32_DirectoryEntry); i++)
         {
             FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)(cluster_ptr + i * sizeof(FAT32_DirectoryEntry));
 
