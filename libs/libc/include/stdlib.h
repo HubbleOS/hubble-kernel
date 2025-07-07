@@ -1,10 +1,9 @@
 #pragma once
 
 #include <_cheader.h>
+#include <stddef.h>
 
 _Begin_C_Header;
-
-#include <stddef.h>
 
 // double atof(const char *nptr);
 // int atoi(const char *nptr);

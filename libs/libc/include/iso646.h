@@ -1,7 +1,8 @@
-#ifndef _ISO646_H_
-#define _ISO646_H_
+#pragma once
 
-#ifdef __cplusplus
+#include <_cheader.h>
+
+_Begin_C_Header;
 
 #define and &&
 #define and_eq &=
@@ -15,6 +16,4 @@
 #define xor ^
 #define xor_eq ^=
 
-#endif
-
-#endif
+_End_C_Header;
