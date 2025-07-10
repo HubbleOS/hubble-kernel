@@ -1,8 +1,6 @@
 #pragma once
 
-#include <_cheader.h>
-
-_Begin_C_Header;
+#ifdef __cplusplus
 
 #define and &&
 #define and_eq &=
@@ -16,4 +14,4 @@ _Begin_C_Header;
 #define xor ^
 #define xor_eq ^=
 
-_End_C_Header;
+#endif
