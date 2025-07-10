@@ -1,6 +1,5 @@
 #include "utils/font.h"
 #include "utils/framebuffer.h"
-#include <stdarg.h>
 
 int cursor_x = 0;
 int cursor_y = 0;
