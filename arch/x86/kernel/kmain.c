@@ -5,6 +5,7 @@
 
 // #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 extern void os_main(framebuffer_info_t *fb);
 extern void libc_init(void);
@@ -72,6 +73,30 @@ void kernel_main(BootInfo *bi)
         printf("FILE LISTED\n");
         printf("%s\n", buf);
     }
+    memset(buf, 0, sizeof(buf));
+    if (fat32_create_folder("TEST_FOLDER") == 0)
+    {
+        printf("FOLDER CREATED\n");
+        if (fat32_list_files("", buf) == 0)
+        {
+            printf("FILE LISTED\n");
+            printf("%s\n", buf);
+        }
+        if (fat32_delete_dir("test_folder") == 0)
+        {
+            printf("FOLDER DELETED\n");
+            memset(buf, 0, sizeof(buf));
+            if (fat32_list_files("", buf) == 0)
+            {
+                printf("FILE LISTED\n");
+                printf("%s\n", buf);
+            }
+        }
+        else
+            printf("error: %d", fat32_delete_dir("TEST_FOLDER"));
+    }
+    else
+        printf("error: %d", fat32_create_folder("TEST_FOLDER"));
     printf("END\n");
 
     while (1)
