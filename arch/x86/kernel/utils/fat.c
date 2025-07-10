@@ -529,8 +529,6 @@ int fat32_rename_file(const char *oldname, const char *newname)
     FAT32_DirectoryEntry *entry = fat32_find_file_in(dir_cluster, target);
     if (!entry)
         return -2;
-    printf("entry %s\n", entry->name);
-    printf("folder path new %s\n", folder_path_new[1]);
     memcpy(entry->name, folder_path_new, 11);
     return 0;
 }
@@ -538,11 +536,9 @@ int fat32_list_files(const char *path, char *out_buf)
 {
     char **folder_path = format_folder_path(path);
     int depth = atoi(folder_path[0]);
-    printf("depth %d\n", depth);
     uint32_t dir_cluster = root_cluster;
     if (depth >= 1)
     {
-        printf("folder path %s\n", folder_path[1]);
         dir_cluster = fat32_find_dir(folder_path);
         if (dir_cluster < 2)
             return -1;
@@ -592,5 +588,150 @@ int fat32_list_files(const char *path, char *out_buf)
     }
 
     *ptr = '\0';
+    return 0;
+}
+int fat32_create_folder(const char *path)
+{
+    char **folder_path = format_folder_path(path);
+    int depth = atoi(folder_path[0]);
+    uint32_t dir_cluster = root_cluster;
+    if (depth - 1 >= 1)
+    {
+        dir_cluster = fat32_find_dir(folder_path);
+        if (dir_cluster < 2)
+            return -1;
+    }
+
+    uint32_t cluster = dir_cluster;
+    FAT32_DirectoryEntry *free_entry = NULL;
+    while (cluster < 0x0FFFFFF8)
+    {
+        uint8_t *cluster_ptr = get_cluster_ptr(cluster);
+        for (int i = 0; i < cluster_size / sizeof(FAT32_DirectoryEntry); i++)
+        {
+            FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)(cluster_ptr + i * sizeof(FAT32_DirectoryEntry));
+            if (entry->name[0] == 0x00 || entry->name[0] == 0xE5)
+            {
+                free_entry = entry;
+                goto found_free;
+            }
+        }
+        cluster = get_next_cluster(cluster);
+    }
+    return -2;
+
+found_free:
+    uint32_t new_cluster = 0, prev = 0;
+    uint32_t *fat = (uint32_t *)(fs_base + fat_start * bpb->bytes_per_sector);
+    for (uint32_t i = 2; i < bpb->fat_size_32 * bpb->bytes_per_sector / 4; i++)
+    {
+        if ((fat[i] & 0x0FFFFFFF) == 0)
+        {
+            fat[i] = 0x0FFFFFFF;
+            new_cluster = i;
+            break;
+        }
+    }
+    if (new_cluster == 0)
+        return -3;
+
+    memset(get_cluster_ptr(new_cluster), 0, cluster_size);
+
+    // Make directory
+    memcpy(free_entry->name, folder_path[depth], 11);
+    free_entry->attr = 0x10; // directory
+    free_entry->first_cluster_low = new_cluster & 0xFFFF;
+    free_entry->first_cluster_high = (new_cluster >> 16) & 0xFFFF;
+    free_entry->file_size = 0;
+
+    // Prepare to add `.`, `..`
+    FAT32_DirectoryEntry *entries = (FAT32_DirectoryEntry *)get_cluster_ptr(new_cluster);
+
+    // `.`
+    memset(&entries[0], 0, sizeof(FAT32_DirectoryEntry));
+    memcpy(entries[0].name, ".          ", 11);
+    entries[0].attr = 0x10;
+    entries[0].first_cluster_low = new_cluster & 0xFFFF;
+    entries[0].first_cluster_high = (new_cluster >> 16) & 0xFFFF;
+
+    // `..`
+    memset(&entries[1], 0, sizeof(FAT32_DirectoryEntry));
+    memcpy(entries[1].name, "..         ", 11);
+    entries[1].attr = 0x10;
+    entries[1].first_cluster_low = dir_cluster & 0xFFFF;
+    entries[1].first_cluster_high = (dir_cluster >> 16) & 0xFFFF;
+
+    return 0;
+}
+
+int fat32_delete_dir(const char *path)
+{
+    char **folder_path = format_folder_path(path);
+    int depth = atoi(folder_path[0]);
+    uint32_t parent_cluster = root_cluster;
+    if (depth - 1 >= 1)
+    {
+        parent_cluster = fat32_find_dir(folder_path);
+        if (parent_cluster < 2)
+            return -1;
+    }
+
+    // get target
+    char *target = folder_path[depth];
+
+    // find dir
+    uint32_t cluster = parent_cluster;
+    FAT32_DirectoryEntry *dir_entry = NULL;
+
+    while (cluster < 0x0FFFFFF8)
+    {
+        uint8_t *cluster_ptr = get_cluster_ptr(cluster);
+        for (int i = 0; i < cluster_size / sizeof(FAT32_DirectoryEntry); i++)
+        {
+            FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)(cluster_ptr + i * sizeof(FAT32_DirectoryEntry));
+            if (entry->name[0] == 0x00)
+                break;
+
+            if ((entry->attr & 0x0F) == 0x0F)
+                continue;
+
+            if ((entry->attr & 0x10) && memcmp(entry->name, target, 11) == 0)
+            {
+                dir_entry = entry;
+                goto found_dir;
+            }
+        }
+        cluster = get_next_cluster(cluster);
+    }
+    return -3; // not found
+
+found_dir:
+    // check if dir is empty
+    uint32_t dir_cluster = (dir_entry->first_cluster_high << 16) | dir_entry->first_cluster_low;
+    uint8_t *cluster_ptr = get_cluster_ptr(dir_cluster);
+    FAT32_DirectoryEntry *entries = (FAT32_DirectoryEntry *)cluster_ptr;
+
+    for (int i = 2; i < cluster_size / sizeof(FAT32_DirectoryEntry); i++)
+    {
+        if (entries[i].name[0] == 0x00)
+            break; // end
+        if (entries[i].name[0] != 0xE5)
+            return -4; // dir is not empty
+    }
+
+    // Очистити FAT
+    uint32_t *fat = (uint32_t *)(fs_base + fat_start * bpb->bytes_per_sector);
+    uint32_t next = fat[dir_cluster] & 0x0FFFFFFF;
+    fat[dir_cluster] = 0;
+    while (next < 0x0FFFFFF8)
+    {
+        uint32_t temp = fat[next] & 0x0FFFFFFF;
+        fat[next] = 0;
+        next = temp;
+    }
+
+    // Видалити запис у батьківській директорії
+    dir_entry->name[0] = 0xE5;
+
     return 0;
 }
