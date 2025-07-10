@@ -6,7 +6,7 @@
 _Begin_C_Header;
 
 // double atof(const char *nptr);
-// int atoi(const char *nptr);
+int atoi(const char *nptr);
 // long atol(const char *nptr);
 
 // double strtod(const char *nptr, char **endptr);
