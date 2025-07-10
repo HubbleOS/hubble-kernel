@@ -8,7 +8,7 @@ BUILD_DIR := $(abspath $(OUT_DIR)/$(ARCH)/build)
 ISO_DIR := $(abspath $(OUT_DIR)/$(ARCH)/iso)
 ARCH_DIR := $(abspath arch/$(ARCH))
 
-LIBS_DIR := $(abspath libs)
+LIB_DIR := $(abspath lib)
 CONFIG_MK := $(abspath tools/config/config.mk)
 
 TOOLS_DIR := tools
@@ -91,13 +91,13 @@ export OUT_DIR
 export BUILD_DIR
 export ISO_DIR
 export ARCH_DIR
-export LIBS_DIR
+export LIB_DIR
 export CONFIG_MK
 export TOOLS_DIR
 export SCRIPT_DIR
 
 INCLUDES += -I$(abspath include)
-INCLUDES += -I$(LIBS_DIR)/libc/include
+INCLUDES += -I$(LIB_DIR)/libc/include
 INCLUDES += -I$(ARCH_DIR)/include 
 
 export INCLUDES
@@ -107,7 +107,7 @@ all: build
 
 #########!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-subdirs += $(LIBS_DIR)
+subdirs += $(LIB_DIR)
 subdirs += $(ARCH_DIR) 
 
 GNU_EFI_BUILD_DIR := $(OUT_DIR)/$(ARCH)/gnu-efi
@@ -188,7 +188,7 @@ mkvars:
 	@echo "  BUILD_DIR    = $(BUILD_DIR)"
 	@echo "  ISO_DIR      = $(ISO_DIR)"
 	@echo "  ARCH_DIR     = $(ARCH_DIR)"
-	@echo "  LIBS_DIR     = $(LIBS_DIR)"
+	@echo "  LIB_DIR     = $(LIB_DIR)"
 	@echo "  CONFIG_MK    = $(CONFIG_MK)"
 	@echo "  TOOLS_DIR    = $(TOOLS_DIR)"
 	@echo "  SCRIPT_DIR   = $(SCRIPT_DIR)"

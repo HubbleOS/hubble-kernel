@@ -2,11 +2,14 @@
 
 char *strchr(const char *s, int c)
 {
+	unsigned char uc = (unsigned char)c;
+
 	while (*s)
 	{
-		if (*s == (char)c)
+		if (*s == uc)
 			return (char *)s;
 		s++;
 	}
-	return c == '\0' ? (char *)s : NULL;
+
+	return uc == '\0' ? (char *)s : NULL;
 }
