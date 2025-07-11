@@ -103,7 +103,8 @@ INCLUDES += -I$(ARCH_DIR)/include
 export INCLUDES
 
 PHONY += all
-all: build
+all:
+	@$(MAKE) -C tools/test-tool
 
 #########!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
