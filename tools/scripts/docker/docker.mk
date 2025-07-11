@@ -5,7 +5,7 @@ PHONY += docker-%
 
 docker-build:
 	@echo "🛠️  Building kernel inside Docker..."
-	@$(DOCKER_RUN) make
+	@$(DOCKER_RUN) make build
 
 docker-run: docker-build
 	@make host-run
