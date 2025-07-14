@@ -5,23 +5,13 @@
 #include <signal.h>
 #include <stdio.h>
 
+#include "menutypes.h"
+
 typedef enum
 {
 	MENU_ACTION,
 	MENU_CHECKLIST
 } MenuType;
-
-typedef struct
-{
-	const char *label;
-	void (*action)(WINDOW *output_win);
-} MenuItem;
-
-typedef struct
-{
-	const char *label;
-	bool checked;
-} ChecklistItem;
 
 typedef struct
 {
@@ -101,6 +91,10 @@ void run_cmd_in_window(const char *cmd, WINDOW *win)
 		}
 		mvwprintw(win, row++, 1, "%.*s", max_x - 2, clean_buf);
 		wrefresh(win);
+
+		box(win, 0, 0);
+		mvwprintw(win, 0, 2, " Output ");
+		wrefresh(win);
 	}
 	pclose(pipe);
 
@@ -120,78 +114,20 @@ void act_docker_run(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-run",
 void act_docker_build(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-build", win); }
 void act_docker_clean(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-clean", win); }
 
-void draw_frame(WINDOW *win, const char *title)
+void draw_action_menu(WINDOW *win, MenuItem *items, int count, int hl, int scroll, int px, int py)
 {
-	box(win, 0, 0);
-	if (title)
-	{
-		int x = (getmaxx(win) - (int)strlen(title)) / 2;
-		mvwprintw(win, 0, x > 1 ? x : 1, " %s ", title);
-	}
-}
-
-void draw_action_menu(WINDOW *win, MenuItem *items, int count, int hl, int px, int py)
-{
+	int height = getmaxy(win) - py - 2;
 	int width = getmaxx(win) - px - 4;
-	for (int i = 0; i < count; i++)
+	for (int i = 0; i < height && (i + scroll) < count; i++)
 	{
+		int idx = i + scroll;
 		int y = i + py;
-		if (i == hl)
-		{
+		if (idx == hl)
 			wattron(win, A_REVERSE);
-			mvwhline(win, y, px, ' ', width);
-			mvwprintw(win, y, px, "%s", items[i].label);
-			wattroff(win, A_REVERSE);
-		}
-		else
-		{
-			mvwprintw(win, y, px, "%s", items[i].label);
-		}
-	}
-	int y = count + py;
-	if (hl == count)
-	{
-		wattron(win, A_REVERSE);
 		mvwhline(win, y, px, ' ', width);
-		mvwprintw(win, y, px, "< Back");
-		wattroff(win, A_REVERSE);
-	}
-	else
-	{
-		mvwprintw(win, y, px, "< Back");
-	}
-}
-
-void draw_checklist_menu(WINDOW *win, ChecklistItem *items, int count, int hl, int px, int py)
-{
-	int width = getmaxx(win) - px - 4;
-	for (int i = 0; i < count; i++)
-	{
-		int y = i + py;
-		char mark = items[i].checked ? '+' : ' ';
-		if (i == hl)
-		{
-			wattron(win, A_REVERSE);
-			mvwhline(win, y, px, ' ', width);
-			mvwprintw(win, y, px, "[%c] %s", mark, items[i].label);
+		mvwprintw(win, y, px, "%s", items[idx].label);
+		if (idx == hl)
 			wattroff(win, A_REVERSE);
-		}
-		else
-		{
-			mvwprintw(win, y, px, "[%c] %s", mark, items[i].label);
-		}
-	}
-	int y = count + py;
-	if (hl == count)
-	{
-		wattron(win, A_REVERSE);
-		mvwhline(win, y, px, ' ', width);
-		mvwprintw(win, y, px, "< Back");
-		wattroff(win, A_REVERSE);
-	}
-	else
-	{
-		mvwprintw(win, y, px, "< Back");
 	}
 }
 
@@ -216,13 +152,42 @@ void show_resize_warning(int tw, int th, int reqw, int reqh)
 	delwin(win);
 }
 
+void draw_frame(WINDOW *win, const char *title)
+{
+	box(win, 0, 0);
+	if (title)
+	{
+		int x = (getmaxx(win) - (int)strlen(title)) / 2;
+		mvwprintw(win, 0, x > 1 ? x : 1, " %s ", title);
+	}
+}
+
+void draw_checklist_menu(WINDOW *win, ChecklistItem *items, int count, int hl, int px, int py)
+{
+	int width = getmaxx(win) - px - 4;
+	for (int i = 0; i < count; i++)
+	{
+		int y = i + py;
+		char mark = items[i].checked ? '+' : ' ';
+		mvwhline(win, y, px, ' ', width);
+		if (i == hl)
+		{
+			wattron(win, A_REVERSE);
+			mvwprintw(win, y, px, "[%c] %s", mark, items[i].label);
+			wattroff(win, A_REVERSE);
+		}
+		else
+		{
+			mvwprintw(win, y, px, "[%c] %s", mark, items[i].label);
+		}
+	}
+}
+
 void menu_loop(Menu *menu)
 {
-	int hl = 0, ch, px = 4, py = 2;
-	WINDOW *win_left = NULL;
-	WINDOW *win_right = NULL;
-	const int min_h = 24;
-
+	int hl = 0, ch, px = 4, py = 2, scroll_offset = 0;
+	WINDOW *win_left = NULL, *win_right = NULL;
+	const int MIN_WIDTH = 80, MIN_HEIGHT = 24;
 	struct sigaction sa = {.sa_handler = on_resize, .sa_flags = SA_RESTART};
 	sigaction(SIGWINCH, &sa, NULL);
 
@@ -235,50 +200,38 @@ void menu_loop(Menu *menu)
 			refresh();
 			clear();
 		}
-
 		if (win_left)
-		{
 			delwin(win_left);
-			win_left = NULL;
-		}
 		if (win_right)
-		{
 			delwin(win_right);
-			win_right = NULL;
-		}
-
-		int termw = COLS, termh = LINES;
-		int w = termw < 80 ? termw : 80;
-		int h = min_h;
-
-		if (h > termh || w > termw)
+		int term_width = COLS, term_height = LINES;
+		if (term_width < MIN_WIDTH || term_height < MIN_HEIGHT)
 		{
-			show_resize_warning(termw, termh, w, h);
+			show_resize_warning(term_width, term_height, MIN_WIDTH, MIN_HEIGHT);
 			timeout(100);
 			ch = getch();
 			if (ch == 27)
 				break;
 			continue;
 		}
-
-		int left_w = w / 2;
-		int right_w = w - left_w;
-		int x = (termw - w) / 2;
-		int y = (termh - h) / 2;
-
-		win_left = newwin(h, left_w, y, x);
-		win_right = newwin(h, right_w, y, x + left_w);
-
+		int left_width = term_width * 0.35;
+		int right_width = term_width - left_width;
+		win_left = newwin(term_height, left_width, 0, 0);
+		win_right = newwin(term_height, right_width, 0, left_width);
 		keypad(win_left, TRUE);
 
 		werase(win_left);
 		draw_frame(win_left, menu->title);
-
 		int count = 0;
 		if (menu->type == MENU_ACTION)
 		{
 			count = (int)menu->action.count;
-			draw_action_menu(win_left, menu->action.items, count, hl, px, py);
+			int max_visible = getmaxy(win_left) - py - 2;
+			if (hl < scroll_offset)
+				scroll_offset = hl;
+			if (hl >= scroll_offset + max_visible)
+				scroll_offset = hl - max_visible + 1;
+			draw_action_menu(win_left, menu->action.items, count, hl, scroll_offset, px, py);
 		}
 		else if (menu->type == MENU_CHECKLIST)
 		{
@@ -286,49 +239,38 @@ void menu_loop(Menu *menu)
 			draw_checklist_menu(win_left, menu->checklist.items, count, hl, px, py);
 		}
 
+		if (count == 0)
+			continue;
+
 		werase(win_right);
 		draw_frame(win_right, "Output");
 		wrefresh(win_right);
-
 		wrefresh(win_left);
 
 		timeout(-1);
 		ch = wgetch(win_left);
-
 		if (ch == KEY_UP)
-			hl = (hl - 1 + count + 1) % (count + 1);
+			hl = (hl - 1 + count) % count;
 		else if (ch == KEY_DOWN)
-			hl = (hl + 1) % (count + 1);
+			hl = (hl + 1) % count;
 		else if (ch == '\n')
 		{
 			if (hl < count)
 			{
 				if (menu->type == MENU_ACTION && menu->action.items[hl].action)
 				{
-
 					menu->action.items[hl].action(win_right);
-
-					werase(win_left);
-					draw_frame(win_left, menu->title);
-					draw_action_menu(win_left, menu->action.items, count, hl, px, py);
-					wrefresh(win_left);
-
-					werase(win_right);
-					draw_frame(win_right, "Output");
-					wrefresh(win_right);
 				}
 				else if (menu->type == MENU_CHECKLIST)
 				{
-					menu->checklist.items[hl].checked ^= 1;
+					menu->checklist.items[hl].checked = !menu->checklist.items[hl].checked;
 				}
 			}
-			else
-				break;
 		}
-		else if (ch == 27)
+
+		else if (ch == 27) // ESC
 			break;
 	}
-
 	if (win_left)
 		delwin(win_left);
 	if (win_right)
@@ -347,6 +289,31 @@ void show_make_menu(WINDOW *output_win)
 		{"help", act_help},
 		{"flash", act_flash},
 		{"docker-run", act_docker_run},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
+		{"docker-build", act_docker_build},
 		{"docker-build", act_docker_build},
 		{"docker-clean", act_docker_clean}};
 	Menu m = {.type = MENU_ACTION, .title = "Make Menu", .action = {items, COUNT(items)}};
@@ -367,6 +334,7 @@ void show_checklist(WINDOW *output_win)
 int main()
 {
 	initscr();
+	set_escdelay(25);
 	noecho();
 	curs_set(FALSE);
 	keypad(stdscr, TRUE);
