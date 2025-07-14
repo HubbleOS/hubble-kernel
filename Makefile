@@ -121,13 +121,33 @@ $(GNU_EFI_BUILT_MARK):
 	@mkdir -p $(dir $@)
 	@touch $@
 
+
+LOG_DIR := $(OUT_DIR)/logs
+
+prepare-log-dir:
+	@mkdir -p $(LOG_DIR)
+
 PHONY += build
-build: gnu-efi
-	$(Q)set -e; \
-	for dir in $(subdirs); do \
-        $(MAKE) -C $$dir; \
-    done
+build: gnu-efi | prepare-log-dir
+	@timestamp=$$(date +%Y%m%d-%H%M%S); \
+	logfile="$(LOG_DIR)/build $$timestamp.log"; \
+	echo "📦 Logging build to $$logfile"; \
+	{ \
+		echo "== Build started at $$(date) =="; \
+		for dir in $(subdirs); do \
+			$(MAKE) -C $$dir; \
+		done; \
+		echo "== Build finished at $$(date) =="; \
+	} 2>&1 | tee "$$logfile"
 	@echo "✅ Build complete for $(ARCH)"
+
+# PHONY += build
+# build: gnu-efi
+# 	$(Q)set -e; \
+# 	for dir in $(subdirs); do \
+#         $(MAKE) -C $$dir; \
+#     done
+# 	@echo "✅ Build complete for $(ARCH)"
 #########!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 PHONY += run
