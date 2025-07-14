@@ -39,6 +39,15 @@ extern "C" void os_main(framebuffer_info_t *fb)
   handle_neofetch();
 
   int r, g, b;
+
+  void *A = malloc(32);
+  void *B = malloc(32);
+  void *C = malloc(32);
+
+  printf("%p\n", A);
+  printf("%p\n", B);
+  printf("%p\n", C);
+
   while (1)
   {
     printf("Enter red value:");
