@@ -1,14 +1,14 @@
 CC := gcc
 CCFLAGS := 
-INCLUDES := -Iinclude -Isrc
+INCLUDES := -Iinclude -Imenu
 
 LDFLAGS := -lncurses
 
 # BUILD_DIR := build
 # BUILD_DIR := $(abspath build)
-override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/main,build)
+override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/menu,build)
 
-SRC_DIR := src
+SRC_DIR := menu
 TARGET := $(BUILD_DIR)/main
 
 SRCS := $(shell find $(SRC_DIR) -name "*.c")
