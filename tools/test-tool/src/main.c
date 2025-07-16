@@ -61,6 +61,7 @@ void run_cmd_in_window(const char *cmd, WINDOW *win)
 {
 	char full_cmd[512];
 	snprintf(full_cmd, sizeof(full_cmd), "script -q /dev/null %s", cmd);
+	// snprintf(full_cmd, sizeof(full_cmd), "%s", cmd);
 
 	werase(win);
 	box(win, 0, 0);
@@ -81,7 +82,6 @@ void run_cmd_in_window(const char *cmd, WINDOW *win)
 
 	while (fgets(buffer, sizeof(buffer), pipe))
 	{
-
 		char clean_buf[256];
 		strip_nonprintable(clean_buf, buffer);
 
@@ -104,16 +104,6 @@ void run_cmd_in_window(const char *cmd, WINDOW *win)
 
 	wgetch(win);
 }
-
-void act_host_run(WINDOW *win) { run_cmd_in_window("make -C ../.. host-run", win); }
-void act_build(WINDOW *win) { run_cmd_in_window("make -C ../.. build", win); }
-void act_run(WINDOW *win) { run_cmd_in_window("make -C ../.. run", win); }
-void act_clean(WINDOW *win) { run_cmd_in_window("make -C ../.. clean", win); }
-void act_help(WINDOW *win) { run_cmd_in_window("make -C ../.. help", win); }
-void act_flash(WINDOW *win) { run_cmd_in_window("make -C ../.. flash", win); }
-void act_docker_run(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-run", win); }
-void act_docker_build(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-build", win); }
-void act_docker_clean(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-clean", win); }
 
 void draw_action_menu(WINDOW *win, MenuItem *items, int count, int hl, int scroll, int px, int py)
 {
@@ -237,7 +227,6 @@ void menu_loop(Menu *menu)
 		werase(win_left);
 		draw_frame(win_left, menu->title);
 		int count = 0;
-
 		if (menu->type == MENU_ACTION)
 		{
 			count = (int)menu->action.count;
@@ -289,13 +278,18 @@ void menu_loop(Menu *menu)
 		{
 			if (hl < count)
 			{
-				if (menu->type == MENU_ACTION && menu->action.items[hl].action)
+				switch (menu->type)
 				{
-					menu->action.items[hl].action(win_right);
-				}
-				else if (menu->type == MENU_CHECKLIST)
-				{
+				case MENU_ACTION:
+					if (menu->action.items[hl].action)
+					{
+						menu->action.items[hl].action(win_right);
+					}
+					break;
+				case MENU_CHECKLIST:
 					menu->checklist.items[hl].checked = !menu->checklist.items[hl].checked;
+				default:
+					break;
 				}
 			}
 		}
@@ -311,10 +305,49 @@ void menu_loop(Menu *menu)
 	refresh();
 }
 
+void show_make_menu(WINDOW *output_win);
+void show_checklist(WINDOW *output_win);
+void show_main_menu();
+
+int main()
+{
+	initscr();
+	set_escdelay(25);
+	noecho();
+	curs_set(FALSE);
+	keypad(stdscr, TRUE);
+
+	show_main_menu();
+
+	endwin();
+	return 0;
+}
+
+void act_qemu(WINDOW *win) { run_cmd_in_window("make -C qemu", win); }
+void act_build(WINDOW *win) { run_cmd_in_window("make -C ../.. build", win); }
+void act_run(WINDOW *win) { run_cmd_in_window("make -C ../.. run", win); }
+void act_clean(WINDOW *win) { run_cmd_in_window("make -C ../.. clean", win); }
+void act_help(WINDOW *win) { run_cmd_in_window("make -C ../.. help", win); }
+void act_flash(WINDOW *win) { run_cmd_in_window("make -C ../.. flash", win); }
+void act_docker_run(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-run", win); }
+void act_docker_build(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-build", win); }
+void act_docker_clean(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-clean", win); }
+
+void show_main_menu()
+{
+	static MenuItem items[] = {
+		{"Make", show_make_menu},
+		{"List", show_checklist}};
+
+	Menu m = {.type = MENU_ACTION, .title = "Main Menu", .action = {items, COUNT(items)}};
+
+	menu_loop(&m);
+}
+
 void show_make_menu(WINDOW *output_win)
 {
 	static MenuItem items[] = {
-		{"host-run", act_host_run},
+		{"host-run", act_qemu},
 		{"build", act_build},
 		{"run", act_run},
 		{"clean", act_clean},
@@ -384,26 +417,4 @@ void show_checklist(WINDOW *output_win)
 		{"item4", false}};
 	Menu m = {.type = MENU_CHECKLIST, .title = "Checklist", .checklist = {items, COUNT(items)}};
 	menu_loop(&m);
-}
-
-int main()
-{
-	initscr();
-	set_escdelay(25);
-	noecho();
-	curs_set(FALSE);
-	keypad(stdscr, TRUE);
-
-	MenuItem main_items[] = {
-		{"Make", show_make_menu},
-		{"List", show_checklist}};
-	Menu main_menu = {
-		.type = MENU_ACTION,
-		.title = "Main Menu",
-		.action = {main_items, COUNT(main_items)}};
-
-	menu_loop(&main_menu);
-
-	endwin();
-	return 0;
 }
