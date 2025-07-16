@@ -61,6 +61,7 @@ void run_cmd_in_window(const char *cmd, WINDOW *win)
 {
 	char full_cmd[512];
 	snprintf(full_cmd, sizeof(full_cmd), "script -q /dev/null %s", cmd);
+	// snprintf(full_cmd, sizeof(full_cmd), "%s", cmd);
 
 	werase(win);
 	box(win, 0, 0);
@@ -81,7 +82,6 @@ void run_cmd_in_window(const char *cmd, WINDOW *win)
 
 	while (fgets(buffer, sizeof(buffer), pipe))
 	{
-
 		char clean_buf[256];
 		strip_nonprintable(clean_buf, buffer);
 
@@ -104,16 +104,6 @@ void run_cmd_in_window(const char *cmd, WINDOW *win)
 
 	wgetch(win);
 }
-
-void act_host_run(WINDOW *win) { run_cmd_in_window("make -C ../.. host-run", win); }
-void act_build(WINDOW *win) { run_cmd_in_window("make -C ../.. build", win); }
-void act_run(WINDOW *win) { run_cmd_in_window("make -C ../.. run", win); }
-void act_clean(WINDOW *win) { run_cmd_in_window("make -C ../.. clean", win); }
-void act_help(WINDOW *win) { run_cmd_in_window("make -C ../.. help", win); }
-void act_flash(WINDOW *win) { run_cmd_in_window("make -C ../.. flash", win); }
-void act_docker_run(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-run", win); }
-void act_docker_build(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-build", win); }
-void act_docker_clean(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-clean", win); }
 
 void draw_action_menu(WINDOW *win, MenuItem *items, int count, int hl, int scroll, int px, int py)
 {
@@ -317,6 +307,7 @@ void menu_loop(Menu *menu)
 
 void show_make_menu(WINDOW *output_win);
 void show_checklist(WINDOW *output_win);
+void show_main_menu();
 
 int main()
 {
@@ -326,24 +317,37 @@ int main()
 	curs_set(FALSE);
 	keypad(stdscr, TRUE);
 
-	MenuItem main_items[] = {
-		{"Make", show_make_menu},
-		{"List", show_checklist}};
-	Menu main_menu = {
-		.type = MENU_ACTION,
-		.title = "Main Menu",
-		.action = {main_items, COUNT(main_items)}};
-
-	menu_loop(&main_menu);
+	show_main_menu();
 
 	endwin();
 	return 0;
 }
 
+void act_qemu(WINDOW *win) { run_cmd_in_window("make -C qemu", win); }
+void act_build(WINDOW *win) { run_cmd_in_window("make -C ../.. build", win); }
+void act_run(WINDOW *win) { run_cmd_in_window("make -C ../.. run", win); }
+void act_clean(WINDOW *win) { run_cmd_in_window("make -C ../.. clean", win); }
+void act_help(WINDOW *win) { run_cmd_in_window("make -C ../.. help", win); }
+void act_flash(WINDOW *win) { run_cmd_in_window("make -C ../.. flash", win); }
+void act_docker_run(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-run", win); }
+void act_docker_build(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-build", win); }
+void act_docker_clean(WINDOW *win) { run_cmd_in_window("make -C ../.. docker-clean", win); }
+
+void show_main_menu()
+{
+	static MenuItem items[] = {
+		{"Make", show_make_menu},
+		{"List", show_checklist}};
+
+	Menu m = {.type = MENU_ACTION, .title = "Main Menu", .action = {items, COUNT(items)}};
+
+	menu_loop(&m);
+}
+
 void show_make_menu(WINDOW *output_win)
 {
 	static MenuItem items[] = {
-		{"host-run", act_host_run},
+		{"host-run", act_qemu},
 		{"build", act_build},
 		{"run", act_run},
 		{"clean", act_clean},
