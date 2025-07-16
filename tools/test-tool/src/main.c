@@ -32,7 +32,8 @@ typedef struct
 	};
 } Menu;
 
-#define COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
+#define sizeOfArray(arr) (sizeof(arr) / sizeof((arr)[0]))
+#define COUNT(arr) sizeOfArray(arr)
 
 volatile sig_atomic_t resized = 0;
 
@@ -148,7 +149,6 @@ void show_resize_warning(int tw, int th, int reqw, int reqh)
 	mvwprintw(win, 5, (w - (int)strlen(msg4)) / 2, "%s", msg4);
 
 	wrefresh(win);
-	wgetch(win);
 	delwin(win);
 }
 
@@ -162,34 +162,41 @@ void draw_frame(WINDOW *win, const char *title)
 	}
 }
 
-void draw_checklist_menu(WINDOW *win, ChecklistItem *items, int count, int hl, int px, int py)
+void draw_checklist_menu(WINDOW *win, ChecklistItem *items, int count, int hl, int scroll, int px, int py)
 {
+	int height = getmaxy(win) - py - 2;
 	int width = getmaxx(win) - px - 4;
-	for (int i = 0; i < count; i++)
+	for (int i = 0; i < height && (i + scroll) < count; i++)
 	{
+		int idx = i + scroll;
 		int y = i + py;
-		char mark = items[i].checked ? '+' : ' ';
+		char mark = items[idx].checked ? '+' : ' ';
 		mvwhline(win, y, px, ' ', width);
-		if (i == hl)
+		if (idx == hl)
 		{
 			wattron(win, A_REVERSE);
-			mvwprintw(win, y, px, "[%c] %s", mark, items[i].label);
+			mvwprintw(win, y, px, "[%c] %s", mark, items[idx].label);
 			wattroff(win, A_REVERSE);
 		}
 		else
 		{
-			mvwprintw(win, y, px, "[%c] %s", mark, items[i].label);
+			mvwprintw(win, y, px, "[%c] %s", mark, items[idx].label);
 		}
 	}
 }
 
+#include <sys/select.h>
+#include <unistd.h>
+
 void menu_loop(Menu *menu)
 {
-	int hl = 0, ch, px = 4, py = 2, scroll_offset = 0;
+	int hl = 0, ch = ERR, px = 4, py = 2, scroll_offset = 0;
 	WINDOW *win_left = NULL, *win_right = NULL;
 	const int MIN_WIDTH = 80, MIN_HEIGHT = 24;
 	struct sigaction sa = {.sa_handler = on_resize, .sa_flags = SA_RESTART};
 	sigaction(SIGWINCH, &sa, NULL);
+
+	int term_width, term_height;
 
 	while (1)
 	{
@@ -199,26 +206,33 @@ void menu_loop(Menu *menu)
 			endwin();
 			refresh();
 			clear();
+			if (win_left)
+				delwin(win_left);
+			if (win_right)
+				delwin(win_right);
+			win_left = NULL;
+			win_right = NULL;
 		}
-		if (win_left)
-			delwin(win_left);
-		if (win_right)
-			delwin(win_right);
-		int term_width = COLS, term_height = LINES;
+
+		term_width = COLS;
+		term_height = LINES;
+
 		if (term_width < MIN_WIDTH || term_height < MIN_HEIGHT)
 		{
 			show_resize_warning(term_width, term_height, MIN_WIDTH, MIN_HEIGHT);
-			timeout(100);
-			ch = getch();
-			if (ch == 27)
-				break;
+			usleep(100000);
 			continue;
 		}
-		int left_width = term_width * 0.35;
-		int right_width = term_width - left_width;
-		win_left = newwin(term_height, left_width, 0, 0);
-		win_right = newwin(term_height, right_width, 0, left_width);
-		keypad(win_left, TRUE);
+
+		if (!win_left || !win_right)
+		{
+			int left_width = term_width * 0.35;
+			int right_width = term_width - left_width;
+			win_left = newwin(term_height, left_width, 0, 0);
+			win_right = newwin(term_height, right_width, 0, left_width);
+			keypad(win_left, TRUE);
+			nodelay(win_left, TRUE); // Non-blocking input mode
+		}
 
 		werase(win_left);
 		draw_frame(win_left, menu->title);
@@ -236,19 +250,36 @@ void menu_loop(Menu *menu)
 		else if (menu->type == MENU_CHECKLIST)
 		{
 			count = (int)menu->checklist.count;
-			draw_checklist_menu(win_left, menu->checklist.items, count, hl, px, py);
+			int max_visible = getmaxy(win_left) - py - 2;
+			if (hl < scroll_offset)
+				scroll_offset = hl;
+			if (hl >= scroll_offset + max_visible)
+				scroll_offset = hl - max_visible + 1;
+			draw_checklist_menu(win_left, menu->checklist.items, count, hl, scroll_offset, px, py);
 		}
-
-		if (count == 0)
-			continue;
 
 		werase(win_right);
 		draw_frame(win_right, "Output");
 		wrefresh(win_right);
 		wrefresh(win_left);
 
-		timeout(-1);
-		ch = wgetch(win_left);
+		// Wait for input or timeout using select
+		fd_set readfds;
+		FD_ZERO(&readfds);
+		FD_SET(0, &readfds); // stdin = 0
+
+		struct timeval tv = {0, 100000}; // 100 ms
+
+		int ret = select(1, &readfds, NULL, NULL, &tv);
+		if (ret > 0 && FD_ISSET(0, &readfds))
+		{
+			ch = wgetch(win_left);
+		}
+		else
+		{
+			ch = ERR;
+		}
+
 		if (ch == KEY_UP)
 			hl = (hl - 1 + count) % count;
 		else if (ch == KEY_DOWN)
@@ -257,26 +288,56 @@ void menu_loop(Menu *menu)
 		{
 			if (hl < count)
 			{
-				if (menu->type == MENU_ACTION && menu->action.items[hl].action)
+				switch (menu->type)
 				{
-					menu->action.items[hl].action(win_right);
-				}
-				else if (menu->type == MENU_CHECKLIST)
-				{
+				case MENU_ACTION:
+					if (menu->action.items[hl].action)
+					{
+						menu->action.items[hl].action(win_right);
+					}
+					break;
+				case MENU_CHECKLIST:
 					menu->checklist.items[hl].checked = !menu->checklist.items[hl].checked;
+				default:
+					break;
 				}
 			}
 		}
-
 		else if (ch == 27) // ESC
 			break;
 	}
+
 	if (win_left)
 		delwin(win_left);
 	if (win_right)
 		delwin(win_right);
 	clear();
 	refresh();
+}
+
+void show_make_menu(WINDOW *output_win);
+void show_checklist(WINDOW *output_win);
+
+int main()
+{
+	initscr();
+	set_escdelay(25);
+	noecho();
+	curs_set(FALSE);
+	keypad(stdscr, TRUE);
+
+	MenuItem main_items[] = {
+		{"Make", show_make_menu},
+		{"List", show_checklist}};
+	Menu main_menu = {
+		.type = MENU_ACTION,
+		.title = "Main Menu",
+		.action = {main_items, COUNT(main_items)}};
+
+	menu_loop(&main_menu);
+
+	endwin();
+	return 0;
 }
 
 void show_make_menu(WINDOW *output_win)
@@ -326,29 +387,30 @@ void show_checklist(WINDOW *output_win)
 		{"item1", true},
 		{"item2", false},
 		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"ite123m3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item333", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
+		{"item3", false},
 		{"item4", false}};
 	Menu m = {.type = MENU_CHECKLIST, .title = "Checklist", .checklist = {items, COUNT(items)}};
 	menu_loop(&m);
-}
-
-int main()
-{
-	initscr();
-	set_escdelay(25);
-	noecho();
-	curs_set(FALSE);
-	keypad(stdscr, TRUE);
-
-	MenuItem main_items[] = {
-		{"Make", show_make_menu},
-		{"List", show_checklist}};
-	Menu main_menu = {
-		.type = MENU_ACTION,
-		.title = "Main Menu",
-		.action = {main_items, COUNT(main_items)}};
-
-	menu_loop(&main_menu);
-
-	endwin();
-	return 0;
 }
