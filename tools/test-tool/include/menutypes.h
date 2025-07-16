@@ -1,12 +1,11 @@
-// Example header
 #pragma once
 
-#include <ncurses.h>
+#include <stdbool.h>
 
 typedef struct
 {
 	const char *label;
-	void (*action)(WINDOW *output_win);
+	void (*action)(void);
 } MenuItem;
 
 typedef struct
