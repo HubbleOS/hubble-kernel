@@ -1,5 +1,4 @@
-#ifndef UTILS_COLOR_H
-#define UTILS_COLOR_H
+#pragma once
 
 #include <stdint.h>
 
@@ -22,5 +21,3 @@ inline color rgba(uint8_t r, uint8_t g, uint8_t b, float a)
 	uint8_t alpha = (uint8_t)(a * 255.0f + 0.5f);
 	return rgb(r, g, b) | ((color)alpha << 24);
 }
-
-#endif // UTILS_COLOR_H

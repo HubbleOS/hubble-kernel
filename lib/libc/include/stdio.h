@@ -66,7 +66,4 @@ int getchar(void);
 
 int ungetc(int c, FILE *stream);
 
-// void stdio_init();
-void stdio_init(FILE *in, FILE *out, FILE *err);
-
 _End_C_Header;
