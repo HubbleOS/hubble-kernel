@@ -37,9 +37,8 @@ void print(const char *s)
 
 char getchar(void)
 {
-	// Ждем, пока UART не станет готов к чтению
 	while (*(volatile uint32_t *)0x09000018 & (1 << 4))
-		; // Bit 4 == RXFE (Receive FIFO Empty)
+		;
 	return UART_DR;
 }
 

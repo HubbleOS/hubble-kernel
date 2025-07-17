@@ -6,7 +6,6 @@
 #define CHAR_WIDTH 8
 #define CHAR_HEIGHT 8
 
-// Шрифт для символів 'A' до 'Z'
 extern const uint8_t font[256][8];
 
 extern framebuffer_info_t *g_fb;
@@ -16,7 +15,6 @@ extern color font_color;
 
 void init_font(framebuffer_info_t *fb);
 
-// Вивід одного символу (тільки великі латинські літери)
 void draw_char(framebuffer_info_t *fb, char c, int x, int y);
 
 void clear_char_area(framebuffer_info_t *fb, int x, int y);
@@ -35,6 +33,6 @@ static inline uint8_t inb(uint16_t port)
 static inline uint8_t kbd_read_scancode(void)
 {
 	while (!(inb(KBD_STATUS_PORT) & KBD_OBF))
-		; // ждем без таймаута
+		;
 	return inb(KBD_DATA_PORT);
 }
