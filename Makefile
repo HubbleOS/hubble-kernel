@@ -104,7 +104,7 @@ export INCLUDES
 
 PHONY += all
 all:
-	@$(MAKE) -C tools/test-tool
+	@$(MAKE) -C tools/dev-tool
 
 #########!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
