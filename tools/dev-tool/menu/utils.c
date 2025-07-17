@@ -4,7 +4,8 @@
 #include <string.h>
 #include "utils.h"
 
-extern WINDOW *g_win_left, *g_win_right;
+extern WINDOW *g_win_left;
+extern WINDOW *g_win_right;
 
 static void strip_nonprintable(char *dest, const char *src)
 {

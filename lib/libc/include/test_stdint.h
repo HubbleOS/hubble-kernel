@@ -74,11 +74,11 @@ typedef uint64_t uint_least64_t;
 #define UINT_FAST32_MAX UINT32_MAX
 #define UINT_FAST64_MAX UINT64_MAX
 
-//////////////////////////////////////////////////////////////////////////////
+// ###########################################################################
 #define INTPTR_MIN INT64_MIN
 #define INTPTR_MAX INT64_MAX
 #define UINTPTR_MAX UINT64_MAX
-//////////////////////////////////////////////////////////////////////////////
+// ###########################################################################
 
 #define INTMAX_MIN INT64_MIN
 #define INTMAX_MAX INT64_MAX
