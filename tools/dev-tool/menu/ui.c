@@ -1,3 +1,6 @@
+#include <string.h>
+#include <signal.h>
+#include <unistd.h>
 #include "ui.h"
 #include "menu.h"
 #include "utils.h"
@@ -80,9 +83,6 @@ Menu make_menu(MenuType type, const char *title, void *items, size_t count)
 	}
 }
 
-//////////////////////////////////////////////////////////////////////////////
-#include <string.h>
-
 void draw_frame(WINDOW *win, const char *title)
 {
 	box(win, 0, 0);
@@ -147,9 +147,6 @@ void handle_keypress(Menu *menu, int ch, int *hl, WINDOW *win_right)
 	}
 }
 
-#include <signal.h>
-#include <unistd.h>
-
 volatile sig_atomic_t resized = 0;
 void on_resize(int sig)
 {
@@ -157,7 +154,8 @@ void on_resize(int sig)
 	resized = 1;
 }
 
-extern WINDOW *g_win_left, *g_win_right;
+extern WINDOW *g_win_left;
+extern WINDOW *g_win_right;
 
 #define win_left g_win_left
 #define win_right g_win_right
@@ -219,14 +217,14 @@ void menu_loop(Menu *menu)
 		int ret = select(1, &fds, NULL, NULL, &tv);
 		ch = (ret > 0 && FD_ISSET(0, &fds)) ? wgetch(win_left) : ERR;
 
-		//////////////////////////////////////////////////////////////////////////////
+		// ###########################################################################
 		if (ch == 27)
 			return;
 		wrefresh(win_right);
 
 		// if (ch == '\b' || ch == KEY_BACKSPACE || ch == 127)
 		// return;
-		//////////////////////////////////////////////////////////////////////////////
+		// ###########################################################################
 		handle_keypress(menu, ch, &hl, win_right);
 	}
 

@@ -1,6 +1,5 @@
 #include "utils/font.h"
 
-// 8x8 bitmap font для 'A' до 'Z'
 const uint8_t font[256][8] = {
     // ASCII 0–31: control characters (empty)
     [0 ... 31] = {0},
@@ -115,4 +114,5 @@ const uint8_t font[256][8] = {
     ['~'] = {0x00, 0x00, 0x34, 0x4C, 0x00, 0x00, 0x00, 0x00},
 
     // Extended ASCII
-    [127 ... 255] = {0}};
+    [127 ... 255] = {0},
+};

@@ -4,7 +4,7 @@
 int main()
 {
 	initscr();
-	set_escdelay(25);
+	set_escdelay(25); // 0.25 seconds
 	noecho();
 	curs_set(FALSE);
 	keypad(stdscr, TRUE);

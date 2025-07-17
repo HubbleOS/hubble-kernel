@@ -1,5 +1,4 @@
-#ifndef KEYMAP_H
-#define KEYMAP_H
+#pragma once
 
 // Special keys + Helper macros
 #define KEY_REALESE 0x80
@@ -157,5 +156,3 @@
 
 // Other keys
 #define KEY_PRTSC 0xE0 0x2A 0xE0 0x37 // special multi-byte sequence
-
-#endif // KEYMAP_H
