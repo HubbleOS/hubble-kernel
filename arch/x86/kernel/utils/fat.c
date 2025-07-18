@@ -62,11 +62,9 @@ void uint_to_str(uint32_t num, char *buf, size_t bufsize)
     if (bufsize == 0)
         return;
 
-    // Заповнюємо весь буфер нулями
     for (size_t i = 0; i < bufsize; i++)
         buf[i] = 0;
 
-    // Кінцевий нульовий символ
     buf[bufsize - 1] = '\0';
 
     if (num == 0)
@@ -76,9 +74,8 @@ void uint_to_str(uint32_t num, char *buf, size_t bufsize)
         return;
     }
 
-    int i = bufsize - 2; // індекс для останнього символу числа
+    int i = bufsize - 2;
 
-    // Записуємо цифри з кінця
     while (num > 0 && i >= 0)
     {
         buf[i] = '0' + (num % 10);
@@ -86,7 +83,6 @@ void uint_to_str(uint32_t num, char *buf, size_t bufsize)
         i--;
     }
 
-    // Зсуваємо рядок в початок буфера
     int start = i + 1;
     int j = 0;
     while (buf[start] != '\0' && j < (int)bufsize)
@@ -113,7 +109,7 @@ int fat32_init_from_lba(gpt_partition_t part)
 
     if (!(sector[510] == 0x55 && sector[511] == 0xAA))
     {
-        printf("❌ Invalid FAT32 signature: 0x%X 0x%X\n", sector[510], sector[511]);
+        printf("Invalid FAT32 signature: 0x%X 0x%X\n", sector[510], sector[511]);
         return -1;
     }
 
@@ -204,7 +200,6 @@ void fat_cleanup()
 void format_filename_fat(const char *in, char *out11)
 {
     int i = 0, j = 0;
-    // Заповнити пробілами
     for (int k = 0; k < 11; ++k)
         out11[k] = ' ';
 
@@ -212,7 +207,7 @@ void format_filename_fat(const char *in, char *out11)
     {
         if (in[i] == '.')
         {
-            j = 8; // після крапки йде розширення
+            j = 8;
             i++;
             continue;
         }
@@ -225,12 +220,12 @@ void format_filename_fat(const char *in, char *out11)
 
 char **format_folder_path(const char *in)
 {
-    static char *out[16]; // макс 15 сегментів + 1 для лічильника
+    static char *out[16];
     int count = 0;
 
     const char *start = in;
     while (*start == '/')
-        start++; // Пропустити початкові '/'
+        start++; // skip '/'
 
     while (*start && count < 15)
     {
@@ -273,7 +268,7 @@ uint32_t resolve_path_to_cluster(const char *path)
         cluster = find_directory_entry_cluster(cluster, parts[i]);
         printf("cluster: %d\n", cluster);
         if (cluster == 0 || cluster >= 0x0FFFFFF8)
-            return 0; // не знайдено або кінець ланцюга
+            return 0; // cluster not found
     }
     return cluster;
 }
@@ -449,15 +444,14 @@ void fat32_free_cluster(uint32_t cluster)
 {
     if (cluster < 2 || cluster >= total_fat_entries)
     {
-        printf("❌ Invalid cluster number: %u\n", cluster);
+        printf("Invalid cluster number: %u\n", cluster);
         return;
     }
 
-    // Позначити кластер як вільний (0x00000000)
+    // Mark the cluster as free (0x00000000)
     fat_cache[cluster] = 0x00000000;
-    fat_dirty = true; // Встановлюємо прапорець, що FAT змінився
-
-    printf("🗑️ Cluster %u marked as free\n", cluster);
+    fat_dirty = true; // Mark the FAT as dirty
+    printf(" Cluster %u marked as free\n", cluster);
 }
 
 uint32_t fat32_allocate_cluster()
@@ -502,25 +496,25 @@ bool fat32_create_directory(const char *path, const char *dirname11)
     uint32_t parent_cluster = resolve_path_to_cluster(path);
     if (parent_cluster == 0)
     {
-        printf("❌ Parent path not found: %s\n", path);
+        printf("Parent path not found: %s\n", path);
         return false;
     }
 
-    // Виділяємо новий кластер для каталогу
+    // Allocate new cluster
     uint32_t new_cluster = fat32_allocate_cluster();
     if (new_cluster == 0)
     {
-        printf("❌ No free clusters\n");
+        printf("No free clusters\n");
         return false;
     }
 
-    // Ініціалізуємо новий каталог
+    // Initialize new directory
     fat32_format_directory_cluster(new_cluster, parent_cluster);
 
-    // Створюємо запис у батьківському каталозі
+    // Create directory entry
     FAT32_DirectoryEntry entry = {0};
-    memcpy(entry.name, dirname11, 11); // Уже у 11-символьному форматі
-    entry.attr = 0x10;                 // Атрибут: каталог
+    memcpy(entry.name, dirname11, 11);
+    entry.attr = 0x10;
     entry.first_cluster_high = (new_cluster >> 16) & 0xFFFF;
     entry.first_cluster_low = new_cluster & 0xFFFF;
     entry.file_size = 0;
@@ -528,13 +522,173 @@ bool fat32_create_directory(const char *path, const char *dirname11)
     bool result = fat32_add_directory_entry(parent_cluster, &entry);
     if (!result)
     {
-        printf("❌ Failed to add directory entry\n");
-        fat32_free_cluster(new_cluster); // очищаємо, якщо не додалося
+        printf(" Failed to add directory entry\n");
+        fat32_free_cluster(new_cluster);
         return false;
     }
 
     printf("📁 Directory created: %s in %s (cluster %d)\n", dirname11, path, new_cluster);
     return true;
+}
+
+bool fat32_create_file(const char *path, const char *filename11)
+{
+    uint32_t parent_cluster = resolve_path_to_cluster(path);
+    if (parent_cluster == 0)
+    {
+        printf("Parent path not found: %s\n", path);
+        return false;
+    }
+
+    uint32_t new_cluster = fat32_allocate_cluster();
+    if (new_cluster == 0)
+    {
+        printf("No free clusters\n");
+        return false;
+    }
+
+    // Create the file
+    FAT32_DirectoryEntry entry = {0};
+    memcpy(entry.name, filename11, 11); // "NAME    EXT"
+    entry.attr = 0x20;                  // 0x20 = file
+    entry.first_cluster_high = (new_cluster >> 16) & 0xFFFF;
+    entry.first_cluster_low = new_cluster & 0xFFFF;
+    entry.file_size = 0;
+
+    if (!fat32_add_directory_entry(parent_cluster, &entry))
+    {
+        printf("Failed to add file entry\n");
+        fat32_free_cluster(new_cluster);
+        return false;
+    }
+
+    printf("File created: %s in %s (cluster %d)\n", filename11, path, new_cluster);
+    return true;
+}
+
+bool fat32_write_file(const char *path, const char *filename11, const uint8_t *data, size_t size)
+{
+    uint32_t file_cluster = resolve_path_to_cluster(path);
+    if (file_cluster == 0)
+    {
+        printf(" File not found: %s/%s\n", path, filename11);
+        return false;
+    }
+
+    // Find entry
+    uint8_t *buf = malloc(cluster_size);
+    fat32_read_cluster(file_cluster, buf);
+    size_t entries = cluster_size / sizeof(FAT32_DirectoryEntry);
+    FAT32_DirectoryEntry *entry = NULL;
+
+    for (size_t i = 0; i < entries; ++i)
+    {
+        FAT32_DirectoryEntry *e = (FAT32_DirectoryEntry *)(buf + i * sizeof(FAT32_DirectoryEntry));
+        if (memcmp(e->name, filename11, 11) == 0 && !(e->attr & 0x10))
+        {
+            entry = e;
+            break;
+        }
+    }
+
+    if (!entry)
+    {
+        free(buf);
+        printf("Entry not found in cluster\n");
+        return false;
+    }
+
+    // Запис у кластери
+    uint32_t cluster = (entry->first_cluster_high << 16) | entry->first_cluster_low;
+    size_t remaining = size;
+    size_t offset = 0;
+
+    while (remaining > 0)
+    {
+        uint8_t *write_buf = malloc(cluster_size);
+        size_t to_write = remaining > cluster_size ? cluster_size : remaining;
+        memcpy(write_buf, data + offset, to_write);
+        fat32_write_cluster(cluster, write_buf);
+        free(write_buf);
+
+        remaining -= to_write;
+        offset += to_write;
+
+        if (remaining > 0)
+        {
+            uint32_t next = get_fat_entry(cluster);
+            if (next >= 0x0FFFFFF8)
+            {
+                next = fat32_allocate_cluster();
+                if (next == 0)
+                {
+                    printf("No space during write\n");
+                    free(buf);
+                    return false;
+                }
+                set_fat_entry(cluster, next);
+            }
+            cluster = next;
+        }
+    }
+
+    // Оновлюємо розмір
+    entry->file_size = size;
+    fat32_write_cluster(file_cluster, buf);
+    free(buf);
+    return true;
+}
+
+size_t fat32_read_file(const char *path, const char *filename11, uint8_t *out_buf, size_t max_size)
+{
+    uint32_t dir_cluster = resolve_path_to_cluster(path);
+    if (dir_cluster == 0)
+    {
+        printf("Path not found: %s\n", path);
+        return 0;
+    }
+
+    uint8_t *buf = malloc(cluster_size);
+    fat32_read_cluster(dir_cluster, buf);
+    FAT32_DirectoryEntry *entry = NULL;
+
+    for (size_t i = 0; i < cluster_size / sizeof(FAT32_DirectoryEntry); ++i)
+    {
+        FAT32_DirectoryEntry *e = (FAT32_DirectoryEntry *)(buf + i * sizeof(FAT32_DirectoryEntry));
+        if (memcmp(e->name, filename11, 11) == 0 && !(e->attr & 0x10))
+        {
+            entry = e;
+            break;
+        }
+    }
+
+    if (!entry)
+    {
+        printf("File not found: %s/%s\n", path, filename11);
+        free(buf);
+        return 0;
+    }
+
+    uint32_t cluster = (entry->first_cluster_high << 16) | entry->first_cluster_low;
+    size_t file_size = entry->file_size;
+    size_t to_read = file_size < max_size ? file_size : max_size;
+
+    size_t read = 0;
+    while (read < to_read && cluster < 0x0FFFFFF8)
+    {
+        uint8_t *cluster_buf = malloc(cluster_size);
+        fat32_read_cluster(cluster, cluster_buf);
+
+        size_t chunk = (to_read - read) > cluster_size ? cluster_size : (to_read - read);
+        memcpy(out_buf + read, cluster_buf, chunk);
+        read += chunk;
+
+        free(cluster_buf);
+        cluster = get_fat_entry(cluster);
+    }
+
+    free(buf);
+    return read;
 }
 
 // int fat32_read_file(uint32_t start_cluster, uint8_t *buffer, uint32_t size)
