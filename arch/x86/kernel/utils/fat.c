@@ -336,14 +336,11 @@ typedef struct
 void list_files_callback(const char *name, bool is_dir, void *ctx_ptr)
 {
     list_ctx_t *ctx = (list_ctx_t *)ctx_ptr;
-    printf("prev_buf: %s\n", ctx->buffer);
     // without sprintf
     ctx->buffer[ctx->pos++] = is_dir ? '/' : ' ';
     memcpy(ctx->buffer + ctx->pos, name, strlen(name));
     ctx->pos += strlen(name);
     ctx->buffer[ctx->pos++] = '\n';
-    printf("pos: %d\n", ctx->pos);
-    printf("buffer: %s\n", ctx->buffer);
 }
 
 void fat32_list_files(uint32_t cluster, char *out_buf)
@@ -351,7 +348,6 @@ void fat32_list_files(uint32_t cluster, char *out_buf)
     memset(out_buf, 0, 2048);
     list_ctx_t ctx = {.buffer = out_buf, .pos = 0};
     iterate_directory(cluster, list_files_callback, &ctx);
-    printf("%d", ctx.pos);
     out_buf[ctx.pos] = '\0';
 }
 void fat32_list_files_from_path(const char *path, char *out_buf)
@@ -546,11 +542,12 @@ bool fat32_create_file(const char *path, const char *filename11)
         printf("No free clusters\n");
         return false;
     }
-
+    char target[11];
+    format_filename_fat(filename11, target);
     // Create the file
     FAT32_DirectoryEntry entry = {0};
-    memcpy(entry.name, filename11, 11); // "NAME    EXT"
-    entry.attr = 0x20;                  // 0x20 = file
+    memcpy(entry.name, target, 11); // "NAME    EXT"
+    entry.attr = 0x20;              // 0x20 = file
     entry.first_cluster_high = (new_cluster >> 16) & 0xFFFF;
     entry.first_cluster_low = new_cluster & 0xFFFF;
     entry.file_size = 0;
@@ -568,6 +565,10 @@ bool fat32_create_file(const char *path, const char *filename11)
 
 bool fat32_write_file(const char *path, const char *filename11, const uint8_t *data, size_t size)
 {
+
+    char target[11];
+    format_filename_fat(filename11, target);
+
     uint32_t file_cluster = resolve_path_to_cluster(path);
     if (file_cluster == 0)
     {
@@ -584,7 +585,7 @@ bool fat32_write_file(const char *path, const char *filename11, const uint8_t *d
     for (size_t i = 0; i < entries; ++i)
     {
         FAT32_DirectoryEntry *e = (FAT32_DirectoryEntry *)(buf + i * sizeof(FAT32_DirectoryEntry));
-        if (memcmp(e->name, filename11, 11) == 0 && !(e->attr & 0x10))
+        if (memcmp(e->name, target, 11) == 0 && !(e->attr & 0x10))
         {
             entry = e;
             break;
@@ -641,6 +642,8 @@ bool fat32_write_file(const char *path, const char *filename11, const uint8_t *d
 
 size_t fat32_read_file(const char *path, const char *filename11, uint8_t *out_buf, size_t max_size)
 {
+    char target[11];
+    format_filename_fat(filename11, target);
     uint32_t dir_cluster = resolve_path_to_cluster(path);
     if (dir_cluster == 0)
     {
@@ -655,7 +658,7 @@ size_t fat32_read_file(const char *path, const char *filename11, uint8_t *out_bu
     for (size_t i = 0; i < cluster_size / sizeof(FAT32_DirectoryEntry); ++i)
     {
         FAT32_DirectoryEntry *e = (FAT32_DirectoryEntry *)(buf + i * sizeof(FAT32_DirectoryEntry));
-        if (memcmp(e->name, filename11, 11) == 0 && !(e->attr & 0x10))
+        if (memcmp(e->name, target, 11) == 0 && !(e->attr & 0x10))
         {
             entry = e;
             break;
