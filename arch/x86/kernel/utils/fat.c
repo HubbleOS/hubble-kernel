@@ -452,7 +452,7 @@ void fat32_free_cluster(uint32_t cluster)
 
 uint32_t fat32_allocate_cluster()
 {
-    for (uint32_t i = 2; i < total_fat_entries; ++i)
+    for (uint32_t i = 3; i < total_fat_entries; ++i)
     {
         if (get_fat_entry(i) == 0x00000000) // 0 = free
         {
@@ -498,7 +498,7 @@ bool fat32_create_directory(const char *path, const char *dirname11)
 
     // Allocate new cluster
     uint32_t new_cluster = fat32_allocate_cluster();
-    if (new_cluster == 0)
+    if (new_cluster == 0 || new_cluster >= total_fat_entries || new_cluster == 2)
     {
         printf("No free clusters\n");
         return false;
