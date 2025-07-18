@@ -32,6 +32,7 @@ void kernel_main(BootInfo *bi)
     fat32_init_from_lba(partitions[0]);
     char buffer[1024];
     printf("root cluster: %d\n", root_cluster);
+
     while (1)
         ;
 }
