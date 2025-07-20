@@ -4,8 +4,6 @@ INCLUDES := -Iinclude -Imenu
 
 LDFLAGS := -lncurses
 
-# BUILD_DIR := build
-# BUILD_DIR := $(abspath build)
 override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/menu,build)
 
 SRC_DIR := menu
