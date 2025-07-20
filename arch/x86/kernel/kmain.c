@@ -2,40 +2,35 @@
 #include "utils/font.h"
 #include "heap.h"
 #include "fat.h"
+#include "utils/ata.h"
+#include "utils/gpt/gpt.h"
+#include "utils/gpt/gpt_struct.h"
 
 #include <stdio.h>
+#include <string.h>
 
+static gpt_partition_t partitions[128];
 extern void os_main(framebuffer_info_t *fb);
 extern void libc_init(void);
+
+extern uint32_t root_cluster;
 
 void kernel_main(BootInfo *bi)
 {
     heap_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
     framebuffer_info_t *fb = bi->framebuffer;
 
-    fat32_init(bi->disk_info->ramdisk_base);
-
     init_font(fb);
     libc_init();
+    printf("GPT init\n");
 
-    // FAT32
-    // char buf[4096];
-    // size_t sz;
+    gpt_init(partitions);
 
-    // debug_fat32(fb);
-    // if (fat32_readgit_file("TEST.TXT", buf, &sz, fb) == 0)
-    // {
-    //     printf("FILE FOUND\n");
-    //     printf("%s\n", buf);
-    // }
-    // else
-    // {
-    //     printf("FILE NOT FOUND\n");
-    // }
-    // printf("END\n");
+    printf("FAT32 init at LBA %d\n", partitions[0].first_lba);
+    fat32_init_from_lba(partitions[0]);
+    char buffer[1024];
+    printf("root cluster: %d\n", root_cluster);
 
-    os_main(fb);
-    // return;
     while (1)
         ;
 }
