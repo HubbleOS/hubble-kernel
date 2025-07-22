@@ -1,5 +1,20 @@
 #include <ncurses.h>
+#include <stdlib.h>
+#include <signal.h>
 #include "apps/app.h"
+
+void end_scr()
+{
+	endwin();
+	printf("Goodbye!\n");
+}
+
+void handle_sigint(int sig)
+{
+	end_scr();
+	printf("handle_sigint!\n");
+	exit(0);
+}
 
 void init_scr()
 {
@@ -8,17 +23,13 @@ void init_scr()
 	noecho();
 	curs_set(FALSE);
 	keypad(stdscr, TRUE);
-}
-
-void end_scr()
-{
-	endwin();
+	atexit(end_scr);
+	signal(SIGINT, handle_sigint); // Ctrl+C
 }
 
 int main()
 {
 	init_scr();
 	app();
-	end_scr();
 	return 0;
 }
