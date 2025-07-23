@@ -217,6 +217,8 @@ void menu_loop(Menu *menu)
 		int ret = select(1, &fds, NULL, NULL, &tv);
 		ch = (ret > 0 && FD_ISSET(0, &fds)) ? wgetch(win_left) : ERR;
 
+		mvprintw(0, 0, "ch: %d", ch);
+
 		// ###########################################################################
 		if (ch == 27)
 			return;

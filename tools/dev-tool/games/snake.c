@@ -35,7 +35,14 @@ typedef struct
 Point snake[SIZE * SIZE];
 int snake_length = 3;
 Point apple;
-int dx = 1, dy = 0;
+Point dir_offset[] = {
+	[UP] = {0, -1},
+	[DOWN] = {0, 1},
+	[LEFT] = {-1, 0},
+	[RIGHT] = {1, 0},
+};
+Direction current_dir = RIGHT;
+
 int score = 0;
 
 WINDOW *game_win;
@@ -51,6 +58,11 @@ void draw_cell(int y, int x, const char *symbol, int color_pair)
 	wattroff(game_win, COLOR_PAIR(color_pair));
 }
 
+bool points_equal(Point a, Point b)
+{
+	return a.x == b.x && a.y == b.y;
+}
+
 void place_apple()
 {
 	bool valid;
@@ -61,7 +73,7 @@ void place_apple()
 		apple.y = rand() % SIZE;
 		for (int i = 0; i < snake_length; i++)
 		{
-			if (snake[i].x == apple.x && snake[i].y == apple.y)
+			if (points_equal(snake[i], apple))
 			{
 				valid = false;
 				break;
@@ -86,7 +98,7 @@ void draw_snake_and_apple()
 		{
 			bool drawn = false;
 
-			if (x == apple.x && y == apple.y)
+			if (points_equal(apple, (Point){x, y}))
 			{
 				draw_cell(y, x, APPLE, 1);
 				drawn = true;
@@ -94,7 +106,7 @@ void draw_snake_and_apple()
 
 			for (int i = 0; !drawn && i < snake_length; i++)
 			{
-				if (snake[i].x == x && snake[i].y == y)
+				if (points_equal(snake[i], (Point){x, y}))
 				{
 					draw_cell(y, x, i == 0 ? HEAD : BODY, 2);
 					drawn = true;
@@ -153,74 +165,45 @@ void apply_buffered_input()
 	for (int i = 0; i < input_buffer_len; i++)
 	{
 		Direction dir = input_buffer[i];
-		switch (dir)
+		Point offset = dir_offset[dir];
+		Point current = dir_offset[current_dir];
+
+		if ((offset.x != -current.x || offset.y != -current.y) && dir != NONE)
 		{
-		case UP:
-			if (dy != 1)
-			{
-				dx = 0;
-				dy = -1;
-				goto done;
-			}
-			break;
-		case DOWN:
-			if (dy != -1)
-			{
-				dx = 0;
-				dy = 1;
-				goto done;
-			}
-			break;
-		case LEFT:
-			if (dx != 1)
-			{
-				dx = -1;
-				dy = 0;
-				goto done;
-			}
-			break;
-		case RIGHT:
-			if (dx != -1)
-			{
-				dx = 1;
-				dy = 0;
-				goto done;
-			}
-			break;
-		default:
-			break;
+			current_dir = dir;
+
+			int remaining = input_buffer_len - i - 1;
+			if (remaining > 0)
+				memmove(&input_buffer[0], &input_buffer[i + 1], remaining * sizeof(Direction));
+			input_buffer_len = remaining;
+
+			return;
 		}
 	}
 
-done:
 	input_buffer_len = 0;
 }
 
-bool check_collision(Point head)
+bool check_collision(Point head, bool grow)
 {
-	for (int i = 0; i < snake_length; i++)
-	{
-		if (snake[i].x == head.x && snake[i].y == head.y)
+	int limit = grow ? snake_length : snake_length - 1;
+	for (int i = 0; i < limit; i++)
+		if (points_equal(snake[i], head))
 			return true;
-	}
 	return false;
 }
 
 void move_snake()
 {
-	Point new_head = {snake[0].x + dx, snake[0].y + dy};
+	Point delta = dir_offset[current_dir];
+	Point new_head = {snake[0].x + delta.x, snake[0].y + delta.y};
 
-	if (new_head.x < 0)
-		new_head.x = SIZE - 1;
-	else if (new_head.x >= SIZE)
-		new_head.x = 0;
+	new_head.x = (new_head.x + SIZE) % SIZE;
+	new_head.y = (new_head.y + SIZE) % SIZE;
 
-	if (new_head.y < 0)
-		new_head.y = SIZE - 1;
-	else if (new_head.y >= SIZE)
-		new_head.y = 0;
+	bool will_grow = (new_head.x == apple.x && new_head.y == apple.y);
 
-	if (check_collision(new_head))
+	if (check_collision(new_head, will_grow))
 	{
 		nodelay(stdscr, FALSE);
 		werase(game_win);
@@ -238,7 +221,7 @@ void move_snake()
 		snake[i] = snake[i - 1];
 	snake[0] = new_head;
 
-	if (new_head.x == apple.x && new_head.y == apple.y)
+	if (will_grow)
 	{
 		score += 10;
 		snake_length++;
@@ -257,8 +240,8 @@ int main()
 
 	start_color();
 	use_default_colors();
-	init_pair(1, COLOR_RED, -1);   // Apple
-	init_pair(2, COLOR_GREEN, -1); // Snake
+	init_pair(1, COLOR_RED, -1);
+	init_pair(2, COLOR_GREEN, -1);
 
 	int term_h, term_w;
 	getmaxyx(stdscr, term_h, term_w);
