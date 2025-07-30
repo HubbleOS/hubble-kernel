@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
-#include "utils/ata.h"
+#include "utils/ata/ata.h"
 #include "utils/io.h"
 
 #define ATA_PRIMARY_IO 0x1F0
@@ -117,7 +117,6 @@ void ata_manual_test()
         return;
     }
 
-    // 2. Обнулити буфер і прочитати назад
     memset(read_buf, 0, sizeof(read_buf));
     printf("Reading from LBA %u...\n", test_lba);
     ata_read_sector(test_lba, read_buf);
