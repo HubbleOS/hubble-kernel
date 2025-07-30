@@ -1,5 +1,7 @@
+#pragma once
+
 #include <stdint.h>
-#include "utils/ata.h"
+#include <stdlib.h>
 
 typedef struct __attribute__((packed))
 {
@@ -48,5 +50,14 @@ typedef struct __attribute__((packed))
     uint32_t file_size;
 } FAT32_DirectoryEntry;
 
-static FAT32_BPB *bpb;
-static uint32_t fat32_partition_base_lba = 0;
+extern uint32_t fat32_partition_base_lba;
+
+#define MAX_CLUSTER_CHAIN 1024
+
+extern uint8_t *fat_cache;
+extern bool fat_dirty;
+
+extern uint32_t fat_start_lba, cluster_heap_lba, root_cluster;
+extern uint32_t cluster_size;
+extern FAT32_BPB *bpb;
+extern uint16_t total_fat_entries;
