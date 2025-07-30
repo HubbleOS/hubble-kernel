@@ -1,9 +1,9 @@
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
-#include "utils/framebuffer.h"
 #include "utils/gpt/gpt_struct.h"
 #include <stdbool.h>
+
 int fat32_init(void *ramdisk_base);
 size_t fat32_read_file(const char *path, const char *filename11, uint8_t *out_buf, size_t max_size);
 bool fat32_write_file(const char *path, const char *filename11, const uint8_t *data, size_t size);
@@ -16,5 +16,3 @@ void fat32_list_files_from_path(const char *path, char *out_buf);
 bool fat32_create_directory(const char *path, const char *dirname11);
 int fat32_delete_dir(const char *path);
 int fat32_init_from_lba(gpt_partition_t part);
-void debug_fat32(framebuffer_info_t *fb);
-extern uint32_t fat_start_lba, cluster_heap_lba, root_cluster;

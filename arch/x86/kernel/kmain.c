@@ -1,8 +1,8 @@
 #include "utils/framebuffer.h"
 #include "utils/font.h"
 #include "heap.h"
-#include "fat.h"
-#include "utils/ata.h"
+#include "utils/fat32/fat.h"
+#include "utils/ata/ata.h"
 #include "utils/gpt/gpt.h"
 #include "utils/gpt/gpt_struct.h"
 
