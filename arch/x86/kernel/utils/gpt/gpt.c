@@ -1,6 +1,6 @@
 #include "utils/gpt/gpt.h"
 #include "utils/gpt/gpt_struct.h"
-#include "utils/ata.h"
+#include "utils/ata/ata.h"
 
 #include <stdint.h>
 #include <string.h>
