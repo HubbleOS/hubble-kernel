@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
+#include <ctype.h>
 
 #include <stddef.h>
 #include <stdarg.h>
