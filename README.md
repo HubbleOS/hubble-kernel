@@ -12,7 +12,7 @@ Kernel HubbleOS is a customizable operating system kernel with support for multi
 
 ### Clone the repository into a folder named 'hubble-kernel'
 ```bash
-git clone --recurse-submodules https://github.com/your-repo/hubbleos.git hubble && cd hubble-kernel
+git clone --recurse-submodules https://github.com/HubbleOS/Kernel.git hubble && cd hubble-kernel
 ```
 ### Basic commands for work
 ```bash

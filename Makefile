@@ -4,8 +4,8 @@ export Q
 ARCH ?= x86
 
 OUT_DIR ?= $(abspath out)
-BUILD_DIR := $(abspath $(OUT_DIR)/$(ARCH)/build)
-ISO_DIR := $(abspath $(OUT_DIR)/$(ARCH)/iso)
+BUILD_DIR := $(OUT_DIR)/$(ARCH)/build
+ISO_DIR := $(OUT_DIR)/$(ARCH)/iso
 ARCH_DIR := $(abspath arch/$(ARCH))
 
 LIB_DIR := $(abspath lib)
@@ -61,8 +61,8 @@ HOST_AS = as
 HOST_AR = ar
 HOST_OBJCOPY = objcopy
 
-CFLAGS = -ffreestanding -m64 -O2 -Wall -Wextra -c
-CXXFLAGS = -ffreestanding -m64 -O2 -Wall -Wextra -c
+CFLAGS = -MMD -MP -ffreestanding -m64 -O2 -Wall -Wextra -c
+CXXFLAGS = -MMD -MP -ffreestanding -m64 -O2 -Wall -Wextra -c
 LDFLAGS = -nostdlib -T
 OBJCPYFLAGS = binary
 
@@ -98,7 +98,7 @@ export SCRIPT_DIR
 
 INCLUDES += -I$(abspath include)
 INCLUDES += -I$(LIB_DIR)/libc/include
-INCLUDES += -I$(ARCH_DIR)/include 
+INCLUDES += -I$(ARCH_DIR)/include
 
 export INCLUDES
 
@@ -219,5 +219,10 @@ mkvars:
 
 include $(SCRIPT_DIR)/scripts.mk
 include $(SCRIPT_DIR)/docker/docker.mk
+
+# DEP_FILES := $(OBJ_FILES:.o=.d)
+DEP_FILES = $(shell find $(BUILD_DIR) -name '*.d')
+
+-include $(DEP_FILES)
 
 .PHONY: $(PHONY)
