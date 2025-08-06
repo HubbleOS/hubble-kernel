@@ -21,3 +21,8 @@ uint32_t resolve_path_to_cluster(const char *path);
 uint32_t find_directory_entry_cluster(uint32_t dir_cluster, const char *name11);
 uint32_t get_fat_entry(uint32_t cluster);
 bool parse_directory_entry(FAT32_DirectoryEntry *entry, char *name_out, bool *is_dir_out);
+uint32_t fat32_allocate_cluster();
+void fat32_free_cluster(uint32_t cluster);
+void set_fat_entry(uint32_t cluster, uint32_t value);
+uint32_t get_fat_entry(uint32_t cluster);
+bool fat32_add_directory_entry(uint32_t dir_cluster, FAT32_DirectoryEntry *new_entry);
