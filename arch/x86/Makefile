@@ -26,7 +26,7 @@ BOOT_SO  := $(BUILD_DIR)/boot/boot.so
 EFI_OUT  := $(ISO_DIR)/EFI/BOOT/BOOTx64.EFI
 EFI_OUT_DIR := $(ISO_DIR)/EFI/BOOT
 
-INCLUDES += include
+# INCLUDES += -Iinclude
 
 .PHONY: all bootloader build iso
 
