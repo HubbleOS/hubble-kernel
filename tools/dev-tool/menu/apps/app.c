@@ -62,6 +62,11 @@ void show_save_modal2()
 	show_modal_with_buttons("bla bla bla?", buttons, COUNT(buttons));
 }
 
+void start_game()
+{
+	system("gcc games/snake.c -o games/snake -lncurses && ./games/snake");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Menu setup
 
@@ -70,6 +75,7 @@ static MenuItem main_items[] = {
 	{"Option 2", show_save_modal2},
 	{"Option 3", fun},
 	{"Option 4", NULL},
+	{"Games :)", start_game},
 };
 
 static ChecklistItem checklist_items[] = {

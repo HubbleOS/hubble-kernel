@@ -1,5 +1,12 @@
 #include <ncurses.h>
+#include <stdlib.h>
 #include "apps/app.h"
+
+void end_scr()
+{
+	endwin();
+	printf("Terminal return to normal!\n");
+}
 
 void init_scr()
 {
@@ -8,17 +15,12 @@ void init_scr()
 	noecho();
 	curs_set(FALSE);
 	keypad(stdscr, TRUE);
-}
-
-void end_scr()
-{
-	endwin();
+	atexit(end_scr);
 }
 
 int main()
 {
 	init_scr();
 	app();
-	end_scr();
 	return 0;
 }
