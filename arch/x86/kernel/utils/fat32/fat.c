@@ -44,12 +44,14 @@ void fat32_list_files(uint32_t cluster, char *out_buf)
 void fat32_list_files_from_path(const char *path, char *out_buf)
 {
     memset(out_buf, 0, 2048);
+    printf("path 1: %s\n", path);
     uint32_t cluster = resolve_path_to_cluster(path);
     if (cluster == 0)
     {
+        printf("Path not found: %s\n", path);
         return;
     }
-
+    printf("cluster: %d\n", cluster);
     fat32_list_files(cluster, out_buf);
 }
 
