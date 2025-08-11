@@ -30,8 +30,6 @@ void kernel_main(BootInfo *bi)
     fat32_init_from_lba(partitions[0]);
     char buffer[1024];
     printf("root cluster: %d\n", root_cluster);
-    fat32_create_directory("/", "TESTDIR");
-    fat32_list_files_from_path("/TESTDIR/", buffer);
     printf("%s\n", buffer);
     printf("FAT32 init done\n");
     while (1)
