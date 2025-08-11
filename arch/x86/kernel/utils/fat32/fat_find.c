@@ -8,14 +8,14 @@ typedef void (*directory_entry_callback_t)(const char *name, bool is_dir, void *
 
 uint32_t resolve_path_to_cluster(const char *path)
 {
-    char **parts = format_folder_path(path);
-    int depth = atoi(parts[0]);
-    printf("target %s", parts[depth]);
+    PathParts parts = format_folder_path(path);
+    int depth = parts.count;
+    printf("target %s depth %d", parts.parts[depth].sfn, depth);
     uint32_t cluster = root_cluster;
-    for (int i = depth; i <= depth; ++i)
+    for (int i = 0; i < depth; ++i)
     {
-
-        cluster = find_directory_entry_cluster(cluster, parts[i]);
+        printf("part: %s\n", parts.parts[i].sfn);
+        cluster = find_directory_entry_cluster(cluster, parts.parts[i].sfn);
         printf("cluster: %d\n", cluster);
         if (cluster == 0 || cluster >= 0x0FFFFFF8)
             return 0; // cluster not found
@@ -27,7 +27,8 @@ uint32_t find_directory_entry_cluster(uint32_t dir_cluster, const char *name11)
 {
     printf("find_directory_entry_cluster: %s\n", name11);
     uint8_t *buffer = malloc(cluster_size);
-    while (dir_cluster < 0x0FFFFFF8)
+    int steps = 0;
+    while (dir_cluster < 0x0FFFFFF8 && steps++ < MAX_CLUSTER_CHAIN)
     {
         fat32_read_cluster(dir_cluster, buffer);
         size_t entries = cluster_size / sizeof(FAT32_DirectoryEntry);
@@ -39,12 +40,16 @@ uint32_t find_directory_entry_cluster(uint32_t dir_cluster, const char *name11)
             if ((entry->attr & 0x0F) == 0x0F || entry->name[0] == 0x00 || entry->name[0] == 0xE5)
                 continue;
 
-            if (memcmp(entry->name, name11, 11) == 0)
+            if (memcmp((char *)entry->name, name11, 10) == 0)
             {
                 free(buffer);
                 printf("entry cluster: high = %d, low = %d\n", entry->first_cluster_high, entry->first_cluster_low);
 
                 return (entry->first_cluster_high << 16) | entry->first_cluster_low;
+            }
+            for (int j = 0; j < 11; j++)
+            {
+                printf("i: %d, entry: %c, target: %c\n", j, entry->name[j], name11[j]);
             }
         }
 

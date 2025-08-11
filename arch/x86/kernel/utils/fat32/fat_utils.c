@@ -20,7 +20,6 @@ void set_next_cluster(uint32_t cluster, uint32_t value);
 void fat_flush();
 void fat_cleanup();
 void format_filename_fat(const char *in, char *out11);
-char **format_folder_path(const char *in);
 bool parse_directory_entry(FAT32_DirectoryEntry *entry, char *name_out, bool *is_dir_out);
 uint32_t get_fat_entry(uint32_t cluster);
 uint32_t find_directory_entry_cluster(uint32_t dir_cluster, const char *name11);
@@ -185,11 +184,10 @@ void fat_cleanup()
     }
 }
 
-void format_filename_fat(const char *in, char *out11)
+void format_filename_fat(const char *in, char out11[12])
 {
     int i = 0, j = 0;
-    for (int k = 0; k < 11; ++k)
-        out11[k] = ' ';
+    char temp_out[12] = {0};
 
     while (in[i] && j < 11)
     {
@@ -199,45 +197,65 @@ void format_filename_fat(const char *in, char *out11)
             i++;
             continue;
         }
-
-        if (j < 11)
-            out11[j++] = to_upper(in[i]);
+        if (in[i] == ' ')
+        {
+            break;
+        }
+        temp_out[j++] = to_upper(in[i]);
         i++;
+    }
+    temp_out[11] = '\0';
+
+    for (i = 0; i < 11; i++)
+    {
+        printf("%c", temp_out[i]);
+        out11[i] = temp_out[i];
     }
 }
 
-char **format_folder_path(const char *in)
+PathParts format_folder_path(const char *in)
 {
-    static char *out[16];
-    int count = 0;
+    PathParts result = {0};
 
-    const char *start = in;
-    while (*start == '/')
-        start++; // skip '/'
+    while (*in == '/')
+        in++; // пропустити початкові '/'
 
-    while (*start && count < 15)
+    while (*in && result.count < MAX_PARTS)
     {
-        const char *end = start;
+        const char *end = in;
         while (*end && *end != '/')
             end++;
 
-        int len = end - start;
+        int len = end - in;
         if (len > 0)
         {
-            char name[12] = {0};
-            for (int i = 0; i < len && i < 11; i++)
-                name[i] = start[i];
-            out[count + 1] = malloc(11);
-            format_filename_fat(name, out[count + 1]);
-            count++;
+            char name[256] = {0};
+            strncpy(name, in, len);
+
+            // SFN
+            format_filename_fat(name, result.parts[result.count].sfn);
+
+            // LFN (оригінальне ім’я)
+            result.parts[result.count].lfn = malloc(len + 1);
+            memcpy(result.parts[result.count].lfn, name, len);
+            result.parts[result.count].lfn[len] = '\0';
+
+            result.count++;
         }
 
-        start = end;
-        while (*start == '/')
-            start++;
+        in = end;
+        while (*in == '/')
+            in++;
     }
+    printf("parts: %d\n", result.count);
+    return result;
+}
 
-    out[0] = malloc(2);
-    itos(count, out[0]);
-    return out;
+void free_folder_path(PathParts *pp)
+{
+    for (int i = 0; i < pp->count; i++)
+    {
+        free(pp->parts[i].lfn);
+    }
+    pp->count = 0;
 }
