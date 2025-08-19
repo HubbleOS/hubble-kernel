@@ -61,14 +61,26 @@ typedef struct
 	PathPart parts[MAX_PARTS];
 } PathParts;
 
+typedef struct
+{
+	uint32_t cluster;
+	char *name;
+	bool is_dir;
+} Entry;
+typedef struct
+{
+	Entry *entries;
+	int count;
+} Directory;
+
 extern uint32_t fat32_partition_base_lba;
 
 #define MAX_CLUSTER_CHAIN 1024
 
-extern uint8_t *fat_cache;
+extern uint32_t *fat_cache;
 extern bool fat_dirty;
 
 extern uint32_t fat_start_lba, cluster_heap_lba, root_cluster;
 extern uint32_t cluster_size;
 extern FAT32_BPB *bpb;
-extern uint16_t total_fat_entries;
+extern uint32_t total_fat_entries;

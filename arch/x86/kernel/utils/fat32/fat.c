@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-uint8_t *fat_cache = NULL;
+uint32_t *fat_cache = NULL; // визначення глобальної змінної (не static)
 bool fat_dirty = false;
 
 uint32_t fat_start_lba = 0;
@@ -16,64 +16,71 @@ uint32_t cluster_heap_lba = 0;
 uint32_t root_cluster = 0;
 uint32_t cluster_size = 0;
 FAT32_BPB *bpb = NULL;
-uint16_t total_fat_entries = 0;
+uint32_t total_fat_entries = 0;
 
-typedef struct
+void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr)
 {
-    char *buffer;
-    size_t pos;
-} list_ctx_t;
-
-void list_files_callback(const char *name, bool is_dir, void *ctx_ptr)
-{
-    list_ctx_t *ctx = (list_ctx_t *)ctx_ptr;
-    // without sprintf
-    ctx->buffer[ctx->pos++] = is_dir ? '/' : ' ';
-    memcpy(ctx->buffer + ctx->pos, name, strlen(name));
-    ctx->pos += strlen(name);
-    ctx->buffer[ctx->pos++] = '\n';
+    size_t namelen = strlen(name);
+    size_t need = namelen + 2; // prefix + '\n'
+    ctx_ptr->entries[ctx_ptr->count].name = malloc(need);
+    if (!ctx_ptr->entries[ctx_ptr->count].name)
+        return;
+    memset(ctx_ptr->entries[ctx_ptr->count].name, 0, need);
+    memcpy(ctx_ptr->entries[ctx_ptr->count].name, name, namelen);
+    ctx_ptr->entries[ctx_ptr->count].is_dir = is_dir;
+    printf("%s\n", name);
+    ctx_ptr->count++;
 }
 
-void fat32_list_files(uint32_t cluster, char *out_buf)
+Directory fat32_list_files(uint32_t cluster)
 {
-    memset(out_buf, 0, 2048);
-    list_ctx_t ctx = {.buffer = out_buf, .pos = 0};
+    Directory ctx = {.entries = malloc(1024), .count = 0};
+
     iterate_directory(cluster, list_files_callback, &ctx);
-    out_buf[ctx.pos] = '\0';
+    return ctx;
 }
-void fat32_list_files_from_path(const char *path, char *out_buf)
+Directory fat32_list_files_from_path(const char *path)
 {
-    memset(out_buf, 0, 2048);
-    printf("path 1: %s\n", path);
+    if (!path)
+        return (Directory){.entries = NULL, .count = 0};
     uint32_t cluster = resolve_path_to_cluster(path);
     if (cluster == 0)
     {
         printf("Path not found: %s\n", path);
-        return;
+        return (Directory){.entries = NULL, .count = 0};
     }
     printf("cluster: %d\n", cluster);
-    fat32_list_files(cluster, out_buf);
+    return fat32_list_files(cluster);
 }
 
 uint32_t get_fat_entry(uint32_t cluster)
 {
+    if (fat_cache && cluster < total_fat_entries)
+        return fat_cache[cluster] & 0x0FFFFFFF;
+
+    // fallback to sector read (unchanged behaviour)
     uint32_t fat_offset = cluster * 4;
     uint32_t fat_sector = fat_start_lba + (fat_offset / bpb->bytes_per_sector);
-
     uint8_t sector[512];
     ata_read_sector(fat_sector, sector);
-
     uint32_t offset = fat_offset % bpb->bytes_per_sector;
     return *((uint32_t *)(sector + offset)) & 0x0FFFFFFF;
 }
 void set_fat_entry(uint32_t cluster, uint32_t value)
 {
+    value &= 0x0FFFFFFF;
+    if (fat_cache && cluster < total_fat_entries)
+    {
+        fat_cache[cluster] = value;
+        fat_dirty = true;
+        return;
+    }
+
+    // fallback: sector read/modify/write
     uint32_t fat_offset = cluster * 4;
     uint32_t fat_sector = fat_start_lba + (fat_offset / bpb->bytes_per_sector);
-
     uint8_t sector[512];
     ata_read_sector(fat_sector, sector);
-
     uint32_t offset = fat_offset % bpb->bytes_per_sector;
     *((uint32_t *)(sector + offset)) = value;
     ata_write_sector(fat_sector, sector);
@@ -86,25 +93,36 @@ void fat32_free_cluster(uint32_t cluster)
         printf("Invalid cluster number: %u\n", cluster);
         return;
     }
-
-    // Mark the cluster as free (0x00000000)
-    fat_cache[cluster] = 0x00000000;
-    fat_dirty = true; // Mark the FAT as dirty
-    printf(" Cluster %u marked as free\n", cluster);
+    set_fat_entry(cluster, 0x00000000);
+    printf("Cluster %u freed\n", cluster);
 }
 
-uint32_t fat32_allocate_cluster()
+uint32_t fat32_allocate_cluster(void)
 {
+    if (!fat_cache)
+    {
+        // fallback: sector scan (slow)
+        for (uint32_t i = 2; i < total_fat_entries; ++i)
+        {
+            if (get_fat_entry(i) == 0x00000000)
+            {
+                set_fat_entry(i, 0x0FFFFFFF);
+                return i;
+            }
+        }
+        return 0;
+    }
+
     for (uint32_t i = 3; i < total_fat_entries; ++i)
     {
-        if (get_fat_entry(i) == 0x00000000) // 0 = free
+        if ((fat_cache[i] & 0x0FFFFFFF) == 0x00000000)
         {
-            set_fat_entry(i, 0x0FFFFFFF); // Mark as end-of-chain
+            fat_cache[i] = 0x0FFFFFFF;
+            fat_dirty = true;
             return i;
         }
     }
-
-    return 0; // No free cluster found
+    return 0;
 }
 
 // int fat32_read_file(uint32_t start_cluster, uint8_t *buffer, uint32_t size)
