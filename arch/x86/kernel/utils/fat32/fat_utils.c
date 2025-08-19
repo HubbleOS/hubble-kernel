@@ -11,7 +11,7 @@ void itos(int num, char *str);
 void stoi(char *str, int *num);
 void uint_to_str(uint32_t num, char *buf, size_t bufsize);
 
-void list_files_callback(const char *name, bool is_dir, void *ctx_ptr);
+void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr);
 uint32_t cluster_to_lba(uint32_t cluster);
 void fat32_read_cluster(uint32_t cluster, uint8_t *buffer);
 void ata_write_cluster(uint32_t cluster, const uint8_t *data);
@@ -100,8 +100,14 @@ int fat32_init_from_lba(gpt_partition_t part)
         return -1;
     }
 
-    bpb = (FAT32_BPB *)malloc(sizeof(FAT32_BPB));
+    bpb = malloc(sizeof(FAT32_BPB));
+    if (!bpb)
+    {
+        printf("Failed to allocate memory for BPB\n");
+        return -2;
+    }
     memcpy(bpb, sector + 0x0B, sizeof(FAT32_BPB));
+
     total_fat_entries = (bpb->fat_size_32 * bpb->bytes_per_sector) / 4;
     cluster_size = bpb->bytes_per_sector * bpb->sectors_per_cluster;
     root_cluster = bpb->root_cluster;
@@ -110,13 +116,18 @@ int fat32_init_from_lba(gpt_partition_t part)
     uint32_t fat_size_bytes = bpb->fat_size_32 * bpb->bytes_per_sector;
     fat_cache = malloc(fat_size_bytes);
     if (!fat_cache)
-        return -2;
+    {
+        free(bpb);
+        printf("Failed to allocate memory for FAT cache\n");
+        return -3;
+    }
 
     for (uint32_t i = 0; i < bpb->fat_size_32; i++)
     {
-        ata_read_sector(fat_start_lba + i, fat_cache + i * bpb->bytes_per_sector);
+        ata_read_sector(fat_start_lba + i, ((uint8_t *)fat_cache) + i * bpb->bytes_per_sector);
     }
 
+    fat_dirty = false; // Ініціалізуємо прапорець "чистоти" кеша
     return 0;
 }
 
@@ -154,16 +165,17 @@ void set_next_cluster(uint32_t cluster, uint32_t value)
     fat_dirty = true;
 }
 
-void fat_flush()
+void fat_flush(void)
 {
-    if (!fat_dirty)
+    if (!fat_dirty || !fat_cache)
         return;
-    for (uint32_t i = 0; i < bpb->num_fats; i++)
+    uint32_t fat_size_sectors = bpb->fat_size_32;
+    for (int f = 0; f < bpb->num_fats; ++f)
     {
-        uint32_t base = fat_start_lba + i * bpb->fat_size_32;
-        for (uint32_t s = 0; s < bpb->fat_size_32; s++)
+        uint32_t base = fat_start_lba + f * fat_size_sectors;
+        for (uint32_t s = 0; s < fat_size_sectors; ++s)
         {
-            ata_write_sector(base + s, fat_cache + s * bpb->bytes_per_sector);
+            ata_write_sector(base + s, ((uint8_t *)fat_cache) + s * bpb->bytes_per_sector);
         }
     }
     fat_dirty = false;
@@ -259,3 +271,47 @@ void free_folder_path(PathParts *pp)
     }
     pp->count = 0;
 }
+bool fat32_create_entry(uint32_t cluster, PathPart *pp, bool is_dir)
+{
+    uint8_t *buf = malloc(cluster_size);
+    fat32_read_cluster(cluster, buf);
+    FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)buf;
+    for (int i = 0; i < cluster_size / sizeof(FAT32_DirectoryEntry); i++, entry++)
+    {
+        if (entry->name[0] == 0x00 || entry->name[0] == 0xE5)
+        {
+            // 3. Формуємо ім’я у форматі 8.3
+
+            memcpy(entry->name, pp->sfn, 11);
+
+            // 4. Записуємо атрибут
+            entry->attr = is_dir ? 0x10 : 0x20;
+
+            // 5. Виділяємо кластер для файлу/директорії
+            uint32_t new_cluster = fat32_allocate_cluster();
+            entry->first_cluster_high = (new_cluster >> 16) & 0xFFFF;
+            entry->first_cluster_low = new_cluster & 0xFFFF;
+
+            // 6. Розмір (для директорії = 0)
+            entry->file_size = 0;
+
+            // 7. Записуємо назад директорію
+            fat32_write_cluster(cluster, buf);
+            free(buf);
+
+            // 8. Для директорії створюємо "." і ".."
+            if (is_dir)
+                fat32_format_directory_cluster(new_cluster, cluster);
+            fat_flush();
+            return true;
+        }
+    }
+
+    free(buf);
+    return false; // нема місця в директорії
+}
+// FAT32_DirectoryEntry *get_directory_entry(uint32_t cluster, const char *name)
+// {
+//     uint8_t *buf = malloc(cluster_size);
+//     fat32_read_cluster(cluster, buf);
+//     return fat32_get_directory_entry(buf, name);
