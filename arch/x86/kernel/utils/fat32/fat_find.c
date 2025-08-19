@@ -1,10 +1,11 @@
 #include "utils/fat32/fat_utils.h"
 #include "utils/fat32/fat_structs.h"
+#include "utils/fat32/fat.h"
 
 #include <stdio.h>
 #include <string.h>
 
-typedef void (*directory_entry_callback_t)(const char *name, bool is_dir, void *context);
+typedef void (*directory_entry_callback_t)(const char *name, bool is_dir, Directory *context);
 
 uint32_t resolve_path_to_cluster(const char *path)
 {
@@ -20,6 +21,7 @@ uint32_t resolve_path_to_cluster(const char *path)
         if (cluster == 0 || cluster >= 0x0FFFFFF8)
             return 0; // cluster not found
     }
+    free_folder_path(&parts);
     return cluster;
 }
 
@@ -40,7 +42,7 @@ uint32_t find_directory_entry_cluster(uint32_t dir_cluster, const char *name11)
             if ((entry->attr & 0x0F) == 0x0F || entry->name[0] == 0x00 || entry->name[0] == 0xE5)
                 continue;
 
-            if (memcmp((char *)entry->name, name11, 10) == 0)
+            if (memcmp(entry->name, name11, 11) == 0)
             {
                 free(buffer);
                 printf("entry cluster: high = %d, low = %d\n", entry->first_cluster_high, entry->first_cluster_low);
@@ -62,10 +64,12 @@ uint32_t find_directory_entry_cluster(uint32_t dir_cluster, const char *name11)
 void iterate_directory(uint32_t cluster, directory_entry_callback_t callback, void *ctx)
 {
     int steps = 0;
+    uint8_t *data = malloc(cluster_size);
+    if (!data)
+        return;
+
     while (cluster < 0x0FFFFFF8 && steps++ < MAX_CLUSTER_CHAIN)
     {
-
-        uint8_t *data = malloc(cluster_size);
         fat32_read_cluster(cluster, data);
         size_t entries = cluster_size / sizeof(FAT32_DirectoryEntry);
         for (size_t i = 0; i < entries; ++i)
@@ -78,7 +82,25 @@ void iterate_directory(uint32_t cluster, directory_entry_callback_t callback, vo
                 callback(name, is_dir, ctx);
             }
         }
-
         cluster = get_fat_entry(cluster);
     }
+    free(data);
+}
+bool is_dir(FAT32_DirectoryEntry *entry)
+{
+    return (entry->attr & 0x10) == 0x10;
+}
+bool is_file(FAT32_DirectoryEntry *entry)
+{
+    return (entry->attr & 0x10) != 0x10;
+}
+bool is_empty_dir(FAT32_DirectoryEntry *entry)
+{
+    if (is_dir(entry))
+        return false;
+
+    Directory empty = fat32_list_files(entry->first_cluster_high << 16 | entry->first_cluster_low);
+    if (empty.count == 0)
+        return true;
+    return false;
 }
