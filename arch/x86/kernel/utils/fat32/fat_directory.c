@@ -152,46 +152,33 @@ bool fat32_add_directory_entry(uint32_t dir_cluster, FAT32_DirectoryEntry *new_e
 }
 bool fat32_delete_directory(const char *path)
 {
-    uint32_t dir_cluster = resolve_path_to_cluster(path);
+
     PathParts parts = format_folder_path(path);
-    if (dir_cluster == 0)
+
+    char abs_path[256] = {0};
+    for (int i = 0; i < parts.count - 1; ++i)
     {
-        printf("Path not found: %s\n", path);
-        return false;
+        if (i > 0)
+            strcat(abs_path, "/");
+        strcat(abs_path, parts.parts[i].sfn);
     }
+    uint32_t parent_cluster = resolve_path_to_cluster(abs_path);
+    uint32_t dir_cluster = find_directory_entry_cluster(parent_cluster, parts.parts[parts.count - 1].sfn);
     Directory dir = fat32_list_files(dir_cluster);
     printf("dir count: %d\n", dir.count);
+
     if (dir.count > 2)
-        return false;
-    char target[12] = {0};
-    printf("dir name: %s\n", parts.parts[parts.count - 1].sfn);
-    uint32_t entry_cluster = find_directory_entry_cluster(dir_cluster, parts.parts[parts.count - 1].sfn);
-    if (entry_cluster == 0)
     {
-        printf("File not found: %s/%s\n", path, parts.parts[parts.count - 1].sfn);
+        for (int i = 0; i < dir.count; i++)
+        {
+            printf("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
+        }
+        printf("Directory not empty\n");
         return false;
     }
 
-    uint8_t *buf = malloc(cluster_size);
-    if (!buf)
-        return false;
-
-    fat32_read_cluster(entry_cluster, buf);
-
-    FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)buf;
-
-    entry->name[0] = 0xE5; // mark as deleted
-
-    uint32_t cluster = (entry->first_cluster_high << 16) | entry->first_cluster_low;
-    while (cluster < 0x0FFFFFF8 && cluster != 0)
-    {
-        uint32_t next = get_fat_entry(cluster);
-        fat32_free_cluster(cluster);
-        cluster = next;
-    }
-
-    fat32_write_cluster(entry_cluster, buf);
-    free(buf);
+    fat32_delete_entry(parent_cluster, parts.parts[parts.count - 1].sfn);
+    printf("📁 Directory deleted: %s\n", path);
 
     fat_flush();
     return true;

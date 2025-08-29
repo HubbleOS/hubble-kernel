@@ -44,6 +44,11 @@ uint32_t find_directory_entry_cluster(uint32_t dir_cluster, const char *name11)
 
             if (memcmp(entry->name, name11, 11) == 0)
             {
+                printf("found entry: %s\n", entry->name);
+                for (int j = 0; j < 11; j++)
+                {
+                    printf("i: %d, entry: %c, target: %c\n", j, entry->name[j], name11[j]);
+                }
                 free(buffer);
                 printf("entry cluster: high = %d, low = %d\n", entry->first_cluster_high, entry->first_cluster_low);
 
