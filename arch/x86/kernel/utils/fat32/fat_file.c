@@ -21,7 +21,7 @@ bool fat32_create_file(const char *path)
 
     uint32_t parent_cluster = resolve_path_to_cluster(abs_path);
 
-    return fat32_create_entry(parent_cluster, &parts.parts[parts.count - 1], true);
+    return fat32_create_entry(parent_cluster, &parts.parts[parts.count - 1], false);
 
     // if (parent_cluster == 0)
     // {
@@ -125,8 +125,6 @@ bool fat32_write_file(const char *path, const char *filename11, const uint8_t *d
             cluster = next;
         }
     }
-
-    // Оновлюємо розмір
     entry->file_size = size;
     fat32_write_cluster(file_cluster, buf);
     free(buf);
@@ -186,43 +184,19 @@ size_t fat32_read_file(const char *path, const char *filename11, uint8_t *out_bu
     free(buf);
     return read;
 }
-bool fat32_delete_file(const char *path, const char *filename11)
+bool fat32_delete_file(const char *path)
 {
-    uint32_t dir_cluster = resolve_path_to_cluster(path);
-    if (dir_cluster == 0)
+    PathParts pp = format_folder_path(path);
+    char abs_path[256] = {0};
+    for (int i = 0; i < pp.count - 1; ++i)
     {
-        printf("Path not found: %s\n", path);
-        return false;
+        if (i > 0)
+            strcat(abs_path, "/");
+        strcat(abs_path, pp.parts[i].sfn);
     }
+    uint32_t parent_cluster = resolve_path_to_cluster(abs_path);
 
-    char target[12] = {0};
-    format_filename_fat(filename11, target);
-    uint32_t entry_cluster = find_directory_entry_cluster(dir_cluster, target);
-    if (entry_cluster == 0)
-    {
-        printf("File not found: %s/%s\n", path, filename11);
-        return false;
-    }
-
-    uint8_t *buf = malloc(cluster_size);
-    if (!buf)
-        return false;
-
-    fat32_read_cluster(entry_cluster, buf);
-
-    FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)buf;
-
-    entry->name[0] = 0xE5; // mark as deleted
-
-    uint32_t cluster = (entry->first_cluster_high << 16) | entry->first_cluster_low;
-    while (cluster < 0x0FFFFFF8 && cluster != 0)
-    {
-        uint32_t next = get_fat_entry(cluster);
-        fat32_free_cluster(cluster);
-        cluster = next;
-    }
-
-    fat32_write_cluster(entry_cluster, buf);
-    free(buf);
+    fat32_delete_entry(parent_cluster, pp.parts[pp.count - 1].sfn);
+    printf("File deleted: %s/%s\n", path, pp.parts[pp.count - 1].sfn);
     return true;
 }
