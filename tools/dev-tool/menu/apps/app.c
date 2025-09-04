@@ -44,8 +44,8 @@ void fun() { system("make -C qemu"); } // example action
 void show_save_modal()
 {
 	ModalButton buttons[] = {
-		{"Save", fun},
-		{"Don't save", on_dont_save},
+	    {"Save", fun},
+	    {"Don't save", on_dont_save},
 	};
 	show_modal_with_buttons("Save changes?", buttons, COUNT(buttons));
 }
@@ -53,11 +53,11 @@ void show_save_modal()
 void show_save_modal2()
 {
 	ModalButton buttons[] = {
-		{"Save", fun},
-		{"Save", fun},
-		{"Save", fun},
-		{"Save", fun},
-		{"Don't save", on_dont_save},
+	    {"Save", fun},
+	    {"Save", fun},
+	    {"Save", fun},
+	    {"Save", fun},
+	    {"Don't save", on_dont_save},
 	};
 	show_modal_with_buttons("bla bla bla?", buttons, COUNT(buttons));
 }
@@ -71,41 +71,41 @@ void start_game()
 // Menu setup
 
 static MenuItem main_items[] = {
-	{"Option 1", show_save_modal},
-	{"Option 2", show_save_modal2},
-	{"Option 3", fun},
-	{"Option 4", NULL},
-	{"Games :)", start_game},
+    {"Option 1", show_save_modal},
+    {"Option 2", show_save_modal2},
+    {"Option 3", fun},
+    {"Option 4", NULL},
+    {"Games :)", start_game},
 };
 
 static ChecklistItem checklist_items[] = {
-	{"item123", true},
-	{"item123", true},
-	{"item123", true},
-	{"item123", true},
-	{"item123", true},
-	{"item2", false},
-	{"item3", false},
-	{"item1", true},
-	{"item2", false},
-	{"item3", false},
-	{"item1", true},
-	{"item1", true},
-	{"item2", false},
-	{"item3", false},
-	{"item1", true},
-	{"item2", false},
-	{"item3", false},
-	{"item1", true},
-	{"item2", false},
-	{"item3", false},
-	{"item1", true},
-	{"item2", false},
-	{"item3", false},
-	{"item1", true},
-	{"item2", false},
-	{"item3", false},
-	{"item4", false},
+    {"item123", true},
+    {"item123", true},
+    {"item123", true},
+    {"item123", true},
+    {"item123", true},
+    {"item2", false},
+    {"item3", false},
+    {"item1", true},
+    {"item2", false},
+    {"item3", false},
+    {"item1", true},
+    {"item1", true},
+    {"item2", false},
+    {"item3", false},
+    {"item1", true},
+    {"item2", false},
+    {"item3", false},
+    {"item1", true},
+    {"item2", false},
+    {"item3", false},
+    {"item1", true},
+    {"item2", false},
+    {"item3", false},
+    {"item1", true},
+    {"item2", false},
+    {"item3", false},
+    {"item4", false},
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -184,8 +184,8 @@ void app()
 	ADD_ELEMENT(win_right, checklist);
 
 	UIWindow *windows[] = {
-		win_left,
-		win_right,
+	    win_left,
+	    win_right,
 	};
 
 	UI_CLEAR();
