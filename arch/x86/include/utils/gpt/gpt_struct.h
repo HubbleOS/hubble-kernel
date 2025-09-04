@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <utils/vfs/vfs.h>
 
 typedef struct __attribute__((packed))
 {
@@ -36,4 +37,6 @@ typedef struct
     uint64_t first_lba;
     uint64_t last_lba;
     char name[37];
+    void *device;
+    DeviceType type;
 } gpt_partition_t;

@@ -3,11 +3,12 @@
 #include <stdio.h>
 #include "utils/ata/ata.h"
 #include "utils/io.h"
+#include "utils/fat32/fat_structs.h"
 
-#define ATA_PRIMARY_IO 0x1F0
-#define ATA_PRIMARY_CTRL 0x3F6
 #define ATA_STATUS_BSY 0x80
 #define ATA_STATUS_DRQ 0x08
+#define SECTOR_SIZE 512
+
 #define ATA_CMD_READ_SECT 0x20
 
 #define ATA_DATA 0x1F0
@@ -24,19 +25,19 @@
 #define ATA_WRITE_SECTORS 0x30
 
 // Wait busy
-void ata_wait()
+static void ata_wait(ATA_Device *dev)
 {
-    while (inb(ATA_PRIMARY_IO + 7) & ATA_STATUS_BSY)
+    while (inb(dev->io_base + 7) & ATA_STATUS_BSY)
         ;
 }
 
 // DRQ wait
-int ata_wait_drq()
+int ata_wait_drq(ATA_Device *dev)
 {
     uint8_t status;
     do
     {
-        status = inb(ATA_PRIMARY_IO + 7);
+        status = inb(dev->io_base + 7);
         if (status & ATA_STATUS_ERROR)
             return -1;
     } while (!(status & ATA_STATUS_DRQ));
@@ -44,91 +45,117 @@ int ata_wait_drq()
 }
 
 // Read sector
-void ata_read_sector(uint32_t lba, uint8_t *buffer)
+
+int ata_read_sector(void *device, uint32_t lba, void *buffer)
 {
+    ATA_Device *dev = (ATA_Device *)device;
 
-    ata_wait();
+    ata_wait(dev);
+    outb(dev->ctrl_base, 0x00);
 
-    outb(ATA_PRIMARY_CTRL, 0x00); // disable IRQ (polling mode)
+    outb(dev->io_base + 2, 1); // sector count = 1
+    outb(dev->io_base + 3, (uint8_t)(lba));
+    outb(dev->io_base + 4, (uint8_t)(lba >> 8));
+    outb(dev->io_base + 5, (uint8_t)(lba >> 16));
+    outb(dev->io_base + 6, 0xE0 | ((lba >> 24) & 0x0F));
+    outb(dev->io_base + 7, ATA_CMD_READ_SECT);
 
-    outb(ATA_PRIMARY_IO + 1, 0x00);                        // null LBA high
-    outb(ATA_PRIMARY_IO + 2, 1);                           // sector count = 1
-    outb(ATA_PRIMARY_IO + 3, (uint8_t)(lba));              // LBA low
-    outb(ATA_PRIMARY_IO + 4, (uint8_t)(lba >> 8));         // LBA mid
-    outb(ATA_PRIMARY_IO + 5, (uint8_t)(lba >> 16));        // LBA high
-    outb(ATA_PRIMARY_IO + 6, 0xE0 | ((lba >> 24) & 0x0F)); // 0xE0: master + LBA mode
-    outb(ATA_PRIMARY_IO + 7, ATA_CMD_READ_SECT);           // команда читання
-
-    ata_wait();
-    ata_wait_drq();
-
-    // Зчитування 256 слів (512 байт)
-    for (int i = 0; i < 256; i++)
+    ata_wait(dev);
+    if (ata_wait_drq(dev) != 0)
     {
-        uint16_t data = inw(ATA_PRIMARY_IO);
-        buffer[i * 2] = data & 0xFF;
-        buffer[i * 2 + 1] = (data >> 8) & 0xFF;
-    }
-}
-
-int ata_write_sector(uint32_t lba, const void *buffer)
-{
-    const uint16_t *data = (const uint16_t *)buffer;
-
-    ata_wait();
-
-    outb(ATA_PRIMARY_IO + 6, 0xE0 | ((lba >> 24) & 0x0F)); // Drive/Head
-    outb(ATA_PRIMARY_IO + 2, 1);                           // Sector count
-    outb(ATA_PRIMARY_IO + 3, lba & 0xFF);                  // LBA low
-    outb(ATA_PRIMARY_IO + 4, (lba >> 8) & 0xFF);           // LBA mid
-    outb(ATA_PRIMARY_IO + 5, (lba >> 16) & 0xFF);          // LBA high
-    outb(ATA_PRIMARY_IO + 7, ATA_WRITE_SECTORS);           // Command
-
-    if (ata_wait_drq() != 0)
+        printf("ata_wait_drq failed\n");
         return -1;
-
-    for (int i = 0; i < 256; i++)
-    {
-        outw(ATA_PRIMARY_IO, data[i]);
     }
 
-    // Flush cache
-    outb(ATA_PRIMARY_IO + 7, 0xE7); // FLUSH CACHE
-    ata_wait();
+    for (int i = 0; i < SECTOR_SIZE / 2; i++)
+    {
+        ((uint16_t *)buffer)[i] = inw(dev->io_base);
+    }
 
     return 0;
 }
 
-void ata_manual_test()
+int ata_write_sector(void *device, uint32_t lba, const void *buffer)
 {
-    const uint32_t test_lba = 100;
-    uint8_t write_buf[512];
-    uint8_t read_buf[512];
+    ATA_Device *dev = (ATA_Device *)device;
 
-    // 1. Підготовка тестових даних
-    for (int i = 0; i < 512; ++i)
-        write_buf[i] = (uint8_t)(i & 0xFF); // просто шаблон: 00, 01, ..., FF, 00, 01 ...
-
-    printf("📤 Writing to LBA %u...\n", test_lba);
-    if (ata_write_sector(test_lba, write_buf) != 0)
+    const uint16_t *buf = (const uint16_t *)buffer;
+    for (int j = 0; j < 16; j++)
+        printf("%02X ", buf[j]);
+    if (((FAT32_DirectoryEntry *)(buf))->name[0] == 0x00)
     {
-        printf("ATA write failed\n");
-        printf("error code: %d\n", ata_write_sector(test_lba, write_buf));
-        return;
+        printf("ata_write_sector: buffer is empty\n");
+    }
+    ata_wait(dev);
+
+    outb(dev->io_base + 6, 0xE0 | ((lba >> 24) & 0x0F)); // Drive/Head
+    outb(dev->io_base + 2, 1);                           // Sector count
+    outb(dev->io_base + 3, lba & 0xFF);                  // LBA low
+    outb(dev->io_base + 4, (lba >> 8) & 0xFF);           // LBA mid
+    outb(dev->io_base + 5, (lba >> 16) & 0xFF);          // LBA high
+    outb(dev->io_base + 7, ATA_WRITE_SECTORS);           // Command
+
+    if (ata_wait_drq(dev) < 0)
+    {
+        printf("ata_wait_drq failed\n");
+        return -1;
     }
 
-    memset(read_buf, 0, sizeof(read_buf));
-    printf("Reading from LBA %u...\n", test_lba);
-    ata_read_sector(test_lba, read_buf);
-
-    // 3. Порівняння
-    for (int i = 0; i < 16; ++i) // перевіримо перші 16 байт
+    for (int i = 0; i < SECTOR_SIZE / 2; i++)
     {
-        printf("Byte %02d: written=0x%d read=0x%d\n", i, write_buf[i], read_buf[i]);
+        outw(dev->io_base, buf[i]);
     }
 
-    if (memcmp(write_buf, read_buf, 512) == 0)
-        printf("ATA write/read successful!\n");
-    else
-        printf("Mismatch in data!\n");
+    ata_wait(dev);
+
+    if (inb(dev->io_base + 7) & ATA_STATUS_ERROR)
+    {
+        printf("ata_write_sector failed\n");
+        return -1;
+    }
+
+    return 0;
 }
+void ata_init_device(ATA_Device *dev, uint8_t bus, uint16_t io_base, uint8_t device, uint16_t ctrl_base)
+{
+    dev->bus = bus;
+    dev->device = device;
+    dev->io_base = io_base;
+    dev->ctrl_base = ctrl_base;
+    dev->read = &ata_read_sector;
+    dev->write = &ata_write_sector;
+}
+
+// void ata_manual_test()
+// {
+//     const uint32_t test_lba = 100;
+//     uint8_t write_buf[512];
+//     uint8_t read_buf[512];
+
+//     // 1. Підготовка тестових даних
+//     for (int i = 0; i < 512; ++i)
+//         write_buf[i] = (uint8_t)(i & 0xFF); // просто шаблон: 00, 01, ..., FF, 00, 01 ...
+
+//     printf("📤 Writing to LBA %u...\n", test_lba);
+//     if (ata_write_sector(test_lba, write_buf) != 0)
+//     {
+//         printf("ATA write failed\n");
+//         printf("error code: %d\n", ata_write_sector(test_lba, write_buf));
+//         return;
+//     }
+
+//     memset(read_buf, 0, sizeof(read_buf));
+//     printf("Reading from LBA %u...\n", test_lba);
+//     ata_read_sector(test_lba, read_buf);
+
+//     // 3. Порівняння
+//     for (int i = 0; i < 16; ++i) // перевіримо перші 16 байт
+//     {
+//         printf("Byte %02d: written=0x%d read=0x%d\n", i, write_buf[i], read_buf[i]);
+//     }
+
+//     if (memcmp(write_buf, read_buf, 512) == 0)
+//         printf("ATA write/read successful!\n");
+//     else
+//         printf("Mismatch in data!\n");
+// }
