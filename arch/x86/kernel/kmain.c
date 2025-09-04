@@ -17,20 +17,20 @@ extern uint32_t root_cluster;
 
 void kernel_main(BootInfo *bi)
 {
-    heap_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
-    framebuffer_info_t *fb = bi->framebuffer;
+	heap_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
+	framebuffer_info_t *fb = bi->framebuffer;
 
-    init_font(fb);
-    libc_init();
-    printf("GPT init\n");
+	init_font(fb);
+	libc_init();
+	printf("GPT init\n");
 
-    gpt_init(partitions);
+	gpt_init(partitions);
 
-    printf("FAT32 init at LBA %d\n", partitions[0].first_lba);
-    fat32_init_from_lba(partitions[0]);
-    char buffer[1024];
-    printf("root cluster: %d\n", root_cluster);
+	printf("FAT32 init at LBA %d\n", partitions[0].first_lba);
+	fat32_init_from_lba(partitions[0]);
+	char buffer[1024];
+	printf("root cluster: %d\n", root_cluster);
 
-    while (1)
-        ;
+	while (1)
+		;
 }
