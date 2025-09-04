@@ -48,6 +48,47 @@ typedef struct __attribute__((packed))
 	uint16_t first_cluster_low;
 	uint32_t file_size;
 } FAT32_DirectoryEntry;
+typedef struct
+{
+	// === Абстракція пристрою ===
+	void *device; // будь-який носій (ATA_Device, RamDisk, USB і т.д.)
+	int (*read_sector)(void *device, uint32_t lba, void *buffer);
+	int (*write_sector)(void *device, uint32_t lba, const void *buffer);
+
+	// === Метадані розділу ===
+	uint32_t start_lba;		// початок розділу FAT32
+	uint32_t total_sectors; // загальна кількість секторів
+	uint32_t sectors_per_cluster;
+	uint32_t cluster_size;
+	uint32_t total_fat_entries;
+	uint32_t bytes_per_sector;
+
+	// FAT32 BPB
+	uint32_t reserved_sectors;
+	uint32_t num_fats;
+	uint32_t sectors_per_fat;
+	uint32_t root_cluster;
+	uint32_t cluster_heap_lba;
+	uint32_t fat_size_32;
+
+	// === FAT cache ===
+	uint32_t fat_start_lba;	 // LBA початку FAT
+	uint32_t data_start_lba; // LBA початку даних
+	uint32_t *fat_cache;	 // кешована FAT (опційно)
+	bool fat_dirty;			 // чи треба скидати зміни назад на диск
+	bool cache_enabled;
+
+	// === Стан ===
+	bool mounted;
+} FAT32_FS;
+
+typedef struct
+{
+	FAT32_DirectoryEntry *entry;
+	uint32_t cluster;
+	uint32_t index;
+} FAT32_File;
+
 #define MAX_PARTS 16
 typedef struct
 {
@@ -61,26 +102,14 @@ typedef struct
 	PathPart parts[MAX_PARTS];
 } PathParts;
 
-typedef struct
-{
-	uint32_t cluster;
-	char *name;
-	bool is_dir;
-} Entry;
-typedef struct
-{
-	Entry *entries;
-	int count;
-} Directory;
-
-extern uint32_t fat32_partition_base_lba;
+// extern uint32_t fat32_partition_base_lba;
 
 #define MAX_CLUSTER_CHAIN 1024
 
-extern uint32_t *fat_cache;
-extern bool fat_dirty;
+// extern uint32_t *fat_cache;
+// extern bool fat_dirty;
 
-extern uint32_t fat_start_lba, cluster_heap_lba, root_cluster;
-extern uint32_t cluster_size;
-extern FAT32_BPB *bpb;
-extern uint32_t total_fat_entries;
+// extern uint32_t fat_start_lba, cluster_heap_lba, root_cluster;
+//  extern uint32_t cluster_size;
+//  extern FAT32_BPB *bpb;
+//  extern uint32_t total_fat_entries;

@@ -37,14 +37,30 @@ int gpt_init(gpt_partition_t *partitions)
     // GPT_Header gpt_header;
     // printf("sizeof(GPT_Header): %d\n", sizeof(GPT_Header));
     uint8_t buf[512];
-    ata_read_sector(1, buf);
-
+    // ata_read_sector(1, buf);
+    if (partitions->type == 0)
+    {
+        //((ATA_Device *)(partitions->device))->read(partitions->device, 1, buf);
+        if (ata_read_sector(partitions->device, 1, buf) != 0)
+        {
+            printf("❌ Failed to read GPT header\n");
+            int a = ata_read_sector(partitions->device, 1, buf);
+            printf("ata_read_sector: %d\n", a);
+            return -1;
+        }
+    }
+    else
+    {
+        printf("❌ Unsupported device type\n");
+        ata_read_sector(partitions->device, 1, buf);
+    }
     GPT_Header *gpt_header = (GPT_Header *)buf;
     printf("GPT Signature: %llx\n", gpt_header->signature);
 
     if (gpt_header->signature != 0x5452415020494645ULL) // "EFI PART"
     {
         printf("❌ Invalid GPT signature\n");
+        printf("GPT Signature: %llx\n", gpt_header->signature);
         return -1;
     }
 
@@ -62,7 +78,11 @@ int gpt_init(gpt_partition_t *partitions)
 
     for (uint32_t i = 0; i < sectors_to_read; i++)
     {
-        ata_read_sector(gpt_header->partition_entries_lba + i, entry_buf + (i * 512));
+        if (partitions->type == 0)
+        {
+            ((ATA_Device *)(partitions->device))->read(partitions->device, gpt_header->partition_entries_lba + i, entry_buf + (i * 512));
+        }
+        // ata_read_sector(gpt_header->partition_entries_lba + i, entry_buf + (i * 512));
     }
 
     for (uint32_t i = 0; i < gpt_header->num_partition_entries; i++)
