@@ -48,7 +48,6 @@ void kernel_main(BootInfo *bi)
 	gpt_init(partitions);
 
 	printf("FAT32 init at LBA %d\n", partitions[0].first_lba);
-<<<<<<< HEAD
 	// fat32_init_from_lba(partitions[0]);
 	VFS_Device *device = malloc(sizeof(VFS_Device));
 	device->type = DEV_ATA;
@@ -79,12 +78,4 @@ void kernel_main(BootInfo *bi)
 	{
 		;
 	}
-=======
-	fat32_init_from_lba(partitions[0]);
-	char buffer[1024];
-	printf("root cluster: %d\n", root_cluster);
-
-	while (1)
-		;
->>>>>>> libc
 }
