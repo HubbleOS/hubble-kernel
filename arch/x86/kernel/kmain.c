@@ -6,78 +6,76 @@
 #include "utils/ata/ata.h"
 #include "utils/gpt/gpt.h"
 #include "utils/gpt/gpt_struct.h"
+#include "utils/vfs/vfs_standart_struct.h"
+#include "utils/vfs/vfs.h"
 
 #include <stdio.h>
 #include <string.h>
-
-static gpt_partition_t partitions[128];
+static ATA_Device ata_devices[2] = {
+    {
+	.bus = 0,
+	.device = 0,
+	.io_base = 0x1F0,
+	.ctrl_base = 0x3F6,
+	.read = ata_read_sector,
+	.write = ata_write_sector,
+    },
+    {
+	.bus = 1,
+	.device = 0,
+	.io_base = 0x170,
+	.ctrl_base = 0x376,
+	.read = ata_read_sector,
+	.write = ata_write_sector,
+    },
+};
+static gpt_partition_t partitions[20] = {
+    {.device = &ata_devices[0],
+     .type = 0}};
 extern void os_main(framebuffer_info_t *fb);
 extern void libc_init(void);
-
-extern uint32_t root_cluster;
+extern VFS_FS *root_fs;
 
 void kernel_main(BootInfo *bi)
 {
-    heap_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
-    framebuffer_info_t *fb = bi->framebuffer;
+	heap_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
+	framebuffer_info_t *fb = bi->framebuffer;
 
-    init_font(fb);
-    libc_init();
-    printf("GPT init\n");
+	init_font(fb);
+	libc_init();
+	printf("GPT init\n");
 
-    gpt_init(partitions);
+	gpt_init(partitions);
 
-    printf("FAT32 init at LBA %d\n", partitions[0].first_lba);
-    fat32_init_from_lba(partitions[0]);
-    char buffer[1024];
-    printf("root cluster: %d\n", root_cluster);
-    printf("%s\n", buffer);
-    printf("FAT32 init done\n");
-    // printf("Enter 1 to list files, 2 to delete file, 3 to create directory, 4 to delete dir\n");
-    // while (1)
-    // {
-    //     int c = getchar();
-    //     if (c == '1')
-    //     {
-    //         char foldername11[1024];
-    //         scanf("%s", foldername11);
-    //         Directory dir = fat32_list_files_from_path(foldername11);
-    //         for (int i = 0; i < dir.count; i++)
-    //         {
-    //             printf("%d ", i);
-    //             printf("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
-    //         }
-    //     }
-    //     if (c == '2')
-    //     {
-    //         // create file
-    //         char foldername11[1024];
-    //         scanf("%s", foldername11);
-    //         fat32_create_file(foldername11);
-    //     }
-    //     if (c == '3')
-    //     {
-    //         char foldername11[1024];
-    //         scanf("%s", foldername11);
-    //         fat32_delete_file(foldername11);
-    //     }
-    //     if (c == '4')
-    //     {
-    //         char foldername11[1024];
-    //         scanf("%s", foldername11);
-    //         fat32_create_directory(foldername11);
-    //     }
-    //     if (c == '5')
-    //     {
-    //         char foldername11[1024];
-    //         scanf("%s", foldername11);
-    //         fat32_delete_directory(foldername11);
-    //     }
+	printf("FAT32 init at LBA %d\n", partitions[0].first_lba);
+	// fat32_init_from_lba(partitions[0]);
+	VFS_Device *device = malloc(sizeof(VFS_Device));
+	device->type = DEV_ATA;
+	device->device = &ata_devices[0];
+	vfs_mount(device, partitions[0].first_lba, FS_FAT32);
+	printf("FAT32 mounted\n");
+	printf("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
+	VFS_File *f = vfs_open("/test.txt", VFS_O_CREAT | VFS_O_RDWR);
+	vfs_write(f, "Hello, world!", 13);
+	Directory dir = vfs_readdir("/");
+	for (int i = 0; i < dir.count; i++)
+	{
+		printf("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
+	}
 
-    //     printf("char:%d \n", c);
-    // }
-    while (1)
-    {
-        ;
-    }
+	char buffer[1024];
+	vfs_read(f, buffer, 1024);
+	printf("Read: \n");
+	printf("%s\n", buffer);
+	for (int i = 0; i < 1024; i++)
+	{
+		printf("%c", buffer[i]);
+	}
+
+	printf("FAT32 init done\n");
+
+	while (1)
+	{
+		;
+	}
 }

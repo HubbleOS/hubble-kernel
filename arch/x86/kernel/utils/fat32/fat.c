@@ -8,16 +8,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-uint32_t *fat_cache = NULL; // визначення глобальної змінної (не static)
-bool fat_dirty = false;
-
-uint32_t fat_start_lba = 0;
-uint32_t cluster_heap_lba = 0;
-uint32_t root_cluster = 0;
-uint32_t cluster_size = 0;
-FAT32_BPB *bpb = NULL;
-uint32_t total_fat_entries = 0;
-
 void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr)
 {
     size_t namelen = strlen(name);
@@ -28,97 +18,122 @@ void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr)
     memset(ctx_ptr->entries[ctx_ptr->count].name, 0, need);
     memcpy(ctx_ptr->entries[ctx_ptr->count].name, name, namelen);
     ctx_ptr->entries[ctx_ptr->count].is_dir = is_dir;
-    printf("%s\n", name);
     ctx_ptr->count++;
 }
 
-Directory fat32_list_files(uint32_t cluster)
+Directory fat32_list_files(FAT32_FS *fs, uint32_t cluster)
 {
     Directory ctx = {.entries = malloc(1024), .count = 0};
 
-    iterate_directory(cluster, list_files_callback, &ctx);
+    iterate_directory(fs, cluster, list_files_callback, &ctx);
     return ctx;
 }
-Directory fat32_list_files_from_path(const char *path)
+Directory fat32_list_files_from_path(FAT32_FS *fs, const char *path)
 {
     if (!path)
         return (Directory){.entries = NULL, .count = 0};
-    uint32_t cluster = resolve_path_to_cluster(path);
+
+    uint32_t cluster = resolve_path_to_cluster(fs, path);
+    printf("cluster show: %d\n", cluster);
     if (cluster == 0)
     {
         printf("Path not found: %s\n", path);
         return (Directory){.entries = NULL, .count = 0};
     }
-    printf("cluster: %d\n", cluster);
-    return fat32_list_files(cluster);
+
+    return fat32_list_files(fs, cluster);
 }
 
-uint32_t get_fat_entry(uint32_t cluster)
+uint32_t get_fat_entry(FAT32_FS *fs, uint32_t cluster)
 {
-    if (fat_cache && cluster < total_fat_entries)
-        return fat_cache[cluster] & 0x0FFFFFFF;
+    if (cluster >= fs->total_fat_entries)
+        return 0x0FFFFFFF; // поза діапазоном => кінець ланцюжка
 
-    // fallback to sector read (unchanged behaviour)
-    uint32_t fat_offset = cluster * 4;
-    uint32_t fat_sector = fat_start_lba + (fat_offset / bpb->bytes_per_sector);
-    uint8_t sector[512];
-    ata_read_sector(fat_sector, sector);
-    uint32_t offset = fat_offset % bpb->bytes_per_sector;
-    return *((uint32_t *)(sector + offset)) & 0x0FFFFFFF;
-}
-void set_fat_entry(uint32_t cluster, uint32_t value)
-{
-    value &= 0x0FFFFFFF;
-    if (fat_cache && cluster < total_fat_entries)
+    if (fs->fat_cache)
     {
-        fat_cache[cluster] = value;
-        fat_dirty = true;
-        return;
+        return fs->fat_cache[cluster] & 0x0FFFFFFF;
     }
 
+    uint32_t fat_offset = cluster * 4;
+    uint32_t fat_sector = fs->fat_start_lba + (fat_offset / fs->bytes_per_sector);
+    uint32_t offset = fat_offset % fs->bytes_per_sector;
+
+    uint8_t *sector = malloc(fs->bytes_per_sector);
+    if (!sector)
+        return 0x0FFFFFFF;
+
+    fs->read_sector(fs->device, fat_sector, sector);
+
+    uint32_t entry = sector[offset] |
+                     (sector[offset + 1] << 8) |
+                     (sector[offset + 2] << 16) |
+                     (sector[offset + 3] << 24);
+
+    free(sector);
+
+    return entry & 0x0FFFFFFF;
+}
+void set_fat_entry(FAT32_FS *fs, uint32_t cluster, uint32_t value)
+{
+    value &= 0x0FFFFFFF;
+    if (fs->fat_cache && cluster < fs->total_fat_entries)
+    {
+        printf("Setting FAT entry cache %u to %u\n", cluster, value);
+        fs->fat_cache[cluster] = value;
+        fs->fat_dirty = true;
+        return;
+    }
+    printf("Setting FAT entry %u to %u\n", cluster, value);
     // fallback: sector read/modify/write
     uint32_t fat_offset = cluster * 4;
-    uint32_t fat_sector = fat_start_lba + (fat_offset / bpb->bytes_per_sector);
+    uint32_t fat_sector = fs->fat_start_lba + (fat_offset / fs->bytes_per_sector);
     uint8_t sector[512];
-    ata_read_sector(fat_sector, sector);
-    uint32_t offset = fat_offset % bpb->bytes_per_sector;
+    // ata_read_sector(fs, fat_sector, sector);
+    fat32_read_cluster(fs, cluster, sector);
+    uint32_t offset = fat_offset % fs->bytes_per_sector;
     *((uint32_t *)(sector + offset)) = value;
-    ata_write_sector(fat_sector, sector);
+    // ata_write_sector(fs, fat_sector, sector);
+    fs->write_sector(fs->device, fat_sector, sector);
 }
 
-void fat32_free_cluster(uint32_t cluster)
+void fat32_free_cluster(FAT32_FS *fs, uint32_t cluster)
 {
-    if (cluster < 2 || cluster >= total_fat_entries)
+    if (cluster < 2 || cluster >= fs->total_fat_entries)
     {
         printf("Invalid cluster number: %u\n", cluster);
         return;
     }
-    set_fat_entry(cluster, 0x00000000);
+    set_fat_entry(fs, cluster, 0x00000000);
     printf("Cluster %u freed\n", cluster);
 }
 
-uint32_t fat32_allocate_cluster(void)
+uint32_t fat32_allocate_cluster(FAT32_FS *fs)
 {
-    if (!fat_cache)
+    if (!(fs->fat_cache))
     {
         // fallback: sector scan (slow)
-        for (uint32_t i = 2; i < total_fat_entries; ++i)
+        for (uint32_t i = 2; i < fs->total_fat_entries; ++i)
         {
-            if (get_fat_entry(i) == 0x00000000)
+            if (i == fs->root_cluster) // ⚠️ пропускаємо root
+                continue;
+            printf("Checking FAT entry %d\n", i);
+            if (get_fat_entry(fs, i) == 0x00000000)
             {
-                set_fat_entry(i, 0x0FFFFFFF);
+                printf("Found free FAT entry %d\n", i);
+                set_fat_entry(fs, i, 0x0FFFFFFF);
+                printf("Allocated FAT entry %d\n", i);
                 return i;
             }
         }
         return 0;
     }
 
-    for (uint32_t i = 3; i < total_fat_entries; ++i)
+    for (uint32_t i = 3; i < fs->total_fat_entries; ++i)
     {
-        if ((fat_cache[i] & 0x0FFFFFFF) == 0x00000000)
+        if ((fs->fat_cache[i] & 0x0FFFFFFF) == 0x00000000)
         {
-            fat_cache[i] = 0x0FFFFFFF;
-            fat_dirty = true;
+            fs->fat_cache[i] = 0x0FFFFFFF;
+            fs->fat_dirty = true;
             return i;
         }
     }
