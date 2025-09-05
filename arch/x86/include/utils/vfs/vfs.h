@@ -10,51 +10,51 @@
 typedef struct VFS_Node
 {
 
-    char name[256];
+	char name[256];
 
-    bool is_dir;
-    uint32_t size;
-    uint32_t mode;
-    uint32_t pos;
+	bool is_dir;
+	uint32_t size;
+	uint32_t mode;
+	uint32_t pos;
 
-    void *fs_node;     // внутрішній вказівник драйвера (наприклад FAT32_DirectoryEntry*)
-    struct VFS_FS *fs; // яка ФС обслуговує
+	void *fs_node;	   // внутрішній вказівник драйвера (наприклад FAT32_DirectoryEntry*)
+	struct VFS_FS *fs; // яка ФС обслуговує
 } VFS_Node;
 
 typedef struct
 {
-    uint32_t flags;
-    uint32_t pos;
-    VFS_Node *node;
+	uint32_t flags;
+	uint32_t pos;
+	VFS_Node *node;
 } VFS_File;
 
 // Таблиця функцій для ФС
 typedef struct VFS_FS
 {
-    FileSystemType type;
-    void *fs;
+	FileSystemType type;
+	void *fs;
 
-    bool (*mount)(struct VFS_FS *fs, void *device, uint32_t start_lba);
-    void (*unmount)(struct VFS_FS *fs);
-    VFS_Node *(*create_file)(struct VFS_FS *fs, const char *path);
+	bool (*mount)(struct VFS_FS *fs, void *device, uint32_t start_lba);
+	void (*unmount)(struct VFS_FS *fs);
+	VFS_Node *(*create_file)(struct VFS_FS *fs, const char *path);
 
-    VFS_Node *(*open)(struct VFS_FS *fs, const char *path);
-    int (*read)(VFS_File *file, void *buf, uint32_t size);
-    int (*write)(VFS_File *file, const void *buf, uint32_t size);
+	VFS_Node *(*open)(struct VFS_FS *fs, const char *path);
+	int (*read)(VFS_File *file, void *buf, uint32_t size);
+	int (*write)(VFS_File *file, const void *buf, uint32_t size);
 
-    bool (*mkdir)(struct VFS_FS *fs, const char *path);
-    bool (*unlink)(struct VFS_FS *fs, const char *path);
-    Directory (*readdir)(struct VFS_FS *fs, const char *path);
+	bool (*mkdir)(struct VFS_FS *fs, const char *path);
+	bool (*unlink)(struct VFS_FS *fs, const char *path);
+	Directory (*readdir)(struct VFS_FS *fs, const char *path);
 } VFS_FS;
 typedef enum
 {
-    DEV_ATA,
-    DEV_USB,
+	DEV_ATA,
+	DEV_USB,
 } DeviceType;
 typedef struct VFS_Device
 {
-    void *device;
-    DeviceType type;
+	void *device;
+	DeviceType type;
 } VFS_Device;
 
 // Функції VFS
@@ -67,3 +67,4 @@ bool vfs_unlink(const char *path);
 Directory vfs_readdir(const char *path);
 extern VFS_FS *root_fs;
 VFS_Node *vfs_create_file(const char *path);
+int vfs_lseek(VFS_File *node, int offset, int whence);
