@@ -48,15 +48,15 @@ void kernel_main(BootInfo *bi)
 	gpt_init(partitions);
 
 	printf("FAT32 init at LBA %d\n", partitions[0].first_lba);
-	// fat32_init_from_lba(partitions[0]);
 	VFS_Device *device = malloc(sizeof(VFS_Device));
 	device->type = DEV_ATA;
 	device->device = &ata_devices[0];
 	vfs_mount(device, partitions[0].first_lba, FS_FAT32);
 	printf("FAT32 mounted\n");
 	printf("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
-	VFS_File *f = vfs_open("/test.txt", VFS_O_CREAT | VFS_O_RDWR);
-	vfs_write(f, "Hello, world!", 13);
+	VFS_File *f = vfs_open("/tesiit.txt", VFS_O_CREAT | VFS_O_RDWR);
+	// vfs_write(f, "Hello, world!", 13);
+	vfs_lseek(f, 0, SEEK_SET);
 	Directory dir = vfs_readdir("/");
 	for (int i = 0; i < dir.count; i++)
 	{
@@ -66,7 +66,6 @@ void kernel_main(BootInfo *bi)
 	char buffer[1024];
 	vfs_read(f, buffer, 1024);
 	printf("Read: \n");
-	printf("%s\n", buffer);
 	for (int i = 0; i < 1024; i++)
 	{
 		printf("%c", buffer[i]);
