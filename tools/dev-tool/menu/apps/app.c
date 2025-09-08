@@ -79,33 +79,46 @@ static MenuItem main_items[] = {
 };
 
 static ChecklistItem checklist_items[] = {
-    {"item123", true},
-    {"item123", true},
-    {"item123", true},
-    {"item123", true},
-    {"item123", true},
-    {"item2", false},
-    {"item3", false},
     {"item1", true},
-    {"item2", false},
-    {"item3", false},
-    {"item1", true},
-    {"item1", true},
-    {"item2", false},
-    {"item3", false},
-    {"item1", true},
-    {"item2", false},
-    {"item3", false},
-    {"item1", true},
-    {"item2", false},
-    {"item3", false},
-    {"item1", true},
-    {"item2", false},
-    {"item3", false},
-    {"item1", true},
-    {"item2", false},
-    {"item3", false},
-    {"item4", false},
+    {"item2", true},
+    {"item3", true},
+    {"item4", true},
+    {"item5", true},
+    {"item6", true},
+    {"item7", true},
+    {"item8", true},
+    {"item9", true},
+    {"item10", true},
+    {"item11", true},
+    {"item12", true},
+    {"item13", true},
+    {"item14", true},
+    {"item15", true},
+    {"item16", true},
+    {"item17", true},
+    {"item18", true},
+    {"item19", true},
+    {"item20", true},
+    {"item21", true},
+    {"item22", true},
+    {"item23", true},
+    {"item24", true},
+    {"item25", true},
+    {"item26", true},
+    {"item27", true},
+    {"item28", true},
+    {"item29", true},
+    {"item30", true},
+    {"item31", true},
+    {"item32", true},
+    {"item33", true},
+    {"item34", true},
+    {"item35", true},
+    {"item36", true},
+    {"item37", true},
+    {"item38", true},
+    {"item39", true},
+    {"item40", true},
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -168,11 +181,51 @@ static void handle_app_keypress(int ch, UIWindow **focused, UIWindow **windows)
 	}
 }
 
+void config_save(const char *path)
+{
+
+	FILE *file = fopen(path, "w");
+	if (!file)
+		return;
+
+	for (size_t i = 0; i < COUNT(checklist_items); i++)
+	{
+		fprintf(file, "%s=%d\n", checklist_items[i].label, checklist_items[i].checked);
+	}
+
+	fclose(file);
+}
+
+void config_load(const char *path)
+{
+	FILE *file = fopen(path, "r");
+	if (!file)
+		return;
+
+	char line[128];
+	while (fgets(line, sizeof(line), file))
+	{
+		char *key = strtok(line, "=");
+		char *value = strtok(NULL, "=");
+		for (size_t i = 0; i < COUNT(checklist_items); i++)
+		{
+			if (strcmp(key, checklist_items[i].label) == 0)
+			{
+				checklist_items[i].checked = atoi(value);
+				break;
+			}
+		}
+	}
+
+	fclose(file);
+}
+
 #define DRAW_WINDOWS(windows) draw_windows(windows, COUNT(windows))
 #define DESTROY_WINDOWS(windows) destroy_windows(windows, COUNT(windows))
 
 void app()
 {
+	config_load("../../.config");
 	int cols = COLS, lines = LINES;
 
 	UIWindow *win_left = CREATE_WIN(lines, cols * 0.35, 0, 0, "Main Menu");
@@ -202,6 +255,8 @@ void app()
 		handle_app_keypress(ch, &focused, windows);
 		DRAW_WINDOWS(windows);
 	}
+
+	config_save("../../.config");
 
 	DESTROY_WINDOWS(windows);
 }
