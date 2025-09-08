@@ -159,6 +159,7 @@ static void handle_app_keypress(int ch, UIWindow **focused, UIWindow **windows)
 		break;
 	case 'q':
 		remove_focus_window(focused);
+		*focused = ui_get_focused_window();
 		break;
 	default:
 		if (*focused)

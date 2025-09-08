@@ -1,4 +1,5 @@
 #include <ui/menu.h>
+#include <stdlib.h>
 
 static void draw_action_item(WINDOW *win, void *item_ptr, int idx, int width)
 {
@@ -16,6 +17,6 @@ static void on_action_select(void *item_ptr)
 UIElement *action_menu_create(MenuItem *items, size_t count)
 {
 	return list_menu_create(
-		items, sizeof(MenuItem), count,
-		draw_action_item, on_action_select);
+	    items, sizeof(MenuItem), count,
+	    draw_action_item, on_action_select);
 }
