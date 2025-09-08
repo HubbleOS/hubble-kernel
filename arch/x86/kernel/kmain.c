@@ -73,6 +73,24 @@ void kernel_main(BootInfo *bi)
 
 	printf("FAT32 init done\n");
 
+	void *p1 = kmalloc(1000);
+	printf("p1 = %p\n", p1);
+
+	void *p2 = kmalloc(9000);
+	printf("p2 = %p\n", p2);
+
+	kfree(p1);
+	printf("p1 freed\n");
+
+	void *p3 = kmalloc(4096);
+	printf("p3 = %p\n", p3);
+
+	void *p4 = kmalloc(1);
+	printf("p4 = %p\n", p4);
+
+	void *p5 = kmalloc(1);
+	printf("p5 = %p\n", p5);
+
 	while (1)
 	{
 		;
