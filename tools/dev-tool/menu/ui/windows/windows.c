@@ -19,11 +19,26 @@ UIWindow *uiwindow_create(int height, int width, int y, int x, const char *title
 
 void uiwindow_destroy(UIWindow *win)
 {
+	if (!win)
+		return;
+
 	REMOVE_FOCUS();
 	for (int i = 0; i < win->element_count; i++)
 	{
-		free(win->elements[i]);
+		UIElement *el = win->elements[i];
+		if (el)
+		{
+			if (el->destroy)
+			{
+				el->destroy(el);
+			}
+			else
+			{
+				free(el);
+			}
+		}
 	}
+
 	free(win->elements);
 	delwin(win->win);
 	free(win);
@@ -108,18 +123,15 @@ void ui_push_focused_window(UIWindow *win)
 
 UIWindow *ui_pop_focused_window()
 {
-	if (focus_stack_top > 0)
-		return focus_stack[focus_stack_top--];
+	if (focus_stack_top < 0)
+		return NULL;
 
-	return NULL;
+	return focus_stack[focus_stack_top--];
 }
 
 UIWindow *ui_get_focused_window()
 {
-	if (focus_stack_top >= 0)
-		return focus_stack[focus_stack_top];
-
-	return NULL;
+	return (focus_stack_top >= 0) ? focus_stack[focus_stack_top] : NULL;
 }
 
 void ui_set_focused_window(UIWindow *win)
