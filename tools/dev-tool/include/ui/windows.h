@@ -6,11 +6,13 @@
 typedef struct UIWindow UIWindow;
 typedef struct UIElement UIElement;
 
+typedef void (*DestroyFn)(UIElement *elem);
 typedef void (*DrawFn)(UIElement *elem, WINDOW *win);
 typedef bool (*HandleKeyFn)(UIElement *elem, int ch);
 
 struct UIElement
 {
+	DestroyFn destroy;
 	DrawFn draw;
 	HandleKeyFn handle_key;
 	void *data;
