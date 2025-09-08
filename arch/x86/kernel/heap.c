@@ -80,18 +80,37 @@ void free_pages(void *ptr, size_t num_pages)
 		clear_page(start_page + i);
 }
 
+typedef struct page_block_header
+{
+	size_t pages; // how many pages are in this block
+} page_block_header_t;
+
 void *kmalloc(size_t size)
 {
+	// size_t pages_needed = (size + PAGE_SIZE - 1) / PAGE_SIZE;
+	// if (pages_needed == 1)
+	// 	return alloc_page();
+	// else
+	// 	return alloc_pages(pages_needed);
+
 	size_t pages_needed = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-	if (pages_needed == 1)
-		return alloc_page();
-	else
-		return alloc_pages(pages_needed);
+	void *ptr = (pages_needed == 1) ? alloc_page() : alloc_pages(pages_needed);
+	if (!ptr)
+		return NULL;
+
+	page_block_header_t *header = (page_block_header_t *)ptr;
+	header->pages = pages_needed;
+	return (void *)(header + 1);
 }
 
 void kfree(void *ptr)
 {
-	free_page(ptr);
+	// free_page(ptr);
+	if (!ptr)
+		return;
+
+	page_block_header_t *header = (page_block_header_t *)ptr - 1;
+	free_pages(header + 1, header->pages);
 }
 
 memory_ops_t heap_memory_ops = {
@@ -139,3 +158,28 @@ memory_ops_t heap_memory_ops = {
 //     .malloc = kmalloc,
 //     .free = kfree,
 // };
+
+size_t count_used_pages()
+{
+	size_t used = 0;
+	for (size_t i = 0; i < total_pages; i++)
+	{
+		if (test_page(i))
+			used++;
+	}
+	return used;
+}
+
+size_t count_free_pages()
+{
+	return total_pages - count_used_pages();
+}
+
+#include <stdio.h>
+
+void print_memory_status()
+{
+	size_t used_pages = count_used_pages();
+
+	printf("Memory usage: %zu / %zu pages\n", used_pages, total_pages);
+}

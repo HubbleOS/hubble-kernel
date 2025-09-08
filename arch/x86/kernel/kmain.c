@@ -9,8 +9,10 @@
 #include "utils/vfs/vfs_standart_struct.h"
 #include "utils/vfs/vfs.h"
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
 static ATA_Device ata_devices[2] = {
     {
 	.bus = 0,
@@ -29,9 +31,15 @@ static ATA_Device ata_devices[2] = {
 	.write = ata_write_sector,
     },
 };
-static gpt_partition_t partitions[20] = {
-    {.device = &ata_devices[0],
-     .type = 0}};
+
+static gpt_partition_t partitions[20] =
+    {
+	{
+	    .device = &ata_devices[0],
+	    .type = 0,
+	},
+};
+
 extern void os_main(framebuffer_info_t *fb);
 extern void libc_init(void);
 extern VFS_FS *root_fs;
@@ -73,23 +81,56 @@ void kernel_main(BootInfo *bi)
 
 	printf("FAT32 init done\n");
 
-	void *p1 = kmalloc(1000);
+	print_memory_status();
+
+	void *p1 = malloc(1000); // 0x1813cf4
 	printf("p1 = %p\n", p1);
 
-	void *p2 = kmalloc(9000);
+	print_memory_status();
+
+	void *p2 = malloc(9000); // 0x1819cf4
 	printf("p2 = %p\n", p2);
 
-	kfree(p1);
-	printf("p1 freed\n");
+	print_memory_status();
 
-	void *p3 = kmalloc(4096);
+	free(p2);
+	printf("p2 freed\n");
+
+	print_memory_status();
+
+	void *p3 = malloc(4096);
 	printf("p3 = %p\n", p3);
 
-	void *p4 = kmalloc(1);
+	free(p3);
+	printf("p3 freed\n");
+
+	print_memory_status();
+
+	void *p4 = malloc(1);
 	printf("p4 = %p\n", p4);
 
-	void *p5 = kmalloc(1);
+	void *p5 = malloc(1);
 	printf("p5 = %p\n", p5);
+
+	print_memory_status();
+
+	void *arr[10];
+
+	for (int i = 0; i < 10; i++)
+	{
+		arr[i] = malloc(4097);
+		printf("arr[%d] = %p\n", i, arr[i]);
+	}
+
+	print_memory_status();
+
+	for (int i = 0; i < 10; i++)
+	{
+		free(arr[i]);
+		printf("arr[%d] freed\n", i);
+	}
+
+	print_memory_status();
 
 	while (1)
 	{
