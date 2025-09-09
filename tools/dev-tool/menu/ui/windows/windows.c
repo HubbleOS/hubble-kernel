@@ -123,7 +123,7 @@ void ui_push_focused_window(UIWindow *win)
 
 UIWindow *ui_pop_focused_window()
 {
-	if (focus_stack_top < 0)
+	if (focus_stack_top <= 0)
 		return NULL;
 
 	return focus_stack[focus_stack_top--];
