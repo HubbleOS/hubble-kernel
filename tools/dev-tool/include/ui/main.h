@@ -8,9 +8,9 @@
 
 #include <ncurses.h>
 
-#define UI_CLEAR() \
-	do             \
-	{              \
+#define UI_CLEAR()         \
+	do                 \
+	{                  \
 		clear();   \
 		refresh(); \
 	} while (0)
@@ -29,4 +29,5 @@
 #define WIN_HANDLE_KEY(win, ch) uiwindow_handle_key(win, ch)
 
 #define COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
-#define MAKE_MENU(type, title, items) make_menu(type, title, items, COUNT(items))
+// #define MAKE_MENU(type, title, items) make_menu(type, title, items, COUNT(items))
+#define MAKE_MENU(type, title, items, count) make_menu(type, title, items, count)

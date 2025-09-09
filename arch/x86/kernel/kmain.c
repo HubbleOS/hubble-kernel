@@ -118,7 +118,7 @@ void kernel_main(BootInfo *bi)
 
 	for (int i = 0; i < 10; i++)
 	{
-		arr[i] = malloc(4097);
+		arr[i] = malloc(4098);
 		printf("arr[%d] = %p\n", i, arr[i]);
 	}
 
