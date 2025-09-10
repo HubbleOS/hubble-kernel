@@ -8,22 +8,22 @@
 
 void app();
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Terminal size warning
+// // ─────────────────────────────────────────────────────────────────────────────
+// // Terminal size warning
 
 void show_terminal_size_warning_window();
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Modal example actions
+// // ─────────────────────────────────────────────────────────────────────────────
+// // Modal example actions
 
-void on_save();
-void on_dont_save();
-void fun();
+// void on_save();
+// void on_dont_save();
+// void fun();
 
 void show_save_modal();
-void show_save_modal2();
+// void show_save_modal2();
 
-void start_game();
+// void start_game();
 
 // ─────────────────────────────────────────────────────────────────────────── ──
 // Menu setup
