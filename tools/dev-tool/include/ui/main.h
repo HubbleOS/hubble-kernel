@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ui/windows.h>
+#include <ui/window.h>
 #include <ui/text.h>
 #include <ui/button.h>
 #include <ui/modal.h>
@@ -8,9 +8,9 @@
 
 #include <ncurses.h>
 
-#define UI_CLEAR()         \
-	do                 \
-	{                  \
+#define UI_CLEAR() \
+	do             \
+	{              \
 		clear();   \
 		refresh(); \
 	} while (0)

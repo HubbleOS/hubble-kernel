@@ -86,12 +86,23 @@ static void config_write(const char *path, bool defaults)
 	if (!file)
 		return;
 
+	if (defaults)
+	{
+		QemuConfig default_config = {
+		    .iso = "../../../out/x86/iso/",
+		    .arch = "x86_64",
+		    .mem = 1024,
+		    .smp = 2,
+		    .debug_port = 1000,
+		};
+	}
+
 	// QEMU config
-	fprintf(file, "ISO=%s\n", defaults ? "../../../out/x86/iso/" : qemu_config.iso);
-	fprintf(file, "ARCH=%s\n", defaults ? "x86_64" : qemu_config.arch);
-	fprintf(file, "MEM=%d\n", defaults ? 1024 : qemu_config.mem);
-	fprintf(file, "SMP=%d\n", defaults ? 2 : qemu_config.smp);
-	fprintf(file, "DEBUG_PORT=%d\n", defaults ? 1000 : qemu_config.debug_port);
+	fprintf(file, "ISO=%s\n", qemu_config.iso);
+	fprintf(file, "ARCH=%s\n", qemu_config.arch);
+	fprintf(file, "MEM=%d\n", qemu_config.mem);
+	fprintf(file, "SMP=%d\n", qemu_config.smp);
+	fprintf(file, "DEBUG_PORT=%d\n", qemu_config.debug_port);
 
 	// Checklist items
 	for (size_t i = 0; i < checklists.count; i++)
