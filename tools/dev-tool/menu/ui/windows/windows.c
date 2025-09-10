@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
-#include <ui/windows.h>
+#include <ui/window.h>
 #include <ui/button.h>
 #include <ui/main.h>
 
@@ -115,7 +115,7 @@ void ui_push_focused_window(UIWindow *win)
 	else
 	{
 		memmove(&focus_stack[0], &focus_stack[1],
-			sizeof(UIWindow *) * (MAX_FOCUS_STACK - 1));
+				sizeof(UIWindow *) * (MAX_FOCUS_STACK - 1));
 
 		focus_stack[MAX_FOCUS_STACK - 1] = win;
 	}
