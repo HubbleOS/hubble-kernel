@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ui/windows.h>
+#include <ui/window.h>
 #include <ui/button.h>
 
 typedef void (*UIButtonCallback)(void);

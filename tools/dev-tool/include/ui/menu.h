@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ui/windows.h>
+#include <ui/window.h>
 #include <stdbool.h>
 
 typedef struct

@@ -36,10 +36,10 @@ Point snake[SIZE * SIZE];
 int snake_length = 3;
 Point apple;
 Point dir_offset[] = {
-	[UP] = {0, -1},
-	[DOWN] = {0, 1},
-	[LEFT] = {-1, 0},
-	[RIGHT] = {1, 0},
+    [UP] = {0, -1},
+    [DOWN] = {0, 1},
+    [LEFT] = {-1, 0},
+    [RIGHT] = {1, 0},
 };
 Direction current_dir = RIGHT;
 
@@ -52,9 +52,9 @@ void draw_cell(int y, int x, const char *symbol, int color_pair)
 {
 	wattron(game_win, COLOR_PAIR(color_pair));
 	mvwprintw(game_win,
-			  y + 1 + PADDING,
-			  x * CELL_W + 1 + PADDING * CELL_W,
-			  symbol);
+		  y + 1 + PADDING,
+		  x * CELL_W + 1 + PADDING * CELL_W,
+		  symbol);
 	wattroff(game_win, COLOR_PAIR(color_pair));
 }
 
