@@ -30,7 +30,7 @@ $(BUILD_DIR)/%.o: %.c
 	$(CC) $(CCFLAGS) $(INCLUDES) -c $< -o $@
 
 run: build
-	@$(TARGET) $(ISO_DIR)
+	@$(TARGET) --iso $(ISO) --arch $(ARCH) --mem $(MEM)
 
 clean:
 	@rm -rf $(BUILD_DIR)
