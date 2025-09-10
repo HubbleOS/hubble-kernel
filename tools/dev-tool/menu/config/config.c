@@ -7,6 +7,36 @@
 #include <ui/main.h>
 #include "../apps/app.h"
 
+void config_save(const char *path);
+void config_init(const char *path);
+void config_load(const char *path);
+void config_set(const char *label, bool value);
+void config_get(const char *label, bool *value);
+
+void config_set(const char *label, bool value)
+{
+	for (size_t i = 0; i < checklists.count; i++)
+	{
+		if (strcmp(checklists.items[i].label, label) == 0)
+		{
+			checklists.items[i].checked = value;
+			return;
+		}
+	}
+}
+
+void config_get(const char *label, bool *value)
+{
+	for (size_t i = 0; i < checklists.count; i++)
+	{
+		if (strcmp(checklists.items[i].label, label) == 0)
+		{
+			*value = checklists.items[i].checked;
+			return;
+		}
+	}
+}
+
 void config_save(const char *path)
 {
 	FILE *file = fopen(path, "w");
@@ -74,4 +104,6 @@ Config config = {
     .save = config_save,
     .init = config_init,
     .load = config_load,
+    .set = config_set,
+    .get = config_get,
 };
