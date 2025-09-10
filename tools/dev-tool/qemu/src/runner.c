@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 	    .arch = "x86_64",
 	    .mem = 1024,
 	    .smp = 2,
-	    .debug_port = 1234,
+	    .debug_port = 1000,
 	    .iso_path = "../../../out/x86/iso/"};
 
 	for (int i = 1; i < argc; i++)
