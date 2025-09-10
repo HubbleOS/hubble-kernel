@@ -7,8 +7,8 @@ typedef struct
 	void (*save)(const char *path);
 	void (*init)(const char *path);
 	void (*load)(const char *path);
-	void (*set)(const char *label, bool value);
-	void (*get)(const char *label, bool *value);
+	void (*set)(const char *label, const char *value);
+	const char *(*get)(const char *label);
 } Config;
 
 extern Config config;

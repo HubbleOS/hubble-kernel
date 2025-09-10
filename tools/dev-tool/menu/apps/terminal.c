@@ -5,7 +5,7 @@
 
 void on_save() { /* save logic */ }
 void on_dont_save() { /* don't save logic */ }
-void fun() { system("make -C qemu"); } // example action
+void fun();
 
 void show_save_modal()
 {
@@ -101,3 +101,27 @@ Menu main_menu = {
     .items = main_items,
     .count = COUNT(main_items),
 };
+
+QemuConfig qemu_config = {
+    .iso = "../../../out/x86/iso/",
+    .arch = "x86_64",
+    .mem = 1024,
+    .smp = 2,
+    .debug_port = 1234,
+};
+
+void run_qemu(const char *iso, const char *arch, int mem)
+{
+	char cmd[512];
+	snprintf(cmd, sizeof(cmd),
+		 "make -C qemu run ISO=%s ARCH=%s MEM=%d",
+		 iso, arch, mem);
+	system(cmd);
+}
+
+void fun()
+{
+	run_qemu(qemu_config.iso,
+		 qemu_config.arch,
+		 qemu_config.mem);
+}

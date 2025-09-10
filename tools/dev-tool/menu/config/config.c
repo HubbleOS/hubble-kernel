@@ -10,60 +10,107 @@
 void config_save(const char *path);
 void config_init(const char *path);
 void config_load(const char *path);
-void config_set(const char *label, bool value);
-void config_get(const char *label, bool *value);
+void config_set(const char *label, const char *value);
+const char *config_get(const char *label);
 
-void config_set(const char *label, bool value)
+static void config_apply_kv(const char *key, const char *value)
 {
-	for (size_t i = 0; i < checklists.count; i++)
+	if (strcmp(key, "ISO") == 0)
+		strncpy(qemu_config.iso, value, sizeof(qemu_config.iso) - 1);
+	else if (strcmp(key, "ARCH") == 0)
+		strncpy(qemu_config.arch, value, sizeof(qemu_config.arch) - 1);
+	else if (strcmp(key, "MEM") == 0)
+		qemu_config.mem = atoi(value);
+	else if (strcmp(key, "SMP") == 0)
+		qemu_config.smp = atoi(value);
+	else if (strcmp(key, "DEBUG_PORT") == 0)
+		qemu_config.debug_port = atoi(value);
+	else
 	{
-		if (strcmp(checklists.items[i].label, label) == 0)
+		for (size_t i = 0; i < checklists.count; i++)
 		{
-			checklists.items[i].checked = value;
-			return;
+			if (strcmp(checklists.items[i].label, key) == 0)
+			{
+				checklists.items[i].checked = atoi(value);
+				break;
+			}
 		}
 	}
 }
 
-void config_get(const char *label, bool *value)
+void config_set(const char *label, const char *value)
 {
-	for (size_t i = 0; i < checklists.count; i++)
+	config_apply_kv(label, value);
+}
+
+const char *config_get(const char *label)
+{
+	static char buffer[128];
+
+	if (strcmp(label, "ISO") == 0)
+		return qemu_config.iso;
+	else if (strcmp(label, "ARCH") == 0)
+		return qemu_config.arch;
+	else if (strcmp(label, "MEM") == 0)
 	{
-		if (strcmp(checklists.items[i].label, label) == 0)
+		snprintf(buffer, sizeof(buffer), "%d", qemu_config.mem);
+		return buffer;
+	}
+	else if (strcmp(label, "SMP") == 0)
+	{
+		snprintf(buffer, sizeof(buffer), "%d", qemu_config.smp);
+		return buffer;
+	}
+	else if (strcmp(label, "DEBUG_PORT") == 0)
+	{
+		snprintf(buffer, sizeof(buffer), "%d", qemu_config.debug_port);
+		return buffer;
+	}
+	else
+	{
+		for (size_t i = 0; i < checklists.count; i++)
 		{
-			*value = checklists.items[i].checked;
-			return;
+			if (strcmp(checklists.items[i].label, label) == 0)
+			{
+				snprintf(buffer, sizeof(buffer), "%d", checklists.items[i].checked);
+				return buffer;
+			}
 		}
 	}
+	return NULL;
+}
+
+static void config_write(const char *path, bool defaults)
+{
+	FILE *file = fopen(path, "w");
+	if (!file)
+		return;
+
+	// QEMU config
+	fprintf(file, "ISO=%s\n", defaults ? "../../../out/x86/iso/" : qemu_config.iso);
+	fprintf(file, "ARCH=%s\n", defaults ? "x86_64" : qemu_config.arch);
+	fprintf(file, "MEM=%d\n", defaults ? 1024 : qemu_config.mem);
+	fprintf(file, "SMP=%d\n", defaults ? 2 : qemu_config.smp);
+	fprintf(file, "DEBUG_PORT=%d\n", defaults ? 1000 : qemu_config.debug_port);
+
+	// Checklist items
+	for (size_t i = 0; i < checklists.count; i++)
+	{
+		int value = defaults ? 0 : checklists.items[i].checked;
+		fprintf(file, "%s=%d\n", checklists.items[i].label, value);
+	}
+
+	fclose(file);
 }
 
 void config_save(const char *path)
 {
-	FILE *file = fopen(path, "w");
-	if (!file)
-		return;
-
-	for (size_t i = 0; i < checklists.count; i++)
-	{
-		fprintf(file, "%s=%d\n", checklists.items[i].label, checklists.items[i].checked);
-	}
-
-	fclose(file);
+	config_write(path, false);
 }
 
 void config_init(const char *path)
 {
-	FILE *file = fopen(path, "w");
-	if (!file)
-		return;
-
-	for (size_t i = 0; i < checklists.count; i++)
-	{
-		// fprintf(file, "%s=%d\n", checklists.items[i].label, checklists.items[i].checked);
-		fprintf(file, "%s=%d\n", checklists.items[i].label, 0);
-	}
-
-	fclose(file);
+	config_write(path, true);
 }
 
 void config_load(const char *path)
@@ -77,26 +124,15 @@ void config_load(const char *path)
 			return;
 	}
 
-	char line[128];
+	char line[256];
 	while (fgets(line, sizeof(line), file))
 	{
-		line[strcspn(line, "\n")] = '\0'; // delete \n
-
+		line[strcspn(line, "\n")] = '\0';
 		char *key = strtok(line, "=");
 		char *value = strtok(NULL, "=");
-		if (!key || !value)
-			continue;
-
-		for (size_t i = 0; i < checklists.count; i++)
-		{
-			if (strcmp(key, checklists.items[i].label) == 0)
-			{
-				checklists.items[i].checked = atoi(value);
-				break;
-			}
-		}
+		if (key && value)
+			config_apply_kv(key, value);
 	}
-
 	fclose(file);
 }
 
