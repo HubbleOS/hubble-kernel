@@ -1,6 +1,6 @@
-#include <stdlib.h>
 #include <ui/menu.h>
 #include <ui/main.h>
+#include <stdlib.h>
 
 typedef struct
 {
