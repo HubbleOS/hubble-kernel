@@ -84,7 +84,7 @@ MenuItem main_items[] = {
 
     {"Option 1", show_save_modal},
     {"Option 2", show_save_modal2},
-    {"Option 3", fun},
+    {"Qemu", fun},
     {"Games", show_games_menu},
 };
 
@@ -149,13 +149,20 @@ QemuConfig qemu_config = {
     .debug_port = 1234,
 };
 
+#include <apps/screen.h>
+
 void run_qemu(const char *iso, const char *arch, int mem)
 {
 	char cmd[512];
 	snprintf(cmd, sizeof(cmd),
 		 "make -C qemu run ISO=%s ARCH=%s MEM=%d",
 		 iso, arch, mem);
+
+	endwin();
+
 	system(cmd);
+
+	screen.init();
 }
 
 void fun()
