@@ -1,6 +1,6 @@
 #include "runner.h"
 #include <apps/screen.h>
-#include <apps/qemu.h>
+#include <qemu/qemu.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -59,6 +59,19 @@ void run_qemu_default(void)
 	run_qemu(qemu_config.iso, qemu_config.arch, qemu_config.mem);
 }
 
-void run_build(void) { run_cmdf("make -C ../../ docker-build"); }
-void run_clean(void) { run_cmdf("make -C ../../ docker-clean"); }
-void run_run(void) { run_cmdf("make -C ../../ docker-run"); }
+#include <docker/docker.h>
+
+void run_build(void)
+{
+	run_cmdf("make -C ../../ %s", docker.enabled ? "docker-build" : "build");
+}
+
+void run_run(void)
+{
+	run_cmdf("make -C ../../ %s", docker.enabled ? "docker-run" : "run");
+}
+
+void run_clean(void)
+{
+	run_cmdf("make -C ../../ clean");
+}

@@ -1,4 +1,4 @@
-#include <apps/qemu.h>
+#include <qemu/qemu.h>
 
 QemuConfig qemu_config = {
     .iso = "../../../out/x86/iso/",
