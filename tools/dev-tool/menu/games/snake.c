@@ -5,6 +5,8 @@
 #include <string.h>
 #include <time.h>
 
+#include <apps/screen.h>
+
 #define SIZE 15
 #define PADDING 1
 #define CELL_W 2
@@ -194,6 +196,8 @@ static bool check_collision(Point head, bool grow)
 	return false;
 }
 
+static bool game_over = false;
+
 void move_snake()
 {
 	Point delta = dir_offset[current_dir];
@@ -214,8 +218,11 @@ void move_snake()
 		mvwprintw(game_win, win_h / 2 + 2, (win_w - 23) / 2, "Press any key to exit...");
 		wrefresh(game_win);
 		getch();
-		endwin();
-		exit(0);
+
+		game_over = true;
+		return;
+
+		screen.end();
 	}
 
 	for (int i = snake_length; i > 0; i--)
@@ -232,12 +239,16 @@ void move_snake()
 
 void snake_run()
 {
+	screen.end();
+
 	srand(time(NULL));
 	initscr();
 	noecho();
 	curs_set(FALSE);
 	keypad(stdscr, TRUE);
 	nodelay(stdscr, TRUE);
+
+	screen.flush();
 
 	start_color();
 	use_default_colors();
@@ -266,12 +277,16 @@ void snake_run()
 	int delay_ms = base_delay;
 	int prev_score = -1;
 
-	while (true)
+	game_over = false;
+
+	while (!game_over)
 	{
 		handle_input();
 		apply_buffered_input();
 		move_snake();
-		werase(game_win);
+		if (game_over)
+			goto end;
+		// werase(game_win);
 		draw_border_and_score();
 		draw_snake_and_apple();
 		wrefresh(game_win);
@@ -285,12 +300,10 @@ void snake_run()
 			prev_score = score;
 		}
 
-		mvprintw(0, 0, "Delay: %d", delay_ms);
-
 		napms(delay_ms);
 	}
 
+end:
 	delwin(game_win);
-	// endwin();
-	// return 0;
+	screen.init();
 }

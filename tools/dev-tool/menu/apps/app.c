@@ -71,6 +71,8 @@ static void handle_app_keypress(int ch, UIWindow **focused, UIWindow **windows)
 #define DRAW_WINDOWS(windows) draw_windows(windows, COUNT(windows))
 #define DESTROY_WINDOWS(windows) destroy_windows(windows, COUNT(windows))
 
+#include <apps/screen.h>
+
 static void run_app()
 {
 	int cols = COLS, lines = LINES;
@@ -89,7 +91,7 @@ static void run_app()
 	    win_right,
 	};
 
-	UI_CLEAR();
+	screen.flush();
 
 	UIWindow *focused = win_left;
 	SET_FOCUS(focused);
@@ -107,8 +109,6 @@ static void run_app()
 
 	DESTROY_WINDOWS(windows);
 }
-
-#include <apps/screen.h>
 
 static void app_init()
 {
