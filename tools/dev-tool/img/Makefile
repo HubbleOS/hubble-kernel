@@ -1,12 +1,14 @@
 CC := gcc
 CCFLAGS := 
-INCLUDES := -Iinclude -Imenu
+INCLUDES := -Iinclude -Isrc
 
 LDFLAGS := -lncurses
 
-override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/menu,build)
+# BUILD_DIR ?= build
+# BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/qemu,build)
+override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/qemu,build)
 
-SRC_DIR := menu
+SRC_DIR := src
 TARGET := $(BUILD_DIR)/main
 
 SRCS := $(shell find $(SRC_DIR) -name "*.c")
@@ -27,7 +29,7 @@ $(BUILD_DIR)/%.o: %.c
 	$(CC) $(CCFLAGS) $(INCLUDES) -c $< -o $@
 
 run: build
-	@$(TARGET)
+	@$(TARGET) --iso $(ISO) --arch $(ARCH) --mem $(MEM)
 
 clean:
 	@rm -rf $(BUILD_DIR)
