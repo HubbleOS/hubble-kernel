@@ -1,4 +1,4 @@
-#include <config.h>
+#include <config/config.h>
 
 #include <stdlib.h>
 #include <stdio.h>

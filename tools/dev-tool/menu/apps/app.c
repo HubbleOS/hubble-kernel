@@ -4,7 +4,7 @@
 #include <ui/button.h>
 #include <string.h>
 #include <stdlib.h>
-#include <config.h>
+#include <config/config.h>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // App lifecycle
