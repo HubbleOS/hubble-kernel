@@ -28,9 +28,48 @@ void show_save_modal2()
 	show_modal_with_buttons("bla bla bla?", buttons, COUNT(buttons));
 }
 
-void start_game()
+#include <games/game.h>
+
+MenuItem games_items[16];
+int games_items_count = 0;
+
+void games_items_init(void)
 {
-	system("gcc games/snake.c -o games/snake -lncurses && ./games/snake");
+	for (int i = 0; i < games_count; i++)
+	{
+		games_items[i].label = games[i].name;
+		games_items[i].action = games[i].run;
+	}
+	games_items_count = games_count;
+}
+
+Menu games_menu = {
+    .items = games_items,
+    .count = 0,
+};
+
+void show_games_menu()
+{
+	UIWindow *win = CREATE_WIN(LINES, COLS, 0, 0, "Games");
+
+	games_items_init();
+	games_menu.count = games_items_count;
+
+	UIElement *games_el = MAKE_MENU(ACTION_MENU, "Games", games_menu.items, games_menu.count);
+	ADD_ELEMENT(win, games_el);
+
+	UI_CLEAR();
+	SET_FOCUS(win);
+	DRAW_WIN(win);
+
+	int ch;
+	while ((ch = getch()) != 27)
+	{ // ESC return to main menu
+		WIN_HANDLE_KEY(win, ch);
+		DRAW_WIN(win);
+	}
+
+	DESTROY_WIN(win);
 }
 
 MenuItem main_items[] = {
@@ -46,7 +85,7 @@ MenuItem main_items[] = {
     {"Option 1", show_save_modal},
     {"Option 2", show_save_modal2},
     {"Option 3", fun},
-    {"Games :)", start_game},
+    {"Games", show_games_menu},
 };
 
 static ChecklistItem checklist_items[] = {

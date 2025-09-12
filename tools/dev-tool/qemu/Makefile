@@ -8,7 +8,6 @@ LDFLAGS := -lncurses
 # BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/qemu,build)
 override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/qemu,build)
 
-# SRC_DIR := src
 SRC_DIR := src
 TARGET := $(BUILD_DIR)/main
 

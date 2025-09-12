@@ -1,3 +1,4 @@
+#include "game.h"
 #include <ncurses.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -184,7 +185,7 @@ void apply_buffered_input()
 	input_buffer_len = 0;
 }
 
-bool check_collision(Point head, bool grow)
+static bool check_collision(Point head, bool grow)
 {
 	int limit = grow ? snake_length : snake_length - 1;
 	for (int i = 0; i < limit; i++)
@@ -229,7 +230,7 @@ void move_snake()
 	}
 }
 
-int main()
+void snake_run()
 {
 	srand(time(NULL));
 	initscr();
@@ -290,6 +291,6 @@ int main()
 	}
 
 	delwin(game_win);
-	endwin();
-	return 0;
+	// endwin();
+	// return 0;
 }

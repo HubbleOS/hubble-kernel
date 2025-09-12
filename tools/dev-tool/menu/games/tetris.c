@@ -1,3 +1,4 @@
+#include "game.h"
 #include <ncurses.h>
 #include <stdlib.h>
 #include <time.h>
@@ -56,7 +57,7 @@ const int tetrominoes[7][4][4][4] = {
 int cur_piece, rotation = 0;
 int pos_x = WIDTH / 2 - 2, pos_y = 0;
 
-bool check_collision(int nx, int ny, int r)
+static bool check_collision(int nx, int ny, int r)
 {
 	for (int y = 0; y < BLOCK_SIZE; y++)
 	{
@@ -144,7 +145,7 @@ void new_piece()
 	}
 }
 
-int main()
+void tetris_run(void)
 {
 	srand(time(NULL));
 	initscr();
@@ -183,7 +184,7 @@ int main()
 			break;
 		case 'q':
 			endwin();
-			return 0;
+			return;
 		}
 
 		if (++tick >= DELAY / 10)
@@ -203,7 +204,4 @@ int main()
 
 		napms(50);
 	}
-
-	endwin();
-	return 0;
 }
