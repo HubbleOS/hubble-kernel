@@ -1,17 +1,22 @@
-#include "app.h"
+#include <stdlib.h>
+#include "menus.h"
+#include <apps/runner.h>
+#include <ui/modal.h>
+#include <ui/window.h>
+#include <ui/main.h>
+#include <games/game.h>
+#include <config/config.h>
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Modal example actions
-
-void on_save() { /* save logic */ }
-void on_dont_save() { /* don't save logic */ }
-void fun();
+static void save_config()
+{
+	config.save("../../.config");
+}
 
 void show_save_modal()
 {
 	ModalButton buttons[] = {
-	    {"Save", fun},
-	    {"Don't save", on_dont_save},
+	    {"Save", save_config},
+	    {"Don't save", NULL},
 	};
 	show_modal_with_buttons("Save changes?", buttons, COUNT(buttons));
 }
@@ -19,21 +24,21 @@ void show_save_modal()
 void show_save_modal2()
 {
 	ModalButton buttons[] = {
-	    {"Save", fun},
-	    {"Save", fun},
-	    {"Save", fun},
-	    {"Save", fun},
-	    {"Don't save", on_dont_save},
+	    {"Save", NULL},
+	    {"Save", NULL},
+	    {"Save", NULL},
+	    {"Save", NULL},
+	    {"Don't save", NULL},
 	};
 	show_modal_with_buttons("bla bla bla?", buttons, COUNT(buttons));
 }
 
-#include <games/game.h>
+// ────────────────────────────── Games ──────────────────────────────
 
-MenuItem games_items[16];
-int games_items_count = 0;
+static MenuItem games_items[16];
+static int games_items_count = 0;
 
-void games_items_init(void)
+static void games_items_init(void)
 {
 	for (int i = 0; i < games_count; i++)
 	{
@@ -43,19 +48,12 @@ void games_items_init(void)
 	games_items_count = games_count;
 }
 
-Menu games_menu = {
-    .items = games_items,
-    .count = 0,
-};
-
 void show_games_menu()
 {
 	UIWindow *win = CREATE_WIN(LINES, COLS, 0, 0, "Games");
 
 	games_items_init();
-	games_menu.count = games_items_count;
-
-	UIElement *games_el = MAKE_MENU(ACTION_MENU, "Games", games_menu.items, games_menu.count);
+	UIElement *games_el = MAKE_MENU(ACTION_MENU, "Games", games_items, games_items_count);
 	ADD_ELEMENT(win, games_el);
 
 	UI_CLEAR();
@@ -64,7 +62,7 @@ void show_games_menu()
 
 	int ch;
 	while ((ch = getch()) != 27)
-	{ // ESC return to main menu
+	{
 		WIN_HANDLE_KEY(win, ch);
 		DRAW_WIN(win);
 	}
@@ -72,20 +70,21 @@ void show_games_menu()
 	DESTROY_WIN(win);
 }
 
+// ────────────────────────────── Main menu ──────────────────────────────
+
 MenuItem main_items[] = {
-    {"make build", NULL},
-    {"make host-run", NULL},
-    {"make clean", NULL},
-    {"make help", NULL},
-    {"make run", NULL},
-    {"make mkvars", NULL},
-
-    {"Settings", NULL},
-
-    {"Option 1", show_save_modal},
-    {"Option 2", show_save_modal2},
-    {"Qemu", fun},
+    {"make build", run_build},
+    {"make host-run", run_qemu_default},
+    {"make clean", run_clean},
+    {"make run", run_run},
+    {"Config", show_save_modal},
     {"Games", show_games_menu},
+    {"Option 1", show_save_modal2},
+};
+
+Menu main_menu = {
+    .items = main_items,
+    .count = COUNT(main_items),
 };
 
 static ChecklistItem checklist_items[] = {
@@ -135,39 +134,3 @@ Checklist checklists = {
     .items = checklist_items,
     .count = COUNT(checklist_items),
 };
-
-Menu main_menu = {
-    .items = main_items,
-    .count = COUNT(main_items),
-};
-
-QemuConfig qemu_config = {
-    .iso = "../../../out/x86/iso/",
-    .arch = "x86_64",
-    .mem = 1024,
-    .smp = 2,
-    .debug_port = 1234,
-};
-
-#include <apps/screen.h>
-
-void run_qemu(const char *iso, const char *arch, int mem)
-{
-	char cmd[512];
-	snprintf(cmd, sizeof(cmd),
-		 "make -C qemu run ISO=%s ARCH=%s MEM=%d",
-		 iso, arch, mem);
-
-	endwin();
-
-	system(cmd);
-
-	screen.init();
-}
-
-void fun()
-{
-	run_qemu(qemu_config.iso,
-		 qemu_config.arch,
-		 qemu_config.mem);
-}
