@@ -12,6 +12,12 @@ static void screen_init()
 	atexit(screen.end);
 }
 
+static void screen_flush()
+{
+	clear();
+	refresh();
+}
+
 static void screen_end()
 {
 	endwin();
@@ -20,5 +26,6 @@ static void screen_end()
 
 Screen screen = {
     .init = screen_init,
+    .flush = screen_flush,
     .end = screen_end,
 };

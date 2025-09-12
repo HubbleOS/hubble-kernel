@@ -4,8 +4,9 @@
 
 typedef struct
 {
-	void (*init)();
-	void (*end)();
+	void (*init)(void);
+	void (*flush)(void);
+	void (*end)(void);
 } Screen;
 
 extern Screen screen;
