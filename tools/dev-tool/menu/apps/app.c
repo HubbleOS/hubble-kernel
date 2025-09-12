@@ -69,10 +69,8 @@ static void handle_app_keypress(int ch, UIWindow **focused, UIWindow **windows)
 #define DRAW_WINDOWS(windows) draw_windows(windows, COUNT(windows))
 #define DESTROY_WINDOWS(windows) destroy_windows(windows, COUNT(windows))
 
-void app()
+static void run_app()
 {
-	config.load("../../.config");
-
 	int cols = COLS, lines = LINES;
 
 	UIWindow *win_left = CREATE_WIN(lines, cols * 0.35, 0, 0, "Main Menu");
@@ -107,3 +105,16 @@ void app()
 
 	DESTROY_WINDOWS(windows);
 }
+
+#include <apps/screen.h>
+
+static void app_init()
+{
+	config.load("../../.config");
+	screen.init();
+}
+
+App app = {
+    .run = run_app,
+    .init = app_init,
+};

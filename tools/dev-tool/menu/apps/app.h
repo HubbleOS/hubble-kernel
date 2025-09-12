@@ -6,7 +6,13 @@
 #include <ui/menu.h>
 #include <ui/main.h>
 
-void app();
+typedef struct
+{
+	void (*init)(void);
+	void (*run)(void);
+} App;
+
+extern App app;
 
 // // ─────────────────────────────────────────────────────────────────────────────
 // // Terminal size warning

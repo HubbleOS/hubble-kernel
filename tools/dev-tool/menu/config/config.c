@@ -7,11 +7,11 @@
 #include <ui/main.h>
 #include "../apps/app.h"
 
-void config_save(const char *path);
-void config_init(const char *path);
-void config_load(const char *path);
-void config_set(const char *label, const char *value);
-const char *config_get(const char *label);
+static void config_save(const char *path);
+static void config_init(const char *path);
+static void config_load(const char *path);
+static void config_set(const char *label, const char *value);
+static const char *config_get(const char *label);
 
 static void config_apply_kv(const char *key, const char *value)
 {
@@ -38,12 +38,12 @@ static void config_apply_kv(const char *key, const char *value)
 	}
 }
 
-void config_set(const char *label, const char *value)
+static void config_set(const char *label, const char *value)
 {
 	config_apply_kv(label, value);
 }
 
-const char *config_get(const char *label)
+static const char *config_get(const char *label)
 {
 	static char buffer[128];
 
@@ -114,17 +114,17 @@ static void config_write(const char *path, bool defaults)
 	fclose(file);
 }
 
-void config_save(const char *path)
+static void config_save(const char *path)
 {
 	config_write(path, false);
 }
 
-void config_init(const char *path)
+static void config_init(const char *path)
 {
 	config_write(path, true);
 }
 
-void config_load(const char *path)
+static void config_load(const char *path)
 {
 	FILE *file = fopen(path, "r");
 	if (!file)

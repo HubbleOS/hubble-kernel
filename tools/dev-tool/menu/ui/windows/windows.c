@@ -101,8 +101,6 @@ static UIWindow *focused_window = NULL;
 static UIWindow *focus_stack[MAX_FOCUS_STACK];
 static int focus_stack_top = -1;
 
-#include <string.h>
-
 void ui_push_focused_window(UIWindow *win)
 {
 	if (WIN_GET_FOCUSED() == win)
@@ -115,7 +113,7 @@ void ui_push_focused_window(UIWindow *win)
 	else
 	{
 		memmove(&focus_stack[0], &focus_stack[1],
-				sizeof(UIWindow *) * (MAX_FOCUS_STACK - 1));
+			sizeof(UIWindow *) * (MAX_FOCUS_STACK - 1));
 
 		focus_stack[MAX_FOCUS_STACK - 1] = win;
 	}
