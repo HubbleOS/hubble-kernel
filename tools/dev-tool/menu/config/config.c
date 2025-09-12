@@ -5,7 +5,9 @@
 #include <string.h>
 
 #include <ui/main.h>
-#include "../apps/app.h"
+#include <apps/app.h>
+#include <apps/qemu.h>
+#include <apps/menus.h>
 
 static void config_save(const char *path);
 static void config_init(const char *path);

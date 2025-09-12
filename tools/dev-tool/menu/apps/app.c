@@ -1,9 +1,11 @@
-#include "app.h"
+#include <string.h>
+#include <stdlib.h>
+#include <apps/app.h>
+#include <apps/menus.h>
+#include <apps/warnings.h>
 #include <ui/main.h>
 #include <ui/text.h>
 #include <ui/button.h>
-#include <string.h>
-#include <stdlib.h>
 #include <config/config.h>
 
 // ─────────────────────────────────────────────────────────────────────────────
