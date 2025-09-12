@@ -5,5 +5,5 @@ QemuConfig qemu_config = {
     .arch = "x86_64",
     .mem = 1024,
     .smp = 2,
-    .debug_port = 1234,
+    .debug_port = 1000,
 };

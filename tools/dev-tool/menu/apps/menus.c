@@ -70,6 +70,11 @@ void show_games_menu()
 	int ch;
 	while ((ch = getch()) != 27)
 	{
+		if (ch == 'q')
+		{
+			break;
+		}
+
 		WIN_HANDLE_KEY(win, ch);
 		DRAW_WIN(win);
 	}
