@@ -1,15 +1,22 @@
 #include <stdlib.h>
+#include <string.h>
 #include "menus.h"
 #include <apps/runner.h>
+#include <apps/screen.h>
 #include <ui/modal.h>
 #include <ui/window.h>
 #include <ui/main.h>
 #include <games/game.h>
 #include <config/config.h>
 
+#include <docker/docker.h>
+
 static void save_config()
 {
 	config.save("../../.config");
+
+	const char *val = config.get("DOCKER");
+	docker.enabled = (val && strcmp(val, "1") == 0);
 }
 
 void show_save_modal()
@@ -56,7 +63,7 @@ void show_games_menu()
 	UIElement *games_el = MAKE_MENU(ACTION_MENU, "Games", games_items, games_items_count);
 	ADD_ELEMENT(win, games_el);
 
-	UI_CLEAR();
+	screen.flush();
 	SET_FOCUS(win);
 	DRAW_WIN(win);
 
@@ -88,6 +95,7 @@ Menu main_menu = {
 };
 
 static ChecklistItem checklist_items[] = {
+    {"DOCKER", false},
     {"item1", true},
     {"item2", true},
     {"item3", true},
