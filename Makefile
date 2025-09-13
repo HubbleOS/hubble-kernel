@@ -99,6 +99,7 @@ export SCRIPT_DIR
 INCLUDES += -I$(abspath include)
 INCLUDES += -I$(LIB_DIR)/libc/include
 INCLUDES += -I$(ARCH_DIR)/include
+INCLUDES += -I$(ARCH_DIR)/kernel
 
 export INCLUDES
 
