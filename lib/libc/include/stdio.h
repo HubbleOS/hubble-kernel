@@ -5,9 +5,9 @@
 
 #define FILE_HAS_UNGETC(stream) ((stream)->has_ungetc)
 #define FILE_GETC_UNGETC(stream) ((stream)->has_ungetc ? ((stream)->has_ungetc = 0, (stream)->ungetc_buf) : -2)
-#define FILE_SET_UNGETC(stream, c)  \
-	do                              \
-	{                               \
+#define FILE_SET_UNGETC(stream, c)          \
+	do                                  \
+	{                                   \
 		(stream)->ungetc_buf = (c); \
 		(stream)->has_ungetc = 1;   \
 	} while (0)
@@ -47,23 +47,23 @@ extern FILE *__stderrp;
 #define stderr __stderrp
 
 // output
-int fprintf(FILE *stream, const char *format, ...);
-int vfprintf(FILE *stream, const char *format, va_list args);
-// int vsprintf(char *buffer, const char *format, va_list args);
-int printf(const char *format, ...);
+int fprintf(FILE *, const char *, ...);
+int vfprintf(FILE *, const char *, va_list);
+// int vsprintf(char *buffer, const char *, va_list );
+int printf(const char *, ...);
 
-int putc(int c, FILE *stream);
-int putchar(int c);
+int putc(int, FILE *);
+int putchar(int);
 
 // input
-int fscanf(FILE *stream, const char *format, ...);
-int scanf(const char *format, ...);
-int vscanf(const char *format, va_list args);
-int getc(FILE *stream);
-char *fgets(char *s, int size, FILE *stream);
-char *gets(char *s);
+int fscanf(FILE *, const char *, ...);
+int scanf(const char *, ...);
+int vscanf(const char *, va_list);
+int getc(FILE *);
+char *fgets(char *, int, FILE *);
+char *gets(char *);
 int getchar(void);
 
-int ungetc(int c, FILE *stream);
+int ungetc(int c, FILE *);
 
 _End_C_Header;
