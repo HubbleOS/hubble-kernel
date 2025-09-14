@@ -1,7 +1,8 @@
 #ifndef _SYS_SYSCALL_NUMS_H_
 #define _SYS_SYSCALL_NUMS_H_
 
-#define SYS_WRITE 1
-#define SYS_READ 2
+#define SYS_write 1
+#define SYS_read 2
+#define SYS_mmap 9
 
 #endif
