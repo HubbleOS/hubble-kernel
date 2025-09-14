@@ -84,37 +84,37 @@ void kernel_main(BootInfo *bi)
 
 	printf("FAT32 init done\n");
 
-	void *p1 = pmm_alloc_pages(10);
-	printf("p1 = %p\n", p1);
+	// void *p1 = pmm_alloc_pages(10);
+	// printf("p1 = %p\n", p1);
 
-	void *p2 = pmm_alloc_pages(10);
-	printf("p2 = %p\n", p2);
+	// void *p2 = pmm_alloc_pages(10);
+	// printf("p2 = %p\n", p2);
 
-	pmm_free_pages(p1, 10);
-	printf("p1 freed\n");
+	// pmm_free_pages(p1, 10);
+	// printf("p1 freed\n");
 
-	void *p3 = pmm_alloc_pages(10);
-	printf("p3 = %p\n", p3);
+	// void *p3 = pmm_alloc_pages(10);
+	// printf("p3 = %p\n", p3);
 
 	// print_memory_status();
 
-	// void *p1 = malloc(1000); // 0x1813cf4
-	// printf("p1 = %p\n", p1);
+	void *p1 = malloc(1000); // 0x1813cf4
+	printf("p1 = %p\n", p1);
 
 	// // print_memory_status();
 
-	// void *p2 = malloc(9000); // 0x1819cf4
-	// printf("p2 = %p\n", p2);
+	void *p2 = malloc(9000); // 0x1819cf4
+	printf("p2 = %p\n", p2);
 
 	// // print_memory_status();
 
-	// free(p2);
-	// printf("p2 freed\n");
+	free(p2);
+	printf("p2 freed\n");
 
 	// // print_memory_status();
 
-	// void *p3 = malloc(4096);
-	// printf("p3 = %p\n", p3);
+	void *p3 = malloc(4096);
+	printf("p3 = %p\n", p3);
 
 	// free(p3);
 	// printf("p3 freed\n");
