@@ -23,8 +23,8 @@ _Begin_C_Header;
 // double log(double x);
 // double log10(double x);
 
-double pow(double x, double n);
-double sqrt(double x);
+double pow(double, double);
+double sqrt(double);
 
 // double ceil(double x);
 // double floor(double x);
