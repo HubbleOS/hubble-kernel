@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ui/modal.h>
-#include <ui/windows.h>
+#include <ui/window.h>
 #include <ui/main.h>
 
 void show_modal_with_buttons(const char *title, ModalButton *buttons, size_t count)

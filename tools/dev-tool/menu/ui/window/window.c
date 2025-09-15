@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
-#include <ui/windows.h>
+#include <ui/window.h>
 #include <ui/button.h>
 #include <ui/main.h>
 
@@ -19,11 +19,26 @@ UIWindow *uiwindow_create(int height, int width, int y, int x, const char *title
 
 void uiwindow_destroy(UIWindow *win)
 {
+	if (!win)
+		return;
+
 	REMOVE_FOCUS();
 	for (int i = 0; i < win->element_count; i++)
 	{
-		free(win->elements[i]);
+		UIElement *el = win->elements[i];
+		if (el)
+		{
+			if (el->destroy)
+			{
+				el->destroy(el);
+			}
+			else
+			{
+				free(el);
+			}
+		}
 	}
+
 	free(win->elements);
 	delwin(win->win);
 	free(win);
@@ -63,11 +78,12 @@ bool uiwindow_handle_key(UIWindow *win, int ch)
 {
 	if (win->element_count == 0)
 		return false;
+
 	UIElement *active = win->elements[win->active_element];
+
 	if (active->handle_key)
-	{
 		return active->handle_key(active, ch);
-	}
+
 	return false;
 }
 
@@ -85,8 +101,6 @@ static UIWindow *focused_window = NULL;
 static UIWindow *focus_stack[MAX_FOCUS_STACK];
 static int focus_stack_top = -1;
 
-#include <string.h>
-
 void ui_push_focused_window(UIWindow *win)
 {
 	if (WIN_GET_FOCUSED() == win)
@@ -99,7 +113,7 @@ void ui_push_focused_window(UIWindow *win)
 	else
 	{
 		memmove(&focus_stack[0], &focus_stack[1],
-				sizeof(UIWindow *) * (MAX_FOCUS_STACK - 1));
+			sizeof(UIWindow *) * (MAX_FOCUS_STACK - 1));
 
 		focus_stack[MAX_FOCUS_STACK - 1] = win;
 	}
@@ -107,18 +121,15 @@ void ui_push_focused_window(UIWindow *win)
 
 UIWindow *ui_pop_focused_window()
 {
-	if (focus_stack_top > 0)
-	{
-		return focus_stack[focus_stack_top--];
-	}
-	return NULL;
+	if (focus_stack_top <= 0)
+		return NULL;
+
+	return focus_stack[focus_stack_top--];
 }
 
 UIWindow *ui_get_focused_window()
 {
-	if (focus_stack_top >= 0)
-		return focus_stack[focus_stack_top];
-	return NULL;
+	return (focus_stack_top >= 0) ? focus_stack[focus_stack_top] : NULL;
 }
 
 void ui_set_focused_window(UIWindow *win)

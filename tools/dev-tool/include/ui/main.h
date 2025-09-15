@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ui/windows.h>
+#include <ui/window.h>
 #include <ui/text.h>
 #include <ui/button.h>
 #include <ui/modal.h>
@@ -29,4 +29,5 @@
 #define WIN_HANDLE_KEY(win, ch) uiwindow_handle_key(win, ch)
 
 #define COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
-#define MAKE_MENU(type, title, items) make_menu(type, title, items, COUNT(items))
+// #define MAKE_MENU(type, title, items) make_menu(type, title, items, COUNT(items))
+#define MAKE_MENU(type, title, items, count) make_menu(type, title, items, count)
