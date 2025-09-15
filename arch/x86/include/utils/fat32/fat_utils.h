@@ -27,6 +27,6 @@ void set_fat_entry(FAT32_FS *fs, uint32_t cluster, uint32_t value);
 bool fat32_add_directory_entry(FAT32_FS *fs, uint32_t dir_cluster, FAT32_DirectoryEntry *new_entry);
 void free_folder_path(PathParts *pp);
 bool is_empty_dir(FAT32_DirectoryEntry *entry);
-bool fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir);
-bool fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name);
+int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir);
+int fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name);
 void fat32_format_directory_cluster(FAT32_FS *fs, uint32_t cluster, uint32_t parent_cluster);
