@@ -3,6 +3,7 @@
 #include <stdbool.h>
 
 #include "utils/vfs/vfs_standart_struct.h"
+#include "utils/gpt/gpt.h"
 
 // Типи ФС
 
@@ -34,7 +35,7 @@ typedef struct VFS_FS
 	FileSystemType type;
 	void *fs;
 
-	bool (*mount)(struct VFS_FS *fs, void *device, uint32_t start_lba);
+	bool (*mount)(struct VFS_FS *fs, VFS_Device *device, uint32_t start_lba);
 	void (*unmount)(struct VFS_FS *fs);
 	VFS_Node *(*create_file)(struct VFS_FS *fs, const char *path);
 
@@ -46,19 +47,15 @@ typedef struct VFS_FS
 	bool (*unlink)(struct VFS_FS *fs, const char *path);
 	Directory (*readdir)(struct VFS_FS *fs, const char *path);
 } VFS_FS;
-typedef enum
-{
-	DEV_ATA,
-	DEV_USB,
-} DeviceType;
-typedef struct VFS_Device
-{
-	void *device;
-	DeviceType type;
-} VFS_Device;
+// typedef enum
+// {
+// 	DEV_ATA,
+// 	DEV_USB,
+// 	DEV_NVME,
+// } DeviceType;
 
 // Функції VFS
-bool vfs_mount(void *device, uint32_t start_lba, FileSystemType type);
+bool vfs_mount(gpt_partition_t *partition, FileSystemType type);
 VFS_File *vfs_open(const char *path, int flags);
 int vfs_read(VFS_File *node, void *buf, uint32_t size);
 int vfs_write(VFS_File *node, const void *buf, uint32_t size);

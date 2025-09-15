@@ -10,7 +10,7 @@
 #define FAT32_ATTR_VOLUME_ID 0x08
 #define FAT32_ATTR_DIRECTORY 0x10
 
-static bool fat32_mount_wrapper(VFS_FS *fs, void *device, uint32_t start_lba)
+static bool fat32_mount_wrapper(VFS_FS *fs, VFS_Device *device, uint32_t start_lba)
 {
 	return fat32_mount(fs->fs, device, start_lba);
 }
