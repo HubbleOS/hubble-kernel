@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 
 void itos(int num, char *str);
 void stoi(char *str, int *num);
@@ -90,21 +91,13 @@ int to_upper(char c)
 }
 bool fat32_mount(FAT32_FS *fs, VFS_Device *device, uint32_t start_lba)
 {
-	fs->device = device;
+	fs->device = device->device;
 	fs->start_lba = start_lba;
-	if (device->type == DEV_ATA)
-	{
-		fs->device = (ATA_Device *)(device->device);
-		printf("device is ATA\n");
-		fs->read_sector = ata_read_sector;
-		fs->write_sector = ata_write_sector;
-	}
-	else
-	{
-		printf("Unknown device type: %d\n", device->type);
-		return false;
-	}
+	fs->read_sector = device->read;
+	fs->write_sector = device->write;
+
 	fat32_init_from_lba(start_lba, fs);
+
 	printf("here is root cluster: %d\n", fs->root_cluster);
 	return true;
 }
@@ -151,14 +144,11 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 	FAT32_DirectoryEntry *entry = fat_file->entry;
 	FAT32_FS *fs = (FAT32_FS *)file->node->fs->fs;
 
-	printf("fat file: %p\n", fat_file);
-	printf("entry: %p\n", entry);
-	printf("cluster: %d\n", fat_file->cluster);
-	printf("index: %d\n", fat_file->index);
+	// printf("cluster: %d\n", fat_file->cluster);
+	// printf("index: %d\n", fat_file->index);
+	// printf("pos: %d\n", file->pos);
 
-	printf("pos: %d\n", file->pos);
-
-	size_t file_size = 13;
+	size_t file_size = entry->file_size;
 	if (file->pos >= file_size)
 	{
 		printf("EOF\n");
@@ -176,9 +166,9 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 	{
 		cluster = get_fat_entry(fs, cluster);
 	}
-	printf("cluster: %d\n", cluster);
-	printf("in_cluster_offset: %d\n", in_cluster_offset);
-	printf("to_read: %d\n", to_read);
+	// printf("cluster: %d\n", cluster);
+	// printf("in_cluster_offset: %d\n", in_cluster_offset);
+	// printf("to_read: %d\n", to_read);
 
 	while (read < to_read && cluster < 0x0FFFFFF8)
 	{
@@ -188,10 +178,10 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 
 		fat32_read_cluster(fs, cluster, cluster_buf);
 		// display raw data
-		printf("Cluster readed: %d\n", cluster);
-		uint16_t *buf = (uint16_t *)cluster_buf;
-		for (int j = 0; j < 16; j++)
-			printf("%02X ", buf[j]);
+		// printf("Cluster readed: %d\n", cluster);
+		// uint16_t *buf = (uint16_t *)cluster_buf;
+		// for (int j = 0; j < 16; j++)
+		//	printf("%02X ", buf[j]);
 		size_t available = fs->cluster_size - in_cluster_offset;
 		size_t chunk = (to_read - read < available) ? (to_read - read) : available;
 
@@ -304,8 +294,8 @@ int fat32_delete(FAT32_FS *fs, const char *path)
 int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 {
 	printf("🔎 Mounting FAT32 at LBA %d\n", first_lba);
-
 	uint8_t sector[512];
+	printf("Reading FAT32 signature\n");
 	fs->read_sector(fs->device, first_lba, sector);
 	printf("FAT32 signature: 0x%X 0x%X\n", sector[510], sector[511]);
 	if (!(sector[510] == 0x55 && sector[511] == 0xAA))
@@ -381,15 +371,12 @@ int fat32_update_fat_entry(FAT32_FS *fs, FAT32_File *file)
 	if (!buf)
 		return -1;
 
-	// читаємо кластер директорії, де лежить цей entry
 	fat32_read_cluster(fs, file->cluster, buf);
 
 	FAT32_DirectoryEntry *entries = (FAT32_DirectoryEntry *)buf;
 
-	// оновлюємо конкретний entry
 	memcpy(&entries[file->index], file->entry, sizeof(FAT32_DirectoryEntry));
 
-	// записуємо назад
 	fat32_write_cluster(fs, file->cluster, buf);
 	free(buf);
 	return 0;
@@ -538,24 +525,24 @@ void free_folder_path(PathParts *pp)
 	}
 	pp->count = 0;
 }
-bool fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir)
+int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir)
 {
 	printf("sfn: %s\n", pp->sfn);
 	if (cluster == 0)
 	{
 		printf("Cluster not found: %s\n", pp->lfn);
-		return false;
+		return -EINVAL;
 	}
 	if (find_directory_entry_cluster(fs, cluster, pp->sfn) != 0)
 	{
 		printf("Entry already exists: %s\n", pp->lfn);
-		return false;
+		return -EEXIST;
 	}
 	uint8_t *buf = malloc(fs->cluster_size);
 	if (!buf)
 	{
 		printf("Failed to allocate buffer\n");
-		return false;
+		return -ENOMEM;
 	}
 	fat32_read_cluster(fs, cluster, buf);
 
@@ -565,9 +552,9 @@ bool fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_di
 
 		if (entry->name[0] == 0x00 || entry->name[0] == 0xE5)
 		{
-			// 3. Формуємо ім’я у форматі 8.3
 
 			memcpy(entry->name, pp->sfn, 11);
+
 			printf("Entry created and found: %s\n", pp->sfn);
 
 			entry->attr = is_dir ? 0x10 : 0x20;
@@ -577,55 +564,37 @@ bool fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_di
 
 			entry->file_size = 0;
 			fat32_write_cluster(fs, cluster, buf);
-			// check if writed
-			uint8_t *buf2 = malloc(fs->cluster_size);
-			if (!buf2)
-			{
-				printf("Failed to allocate buffer\n");
-			}
-			fat32_read_cluster(fs, cluster, buf2);
-			FAT32_DirectoryEntry *entry2 = (FAT32_DirectoryEntry *)buf2;
-			entry2 += i;
-			if (memcmp(entry2->name, pp->sfn, 11) != 0)
-			{
-				printf("Entry not created: %s\n", pp->lfn);
-				for (int j = 0; j < 11; j++)
-				{
-					printf("i: %d, entry: %c, target: %c, entry: %c\n", j, entry2->name[j], pp->sfn[j], entry->name[j]);
-				}
-			}
 
 			free(buf);
-			free(buf2);
 
-			// 8. Для директорії створюємо "." і ".."
+			// add entry to directory
 			if (is_dir)
 				fat32_format_directory_cluster(fs, new_cluster, cluster);
 			fat_flush(fs);
-			return true;
+			return 0;
 		}
 	}
 
 	free(buf);
-	return false; // нема місця в директорії
+	return -ENOSPC; // нема місця в директорії
 }
-bool fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name)
+int fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name)
 {
 	if (cluster == 0)
 	{
 		printf("Cluster not found: %s\n", name);
-		return false;
+		return -EINVAL;
 	}
 	if (find_directory_entry_cluster(fs, cluster, name) == 0)
 	{
 		printf("Entry not found: %s\n", name);
-		return false;
+		return -ENOENT;
 	}
 	uint8_t *buf = malloc(fs->cluster_size);
 	if (!buf)
 	{
 		printf("Failed to allocate buffer\n");
-		return false;
+		return -ENOMEM;
 	}
 	fat32_read_cluster(fs, cluster, buf);
 	FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)buf;
@@ -639,9 +608,9 @@ bool fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name)
 			fat32_write_cluster(fs, cluster, buf);
 			free(buf);
 			fat_flush(fs);
-			return true;
+			return 0;
 		}
 	}
 	free(buf);
-	return false;
+	return -ENOENT;
 }

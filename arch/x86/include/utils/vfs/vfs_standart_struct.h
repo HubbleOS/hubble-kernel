@@ -29,6 +29,16 @@ typedef enum
 	FS_EXT2,
 	// інші
 } FileSystemType;
+typedef struct
+{
+	void *device;
+	int (*read)(void *device, uint32_t lba, void *buffer);
+	int (*write)(void *device, uint32_t lba, const void *buffer);
+} VFS_Device;
+
+#define ERR_PTR(x) ((void *)(intptr_t)(x))
+#define PTR_ERR(p) ((int)(intptr_t)(p))
+#define IS_ERR(p) ((uintptr_t)(p) >= (uintptr_t)-4095)
 
 // Open modes
 #define VFS_O_RDONLY 0x01 // RD
@@ -56,3 +66,5 @@ typedef enum
 #define SEEK_SET 0 // Set position
 #define SEEK_CUR 1 // Current position
 #define SEEK_END 2 // End position
+
+// extern void *fb;

@@ -4,21 +4,21 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
-// #include <errno.h>
-
+#include <errno.h>
+#include "utils/gpt/gpt.h"
 // Список змонтованих ФС (поки що 1)
 VFS_FS *root_fs = NULL;
 
 // ==== Реалізація VFS API ==== //
 
-bool vfs_mount(void *device, uint32_t start_lba, FileSystemType type)
+bool vfs_mount(gpt_partition_t *parition, FileSystemType type)
 {
 	if (root_fs != NULL)
 	{
 		printf("VFS: already mounted\n");
 		return false;
 	}
-
+	printf("VFS: mounting\n");
 	root_fs = malloc(sizeof(VFS_FS));
 	memset(root_fs, 0, sizeof(VFS_FS));
 	root_fs->type = type;
@@ -36,8 +36,8 @@ bool vfs_mount(void *device, uint32_t start_lba, FileSystemType type)
 		root_fs = NULL;
 		return false;
 	}
-
-	return root_fs->mount(root_fs, device, start_lba);
+	printf("VFS: mounted\n");
+	return root_fs->mount(root_fs, parition->device, parition->first_lba);
 }
 
 VFS_File *vfs_open(const char *path, int flags)
@@ -45,8 +45,10 @@ VFS_File *vfs_open(const char *path, int flags)
 {
 
 	if (!root_fs || !root_fs->open)
-		return NULL;
+		return ERR_PTR(-ENODEV);
 	VFS_Node *node = root_fs->open(root_fs, path);
+
+	VFS_File *f = malloc(sizeof(VFS_File));
 
 	printf("VFS: opening file %s\n", path);
 
@@ -60,14 +62,14 @@ VFS_File *vfs_open(const char *path, int flags)
 			node = vfs_create_file(path);
 			if (!node)
 			{
-				return NULL;
-				// return -EIO;
+				// f->flags = -EIO;
+				return ERR_PTR(-EIO);
 			}
 		}
 		else
 		{
-			return NULL;
-			// return -ENOENT;
+			// f->flags = -ENOENT;
+			return ERR_PTR(-ENOENT);
 		}
 	}
 	else
@@ -75,8 +77,8 @@ VFS_File *vfs_open(const char *path, int flags)
 		// Якщо файл вже існує
 		if ((flags & VFS_O_CREAT) && (flags & VFS_O_EXCL))
 		{
-			return NULL;
-			// return -EEXIST; // існує, а ми хочемо створити з EXCL
+			// return NULL;
+			return ERR_PTR(-EEXIST); // існує, а ми хочемо створити з EXCL
 		}
 	}
 
@@ -86,28 +88,18 @@ VFS_File *vfs_open(const char *path, int flags)
 	{
 	case VFS_O_RDONLY:
 		if (!(node->mode & MODE_READ))
-		{
-			return NULL;
-			// return -EACCES;
-		}
+			return ERR_PTR(-EACCES);
 		break;
 	case VFS_O_WRONLY:
 		if (!(node->mode & MODE_WRITE))
-		{
-			return NULL;
-			// return -EACCES;
-		}
+			return ERR_PTR(-EACCES);
 		break;
 	case VFS_O_RDWR:
 		if (!(node->mode & MODE_READ) || !(node->mode & MODE_WRITE))
-		{
-			return NULL;
-			// return -EACCES;
-		}
+			return ERR_PTR(-EACCES);
 		break;
 	default:
-		return NULL;
-		// return -EINVAL;
+		return ERR_PTR(-EINVAL);
 	}
 
 	// --- trunc ---
@@ -118,7 +110,6 @@ VFS_File *vfs_open(const char *path, int flags)
 	//}
 
 	// --- append ---
-	VFS_File *f = malloc(sizeof(VFS_File));
 
 	f->node = node;
 	f->flags = flags;
@@ -129,15 +120,19 @@ VFS_File *vfs_open(const char *path, int flags)
 
 int vfs_read(VFS_File *file, void *buf, uint32_t size)
 {
-	if (!file || !file->node->fs || !file->node->fs->write)
-		return -1;
+	if (!file || !file->node->fs || !file->node->fs->read)
+		return -EIO;
+	if (file->pos >= file->node->size)
+	{
+		return -0;
+	}
 	return file->node->fs->read(file, buf, size);
 }
 
 int vfs_write(VFS_File *file, const void *buf, uint32_t size)
 {
 	if (!file || !file->node->fs || !file->node->fs->write)
-		return -1;
+		return -EIO;
 	return file->node->fs->write(file, buf, size);
 }
 

@@ -48,7 +48,10 @@ int ata_wait_drq(ATA_Device *dev)
 
 int ata_read_sector(void *device, uint32_t lba, void *buffer)
 {
+	printf("ata_read_sector %d\n", lba);
 	ATA_Device *dev = (ATA_Device *)device;
+	printf("bus: %d, device: %d, io_base: %d, ctrl_base: %d\n", dev->bus, dev->device, dev->io_base, dev->ctrl_base);
+
 	uint16_t *buf = (uint16_t *)buffer;
 	// printf("ata_read_sector");
 	// for (int j = 0; j < 16; j++)
@@ -81,7 +84,7 @@ int ata_read_sector(void *device, uint32_t lba, void *buffer)
 int ata_write_sector(void *device, uint32_t lba, const void *buffer)
 {
 	ATA_Device *dev = (ATA_Device *)device;
-
+	printf("bus: %d, device: %d, io_base: %d, ctrl_base: %d\n", dev->bus, dev->device, dev->io_base, dev->ctrl_base);
 	const uint16_t *buf = (const uint16_t *)buffer;
 	printf("\nata_write_sector %d", lba);
 
@@ -121,15 +124,15 @@ int ata_write_sector(void *device, uint32_t lba, const void *buffer)
 
 	return 0;
 }
-void ata_init_device(ATA_Device *dev, uint8_t bus, uint16_t io_base, uint8_t device, uint16_t ctrl_base)
-{
-	dev->bus = bus;
-	dev->device = device;
-	dev->io_base = io_base;
-	dev->ctrl_base = ctrl_base;
-	dev->read = &ata_read_sector;
-	dev->write = &ata_write_sector;
-}
+// void ata_init_device(ATA_Device *dev, uint8_t bus, uint16_t io_base, uint8_t device, uint16_t ctrl_base)
+// {
+// 	dev->bus = bus;
+// 	dev->device = device;
+// 	dev->io_base = io_base;
+// 	dev->ctrl_base = ctrl_base;
+// 	dev->read = &ata_read_sector;
+// 	dev->write = &ata_write_sector;
+// }
 
 // void ata_manual_test()
 // {
