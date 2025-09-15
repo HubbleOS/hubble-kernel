@@ -1,4 +1,5 @@
 #include <ui/menu.h>
+#include <stdlib.h>
 
 static void draw_checklist_item(WINDOW *win, void *item_ptr, int idx, int width)
 {
@@ -16,6 +17,9 @@ static void on_checklist_toggle(void *item_ptr)
 UIElement *checklist_menu_create(ChecklistItem *items, size_t count)
 {
 	return list_menu_create(
-		items, sizeof(ChecklistItem), count,
-		draw_checklist_item, on_checklist_toggle);
+	    items,
+	    sizeof(ChecklistItem),
+	    count,
+	    draw_checklist_item,
+	    on_checklist_toggle);
 }

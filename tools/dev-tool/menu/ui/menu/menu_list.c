@@ -1,6 +1,6 @@
-#include <stdlib.h>
 #include <ui/menu.h>
 #include <ui/main.h>
+#include <stdlib.h>
 
 typedef struct
 {
@@ -82,6 +82,14 @@ static bool list_menu_handle_key(UIElement *elem, int ch)
 	}
 }
 
+static void list_menu_destroy(UIElement *elem)
+{
+	if (!elem)
+		return;
+	free(elem->data);
+	free(elem);
+}
+
 UIElement *list_menu_create(void *items, size_t item_size, size_t count, DrawItemFn draw_item, OnSelectFn on_select)
 {
 	UIElement *elem = malloc(sizeof(UIElement));
@@ -96,17 +104,19 @@ UIElement *list_menu_create(void *items, size_t item_size, size_t count, DrawIte
 	}
 
 	*data = (ListMenuData){
-		.items = items,
-		.item_size = item_size,
-		.count = count,
-		.highlight = 0,
-		.scroll = 0,
-		.draw_item = draw_item,
-		.on_select = on_select};
+	    .items = items,
+	    .item_size = item_size,
+	    .count = count,
+	    .highlight = 0,
+	    .scroll = 0,
+	    .draw_item = draw_item,
+	    .on_select = on_select,
+	};
 
 	elem->data = data;
 	elem->draw = list_menu_draw;
 	elem->handle_key = list_menu_handle_key;
+	elem->destroy = list_menu_destroy;
 
 	return elem;
 }
