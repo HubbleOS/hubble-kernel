@@ -49,7 +49,7 @@ extern VFS_FS *root_fs;
 void kernel_main(BootInfo *bi)
 {
 	heap_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
-	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
+	// pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
 	framebuffer_info_t *fb = bi->framebuffer;
 
 	init_font(fb);
@@ -66,7 +66,7 @@ void kernel_main(BootInfo *bi)
 	printf("FAT32 mounted\n");
 	printf("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
 	VFS_File *f = vfs_open("/tesiit.txt", VFS_O_CREAT | VFS_O_RDWR);
-	// vfs_write(f, "Hello, world!", 13);
+	vfs_write(f, "Hello, world!", 13);
 	vfs_lseek(f, 0, SEEK_SET);
 	Directory dir = vfs_readdir("/");
 	for (int i = 0; i < dir.count; i++)

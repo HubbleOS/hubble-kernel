@@ -161,7 +161,9 @@ run: build
 PHONY += host-run
 host-run:
 	@echo "🖥  Launching QEMU from host..."
-	$(MAKE) $(SCRIPT_DIR) qemu
+	$(MAKE) -C tools/dev-tool/qemu run ISO=../../../out/x86/iso/ ARCH=x86_64 MEM=1024;
+
+###########################################################################
 
 PHONY += clean
 clean:

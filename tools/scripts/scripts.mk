@@ -7,6 +7,3 @@ img:
 
 flash:
 	@sh $(SCRIPT_DIR)/img/make-flash.sh
-
-qemu:
-	@sh $(SCRIPT_DIR)/qemu/qemu.sh $(ISO_DIR)
