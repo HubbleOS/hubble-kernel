@@ -1,6 +1,6 @@
 # scripts.mk
 
-.PHONY: img flash qemu
+.PHONY: img flash
 
 img:
 	@sh $(SCRIPT_DIR)/img/make-image.sh

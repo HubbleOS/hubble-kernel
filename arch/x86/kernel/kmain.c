@@ -48,53 +48,68 @@ extern VFS_FS *root_fs;
 
 void kernel_main(BootInfo *bi)
 {
-	heap_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
-	// pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
+	// heap_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
+	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
+	vmm_init();
 	framebuffer_info_t *fb = bi->framebuffer;
 
 	init_font(fb);
 	libc_init();
-	printf("GPT init\n");
+	putchar('\n');
 
-	gpt_init(partitions);
+	// alloc page:
+	void *p1 = pmm_alloc(1);
+	printf("p1: %p\n", p1);
 
-	printf("FAT32 init at LBA %d\n", partitions[0].first_lba);
-	VFS_Device *device = malloc(sizeof(VFS_Device));
-	device->type = DEV_ATA;
-	device->device = &ata_devices[0];
-	vfs_mount(device, partitions[0].first_lba, FS_FAT32);
-	printf("FAT32 mounted\n");
-	printf("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
-	VFS_File *f = vfs_open("/tesiit.txt", VFS_O_CREAT | VFS_O_RDWR);
-	vfs_write(f, "Hello, world!", 13);
-	vfs_lseek(f, 0, SEEK_SET);
-	Directory dir = vfs_readdir("/");
-	for (int i = 0; i < dir.count; i++)
-	{
-		printf("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
-	}
+	void *p2 = pmm_alloc(1);
+	printf("p2: %p\n", p2);
 
-	char buffer[1024];
-	vfs_read(f, buffer, 1024);
-	printf("Read: \n");
-	for (int i = 0; i < 1024; i++)
-	{
-		printf("%c", buffer[i]);
-	}
+	pmm_free(p1, 32);
+	pmm_free(p2, 32);
 
-	printf("FAT32 init done\n");
+	void *p3 = pmm_alloc(1);
+	printf("p3: %p\n", p3);
 
-	void *p1 = malloc(1);
-	printf("p1 = %p\n", p1);
+	// printf("GPT init\n");
+	// gpt_init(partitions);
 
-	void *p2 = malloc(1);
-	printf("p2 = %p\n", p2);
+	// printf("FAT32 init at LBA %d\n", partitions[0].first_lba);
+	// VFS_Device *device = malloc(sizeof(VFS_Device));
+	// device->type = DEV_ATA;
+	// device->device = &ata_devices[0];
+	// vfs_mount(device, partitions[0].first_lba, FS_FAT32);
+	// printf("FAT32 mounted\n");
+	// printf("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
+	// VFS_File *f = vfs_open("/test.txt", VFS_O_CREAT | VFS_O_RDWR);
+	// vfs_write(f, "Hello, world!", 13);
+	// vfs_lseek(f, 0, SEEK_SET);
+	// Directory dir = vfs_readdir("/");
+	// for (int i = 0; i < dir.count; i++)
+	// {
+	// 	printf("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
+	// }
 
-	free(p1);
-	printf("p1 freed\n");
+	// char buffer[1024];
+	// vfs_read(f, buffer, 1024);
+	// printf("Read: \n");
+	// for (int i = 0; i < 1024; i++)
+	// {
+	// 	printf("%c", buffer[i]);
+	// }
 
-	void *p3 = malloc(1);
-	printf("p3 = %p\n", p3);
+	// printf("FAT32 init done\n");
+
+	// void *p1 = malloc(1);
+	// printf("p1 = %p\n", p1);
+
+	// void *p2 = malloc(1);
+	// printf("p2 = %p\n", p2);
+
+	// free(p1);
+	// printf("p1 freed\n");
+
+	// void *p3 = malloc(1);
+	// printf("p3 = %p\n", p3);
 
 	// void *p1 = pmm_alloc_pages(10);
 	// printf("p1 = %p\n", p1);
