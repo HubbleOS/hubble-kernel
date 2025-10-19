@@ -161,7 +161,7 @@ run: build
 PHONY += host-run
 host-run:
 	@echo "🖥  Launching QEMU from host..."
-	$(MAKE) -C tools/dev-tool/qemu run ISO=../../../out/x86/iso/ ARCH=x86_64 MEM=1024;
+	$(MAKE) -C tools/dev-tool/qemu run ISO=../../../out/x86/iso/ ARCH=x86_64 MEM=256;
 
 ###########################################################################
 

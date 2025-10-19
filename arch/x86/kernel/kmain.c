@@ -52,9 +52,7 @@ void kernel_main(BootInfo *bi)
 	framebuffer_info_t *fb = bi->framebuffer;
 
 	for (int i = 0; i < fb->width * fb->height; i++)
-	{
 		((uint32_t *)fb->base)[i] = rgb(0, 0, 0);
-	}
 
 	init_font(fb);
 	libc_init();
@@ -73,6 +71,18 @@ void kernel_main(BootInfo *bi)
 
 	// 4. Теперь можно тестировать
 	vmm_test();
+
+	void *p1 = pmm_alloc(1);
+	printf("p1 = %p\n", p1);
+
+	void *p2 = pmm_alloc(1);
+	printf("p2 = %p\n", p2);
+
+	pmm_free(p1, 1);
+	pmm_free(p2, 1);
+
+	void *p3 = pmm_alloc(1);
+	printf("p3 = %p\n", p3);
 
 	// printf("GPT init\n");
 	// gpt_init(partitions);
@@ -102,6 +112,7 @@ void kernel_main(BootInfo *bi)
 	// }
 
 	// printf("FAT32 init done\n");
+
 	while (1)
 		;
 }

@@ -1,225 +1,3 @@
-// #include "vmm.h"
-// #include "pmm.h"
-// #include <string.h>
-
-// // Для early boot используем identity mapping
-// // После инициализации можно переключиться на higher-half
-// static inline void *phys_to_virt(uint64_t phys)
-// {
-// 	// В early boot: identity mapping
-// 	return (void *)phys;
-
-// 	// После переключения на higher-half:
-// 	// return (void *)(phys + KERNEL_VIRT_BASE);
-// }
-
-// static inline uint64_t virt_to_phys(void *vptr)
-// {
-// 	// В early boot: identity mapping
-// 	return (uint64_t)vptr;
-
-// 	// После переключения:
-// 	// return (uint64_t)vptr - KERNEL_VIRT_BASE;
-// }
-
-// static uint64_t current_pml4_phys = 0;
-
-// uint64_t vmm_get_current_cr3_phys(void)
-// {
-// 	return current_pml4_phys;
-// }
-
-// void vmm_switch_cr3(uint64_t phys)
-// {
-// 	current_pml4_phys = phys;
-// 	asm volatile("mov %0, %%cr3" : : "r"(phys) : "memory");
-// }
-
-// // В vmm.c добавить:
-// static uint64_t bootstrap_alloc_base = 0;
-// static uint64_t bootstrap_alloc_offset = 0;
-// static uint64_t bootstrap_alloc_size = 0;
-// static int use_bootstrap = 0;
-
-// void vmm_set_bootstrap_allocator(uint64_t base, uint64_t size)
-// {
-// 	bootstrap_alloc_base = base;
-// 	bootstrap_alloc_size = size;
-// 	bootstrap_alloc_offset = 0;
-// 	use_bootstrap = 1;
-// }
-
-// void vmm_disable_bootstrap_allocator(void)
-// {
-// 	use_bootstrap = 0;
-// }
-
-// static uint64_t alloc_table_phys(void)
-// {
-// 	if (use_bootstrap)
-// 	{
-// 		if (bootstrap_alloc_offset + PAGE_SIZE > bootstrap_alloc_size)
-// 			return 0;
-
-// 		uint64_t phys = bootstrap_alloc_base + bootstrap_alloc_offset;
-// 		bootstrap_alloc_offset += PAGE_SIZE;
-
-// 		void *virt = phys_to_virt(phys);
-// 		memset(virt, 0, PAGE_SIZE);
-// 		return phys;
-// 	}
-
-// 	void *virt = pmm_alloc(1);
-// 	if (!virt)
-// 		return 0;
-
-// 	memset(virt, 0, PAGE_SIZE);
-// 	return pmm_get_phys(virt);
-// }
-
-// static inline size_t idx_from_virt(uint64_t virt, int level)
-// {
-// 	int shift = 12 + (level - 1) * 9;
-// 	return (virt >> shift) & 0x1FF;
-// }
-
-// static uint64_t *get_pte_for(uint64_t pml4_phys, uint64_t virt, int create)
-// {
-// 	uint64_t phys = pml4_phys;
-
-// 	for (int level = 4; level > 1; level--)
-// 	{
-// 		uint64_t *table = (uint64_t *)phys_to_virt(phys);
-// 		size_t idx = idx_from_virt(virt, level);
-// 		uint64_t entry = table[idx];
-
-// 		if (!(entry & PTE_PRESENT))
-// 		{
-// 			if (!create)
-// 				return NULL;
-
-// 			uint64_t new_phys = alloc_table_phys();
-// 			if (!new_phys)
-// 				return NULL;
-
-// 			table[idx] = new_phys | PTE_PRESENT | PTE_WRITABLE;
-// 			entry = table[idx];
-// 		}
-
-// 		phys = entry & 0x000FFFFFFFFFF000ULL;
-// 	}
-
-// 	uint64_t *pt = (uint64_t *)phys_to_virt(phys);
-// 	size_t tidx = idx_from_virt(virt, 1);
-// 	return &pt[tidx];
-// }
-
-// int vmm_map(uint64_t virt, uint64_t phys, size_t pages, uint64_t flags)
-// {
-// 	if (virt & (PAGE_SIZE - 1))
-// 		return -1;
-// 	if (phys & (PAGE_SIZE - 1))
-// 		return -1;
-
-// 	for (size_t i = 0; i < pages; i++)
-// 	{
-// 		uint64_t *pte = get_pte_for(current_pml4_phys, virt + i * PAGE_SIZE, 1);
-// 		if (!pte)
-// 			return -2;
-
-// 		// Перезапись существующего mapping - допустимо для reinitialization
-// 		*pte = (phys + i * PAGE_SIZE) | (flags & 0xFFF) | PTE_PRESENT;
-// 	}
-
-// 	// Flush TLB для всех изменённых страниц
-// 	for (size_t i = 0; i < pages; i++)
-// 	{
-// 		asm volatile("invlpg (%0)" : : "r"(virt + i * PAGE_SIZE) : "memory");
-// 	}
-
-// 	return 0;
-// }
-
-// int vmm_unmap(uint64_t virt, size_t pages)
-// {
-// 	if (virt & (PAGE_SIZE - 1))
-// 		return -1;
-
-// 	for (size_t i = 0; i < pages; i++)
-// 	{
-// 		uint64_t *pte = get_pte_for(current_pml4_phys, virt + i * PAGE_SIZE, 0);
-// 		if (!pte)
-// 			continue;
-
-// 		*pte = 0;
-// 		asm volatile("invlpg (%0)" : : "r"(virt + i * PAGE_SIZE) : "memory");
-// 	}
-
-// 	return 0;
-// }
-
-// uint64_t vmm_translate(uint64_t virt)
-// {
-// 	uint64_t phys = current_pml4_phys;
-
-// 	for (int level = 4; level >= 1; level--)
-// 	{
-// 		uint64_t *table = (uint64_t *)phys_to_virt(phys);
-// 		size_t idx = idx_from_virt(virt, level);
-// 		uint64_t entry = table[idx];
-
-// 		if (!(entry & PTE_PRESENT))
-// 			return 0;
-
-// 		if (level > 1 && (entry & PTE_PS))
-// 		{
-// 			// Large page
-// 			uint64_t base = entry & 0x000FFFFFFFFFF000ULL;
-// 			int shift = 12 + (level - 1) * 9;
-// 			uint64_t offset = virt & ((1ULL << shift) - 1);
-// 			return base + offset;
-// 		}
-
-// 		phys = entry & 0x000FFFFFFFFFF000ULL;
-// 	}
-
-// 	// Level 1
-// 	uint64_t *pt = (uint64_t *)phys_to_virt(phys);
-// 	size_t tidx = idx_from_virt(virt, 1);
-// 	uint64_t e = pt[tidx];
-
-// 	if (!(e & PTE_PRESENT))
-// 		return 0;
-
-// 	return (e & 0x000FFFFFFFFFF000ULL) | (virt & 0xFFF);
-// }
-
-// void vmm_init(uint64_t bootstrap_cr3_phys)
-// {
-// 	printf("VMM Init: bootstrap CR3 = 0x%llx\n", bootstrap_cr3_phys);
-
-// 	if (bootstrap_cr3_phys)
-// 	{
-// 		// Используем существующую PML4 от загрузчика
-// 		current_pml4_phys = bootstrap_cr3_phys;
-// 	}
-// 	else
-// 	{
-// 		// Создаём новую PML4 (не рекомендуется без копирования!)
-// 		uint64_t new_pml4 = alloc_table_phys();
-// 		if (!new_pml4)
-// 		{
-// 			printf("FATAL: Cannot allocate PML4\n");
-// 			return;
-// 		}
-// 		current_pml4_phys = new_pml4;
-// 		vmm_switch_cr3(new_pml4);
-// 	}
-
-// 	printf("Current CR3: 0x%llx\n", current_pml4_phys);
-// }
-
-// ========== vmm.c ==========
 #include "vmm.h"
 #include "pmm.h"
 #include <string.h>
@@ -289,7 +67,7 @@ static uint64_t alloc_table_phys(void)
 		return phys;
 	}
 
-	// После отключения bootstrap - используем PMM
+	// After disabling bootstrap - use PMM
 	void *virt = pmm_alloc(1);
 	if (!virt)
 		return 0;
@@ -427,7 +205,7 @@ void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_si
 		return;
 	}
 
-	// Проверяем минимальный размер
+	// Check minimum heap size
 	if (heap_size < 16 * 1024 * 1024)
 	{
 		printf("FATAL: Heap too small (%llu MB), need >= 16MB\n",
@@ -437,18 +215,18 @@ void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_si
 
 	current_pml4_phys = bootstrap_cr3_phys;
 
-	// Резервируем 2MB для bootstrap allocator
+	// We reserve 2MB for bootstrap allocator
 	uint64_t bootstrap_size = 2 * 1024 * 1024;
 	if (bootstrap_size > heap_size / 4)
 		bootstrap_size = heap_size / 4;
 
 	vmm_set_bootstrap_allocator(heap_start, bootstrap_size);
 
-	// КРИТИЧНО: Мапим весь heap
+	// CRITICAL: Map the entire heap
 	printf("Mapping heap into page tables...\n");
 	uint64_t heap_pages = (heap_size + PAGE_SIZE - 1) / PAGE_SIZE;
 
-	// Мапим блоками по 512 страниц для лучшей отладки
+	// We map in blocks of 512 pages for better debugging
 	uint64_t mapped = 0;
 	const uint64_t chunk = 512;
 
@@ -468,7 +246,7 @@ void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_si
 
 		mapped += to_map;
 
-		if (mapped % (1024) == 0) // Progress каждые 4MB
+		if (mapped % (1024) == 0) // Progress every 4MB
 			printf("  Mapped %llu/%llu pages (%llu MB)\n",
 			       mapped, heap_pages,
 			       mapped * PAGE_SIZE / (1024 * 1024));
