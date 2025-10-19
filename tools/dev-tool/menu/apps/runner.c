@@ -16,24 +16,19 @@ static void system_command(const char *cmd)
 		printf("\n[Failed to start command]\n");
 		getchar();
 	}
-	else
+	else if (WIFEXITED(ret) && WEXITSTATUS(ret) != 0)
 	{
-		if (WIFEXITED(ret))
-		{
-			int code = WEXITSTATUS(ret);
-			if (code != 0)
-			{
-				printf("\nCommand failed (exit code %d). Press Enter...\n", code);
-				getchar();
-			}
-		}
-		else if (WIFSIGNALED(ret))
-		{
-			printf("\nCommand killed by signal %d. Press Enter...\n", WTERMSIG(ret));
-			getchar();
-		}
+		printf("\nCommand failed (exit code %d). Press Enter...\n", WEXITSTATUS(ret));
+		getchar();
+	}
+	else if (WIFSIGNALED(ret))
+	{
+		printf("\nCommand killed by signal %d. Press Enter...\n", WTERMSIG(ret));
+		getchar();
 	}
 
+	// return control to ncurses
+	screen.reset();
 	screen.init();
 }
 
