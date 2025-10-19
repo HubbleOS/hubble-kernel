@@ -2,12 +2,25 @@
 #include "pmm.h"
 #include <stdio.h>
 
-#define TEST_VIRT 0x0000000010000000ULL
+#define TEST_VIRT 0x0000800000000000ULL
 #define TEST_PAGES 2
 
 void vmm_test(void)
 {
 	printf("\n=== VMM Test Start ===\n");
+
+	printf("Checking if TEST_VIRT is already mapped...\n");
+	uint64_t existing = vmm_translate(TEST_VIRT);
+	if (existing)
+	{
+		printf("WARNING: 0x%llx already mapped to 0x%llx\n",
+		       TEST_VIRT, existing);
+		printf("This is likely UEFI identity mapping. Using different address.\n");
+	}
+	else
+	{
+		printf("0x%llx is not mapped, good!\n", TEST_VIRT);
+	}
 
 	uint64_t phys[TEST_PAGES];
 	void *virt_ptrs[TEST_PAGES];

@@ -19,8 +19,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	g_systab = systab;
 
 	InitializeLib(image, systab);
-	uefi_call_wrapper(systab->ConOut->ClearScreen, 1, systab->ConOut);
-	PrintInfo(L"Bootloader Started\n");
+	ClearConsole();
+
+	PrintMessage(L"BOOT", EFI_LIGHTGRAY, L"Starting...\n");
 
 	EFI_STATUS status;
 
@@ -32,7 +33,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 				   &gop_guid, NULL, (void **)&gop);
 	if (EFI_ERROR(status))
 	{
-		PrintError(L"GOP not found: %r\n", status);
+		PrintFail(L"GOP not found: %r\n", status);
 		return status;
 	}
 	PrintOk(L"GOP found\n");
@@ -46,7 +47,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 				   &HandleCount, &HandleBuffer);
 	if (EFI_ERROR(status))
 	{
-		PrintError(L"LocateHandleBuffer failed: %r\n", status);
+		PrintFail(L"LocateHandleBuffer failed: %r\n", status);
 		return status;
 	}
 
@@ -79,7 +80,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	if (KernelFile == NULL)
 	{
-		PrintError(L"kernel.bin not found\n");
+		PrintFail(L"kernel.bin not found\n");
 		return EFI_NOT_FOUND;
 	}
 
@@ -92,7 +93,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 				   &FileInfoGuid, &FileInfoSize, NULL);
 	if (status != EFI_BUFFER_TOO_SMALL)
 	{
-		PrintError(L"GetInfo size query failed: %r\n", status);
+		PrintFail(L"GetInfo size query failed: %r\n", status);
 		return status;
 	}
 
@@ -100,7 +101,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 				   FileInfoSize, (void **)&KernelFileInfo);
 	if (EFI_ERROR(status))
 	{
-		PrintError(L"AllocatePool failed: %r\n", status);
+		PrintFail(L"AllocatePool failed: %r\n", status);
 		return status;
 	}
 
@@ -108,7 +109,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 				   &FileInfoGuid, &FileInfoSize, KernelFileInfo);
 	if (EFI_ERROR(status))
 	{
-		PrintError(L"GetInfo failed: %r\n", status);
+		PrintFail(L"GetInfo failed: %r\n", status);
 		return status;
 	}
 
@@ -125,7 +126,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 				   EfiLoaderData, kernel_pages, &kernel_addr);
 	if (EFI_ERROR(status))
 	{
-		PrintError(L"AllocatePages for kernel failed: %r\n", status);
+		PrintFail(L"AllocatePages for kernel failed: %r\n", status);
 		return status;
 	}
 
@@ -134,7 +135,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 				   &kernel_size, (void *)kernel_addr);
 	if (EFI_ERROR(status))
 	{
-		PrintError(L"Read kernel failed: %r\n", status);
+		PrintFail(L"Read kernel failed: %r\n", status);
 		return status;
 	}
 	PrintOk(L"Kernel loaded at 0x%lx\n", kernel_addr);
@@ -192,7 +193,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	if (!largest || largest_size < 64 * 1024 * 1024)
 	{
-		PrintError(L"No large memory region found (need >=64MB)\n");
+		PrintFail(L"No large memory region found (need >=64MB)\n");
 		return EFI_OUT_OF_RESOURCES;
 	}
 
@@ -253,10 +254,10 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	if (largest->NumberOfPages < required_pages)
 	{
-		PrintError(L"Largest region too small for ramdisk + heap\n");
-		PrintError(L"Need %lu pages, have %lu pages\n",
-			   required_pages, largest->NumberOfPages);
-		PrintError(L"Try: 1) Reduce ramdisk size, or 2) Increase VM memory\n");
+		PrintFail(L"Largest region too small for ramdisk + heap\n");
+		PrintFail(L"Need %lu pages, have %lu pages\n",
+			  required_pages, largest->NumberOfPages);
+		PrintFail(L"Try: 1) Reduce ramdisk size, or 2) Increase VM memory\n");
 		return EFI_OUT_OF_RESOURCES;
 	}
 
@@ -290,7 +291,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 				   &heap_phys);
 	if (EFI_ERROR(status))
 	{
-		PrintError(L"Failed to reserve heap: %r\n", status);
+		PrintFail(L"Failed to reserve heap: %r\n", status);
 		return status;
 	}
 	PrintOk(L"KernelHeap reserved at 0x%lx\n", heap_phys);
@@ -321,14 +322,14 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 			}
 			else
 			{
-				PrintError(L"Failed to read ramdisk: %r\n", status);
+				PrintFail(L"Failed to read ramdisk: %r\n", status);
 				ramdisk_ptr = NULL;
 				ramdisk_size = 0;
 			}
 		}
 		else
 		{
-			PrintError(L"Failed to allocate ramdisk: %r\n", status);
+			PrintFail(L"Failed to allocate ramdisk: %r\n", status);
 			ramdisk_ptr = NULL;
 			ramdisk_size = 0;
 		}
@@ -348,7 +349,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 				   EfiLoaderData, boot_info_pages, &boot_info_addr);
 	if (EFI_ERROR(status))
 	{
-		PrintError(L"AllocatePages for boot_info failed: %r\n", status);
+		PrintFail(L"AllocatePages for boot_info failed: %r\n", status);
 		return status;
 	}
 
@@ -380,6 +381,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		ram_info->heap_size / (1024 * 1024));
 
 	PrintInfo(L"Jumping to kernel at 0x%lx\n", (UINT64)kernel_addr);
+	ClearConsole();
 
 	// === [11] Prepare BootInfo pointer ===
 	BootInfo boot_info;

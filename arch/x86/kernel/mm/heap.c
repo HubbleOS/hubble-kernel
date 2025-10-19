@@ -9,7 +9,7 @@ void heap_init(uint64_t heap_start, uint64_t heap_size)
 	heap_end = heap_start + heap_size;
 }
 
-void *kmalloc(size_t size)
+void *kmalloc1(size_t size)
 {
 	if (heap_ptr + size > heap_end)
 		return NULL;
@@ -18,7 +18,7 @@ void *kmalloc(size_t size)
 	return ptr;
 }
 
-void *kmalloc_aligned(size_t size, size_t align)
+void *kmalloc_aligned1(size_t size, size_t align)
 {
 	uint64_t aligned_ptr = (heap_ptr + align - 1) & ~(align - 1);
 	if (aligned_ptr + size > heap_end)
@@ -28,9 +28,9 @@ void *kmalloc_aligned(size_t size, size_t align)
 	return ptr;
 }
 
-void kfree(void *ptr) { (void)ptr; }
+void kfree1(void *ptr) { (void)ptr; }
 
-memory_ops_t heap_memory_ops = {
-    .malloc = kmalloc,
-    .free = kfree,
-};
+// memory_ops_t heap_memory_ops = {
+//     .malloc = kmalloc1,
+//     .free = kfree1,
+// };
