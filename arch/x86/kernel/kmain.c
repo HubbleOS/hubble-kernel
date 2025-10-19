@@ -49,26 +49,30 @@ extern VFS_FS *root_fs;
 void kernel_main(BootInfo *bi)
 {
 	// heap_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
-	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
-	vmm_init();
 	framebuffer_info_t *fb = bi->framebuffer;
+
+	for (int i = 0; i < fb->width * fb->height; i++)
+	{
+		((uint32_t *)fb->base)[i] = rgb(0, 0, 0);
+	}
 
 	init_font(fb);
 	libc_init();
 	putchar('\n');
 
-	// alloc page:
-	void *p1 = pmm_alloc(1);
-	printf("p1: %p\n", p1);
+	// 1. Получаем текущий CR3 от UEFI
+	uint64_t cr3;
+	asm volatile("mov %%cr3, %0" : "=r"(cr3));
 
-	void *p2 = pmm_alloc(1);
-	printf("p2: %p\n", p2);
+	// 2. VMM init БЕЗ использования PMM
+	//    Он маппит heap используя UEFI page tables
+	vmm_init(cr3, bi->memory_map->heap_start, bi->memory_map->heap_size);
 
-	pmm_free(p1, 32);
-	pmm_free(p2, 32);
+	// 3. ТОЛЬКО после mapping heap можно инициализировать PMM
+	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
 
-	void *p3 = pmm_alloc(1);
-	printf("p3: %p\n", p3);
+	// 4. Теперь можно тестировать
+	vmm_test();
 
 	// printf("GPT init\n");
 	// gpt_init(partitions);
@@ -98,84 +102,6 @@ void kernel_main(BootInfo *bi)
 	// }
 
 	// printf("FAT32 init done\n");
-
-	// void *p1 = malloc(1);
-	// printf("p1 = %p\n", p1);
-
-	// void *p2 = malloc(1);
-	// printf("p2 = %p\n", p2);
-
-	// free(p1);
-	// printf("p1 freed\n");
-
-	// void *p3 = malloc(1);
-	// printf("p3 = %p\n", p3);
-
-	// void *p1 = pmm_alloc_pages(10);
-	// printf("p1 = %p\n", p1);
-
-	// void *p2 = pmm_alloc_pages(10);
-	// printf("p2 = %p\n", p2);
-
-	// pmm_free_pages(p1, 10);
-	// printf("p1 freed\n");
-
-	// void *p3 = pmm_alloc_pages(10);
-	// printf("p3 = %p\n", p3);
-
-	// print_memory_status();
-
-	// void *p1 = malloc(1000); // 0x1813cf4
-	// printf("p1 = %p\n", p1);
-
-	// // // print_memory_status();
-
-	// void *p2 = malloc(9000); // 0x1819cf4
-	// printf("p2 = %p\n", p2);
-
-	// // // print_memory_status();
-
-	// free(p2);
-	// printf("p2 freed\n");
-
-	// // // print_memory_status();
-
-	// void *p3 = malloc(4096);
-	// printf("p3 = %p\n", p3);
-
-	// free(p3);
-	// printf("p3 freed\n");
-
-	// // print_memory_status();
-
-	// void *p4 = malloc(1);
-	// printf("p4 = %p\n", p4);
-
-	// void *p5 = malloc(1);
-	// printf("p5 = %p\n", p5);
-
-	// // print_memory_status();
-
-	// void *arr[10];
-
-	// for (int i = 0; i < 10; i++)
-	// {
-	// 	arr[i] = malloc(4098);
-	// 	printf("arr[%d] = %p\n", i, arr[i]);
-	// }
-
-	// // print_memory_status();
-
-	// for (int i = 0; i < 10; i++)
-	// {
-	// 	free(arr[i]);
-	// 	printf("arr[%d] freed\n", i);
-	// }
-
-	// print_memory_status();
-
 	while (1)
-	{
 		;
-	}
 }
