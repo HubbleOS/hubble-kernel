@@ -46,15 +46,72 @@ extern void os_main(framebuffer_info_t *fb);
 extern void libc_init(void);
 extern VFS_FS *root_fs;
 
+#include <mm/kmalloc.h>
+
+// ========== TEST ==========
+// void test_kmalloc(void)
+// {
+// 	printf("\n=== Testing kmalloc ===\n");
+
+// 	// Test 1: Simple allocation
+// 	printf("\nTest 1: Simple allocation\n");
+// 	void *p1 = kmalloc(100);
+// 	void *p2 = kmalloc(200);
+// 	void *p3 = kmalloc(500);
+// 	printf("p1=%p, p2=%p, p3=%p\n", p1, p2, p3);
+
+// 	// Test 2: Write and read
+// 	printf("\nTest 2: Write and read\n");
+// 	char *str = (char *)kmalloc(50);
+// 	strcpy(str, "Hello, kernel!");
+// 	printf("String: %s\n", str);
+
+// 	// Test 3: Free and realloc
+// 	printf("\nTest 3: Free and realloc\n");
+// 	kfree(p2);
+// 	void *p4 = kmalloc(200);
+// 	printf("p4=%p (should reuse p2's space)\n", p4);
+
+// 	// Test 4: Zero allocation
+// 	printf("\nTest 4: Zero allocation\n");
+// 	int *arr = (int *)kzalloc(10 * sizeof(int));
+// 	printf("Array: ");
+// 	for (int i = 0; i < 10; i++)
+// 		printf("%d ", arr[i]);
+// 	printf("\n");
+
+// 	// Test 5: Realloc
+// 	printf("\nTest 5: Realloc\n");
+// 	char *small = (char *)kmalloc(10);
+// 	strcpy(small, "Small");
+// 	char *large = (char *)krealloc(small, 100);
+// 	printf("After realloc: %s\n", large);
+
+// 	// Test 6: Large allocation
+// 	printf("\nTest 6: Large allocation\n");
+// 	void *big = kmalloc(1024 * 1024); // 1MB
+// 	printf("Big allocation: %p\n", big);
+
+// 	// Cleanup
+// 	kfree(p1);
+// 	kfree(p3);
+// 	kfree(p4);
+// 	kfree(str);
+// 	kfree(arr);
+// 	kfree(large);
+// 	kfree(big);
+
+// 	// Stats
+// 	kmalloc_stats();
+
+// 	printf("=== kmalloc tests complete ===\n");
+// }
+
 void kernel_main(BootInfo *bi)
 {
 	// heap_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
-	framebuffer_info_t *fb = bi->framebuffer;
 
-	for (int i = 0; i < fb->width * fb->height; i++)
-		((uint32_t *)fb->base)[i] = rgb(0, 0, 0);
-
-	init_font(fb);
+	init_font(bi->framebuffer);
 	libc_init();
 	putchar('\n');
 
@@ -70,19 +127,23 @@ void kernel_main(BootInfo *bi)
 	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
 
 	// 4. Теперь можно тестировать
-	vmm_test();
+	// vmm_test();
 
-	void *p1 = pmm_alloc(1);
-	printf("p1 = %p\n", p1);
+	printf("kmalloc init\n");
+	kmalloc_init();
 
-	void *p2 = pmm_alloc(1);
-	printf("p2 = %p\n", p2);
+	// test_kmalloc();
 
-	pmm_free(p1, 1);
-	pmm_free(p2, 1);
+	// void *p1 = kmalloc(100);
+	// void *p2 = kmalloc(200);
+	// void *p3 = kmalloc(500);
+	// printf("p1=%p, p2=%p, p3=%p\n", p1, p2, p3);
 
-	void *p3 = pmm_alloc(1);
-	printf("p3 = %p\n", p3);
+	// kfree(p2);
+	// void *p4 = kmalloc(200);
+	// printf("p4=%p (should reuse p2's space)\n", p4);
+
+	// kmalloc_stats();
 
 	// printf("GPT init\n");
 	// gpt_init(partitions);
@@ -95,8 +156,8 @@ void kernel_main(BootInfo *bi)
 	// printf("FAT32 mounted\n");
 	// printf("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
 	// VFS_File *f = vfs_open("/test.txt", VFS_O_CREAT | VFS_O_RDWR);
-	// vfs_write(f, "Hello, world!", 13);
-	// vfs_lseek(f, 0, SEEK_SET);
+	// // vfs_write(f, "Hello, world!", 13);
+	// // vfs_lseek(f, 0, SEEK_SET);
 	// Directory dir = vfs_readdir("/");
 	// for (int i = 0; i < dir.count; i++)
 	// {
@@ -111,7 +172,7 @@ void kernel_main(BootInfo *bi)
 	// 	printf("%c", buffer[i]);
 	// }
 
-	// printf("FAT32 init done\n");
+	// printf("\nFAT32 init done\n");
 
 	while (1)
 		;

@@ -247,9 +247,10 @@ void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_si
 		mapped += to_map;
 
 		if (mapped % (1024) == 0) // Progress every 4MB
-			printf("  Mapped %llu/%llu pages (%llu MB)\n",
-			       mapped, heap_pages,
-			       mapped * PAGE_SIZE / (1024 * 1024));
+			;
+		// printf("  Mapped %llu/%llu pages (%llu MB)\n",
+		//        mapped, heap_pages,
+		//        mapped * PAGE_SIZE / (1024 * 1024));
 	}
 
 	printf("Successfully mapped %llu pages (%llu MB)\n",
