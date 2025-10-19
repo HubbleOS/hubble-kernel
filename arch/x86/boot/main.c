@@ -117,7 +117,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	uefi_call_wrapper(BS->FreePool, 1, KernelFileInfo);
 
-	// === [4] Allocate kernel at fixed address (БЕЗ ИЗМЕНЕНИЙ) ===
+	// === [4] Allocate kernel at fixed address ===
 	EFI_PHYSICAL_ADDRESS kernel_addr = 0x100000;
 	UINTN kernel_pages = (kernel_size + 0xFFF) / 0x1000;
 
@@ -129,7 +129,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		return status;
 	}
 
-	// === [5] Read kernel (БЕЗ ИЗМЕНЕНИЙ) ===
+	// === [5] Read kernel ===
 	status = uefi_call_wrapper(KernelFile->Read, 3, KernelFile,
 				   &kernel_size, (void *)kernel_addr);
 	if (EFI_ERROR(status))
@@ -378,6 +378,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		ram_info->heap_start,
 		ram_info->heap_start + ram_info->heap_size,
 		ram_info->heap_size / (1024 * 1024));
+
+	PrintInfo(L"Jumping to kernel at 0x%lx\n", (UINT64)kernel_addr);
 
 	// === [11] Prepare BootInfo pointer ===
 	BootInfo boot_info;
