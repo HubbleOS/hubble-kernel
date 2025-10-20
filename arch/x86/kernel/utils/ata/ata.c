@@ -48,9 +48,9 @@ int ata_wait_drq(ATA_Device *dev)
 
 int ata_read_sector(void *device, uint32_t lba, void *buffer)
 {
-	printf("ata_read_sector %d\n", lba);
+	// printf("ata_read_sector %d\n", lba);
 	ATA_Device *dev = (ATA_Device *)device;
-	printf("bus: %d, device: %d, io_base: %d, ctrl_base: %d\n", dev->bus, dev->device, dev->io_base, dev->ctrl_base);
+	// printf("bus: %d, device: %d, io_base: %d, ctrl_base: %d\n", dev->bus, dev->device, dev->io_base, dev->ctrl_base);
 
 	uint16_t *buf = (uint16_t *)buffer;
 	// printf("ata_read_sector");
@@ -84,12 +84,12 @@ int ata_read_sector(void *device, uint32_t lba, void *buffer)
 int ata_write_sector(void *device, uint32_t lba, const void *buffer)
 {
 	ATA_Device *dev = (ATA_Device *)device;
-	printf("bus: %d, device: %d, io_base: %d, ctrl_base: %d\n", dev->bus, dev->device, dev->io_base, dev->ctrl_base);
+	// printf("bus: %d, device: %d, io_base: %d, ctrl_base: %d\n", dev->bus, dev->device, dev->io_base, dev->ctrl_base);
 	const uint16_t *buf = (const uint16_t *)buffer;
-	printf("\nata_write_sector %d", lba);
+	// printf("\nata_write_sector %d", lba);
 
-	for (int j = 0; j < 16; j++)
-		printf("%02X ", buf[j]);
+	// for (int j = 0; j < 16; j++)
+	// 	printf("%02X ", buf[j]);
 	if (((FAT32_DirectoryEntry *)(buf))->name[0] == 0x00)
 	{
 		printf("ata_write_sector: buffer is empty\n");

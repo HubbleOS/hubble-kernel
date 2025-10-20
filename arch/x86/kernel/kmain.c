@@ -78,76 +78,20 @@ void kernel_main(BootInfo *bi)
 	vfs_mount(&partitions[0], FS_FAT32);
 	printf("FAT32 mounted\n");
 	printf("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
+
 	VFS_File *f = vfs_open("/tesiit.txt", VFS_O_CREAT | VFS_O_RDWR);
-	// vfs_write(f, "Hello, world!", 13);
 	vfs_lseek(f, 0, SEEK_SET);
 	Directory dir = vfs_readdir("/");
+
 	for (int i = 0; i < dir.count; i++)
 	{
 		printf("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
 	}
+	dir.free_entries(&dir);
 
 	vfs_read(f, buffer, 1024);
-	printf("Read: \n");
-	for (int i = 0; i < 1024; i++)
-	{
-		printf("%c", buffer[i]);
-	}
-	printf("play\n");
-	play_bwvid("/output.bwv", bi->framebuffer->width, bi->framebuffer->bpp);
 
 	printf("FAT32 init done\n");
-
-	print_memory_status();
-
-	void *p1 = malloc(1000); // 0x1813cf4
-	printf("p1 = %p\n", p1);
-
-	print_memory_status();
-
-	void *p2 = malloc(9000); // 0x1819cf4
-	printf("p2 = %p\n", p2);
-
-	print_memory_status();
-
-	free(p2);
-	printf("p2 freed\n");
-
-	print_memory_status();
-
-	void *p3 = malloc(4096);
-	printf("p3 = %p\n", p3);
-
-	free(p3);
-	printf("p3 freed\n");
-
-	print_memory_status();
-
-	void *p4 = malloc(1);
-	printf("p4 = %p\n", p4);
-
-	void *p5 = malloc(1);
-	printf("p5 = %p\n", p5);
-
-	print_memory_status();
-
-	void *arr[10];
-
-	for (int i = 0; i < 10; i++)
-	{
-		arr[i] = malloc(4098);
-		printf("arr[%d] = %p\n", i, arr[i]);
-	}
-
-	print_memory_status();
-
-	for (int i = 0; i < 10; i++)
-	{
-		free(arr[i]);
-		printf("arr[%d] freed\n", i);
-	}
-
-	print_memory_status();
 
 	while (1)
 	{

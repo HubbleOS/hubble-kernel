@@ -80,7 +80,7 @@ static bool fat32_unlink_wrapper(VFS_FS *fs, const char *path)
 {
 	return fat32_delete(((FAT32_FS *)(fs - fs)), path);
 }
-static Directory fat32_readdir_wrapper(VFS_FS *fs, const char *path)
+static Directory fat32_readdir_wrapper(VFS_FS *fs, const char path)
 {
 	return fat32_list_files_from_path((FAT32_FS *)(fs->fs), path);
 }

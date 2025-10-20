@@ -1,5 +1,8 @@
 #pragma once
 #include <stdint.h>
+#include <stdbool.h>
+
+typedef struct Directory Directory;
 
 typedef struct
 {
@@ -7,11 +10,13 @@ typedef struct
 	char *name;
 	bool is_dir;
 } Entry;
-typedef struct
+
+struct Directory
 {
 	Entry *entries;
 	int count;
-} Directory;
+	bool (*free_entries)(Directory *ctx);
+};
 
 typedef enum
 {
