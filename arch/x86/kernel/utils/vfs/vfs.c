@@ -114,7 +114,7 @@ VFS_File *vfs_open(const char *path, int flags)
 	f->node = node;
 	f->flags = flags;
 	f->pos = (flags & VFS_O_APPEND) ? node->size : 0;
-
+	printf("VFS: file opened %s\n", path);
 	return f;
 }
 
@@ -151,8 +151,10 @@ bool vfs_mkdir(const char *path)
 }
 Directory vfs_readdir(const char *path)
 {
+
 	if (!root_fs || !root_fs->readdir)
 		return (Directory){0};
+	printf("VFS: reading directory %s\n", path);
 	return root_fs->readdir(root_fs, path);
 }
 

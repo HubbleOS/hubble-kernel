@@ -30,3 +30,4 @@ bool is_empty_dir(FAT32_DirectoryEntry *entry);
 int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir);
 int fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name);
 void fat32_format_directory_cluster(FAT32_FS *fs, uint32_t cluster, uint32_t parent_cluster);
+Directory Directory_init(Directory dir);
