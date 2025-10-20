@@ -33,7 +33,7 @@ ifeq ($(IS_WSL),Microsoft)
   $(warning https://docs.docker.com/docker-for-windows/wsl/)
 endif
 
-SUPPORTED_ARCHES := x86 arm64
+SUPPORTED_ARCHES := x86 x86_64 arm64
 ifneq ($(ARCH),$(filter $(ARCH),$(SUPPORTED_ARCHES)))
   $(error Unsupported architecture: $(ARCH). Supported architectures are: $(SUPPORTED_ARCHES))
 endif
@@ -42,7 +42,9 @@ endif
 ifeq ($(ARCH),x86)
 	CROSS = x86_64-elf-
 endif
-
+ifeq ($(ARCH), x86_64)
+	CROSS = x86_64-elf-
+endif
 ifeq ($(ARCH),arm64)
 	CROSS = aarch64-elf-
 endif
@@ -161,7 +163,7 @@ run: build
 PHONY += host-run
 host-run:
 	@echo "🖥  Launching QEMU from host..."
-	$(MAKE) -C tools/dev-tool/qemu run ISO=../../../out/x86/iso/ ARCH=x86_64 MEM=256;
+	$(MAKE) -C tools/dev-tool/qemu run ISO=$(ISO_DIR) ARCH=x86_64 MEM=256;
 
 ###########################################################################
 
