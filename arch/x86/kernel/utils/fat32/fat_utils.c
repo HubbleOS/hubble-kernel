@@ -407,17 +407,6 @@ void fat32_write_cluster(FAT32_FS *fs, uint32_t cluster, uint8_t *buffer)
 	printf("Wrote cluster %d\n", cluster);
 }
 
-// uint32_t get_next_cluster(FAT32_FS *fs, uint32_t cluster)
-// {
-//     return ((uint32_t *)(fs->fat_cache))[cluster] & 0x0FFFFFFF;
-// }
-
-// void set_next_cluster(FAT32_FS *fs, uint32_t cluster, uint32_t value)
-// {
-//     ((uint32_t *)(fs->fat_cache))[cluster] = value & 0x0FFFFFFF;
-//     fs->fat_dirty = true;
-// }
-
 bool fat_flush(FAT32_FS *fs)
 {
 	if (!fs->fat_dirty || !fs->fat_cache)
@@ -613,4 +602,27 @@ int fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name)
 	}
 	free(buf);
 	return -ENOENT;
+}
+
+bool free_entries(Directory *dir)
+{
+	if (!dir || !dir->entries)
+		return false;
+
+	for (int i = 0; i < dir->count; i++)
+	{
+		free(dir->entries[i].name);
+	}
+
+	free(dir->entries);
+	dir->entries = NULL;
+	dir->count = 0;
+
+	return true;
+}
+
+Directory Directory_init(Directory dir)
+{
+	dir.free_entries = free_entries;
+	return dir;
 }
