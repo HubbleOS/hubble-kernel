@@ -81,7 +81,7 @@ VFS_File *vfs_open(const char *path, int flags)
 			return ERR_PTR(-EEXIST); // існує, а ми хочемо створити з EXCL
 		}
 	}
-
+	printf("VFS: file opened %s\n", path);
 	// --- перевірка режимів ---
 	int access_mode = flags & 0x03; // беремо тільки нижні біти
 	switch (access_mode)
@@ -121,9 +121,13 @@ VFS_File *vfs_open(const char *path, int flags)
 int vfs_read(VFS_File *file, void *buf, uint32_t size)
 {
 	if (!file || !file->node->fs || !file->node->fs->read)
+	{
+		printf("VFS: read error\n");
 		return -EIO;
+	}
 	if (file->pos >= file->node->size)
 	{
+		printf("VFS: EOF\n");
 		return -0;
 	}
 	return file->node->fs->read(file, buf, size);
