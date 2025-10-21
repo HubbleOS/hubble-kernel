@@ -110,34 +110,62 @@ bool fat32_unmount(FAT32_FS *fs)
 }
 FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 {
+	printf("Opening file: %s\n", path);
 	uint32_t cluster = resolve_path_to_cluster(fs, path);
+	if (cluster == 0)
+		return NULL;
+
 	PathParts parts = format_folder_path(path);
+
 	uint8_t *buf = malloc(fs->cluster_size);
 	if (!buf)
+		return NULL;
+
+	fat32_read_cluster(fs, cluster, buf);
+	if (!buf)
 	{
-		printf("Failed to allocate buffer\n");
+		free(buf);
 		return NULL;
 	}
-	fat32_read_cluster(fs, cluster, buf);
+
 	for (int i = 0; i < fs->cluster_size / sizeof(FAT32_DirectoryEntry); i++)
 	{
 		FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)(buf + i * sizeof(FAT32_DirectoryEntry));
+
 		if (entry->name[0] == 0x00 || entry->name[0] == 0xE5)
 			continue;
+
 		if (memcmp(entry->name, parts.parts[parts.count - 1].sfn, 11) == 0)
 		{
-			printf("Found entry: %s\n", parts.parts[parts.count - 1].lfn);
-			FAT32_File *file = malloc(sizeof(VFS_File));
-			file->entry = entry;
+			FAT32_File *file = malloc(sizeof(FAT32_File));
+			if (!file)
+			{
+				free(buf);
+				return NULL;
+			}
+
+			file->entry = malloc(sizeof(FAT32_DirectoryEntry));
+			if (!file->entry)
+			{
+				free(buf);
+				free(file);
+				return NULL;
+			}
+
+			*(file->entry) = *entry; // копіюємо структуру
 			file->cluster = cluster;
 			file->index = i;
+
 			free(buf);
 			return file;
 		}
 	}
+
 	free(buf);
+	printf("File not found\n");
 	return NULL;
 }
+
 int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 {
 	FAT32_File *fat_file = file->node->fs_node;
@@ -204,25 +232,24 @@ int fat32_write(VFS_File *file, const uint8_t *buffer, uint32_t size)
 	FAT32_DirectoryEntry *entry = fat_file->entry;
 	FAT32_FS *fs = (FAT32_FS *)file->node->fs->fs;
 
-	// 	printf("fat file: %p\n", fat_file);
-	// 	printf("entry: %p\n", entry);
-	// 	printf("cluster: %d\n", fat_file->cluster);
-	// printf("index: %d\n", fat_file->index);
-
 	uint32_t cluster = (entry->first_cluster_high << 16) | entry->first_cluster_low;
 
 	if (cluster == 0)
 	{
-		// файл порожній, треба виділити перший кластер
 		cluster = fat32_allocate_cluster(fs);
 		if (cluster == 0)
 		{
 			printf("No space for new file\n");
 			return -1;
 		}
+		printf("New cluster: %d\n", cluster);
 		entry->first_cluster_low = cluster & 0xFFFF;
 		entry->first_cluster_high = (cluster >> 16) & 0xFFFF;
 	}
+	// printf("entry :");
+	// for (int i = 0; i < 256; i++)
+	// 	printf("%c", entry[i]);
+	// printf("\n");
 
 	size_t buf_offset = 0;
 	size_t remaining = size;
@@ -230,12 +257,23 @@ int fat32_write(VFS_File *file, const uint8_t *buffer, uint32_t size)
 	while (remaining > 0 && cluster < 0x0FFFFFF8)
 	{
 		uint8_t *cluster_buf = malloc(fs->cluster_size);
-		fat32_read_cluster(fs, cluster, cluster_buf);
-		size_t cluster_offset = (file->pos / fs->cluster_size);
-		size_t space_in_cluster = fs->cluster_size - cluster_offset;
+		if (!cluster_buf)
+			return -1;
+
+		// визначаємо позицію в кластері
+		size_t in_cluster_offset = file->pos % fs->cluster_size;
+		size_t space_in_cluster = fs->cluster_size - in_cluster_offset;
 		size_t to_write = (remaining < space_in_cluster) ? remaining : space_in_cluster;
 
-		memcpy(cluster_buf + cluster_offset, buffer + buf_offset, to_write);
+		// читаємо старі дані, якщо не перезаписуємо весь кластер
+		if (to_write < fs->cluster_size)
+		{
+			fat32_read_cluster(fs, cluster, cluster_buf);
+		}
+		else
+			memset(cluster_buf, 0, fs->cluster_size);
+
+		memcpy(cluster_buf + in_cluster_offset, buffer + buf_offset, to_write);
 		fat32_write_cluster(fs, cluster, cluster_buf);
 
 		free(cluster_buf);
@@ -254,18 +292,20 @@ int fat32_write(VFS_File *file, const uint8_t *buffer, uint32_t size)
 				{
 					printf("No space during write\n");
 					fat_flush(fs);
-					return buf_offset; // скільки реально записали
+					return buf_offset;
 				}
 				set_fat_entry(fs, cluster, next);
 			}
 			cluster = next;
 		}
 	}
-	// Оновлюємо розмір файлу
+
+	// оновлюємо розмір
 	if (file->pos > entry->file_size)
 	{
 		entry->file_size = file->pos;
 	}
+
 	file->node->size = entry->file_size;
 	fat32_update_fat_entry(fs, fat_file);
 	fat_flush(fs);
@@ -372,11 +412,21 @@ int fat32_update_fat_entry(FAT32_FS *fs, FAT32_File *file)
 		return -1;
 
 	fat32_read_cluster(fs, file->cluster, buf);
-
+	// printf("old data: ");
+	// for (int i = 0; i < 256; i++)
+	// 	printf("%c", buf[i]);
+	// printf("\n");
 	FAT32_DirectoryEntry *entries = (FAT32_DirectoryEntry *)buf;
+	// printf("entry :");
+	// for (int i = 0; i < 256; i++)
+	// 	printf("%c", file->entry[i]);
+	// printf("\n");
 
 	memcpy(&entries[file->index], file->entry, sizeof(FAT32_DirectoryEntry));
-
+	// printf("new data: ");
+	// for (int i = 0; i < 256; i++)
+	// 	printf("%c", buf[i]);
+	// printf("\n");
 	fat32_write_cluster(fs, file->cluster, buf);
 	free(buf);
 	return 0;
@@ -394,7 +444,7 @@ void fat32_read_cluster(FAT32_FS *fs, uint32_t cluster, uint8_t *buffer)
 
 void fat32_write_cluster(FAT32_FS *fs, uint32_t cluster, uint8_t *buffer)
 {
-	for (int i = 0; i < 20; i++)
+	for (int i = 0; i < 256; i++)
 	{
 		printf("%c", buffer[i]);
 	}
@@ -404,7 +454,7 @@ void fat32_write_cluster(FAT32_FS *fs, uint32_t cluster, uint8_t *buffer)
 		fs->write_sector(fs->device, lba + i, buffer + i * fs->bytes_per_sector);
 	}
 
-	printf("Wrote cluster %d\n", cluster);
+	printf("\nWrote cluster %d\n", cluster);
 }
 
 bool fat_flush(FAT32_FS *fs)
@@ -516,6 +566,7 @@ void free_folder_path(PathParts *pp)
 }
 int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir)
 {
+
 	printf("sfn: %s\n", pp->sfn);
 	if (cluster == 0)
 	{
@@ -534,6 +585,10 @@ int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir
 		return -ENOMEM;
 	}
 	fat32_read_cluster(fs, cluster, buf);
+	printf("Cluster data: ");
+	for (int i = 0; i < 256; i++)
+		printf("%c", buf[i]);
+	printf("\n\n");
 
 	FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)buf;
 	for (int i = 0; i < fs->cluster_size / sizeof(FAT32_DirectoryEntry); i++, entry++)

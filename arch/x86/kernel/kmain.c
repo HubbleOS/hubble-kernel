@@ -79,8 +79,6 @@ void kernel_main(BootInfo *bi)
 	printf("FAT32 mounted\n");
 	printf("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
 
-	VFS_File *f = vfs_open("/tesiit.txt", VFS_O_CREAT | VFS_O_RDWR);
-	vfs_lseek(f, 0, SEEK_SET);
 	Directory dir = vfs_readdir("/");
 
 	for (int i = 0; i < dir.count; i++)
@@ -88,8 +86,20 @@ void kernel_main(BootInfo *bi)
 		printf("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
 	}
 	dir.free_entries(&dir);
-
+	VFS_File *f = vfs_open("/tesit.txt", VFS_O_CREAT | VFS_O_RDWR);
+	vfs_write(f, "Hello wo123", 11);
+	vfs_lseek(f, 0, SEEK_SET);
+	printf("Reading file: ");
 	vfs_read(f, buffer, 1024);
+	printf("File content: ");
+	for (int i = 0; i < 1024; i++)
+	{
+		if (buffer[i] == '\0')
+			break;
+		printf("%c", buffer[i]);
+	}
+
+	// play_bwvid("/output.bwv", bi->framebuffer->width, bi->framebuffer->bpp);
 
 	printf("FAT32 init done\n");
 

@@ -91,15 +91,17 @@ void set_fat_entry(FAT32_FS *fs, uint32_t cluster, uint32_t value)
 		fs->fat_dirty = true;
 		return;
 	}
+	// printf("Setting FAT entry %u to %u\n", cluster, value);
+	//  fallback: sector read/modify/write
 	uint32_t fat_offset = cluster * 4;
 	uint32_t fat_sector = fs->fat_start_lba + (fat_offset / fs->bytes_per_sector);
 	uint8_t sector[512];
+	// ata_read_sector(fs, fat_sector, sector);
 	fat32_read_cluster(fs, cluster, sector);
-	// uint32_t offset = fat_offset % fs->bytes_per_sector;
-	// *((uint32_t *)(sector + offset)) = value;
-	// fs->write_sector(fs->device, fat_sector, sector);
-
-	fat32_write_cluster(fs, cluster, sector);
+	uint32_t offset = fat_offset % fs->bytes_per_sector;
+	*((uint32_t *)(sector + offset)) = value;
+	// ata_write_sector(fs, fat_sector, sector);
+	fs->write_sector(fs->device, fat_sector, sector);
 }
 
 void fat32_free_cluster(FAT32_FS *fs, uint32_t cluster)
@@ -122,12 +124,12 @@ uint32_t fat32_allocate_cluster(FAT32_FS *fs)
 		{
 			if (i == fs->root_cluster) // root
 				continue;
-			printf("Checking FAT entry %d\n", i);
+			// printf("Checking FAT entry %d\n", i);
 			if (get_fat_entry(fs, i) == 0x00000000)
 			{
-				printf("Found free FAT entry %d\n", i);
+				// printf("Found free FAT entry %d\n", i);
 				set_fat_entry(fs, i, 0x0FFFFFFF);
-				printf("Allocated FAT entry %d\n", i);
+				// printf("Allocated FAT entry %d\n", i);
 				return i;
 			}
 		}
