@@ -23,8 +23,14 @@ static void fat32_unmount_wrapper(VFS_FS *fs)
 static VFS_Node *fat32_open_wrapper(VFS_FS *fs, const char *path)
 {
 	FAT32_File *file = fat32_open(fs->fs, path);
+	printf("\nEntry open here!!: ");
+	// for (int i = 0; i < sizeof(FAT32_DirectoryEntry); i++)
+	// {
+	// 	printf("%c", file->entry[i]);
+	// }
 	if (!file)
 	{
+		printf("\nFailed to open file\n");
 		return NULL;
 	}
 
@@ -52,7 +58,7 @@ static VFS_Node *fat32_open_wrapper(VFS_FS *fs, const char *path)
 	{
 		node->mode |= MODE_READ | MODE_WRITE;
 	}
-
+	printf("Entry open: %s\n", node->name);
 	return node;
 }
 
@@ -80,7 +86,7 @@ static bool fat32_unlink_wrapper(VFS_FS *fs, const char *path)
 {
 	return fat32_delete(((FAT32_FS *)(fs - fs)), path);
 }
-static Directory fat32_readdir_wrapper(VFS_FS *fs, const char path)
+static Directory fat32_readdir_wrapper(VFS_FS *fs, const char *path)
 {
 	return fat32_list_files_from_path((FAT32_FS *)(fs->fs), path);
 }

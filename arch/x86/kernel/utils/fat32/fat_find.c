@@ -28,7 +28,7 @@ uint32_t resolve_path_to_cluster(FAT32_FS *fs, const char *path)
 
 uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const char *name11)
 {
-	// printf("find_directory_entry_cluster: %s\n", name11);
+	printf("find_directory_entry_cluster: %s\n", name11);
 	uint8_t *buffer = malloc(fs->cluster_size);
 	int steps = 0;
 	while (dir_cluster < 0x0FFFFFF8 && steps++ < MAX_CLUSTER_CHAIN)
@@ -46,7 +46,7 @@ uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const 
 			if (memcmp(entry->name, name11, 11) == 0)
 			{
 				free(buffer);
-				// printf("entry cluster: high = %d, low = %d\n", entry->first_cluster_high, entry->first_cluster_low);
+				printf("entry cluster: high = %d, low = %d\n", entry->first_cluster_high, entry->first_cluster_low);
 
 				return (entry->first_cluster_high << 16) | entry->first_cluster_low;
 			}
