@@ -1,19 +1,6 @@
 #include "utils/font.h"
 #include "utils/framebuffer.h"
 
-int cursor_x = 0;
-int cursor_y = 0;
-framebuffer_info_t *g_fb = 0;
-color font_color = COLOR_WHITE;
-
-void init_font(framebuffer_info_t *fb)
-{
-	g_fb = fb;
-	cursor_x = 0;
-	cursor_y = 0;
-	font_color = rgb(255, 255, 255);
-}
-
 const uint8_t *get_glyph(char c)
 {
 	if ((unsigned char)c >= 128)
@@ -51,14 +38,14 @@ static color blend_colors(color src, color dst)
 	return make_color(a, r, g, b);
 }
 
-void draw_pixel_array_scaled(uint8_t *glyph, int pitch, framebuffer_info_t *fb,
-			     int x, int y, int scale_x, int scale_y)
+static void draw_pixel_array_scaled(uint8_t *glyph, int pitch, framebuffer_info_t *fb,
+				    int x, int y, int w, int h, int scale_x, int scale_y, color font_color)
 {
-	for (int row = 0; row < CHAR_HEIGHT; ++row)
+	for (int row = 0; row < h; ++row)
 	{
 		uint8_t line = glyph[row];
 
-		for (int col = 0; col < CHAR_WIDTH; ++col)
+		for (int col = 0; col < w; ++col)
 		{
 			if (line & (0x80 >> col))
 				for (int dy = 0; dy < scale_y; ++dy)
@@ -79,7 +66,7 @@ void draw_pixel_array_scaled(uint8_t *glyph, int pitch, framebuffer_info_t *fb,
 	}
 }
 
-void draw_char(framebuffer_info_t *fb, char c, int x, int y)
+void draw_char(framebuffer_info_t *fb, char c, int x, int y, int w, int h, color font_color)
 {
 	uint8_t *glyph = (uint8_t *)get_glyph(c); // Отримуємо гліф символу
 	if (glyph == 0)
@@ -87,18 +74,17 @@ void draw_char(framebuffer_info_t *fb, char c, int x, int y)
 
 	int pitch = fb->pitch / 4; // Вираховуємо ширину рядка в пікселях (з
 				   // урахуванням 32 біт на піксель)
-	draw_pixel_array_scaled(glyph, pitch, fb, x, y, 1, 1);
+	draw_pixel_array_scaled(glyph, pitch, fb, x, y, w, h, 1, 1, font_color);
 }
 
 // crutch
-void clear_char_area(framebuffer_info_t *fb, int x, int y)
+void clear_char_area(framebuffer_info_t *fb, int x, int y, int w, int h, color bg_color)
 {
 	int pitch = fb->pitch / 4;
-	color bg_color = rgb(0, 0, 0);
 
-	for (int row = 0; row < CHAR_HEIGHT; ++row)
+	for (int row = 0; row < h; ++row)
 	{
-		for (int col = 0; col < CHAR_WIDTH; ++col)
+		for (int col = 0; col < w; ++col)
 		{
 			unsigned int px = x + col;
 			unsigned int py = y + row;

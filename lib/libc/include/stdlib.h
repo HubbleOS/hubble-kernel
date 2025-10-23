@@ -18,8 +18,7 @@ int atoi(const char *);
 
 // void *calloc(size_t nmemb, size_t size);
 void *malloc(size_t);
-// void *realloc(void *ptr, size_t size);
-// void free(void *ptr);
+void *realloc(void *ptr, size_t size);
 void free(void *);
 // void *aligned_alloc(size_t, size_t);
 

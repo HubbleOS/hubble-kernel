@@ -9,7 +9,7 @@
 #include "utils/vfs/vfs.h"
 
 #include <mm/pmm.h>
-#include <mm/heap.h>
+#include <mm/mm.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -42,76 +42,14 @@ static gpt_partition_t partitions[20] =
 	},
 };
 
-extern void os_main(framebuffer_info_t *fb);
+extern void os_main(BootInfo *bi);
 extern void libc_init(void);
 extern VFS_FS *root_fs;
-
-#include <mm/kmalloc.h>
-
-// ========== TEST ==========
-// void test_kmalloc(void)
-// {
-// 	printf("\n=== Testing kmalloc ===\n");
-
-// 	// Test 1: Simple allocation
-// 	printf("\nTest 1: Simple allocation\n");
-// 	void *p1 = kmalloc(100);
-// 	void *p2 = kmalloc(200);
-// 	void *p3 = kmalloc(500);
-// 	printf("p1=%p, p2=%p, p3=%p\n", p1, p2, p3);
-
-// 	// Test 2: Write and read
-// 	printf("\nTest 2: Write and read\n");
-// 	char *str = (char *)kmalloc(50);
-// 	strcpy(str, "Hello, kernel!");
-// 	printf("String: %s\n", str);
-
-// 	// Test 3: Free and realloc
-// 	printf("\nTest 3: Free and realloc\n");
-// 	kfree(p2);
-// 	void *p4 = kmalloc(200);
-// 	printf("p4=%p (should reuse p2's space)\n", p4);
-
-// 	// Test 4: Zero allocation
-// 	printf("\nTest 4: Zero allocation\n");
-// 	int *arr = (int *)kzalloc(10 * sizeof(int));
-// 	printf("Array: ");
-// 	for (int i = 0; i < 10; i++)
-// 		printf("%d ", arr[i]);
-// 	printf("\n");
-
-// 	// Test 5: Realloc
-// 	printf("\nTest 5: Realloc\n");
-// 	char *small = (char *)kmalloc(10);
-// 	strcpy(small, "Small");
-// 	char *large = (char *)krealloc(small, 100);
-// 	printf("After realloc: %s\n", large);
-
-// 	// Test 6: Large allocation
-// 	printf("\nTest 6: Large allocation\n");
-// 	void *big = kmalloc(1024 * 1024); // 1MB
-// 	printf("Big allocation: %p\n", big);
-
-// 	// Cleanup
-// 	kfree(p1);
-// 	kfree(p3);
-// 	kfree(p4);
-// 	kfree(str);
-// 	kfree(arr);
-// 	kfree(large);
-// 	kfree(big);
-
-// 	// Stats
-// 	kmalloc_stats();
-
-// 	printf("=== kmalloc tests complete ===\n");
-// }
 
 void kernel_main(BootInfo *bi)
 {
 	// heap_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
 
-	init_font(bi->framebuffer);
 	libc_init();
 	putchar('\n');
 
@@ -125,9 +63,6 @@ void kernel_main(BootInfo *bi)
 
 	// 3. ТОЛЬКО после mapping heap можно инициализировать PMM
 	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
-
-	// 4. Теперь можно тестировать
-	// vmm_test();
 
 	printf("kmalloc init\n");
 	kmalloc_init();
@@ -173,6 +108,8 @@ void kernel_main(BootInfo *bi)
 	// }
 
 	// printf("\nFAT32 init done\n");
+
+	os_main(bi);
 
 	while (1)
 		;
