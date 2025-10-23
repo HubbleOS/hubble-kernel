@@ -5,60 +5,20 @@
 
 #include "utils/font.h"
 
-extern framebuffer_info_t *g_fb;
-extern int cursor_x, cursor_y;
-
-void backspace(void)
-{
-	if (cursor_x >= CHAR_WIDTH)
-	{
-		cursor_x -= CHAR_WIDTH;
-	}
-	else if (cursor_y >= CHAR_HEIGHT)
-	{
-		cursor_y -= CHAR_HEIGHT;
-		cursor_x = g_fb->width - CHAR_WIDTH;
-	}
-	else
-	{
-		return;
-	}
-
-	// draw_char(g_fb, ' ', cursor_x, cursor_y);
-	clear_char_area(g_fb, cursor_x, cursor_y);
-}
+#include <sys/output_device.h>
 
 long sys_write(int fd, const char *buffer, size_t len)
 {
-	if (fd != 1) // stdout
+	if (fd != 1) // only stdout
 		return -1;
 
-	if (!g_fb)
+	if (!buffer)
 		return -1;
 
-	for (size_t i = 0; i < len; i++)
-	{
-		char c = buffer[i];
-		if (c == '\n')
-		{
-			cursor_x = 0;
-			cursor_y += CHAR_HEIGHT;
-			continue;
-		}
-		if (c == '\b')
-		{
-			backspace();
-			continue;
-		}
+	output_device_t *dev = get_stdout_device();
+	if (!dev || !dev->write)
+		return -1;
 
-		draw_char(g_fb, c, cursor_x, cursor_y);
-		cursor_x += CHAR_WIDTH;
-
-		if ((unsigned int)cursor_x + CHAR_WIDTH > g_fb->width)
-		{
-			cursor_x = 0;
-			cursor_y += CHAR_HEIGHT;
-		}
-	}
+	dev->write(buffer, len, dev->user_data);
 	return len;
 }

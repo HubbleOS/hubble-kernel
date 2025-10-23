@@ -7,7 +7,7 @@
 
 // Конфигурация
 #define MIN_BLOCK_SIZE 32 // Минимальный размер блока (2^5)
-#define MIN_ORDER 5	  // log2(32)
+#define MIN_ORDER 5		  // log2(32)
 #define MAX_ORDER 20	  // 2^20 * 1 byte = 1MB max block
 #define NUM_ORDERS (MAX_ORDER - MIN_ORDER + 1)
 
@@ -20,9 +20,9 @@ static uint64_t heap_used = 0;
 typedef struct block_header
 {
 	struct block_header *next; // Следующий блок в free list
-	uint32_t order;		   // Порядок блока (log2 размера)
-	uint32_t magic;		   // Магическое число для проверки
-	uint8_t free;		   // 1 = свободен, 0 = занят
+	uint32_t order;			   // Порядок блока (log2 размера)
+	uint32_t magic;			   // Магическое число для проверки
+	uint8_t free;			   // 1 = свободен, 0 = занят
 	uint8_t padding[3];
 } __attribute__((packed)) block_header_t;
 
@@ -252,7 +252,7 @@ void kmalloc_init(void)
 	heap_size = initial_heap_size;
 
 	printf("Heap region: 0x%llx - 0x%llx (%llu MB)\n",
-	       heap_start, heap_start + heap_size, heap_size / (1024 * 1024));
+		   heap_start, heap_start + heap_size, heap_size / (1024 * 1024));
 
 	// Инициализируем free lists
 	for (int i = 0; i < NUM_ORDERS; i++)
@@ -295,7 +295,7 @@ void kmalloc_init(void)
 	}
 
 	printf("kmalloc initialized with %d orders (%d - %d bytes)\n",
-	       NUM_ORDERS, 1 << MIN_ORDER, 1 << MAX_ORDER);
+		   NUM_ORDERS, 1 << MIN_ORDER, 1 << MAX_ORDER);
 }
 
 void *kmalloc(size_t size)
@@ -310,7 +310,7 @@ void *kmalloc(size_t size)
 	if (order > MAX_ORDER)
 	{
 		printf("kmalloc: size %llu too large (max %llu)\n",
-		       size, (1ULL << MAX_ORDER) - HEADER_SIZE);
+			   size, (1ULL << MAX_ORDER) - HEADER_SIZE);
 		stats.failed_allocs++;
 		return NULL;
 	}
@@ -450,8 +450,8 @@ void kmalloc_stats(void)
 	printf("Heap region: 0x%llx - 0x%llx\n", heap_start, heap_start + heap_size);
 	printf("Total size: %llu KB\n", heap_size / 1024);
 	printf("Used: %llu KB (%llu%%)\n",
-	       heap_used / 1024,
-	       heap_size > 0 ? (heap_used * 100 / heap_size) : 0);
+		   heap_used / 1024,
+		   heap_size > 0 ? (heap_used * 100 / heap_size) : 0);
 	printf("Free: %llu KB\n", (heap_size - heap_used) / 1024);
 	printf("\nOperations:\n");
 	printf("  Total allocs: %llu\n", stats.total_allocs);
@@ -477,15 +477,16 @@ void kmalloc_stats(void)
 		if (count > 0)
 		{
 			printf("  Order %2d (%6llu bytes): %d blocks\n",
-			       order, order_to_size(order), count);
+				   order, order_to_size(order), count);
 		}
 	}
 	printf("==========================\n\n");
 }
 
-#include <mm/heap.h>
+#include <mm/mm.h>
 
 memory_ops_t heap_memory_ops = {
-    .malloc = kmalloc,
-    .free = kfree,
+	.malloc = kmalloc,
+	.realloc = krealloc,
+	.free = kfree,
 };

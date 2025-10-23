@@ -3,17 +3,17 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// Инициализация heap
+// Initialization heap
 void kmalloc_init(void);
 
-// Основные функции
+// Basic functions
 void *kmalloc(size_t size);
-void *kzalloc(size_t size); // Обнулённый
+void *kzalloc(size_t size); // Zeroed
 void kfree(void *ptr);
 void *krealloc(void *ptr, size_t new_size);
 
 // Aligned allocation
 void *kmalloc_aligned(size_t size, size_t alignment);
 
-// Статистика
+// Statistics
 void kmalloc_stats(void);
