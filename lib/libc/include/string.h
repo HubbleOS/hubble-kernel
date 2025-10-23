@@ -20,6 +20,7 @@ char *strcpy(char *, const char *);
 char *strncpy(char *, const char *, size_t);
 char *strcat(char *, const char *);
 char *strncat(char *, const char *, size_t);
+char *strdup(const char *);
 // ###########################################################################
 size_t strxfrm(char *, const char *, size_t);
 // ###########################################################################

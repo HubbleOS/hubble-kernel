@@ -64,7 +64,7 @@ HOST_AR = ar
 HOST_OBJCOPY = objcopy
 
 CFLAGS = -MMD -MP -ffreestanding -m64 -O2 -Wall -Wextra -c
-CXXFLAGS = -MMD -MP -ffreestanding -m64 -O2 -Wall -Wextra -c
+CXXFLAGS = -MMD -MP -ffreestanding -fno-exceptions -fno-rtti -m64 -O2 -Wall -Wextra -c
 LDFLAGS = -nostdlib -T
 OBJCPYFLAGS = binary
 
