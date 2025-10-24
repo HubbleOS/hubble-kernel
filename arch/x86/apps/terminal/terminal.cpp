@@ -716,7 +716,7 @@ void Terminal::run()
 			framebuffer_info_t *fb = VideoPlayer.getScreen()->getFramebuffer();
 
 			printf("%d %d", VideoPlayer.getX(), VideoPlayer.getY());
-			play_bwvid(fb, "/output.bwv", fb->width, fb->bpp, VideoPlayer.getX(), VideoPlayer.getY());
+			play_bwvid(fb, "/output.bwv", VideoPlayer.getX(), VideoPlayer.getY());
 		}
 		else if (strcmp(argv[0], "help") == 0)
 		{
