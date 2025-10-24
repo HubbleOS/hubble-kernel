@@ -12,7 +12,9 @@
 #include <fs/nvme/nvme.h>
 #include <fs/pci/pci.h>
 
+#include <mm/kmalloc.h>
 #include <mm/pmm.h>
+#include <mm/vmm.h>
 #include <mm/mm.h>
 
 #include <stdlib.h>
@@ -110,8 +112,6 @@ void kernel_main(BootInfo *bi)
 			break;
 		printf("%c", buffer[i]);
 	}
-
-	play_bwvid("/output.bwv", bi->framebuffer->width, bi->framebuffer->bpp);
 
 	printf("FAT32 init done\n");
 
