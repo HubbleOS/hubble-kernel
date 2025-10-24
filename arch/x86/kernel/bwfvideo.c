@@ -23,27 +23,23 @@ void sleep_ms(uint32_t ms)
 }
 
 // --- твоя функція малювання ---
-static inline void putpixel(int x, int y, uint32_t color,
+static inline void putpixel(framebuffer_info_t *bi, int x, int y, uint32_t color,
 			    uint32_t fb_pitch, uint32_t bpp)
 {
-	uint8_t *ptr = boot_info.framebuffer->base + y * fb_pitch + x * (bpp / 8);
+	uint8_t *ptr = bi->base + y * fb_pitch + x * (bpp / 8);
 	*(uint32_t *)ptr = color;
 }
 
 // --- відмалювання одного кадру ---
-void draw_frame(uint8_t *data, uint32_t pitch, uint32_t bpp)
-
+void draw_frame(framebuffer_info_t *bi, uint8_t *data, int x_start, int y_start)
 {
 	struct BWFrameHeader *hdr = (struct BWFrameHeader *)data;
 	uint8_t *pixels = data + sizeof(struct BWFrameHeader);
 
 	int w = hdr->width;
 	int h = hdr->height;
+	int row_bytes = (w + 7) / 8;
 
-	uint32_t fb_pitch = boot_info.framebuffer->pitch;
-	bpp = boot_info.framebuffer->bpp;
-
-	int row_bytes = (w + 7) / 8; // кількість байтів на рядок у кадрі
 	for (int y = 0; y < h; y++)
 	{
 		for (int x = 0; x < w; x++)
@@ -51,15 +47,18 @@ void draw_frame(uint8_t *data, uint32_t pitch, uint32_t bpp)
 			int byte_index = y * row_bytes + x / 8;
 			int bit_index = 7 - (x % 8);
 			int bit = (pixels[byte_index] >> bit_index) & 1;
-			uint32_t color = bit ? 0xFFFFFFFF : 0x00000000; // білий / чорний
+			uint32_t color = bit ? 0xFFFFFFFF : 0x00000000;
 
-			putpixel(x, y, color, fb_pitch, bpp);
+			int px = x_start + x;
+			int py = y_start + y;
+			if (px >= 0 && px < bi->width && py >= 0 && py < bi->height)
+				putpixel(bi, px, py, color, bi->pitch, bi->bpp);
 		}
 	}
 }
 
 // --- програвач ---
-void play_bwvid(const char *path, uint32_t pitch, uint32_t bpp)
+void play_bwvid(framebuffer_info_t *bi, const char *path, uint32_t pitch, uint32_t bpp, int x, int y)
 {
 	VFS_File *file = vfs_open(path, VFS_O_RDONLY);
 	if (IS_ERR(file))
@@ -89,14 +88,14 @@ void play_bwvid(const char *path, uint32_t pitch, uint32_t bpp)
 		if (r != (int)hdr.size)
 		{
 			free(frame_data);
-			printf("frame read error %d, expected %d\n", r, hdr.size);
+			// printf("frame read error %d, expected %d\n", r, hdr.size);
 			break;
 		}
 		// printf("frame size: %d\n", hdr.size);
 		//  відмальовуємо кадр
-		printf("Frame %dx%d, size=%d\n", hdr.width, hdr.height, hdr.size);
+		// printf("Frame %dx%d, size=%d\n", hdr.width, hdr.height, hdr.size);
 
-		draw_frame(frame_data, pitch, bpp);
+		draw_frame(bi, frame_data, x, y);
 
 		free(frame_data);
 		sleep_ms(33);
