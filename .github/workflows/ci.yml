@@ -15,4 +15,4 @@ jobs:
           submodules: true
 
       - name: Build kernel
-        run: make all
+        run: make build
