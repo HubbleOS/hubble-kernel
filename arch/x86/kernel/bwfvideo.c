@@ -12,6 +12,7 @@ struct BWFrameHeader
 	uint16_t height;
 	uint32_t size;
 } __attribute__((packed));
+
 void sleep_ms(uint32_t ms)
 {
 	// Константу підібрати експериментально під свою частоту CPU

@@ -239,7 +239,7 @@ const char *Terminal::getHistory(int &index, int direction)
 static bool isValidCommand(const char *buffer, size_t length)
 {
 	// List of known commands
-	const char *commands[] = {"neofetch", "clear", "help", "ls", "cd", "pwd", "echo"};
+	const char *commands[] = {"neofetch", "clear", "help", "cd", "pwd", "echo", "cat"};
 	const int num_commands = sizeof(commands) / sizeof(commands[0]);
 
 	// Skip leading spaces
@@ -374,8 +374,8 @@ char *Terminal::readLine()
 		// Ctrl + C -> прерывание ввода
 		if (evt.is_ctrl && evt.id.scancode == KEY_C)
 		{
-			cursor_X = line_start_x;
-			cursor_Y = line_start_y;
+			// cursor_X = line_start_x;
+			// cursor_Y = line_start_y;
 			putChar('^');
 			putChar('C');
 			free(buffer);
@@ -437,41 +437,6 @@ char *Terminal::readLine()
 					buffer[i] = buffer[i + 1];
 
 				redrawLine();
-			}
-			continue;
-		}
-
-		// Стрелки влево/вправо
-		if (evt.id.scancode == KEY_LEFT && cursor_pos > 0)
-		{
-			cursor_pos--;
-			cursor_X = line_start_x;
-			cursor_Y = line_start_y;
-			for (size_t i = 0; i < cursor_pos; i++)
-			{
-				cursor_X += char_width;
-				if (cursor_X + char_width > win.getWidth())
-				{
-					cursor_X = 0;
-					cursor_Y += char_height;
-				}
-			}
-			continue;
-		}
-
-		if (evt.id.scancode == KEY_RIGHT && cursor_pos < length)
-		{
-			cursor_pos++;
-			cursor_X = line_start_x;
-			cursor_Y = line_start_y;
-			for (size_t i = 0; i < cursor_pos; i++)
-			{
-				cursor_X += char_width;
-				if (cursor_X + char_width > win.getWidth())
-				{
-					cursor_X = 0;
-					cursor_Y += char_height;
-				}
 			}
 			continue;
 		}
@@ -556,14 +521,15 @@ char *Terminal::readLine()
 	}
 }
 
-// Функция для удаления пробелов в начале и конце строки
+#include <ctype.h>
 static char *trim(char *str)
 {
 	if (!str)
 		return nullptr;
 
 	// Убираем пробелы в начале
-	while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r')
+	// while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r')
+	while (isspace(*str))
 		str++;
 
 	if (*str == '\0')
@@ -571,13 +537,123 @@ static char *trim(char *str)
 
 	// Убираем пробелы в конце
 	char *end = str + strlen(str) - 1;
-	while (end > str && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r'))
+	// while (end > str && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r'))
+	while (end > str && (isspace(*end)))
 		end--;
 
 	// Ставим null-terminator после последнего непробельного символа
 	*(end + 1) = '\0';
 
 	return str;
+}
+
+static int parse_args(char *input, char **argv, int max_args)
+{
+	int argc = 0;
+	char *p = input;
+	bool in_quotes = false;
+	char quote_char = 0;
+
+	while (*p && argc < max_args)
+	{
+		while (*p == ' ' || *p == '\t')
+			p++;
+
+		if (*p == '\0')
+			break;
+
+		if (*p == '"' || *p == '\'')
+		{
+			in_quotes = true;
+			quote_char = *p;
+			p++;
+			argv[argc++] = p;
+
+			while (*p && *p != quote_char)
+				p++;
+
+			if (*p == quote_char)
+			{
+				*p = '\0';
+				p++;
+			}
+			in_quotes = false;
+		}
+		else
+		{
+			argv[argc++] = p;
+
+			while (*p && *p != ' ' && *p != '\t')
+				p++;
+
+			if (*p)
+			{
+				*p = '\0';
+				p++;
+			}
+		}
+	}
+
+	return argc;
+}
+
+#include <fs/vfs/vfs.h>
+#include <fs/vfs/vfs_standart_struct.h>
+
+static void cmd_echo(Terminal *term, int argc, char **argv)
+{
+	for (int i = 1; i < argc; i++)
+	{
+		term->print(argv[i]);
+		if (i < argc - 1)
+			term->print(" ");
+	}
+	term->print("\n");
+}
+
+static void cmd_cat(Terminal *term, int argc, char **argv)
+{
+	if (argc < 2)
+	{
+		term->print("Usage: cat <filename>\n");
+		return;
+	}
+
+	const char *filename = argv[1];
+
+	VFS_File *f = vfs_open(filename, VFS_O_RDONLY);
+	if (!f)
+	{
+		term->print("cat: cannot open '");
+		term->print(filename);
+		term->print("': No such file or directory\n");
+		return;
+	}
+
+	char buffer[512];
+	size_t bytes_read;
+
+	// while ((bytes_read = vfs_read(f, buffer, sizeof(buffer) - 1)) > 0)
+	// {
+	// 	buffer[bytes_read] = '\0';
+	// 	term->print(buffer);
+	// }
+	vfs_read(f, buffer, 512);
+	printf("%s", buffer);
+
+	term->newLine();
+
+	// vfs_close(f);
+}
+
+static void cmd_ls(Terminal *term, int argc, char **argv)
+{
+	Directory dir = vfs_readdir("/");
+	for (size_t i = 0; i < dir.count; i++)
+	{
+		term->print(dir.entries[i].name);
+		term->print("\n");
+	}
 }
 
 #include "apps/neofetch/neofetch.h"
@@ -595,21 +671,59 @@ void Terminal::run()
 			continue;
 		}
 
-		// Обрезаем пробелы
 		char *trimmed = trim(input);
 
-		// Пропускаем пустые строки
 		if (*trimmed == '\0')
 		{
 			free(input);
 			continue;
 		}
 
-		// TODO: обработка команд
-		if (strcmp(trimmed, "neofetch") == 0)
+		char *argv[64];
+		int argc = parse_args(trimmed, argv, 64);
+
+		if (argc == 0)
+		{
+			free(input);
+			continue;
+		}
+
+		if (strcmp(argv[0], "neofetch") == 0)
+		{
 			neofetch();
-		if (strcmp(trimmed, "clear") == 0)
+		}
+		else if (strcmp(argv[0], "clear") == 0)
+		{
 			clear();
+		}
+		else if (strcmp(argv[0], "echo") == 0)
+		{
+			cmd_echo(this, argc, argv);
+		}
+		else if (strcmp(argv[0], "cat") == 0)
+		{
+			cmd_cat(this, argc, argv);
+		}
+		else if (strcmp(argv[0], "ls") == 0)
+		{
+			cmd_ls(this, argc, argv);
+		}
+		else if (strcmp(argv[0], "help") == 0)
+		{
+			print("Available commands:\n");
+			print("  neofetch - Show system information\n");
+			print("  clear    - Clear the terminal\n");
+			print("  echo     - Display a line of text\n");
+			print("  cat      - Display file contents\n");
+			print("  help     - Show this help message\n");
+			print("  exit     - Exit the terminal\n");
+		}
+		else
+		{
+			print("Unknown command: ");
+			print(argv[0]);
+			print("\n");
+		}
 
 		free(input);
 	}
