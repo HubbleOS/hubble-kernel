@@ -239,7 +239,7 @@ const char *Terminal::getHistory(int &index, int direction)
 static bool isValidCommand(const char *buffer, size_t length)
 {
 	// List of known commands
-	const char *commands[] = {"neofetch", "clear", "help", "cd", "pwd", "echo", "cat", "ls"};
+	const char *commands[] = {"neofetch", "clear", "help", "cd", "pwd", "echo", "cat", "ls", "video"};
 	const int num_commands = sizeof(commands) / sizeof(commands[0]);
 
 	// Skip leading spaces
@@ -717,6 +717,10 @@ void Terminal::run()
 
 			printf("%d %d", VideoPlayer.getX(), VideoPlayer.getY());
 			play_bwvid(fb, "/output.bwv", VideoPlayer.getX(), VideoPlayer.getY());
+
+			VideoPlayer.setBgColor(win.getBgColor());
+			VideoPlayer.clear();
+			continue;
 		}
 		else if (strcmp(argv[0], "help") == 0)
 		{
