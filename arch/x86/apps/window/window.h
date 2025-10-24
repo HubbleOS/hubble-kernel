@@ -36,4 +36,5 @@ public:
 	int getX() const { return x; }
 	int getY() const { return y; }
 	uint32_t getBgColor() const { return bg_color; }
+	void setBgColor(uint32_t bg_color) { this->bg_color = bg_color; }
 };
