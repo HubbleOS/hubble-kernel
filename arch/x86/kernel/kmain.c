@@ -1,16 +1,19 @@
 #include "utils/framebuffer.h"
 #include "utils/font.h"
-#include "heap.h"
-#include "utils/fat32/fat.h"
-#include "utils/fat32/fat_structs.h"
-#include "utils/ata/ata.h"
-#include "utils/gpt/gpt.h"
-#include "utils/gpt/gpt_struct.h"
-#include "utils/vfs/vfs_standart_struct.h"
-#include "utils/vfs/vfs.h"
 #include "utils/bwfvideo.h"
-#include "utils/nvme/nvme.h"
-#include "utils/pci/pci.h"
+
+#include <fs/fat32/fat.h>
+#include <fs/fat32/fat_structs.h>
+#include <fs/ata/ata.h>
+#include <fs/gpt/gpt.h>
+#include <fs/gpt/gpt_struct.h>
+#include <fs/vfs/vfs.h>
+#include <fs/vfs/vfs_standart_struct.h>
+#include <fs/nvme/nvme.h>
+#include <fs/pci/pci.h>
+
+#include <mm/pmm.h>
+#include <mm/mm.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -50,19 +53,29 @@ static VFS_Device devi[2] = {
 };
 
 static gpt_partition_t partitions[20] = {{.device = &devi[0]}};
-extern void os_main(framebuffer_info_t *fb);
+
+extern void os_main(BootInfo *bi);
 extern void libc_init(void);
 extern VFS_FS *root_fs;
 BootInfo boot_info;
 
 void kernel_main(BootInfo *bi)
 {
-	boot_info = *bi;
-	heap_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
-	framebuffer_info_t *fb = bi->framebuffer;
-
-	init_font(fb);
 	libc_init();
+
+	// 1. Получаем текущий CR3 от UEFI
+	uint64_t cr3;
+	asm volatile("mov %%cr3, %0" : "=r"(cr3));
+
+	// 2. VMM init БЕЗ использования PMM
+	//    Он маппит heap используя UEFI page tables
+	vmm_init(cr3, bi->memory_map->heap_start, bi->memory_map->heap_size);
+
+	// 3. ТОЛЬКО после mapping heap можно инициализировать PMM
+	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
+
+	printf("kmalloc init\n");
+	kmalloc_init();
 
 	char buffer[1024];
 
@@ -87,7 +100,7 @@ void kernel_main(BootInfo *bi)
 	}
 	dir.free_entries(&dir);
 	VFS_File *f = vfs_open("/tesit.txt", VFS_O_CREAT | VFS_O_RDWR);
-	vfs_write(f, "Hello wo123", 11);
+	// vfs_write(f, "Hello wo123", 11);
 	vfs_lseek(f, 0, SEEK_SET);
 	printf("Reading file: ");
 	vfs_read(f, buffer, 1024);
@@ -103,8 +116,8 @@ void kernel_main(BootInfo *bi)
 
 	printf("FAT32 init done\n");
 
+	os_main(bi);
+
 	while (1)
-	{
 		;
-	}
 }

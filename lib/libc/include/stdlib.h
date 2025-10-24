@@ -6,7 +6,7 @@
 _Begin_C_Header;
 
 // double atof(const char *nptr);
-int atoi(const char *nptr);
+int atoi(const char *);
 // long atol(const char *nptr);
 
 // double strtod(const char *nptr, char **endptr);
@@ -17,9 +17,10 @@ int atoi(const char *nptr);
 // void srand(unsigned int seed);
 
 // void *calloc(size_t nmemb, size_t size);
-void *malloc(size_t size);
-// void *realloc(void *ptr, size_t size);
-void free(void *ptr);
+void *malloc(size_t);
+void *realloc(void *ptr, size_t size);
+void free(void *);
+// void *aligned_alloc(size_t, size_t);
 
 // void abort(void);
 // void exit(int status);
@@ -31,8 +32,8 @@ void free(void *ptr);
 // void *bsearch(const void *key, const void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
 // void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
 
-int abs(int x);
-long labs(long x);
+int abs(int);
+long labs(long);
 long long llabs(long long x);
 
 // div_t div(int numer, int denom); ??

@@ -5,17 +5,17 @@
 
 long syscall_dispatcher(long n, long a1, long a2, long a3, long a4, long a5, long a6)
 {
-	(void)a4;
-	(void)a5;
-	(void)a6;
 
 	switch (n)
 	{
-	case SYS_WRITE:
+	case SYS_write:
 		return sys_write((int)a1, (const char *)a2, (size_t)a3);
 
-	case SYS_READ:
+	case SYS_read:
 		return sys_read((int)a1, (char *)a2, (size_t)a3);
+
+	case SYS_mmap:
+		return sys_mmap((void *)a1, (size_t)a2, (int)a3, (int)a4, (int)a5, (long)a6);
 
 	default:
 		return -1; // unknown syscall
