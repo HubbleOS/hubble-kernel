@@ -79,12 +79,11 @@ void kernel_main(BootInfo *bi)
 
 	char buffer[1024];
 
-	printf("GPT init\n");
-
 	// struct pci_device *nvme = find_nvme_qemu();
 	// printf("NVMe bus: %d", nvme->bus);
+	// printf("NVMe init\n");
 
-	printf("NVMe init\n");
+	printf("GPT init\n");
 	gpt_init(partitions);
 
 	printf("FAT32 init at LBA %d\n", partitions[0].first_lba);
@@ -100,7 +99,7 @@ void kernel_main(BootInfo *bi)
 	}
 	dir.free_entries(&dir);
 	VFS_File *f = vfs_open("/tesit.txt", VFS_O_CREAT | VFS_O_RDWR);
-	// vfs_write(f, "Hello wo123", 11);
+	vfs_write(f, "Hello wo123", 11);
 	vfs_lseek(f, 0, SEEK_SET);
 	printf("Reading file: ");
 	vfs_read(f, buffer, 1024);
@@ -112,7 +111,7 @@ void kernel_main(BootInfo *bi)
 		printf("%c", buffer[i]);
 	}
 
-	// play_bwvid("/output.bwv", bi->framebuffer->width, bi->framebuffer->bpp);
+	play_bwvid("/output.bwv", bi->framebuffer->width, bi->framebuffer->bpp);
 
 	printf("FAT32 init done\n");
 
