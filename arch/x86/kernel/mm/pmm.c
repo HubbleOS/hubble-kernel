@@ -1,5 +1,6 @@
 #include "pmm.h"
 #include <string.h>
+#include <stdio.h>
 
 #define PAGE_SIZE 0x1000
 

@@ -239,7 +239,7 @@ const char *Terminal::getHistory(int &index, int direction)
 static bool isValidCommand(const char *buffer, size_t length)
 {
 	// List of known commands
-	const char *commands[] = {"neofetch", "clear", "help", "cd", "pwd", "echo", "cat"};
+	const char *commands[] = {"neofetch", "clear", "help", "cd", "pwd", "echo", "cat", "ls", "video"};
 	const int num_commands = sizeof(commands) / sizeof(commands[0]);
 
 	// Skip leading spaces
@@ -657,6 +657,7 @@ static void cmd_ls(Terminal *term, int argc, char **argv)
 }
 
 #include "apps/neofetch/neofetch.h"
+#include "utils/bwfvideo.h"
 
 void Terminal::run()
 {
@@ -708,6 +709,19 @@ void Terminal::run()
 		{
 			cmd_ls(this, argc, argv);
 		}
+		else if (strcmp(argv[0], "video") == 0)
+		{
+			Window VideoPlayer(*(win.getScreen()), win.getWidth() / 2 - 240, win.getHeight() / 2 - 180, 480, 360, rgba(141, 141, 141, 1));
+			VideoPlayer.clear();
+			framebuffer_info_t *fb = VideoPlayer.getScreen()->getFramebuffer();
+
+			printf("%d %d", VideoPlayer.getX(), VideoPlayer.getY());
+			play_bwvid(fb, "/output.bwv", fb->width, fb->bpp, VideoPlayer.getX(), VideoPlayer.getY());
+
+			VideoPlayer.setBgColor(win.getBgColor());
+			VideoPlayer.clear();
+			continue;
+		}
 		else if (strcmp(argv[0], "help") == 0)
 		{
 			print("Available commands:\n");
@@ -717,6 +731,7 @@ void Terminal::run()
 			print("  cat      - Display file contents\n");
 			print("  help     - Show this help message\n");
 			print("  exit     - Exit the terminal\n");
+			print("  video    - Show video in terminal\n");
 		}
 		else
 		{
