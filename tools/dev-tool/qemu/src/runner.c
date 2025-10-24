@@ -23,36 +23,57 @@ esac
 
 */
 
+#define NEXT_VALUE_OR_DEFAULT(target, default_value)                      \
+	if (i + 1 < argc && strncmp(argv[i + 1], "--", 2) != 0)           \
+	{                                                                 \
+		strcpy(target, argv[++i]);                                \
+	}                                                                 \
+	else                                                              \
+	{                                                                 \
+		printf("Using default %s: %s\n", #target, default_value); \
+	}
+
+#define NEXT_INT_OR_DEFAULT(target, default_value)                        \
+	if (i + 1 < argc && strncmp(argv[i + 1], "--", 2) != 0)           \
+	{                                                                 \
+		target = atoi(argv[++i]);                                 \
+	}                                                                 \
+	else                                                              \
+	{                                                                 \
+		printf("Using default %s: %d\n", #target, default_value); \
+	}
+
 int main(int argc, char **argv)
 {
 	QemuOptions opts = {
 	    .arch = "x86_64",
-	    .mem = 1024,
+	    .mem = 512,
 	    .smp = 2,
 	    .debug_port = 1000,
-	    .iso_path = "../../../out/x86/iso/"};
+	    .iso_path = "out/x86/iso/",
+	};
 
 	for (int i = 1; i < argc; i++)
 	{
-		if (strcmp(argv[i], "--iso") == 0 && i + 1 < argc)
+		if (strcmp(argv[i], "--iso") == 0)
 		{
-			strcpy(opts.iso_path, argv[++i]);
+			NEXT_VALUE_OR_DEFAULT(opts.iso_path, opts.iso_path);
 		}
-		else if (strcmp(argv[i], "--arch") == 0 && i + 1 < argc)
+		else if (strcmp(argv[i], "--arch") == 0)
 		{
-			strcpy(opts.arch, argv[++i]);
+			NEXT_VALUE_OR_DEFAULT(opts.arch, opts.arch);
 		}
-		else if (strcmp(argv[i], "--mem") == 0 && i + 1 < argc)
+		else if (strcmp(argv[i], "--mem") == 0)
 		{
-			opts.mem = atoi(argv[++i]);
+			NEXT_INT_OR_DEFAULT(opts.mem, opts.mem);
 		}
-		else if (strcmp(argv[i], "--smp") == 0 && i + 1 < argc)
+		else if (strcmp(argv[i], "--smp") == 0)
 		{
-			opts.smp = atoi(argv[++i]);
+			NEXT_INT_OR_DEFAULT(opts.smp, opts.smp);
 		}
-		else if (strcmp(argv[i], "--debug") == 0 && i + 1 < argc)
+		else if (strcmp(argv[i], "--debug") == 0)
 		{
-			opts.debug_port = atoi(argv[++i]);
+			NEXT_INT_OR_DEFAULT(opts.debug_port, opts.debug_port);
 		}
 		else
 		{
