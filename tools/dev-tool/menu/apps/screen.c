@@ -24,8 +24,16 @@ static void screen_end()
 	printf("Terminal return to normal!\n");
 }
 
+static void srceen_reset()
+{
+	printf("\033[0m");
+	printf("\033[H\033[J");
+	fflush(stdout);
+}
+
 Screen screen = {
     .init = screen_init,
     .flush = screen_flush,
     .end = screen_end,
+    .reset = srceen_reset,
 };

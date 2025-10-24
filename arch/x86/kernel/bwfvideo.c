@@ -1,8 +1,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "utils/vfs/vfs.h"
-#include "utils/vfs/vfs_standart_struct.h"
+#include <fs/vfs/vfs.h>
+#include <fs/vfs/vfs_standart_struct.h>
 #include "utils/framebuffer.h"
 
 // --- структура кадру ---

@@ -33,7 +33,7 @@ ifeq ($(IS_WSL),Microsoft)
   $(warning https://docs.docker.com/docker-for-windows/wsl/)
 endif
 
-SUPPORTED_ARCHES := x86 arm64
+SUPPORTED_ARCHES := x86 x86_64 arm64
 ifneq ($(ARCH),$(filter $(ARCH),$(SUPPORTED_ARCHES)))
   $(error Unsupported architecture: $(ARCH). Supported architectures are: $(SUPPORTED_ARCHES))
 endif
@@ -42,7 +42,9 @@ endif
 ifeq ($(ARCH),x86)
 	CROSS = x86_64-elf-
 endif
-
+ifeq ($(ARCH), x86_64)
+	CROSS = x86_64-elf-
+endif
 ifeq ($(ARCH),arm64)
 	CROSS = aarch64-elf-
 endif
@@ -62,7 +64,7 @@ HOST_AR = ar
 HOST_OBJCOPY = objcopy
 
 CFLAGS = -MMD -MP -ffreestanding -m64 -O2 -Wall -Wextra -c
-CXXFLAGS = -MMD -MP -ffreestanding -m64 -O2 -Wall -Wextra -c
+CXXFLAGS = -MMD -MP -ffreestanding -fno-exceptions -fno-rtti -m64 -O2 -Wall -Wextra -c
 LDFLAGS = -nostdlib -T
 OBJCPYFLAGS = binary
 
@@ -98,7 +100,9 @@ export SCRIPT_DIR
 
 INCLUDES += -I$(abspath include)
 INCLUDES += -I$(LIB_DIR)/libc/include
+INCLUDES += -I$(LIB_DIR)/libc/src/internal
 INCLUDES += -I$(ARCH_DIR)/include
+INCLUDES += -I$(ARCH_DIR)/kernel
 
 export INCLUDES
 
@@ -159,7 +163,9 @@ run: build
 PHONY += host-run
 host-run:
 	@echo "🖥  Launching QEMU from host..."
-	$(MAKE) $(SCRIPT_DIR) qemu
+	$(MAKE) -C tools/dev-tool/qemu run ISO=$(ISO_DIR) ARCH=x86_64 MEM=256;
+
+###########################################################################
 
 PHONY += clean
 clean:
