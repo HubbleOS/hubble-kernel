@@ -70,10 +70,10 @@ const keymap_entry_t keymap[] = {
     {.id = {KEY_LEFT_ALT, false}, 0, 0},
     {.id = {KEY_RIGHT_ALT, true}, 0, 0},
 
-    {.id = {KEY_LEFT, true}, '<', '<'},
-    {.id = {KEY_RIGHT, true}, '>', '>'},
-    {.id = {KEY_UP, true}, '^', '^'},
-    {.id = {KEY_DOWN, true}, 'v', 'v'},
+    //     {.id = {KEY_LEFT, true}, '<', '<'},
+    //     {.id = {KEY_RIGHT, true}, '>', '>'},
+    //     {.id = {KEY_UP, true}, '^', '^'},
+    //     {.id = {KEY_DOWN, true}, 'v', 'v'},
 };
 
 const size_t keymap_size = sizeof(keymap) / sizeof(keymap[0]);

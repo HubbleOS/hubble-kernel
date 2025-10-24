@@ -43,7 +43,6 @@ bool vfs_mount(gpt_partition_t *parition, FileSystemType type)
 VFS_File *vfs_open(const char *path, int flags)
 
 {
-
 	if (!root_fs || !root_fs->open)
 		return ERR_PTR(-ENODEV);
 	VFS_Node *node = root_fs->open(root_fs, path);
