@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../screen/screen.h"
+#include <utils/color.h>
 
 class Window
 {
@@ -8,13 +9,13 @@ private:
 	Screen &screen;	   // Ссылка на экран
 	int x, y;	   // Позиция окна (левый верхний угол)
 	int width, height; // Размеры окна
-	uint32_t bg_color; // Цвет фона окна
+	color_t bg_color;  // Цвет фона окна
 
 public:
-	Window(Screen &screen, int x, int y, int width, int height, uint32_t bg_color = 0x000000)
+	Window(Screen &screen, int x, int y, int width, int height, color_t bg_color = COLOR_BLACK)
 	    : screen(screen), x(x), y(y), width(width), height(height), bg_color(bg_color) {}
 
-	void drawPixel(int px, int py, uint32_t color)
+	void drawPixel(int px, int py, color_t color)
 	{
 		if (px < 0 || px >= width || py < 0 || py >= height)
 			return; // За пределами окна
@@ -35,6 +36,6 @@ public:
 
 	int getX() const { return x; }
 	int getY() const { return y; }
-	uint32_t getBgColor() const { return bg_color; }
-	void setBgColor(uint32_t bg_color) { this->bg_color = bg_color; }
+	color_t getBgColor() const { return bg_color; }
+	void setBgColor(color_t bg_color) { this->bg_color = bg_color; }
 };
