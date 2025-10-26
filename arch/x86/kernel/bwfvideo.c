@@ -4,6 +4,7 @@
 #include <fs/vfs/vfs.h>
 #include <fs/vfs/vfs_standart_struct.h>
 #include "utils/framebuffer.h"
+#include <utils/color.h>
 
 // --- структура кадру ---
 struct BWFrameHeader
@@ -23,11 +24,11 @@ void sleep_ms(uint32_t ms)
 }
 
 // --- твоя функція малювання ---
-static inline void putpixel(framebuffer_info_t *bi, int x, int y, uint32_t color,
+static inline void putpixel(framebuffer_info_t *bi, int x, int y, color_t color,
 			    uint32_t fb_pitch, uint32_t bpp)
 {
 	uint8_t *ptr = bi->base + y * fb_pitch + x * (bpp / 8);
-	*(uint32_t *)ptr = color;
+	*(color_t *)ptr = color;
 }
 
 // --- відмалювання одного кадру ---
@@ -47,7 +48,7 @@ void draw_frame(framebuffer_info_t *bi, uint8_t *data, int x_start, int y_start)
 			int byte_index = y * row_bytes + x / 8;
 			int bit_index = 7 - (x % 8);
 			int bit = (pixels[byte_index] >> bit_index) & 1;
-			uint32_t color = bit ? 0xFFFFFFFF : 0x00000000;
+			color_t color = bit ? COLOR_WHITE : COLOR_BLACK;
 
 			int px = x_start + x;
 			int py = y_start + y;

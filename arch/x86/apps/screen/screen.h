@@ -12,7 +12,7 @@ public:
 	Screen(framebuffer_info_t *fb);
 	~Screen();
 
-	void drawPixel(int x, int y, color color);
+	void drawPixel(int x, int y, color_t color);
 	int getWidth() const;
 	int getHeight() const;
 	void clearScreen();

@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
-#include "utils/io.h"
+#include <io.h>
 #include <fs/fat32/fat_structs.h>
 
 #define ATA_STATUS_BSY 0x80

@@ -1,13 +1,14 @@
 #include "terminal.h"
+#include <utils/color.h>
 #include <utils/font.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-Terminal::Terminal(Window &window, uint32_t color)
+Terminal::Terminal(Window &window, color_t color)
 	: win(window), cursor_X(0), cursor_Y(0), text_color(color),
 	  history_count(0), history_index(0), cursor_visible(true),
-	  cursor_color(0xFFFFFF)
+	  cursor_color(color)
 {
 	char_width = CHAR_WIDTH;
 	char_height = CHAR_HEIGHT;
@@ -136,7 +137,7 @@ void Terminal::newLine()
 	}
 }
 
-inline static void drawChar(Window &win, char c, int x, int y, int w, int h, uint32_t color)
+inline static void drawChar(Window &win, char c, int x, int y, int w, int h, color_t color)
 {
 	framebuffer_info_t *fb = win.getScreen()->getFramebuffer();
 
@@ -316,7 +317,7 @@ char *Terminal::readLine()
 
 		// Определяем цвет для первого слова
 		bool is_valid = isValidCommand(buffer, length);
-		uint32_t cmd_color = is_valid ? 0x00FF00 : 0xFF0000; // зелёный или красный
+		color_t cmd_color = is_valid ? COLOR_GREEN : COLOR_RED; // зелёный или красный
 
 		// Пропускаем начальные пробелы для определения конца команды
 		size_t start = 0;
@@ -337,7 +338,7 @@ char *Terminal::readLine()
 				break;
 
 			// Выбираем цвет: команда или обычный текст
-			uint32_t color = (i >= start && i < first_word_end) ? cmd_color : text_color;
+			color_t color = (i >= start && i < first_word_end) ? cmd_color : text_color;
 			drawChar(win, buffer[i], x, y, char_width, char_height, color);
 
 			x += char_width;
@@ -656,6 +657,66 @@ static void cmd_ls(Terminal *term, int argc, char **argv)
 	}
 }
 
+#include "io.h"
+
+void shutdown(void)
+{
+	// outw(0x604, 0x2000);
+	outw(0x604, 0x2000);  // ACPI poweroff
+	outw(0xB004, 0x2000); // старый вариант
+	outw(0x4004, 0x3400); // ещё один способ (ISA)
+}
+
+void system_shutdown(void)
+{
+	// cli(); // отключить прерывания, если у тебя есть такая функция
+	asm volatile("cli");
+	shutdown();
+	for (;;)
+		asm volatile("hlt"); // на случай, если не сработает
+}
+
+void reboot(void)
+{
+	// Пытаемся сделать COLD RESET через ACPI
+	// Записываем значение для полной перезагрузки
+	outb(0x64, 0xFE); // Клавиатурный контроллер - COLD reset
+
+	for (volatile int i = 0; i < 1000000; i++)
+		;
+
+	// Альтернатива: полная перезагрузка через порт 0xCF9
+	// 0x0E = CPU reset + system reset + full reset
+	outb(0xCF9, 0x00);
+	outb(0xCF9, 0x0E);
+
+	for (volatile int i = 0; i < 1000000; i++)
+		;
+
+	// Triple fault как последний способ
+	struct
+	{
+		uint16_t limit;
+		uint64_t base;
+	} __attribute__((packed)) invalid_idt = {0, 0};
+
+	asm volatile("lidt %0" : : "m"(invalid_idt));
+	asm volatile("int3");
+
+	while (1)
+		asm volatile("hlt");
+}
+
+void system_reboot(void)
+{
+	asm volatile("cli"); // Отключаем прерывания
+	reboot();
+
+	// На всякий случай, если reboot() вернулся
+	for (;;)
+		asm volatile("hlt");
+}
+
 #include "apps/neofetch/neofetch.h"
 #include "utils/bwfvideo.h"
 
@@ -708,6 +769,24 @@ void Terminal::run()
 		else if (strcmp(argv[0], "ls") == 0)
 		{
 			cmd_ls(this, argc, argv);
+		}
+		else if (strcmp(argv[0], "shutdown") == 0)
+		{
+			free(input); // Освобождаем память ДО выключения
+			print("Shutting down...\n");
+			system_shutdown();
+			// Никогда не должно дойти сюда, но на всякий случай:
+			while (1)
+				asm volatile("hlt");
+		}
+		else if (strcmp(argv[0], "reboot") == 0)
+		{
+			free(input); // Освобождаем память ДО перезагрузки
+			print("Rebooting...\n");
+			system_reboot();
+			// Никогда не должно дойти сюда, но на всякий случай:
+			while (1)
+				asm volatile("hlt");
 		}
 		else if (strcmp(argv[0], "video") == 0)
 		{
