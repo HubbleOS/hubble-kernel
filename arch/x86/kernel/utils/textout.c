@@ -1,5 +1,6 @@
 #include "utils/font.h"
 #include "utils/framebuffer.h"
+#include "utils/color.h"
 
 const uint8_t *get_glyph(char c)
 {
@@ -8,19 +9,19 @@ const uint8_t *get_glyph(char c)
 	return font[(unsigned char)c]; // Повертаємо гліф для символу
 }
 
-static inline uint8_t get_alpha(color c) { return (c >> 24) & 0xFF; }
-static inline uint8_t get_red(color c) { return (c >> 16) & 0xFF; }
-static inline uint8_t get_green(color c) { return (c >> 8) & 0xFF; }
-static inline uint8_t get_blue(color c) { return c & 0xFF; }
+static inline uint8_t get_alpha(color_t c) { return (c >> 24) & 0xFF; }
+static inline uint8_t get_red(color_t c) { return (c >> 16) & 0xFF; }
+static inline uint8_t get_green(color_t c) { return (c >> 8) & 0xFF; }
+static inline uint8_t get_blue(color_t c) { return c & 0xFF; }
 
-static inline color make_color(uint8_t a, uint8_t r, uint8_t g, uint8_t b)
+static inline color_t make_color(uint8_t a, uint8_t r, uint8_t g, uint8_t b)
 {
-	return ((color)a << 24) | ((color)r << 16) | ((color)g << 8) | b;
+	return ((color_t)a << 24) | ((color_t)r << 16) | ((color_t)g << 8) | b;
 }
 
-static color blend_colors(color src, color dst)
+static color_t blend_colors(color_t src, color_t dst)
 {
-	uint8_t alpha = get_alpha(src);
+	alpha_t alpha = get_alpha(src);
 
 	if (alpha == 0)
 		alpha = 255;
@@ -28,18 +29,18 @@ static color blend_colors(color src, color dst)
 	if (alpha == 255)
 		return src;
 
-	uint8_t inv_alpha = 255 - alpha;
+	alpha_t inv_alpha = 255 - alpha;
 
-	uint8_t r = (get_red(src) * alpha + get_red(dst) * inv_alpha) / 255;
-	uint8_t g = (get_green(src) * alpha + get_green(dst) * inv_alpha) / 255;
-	uint8_t b = (get_blue(src) * alpha + get_blue(dst) * inv_alpha) / 255;
-	uint8_t a = 255;
+	chan_t r = (get_red(src) * alpha + get_red(dst) * inv_alpha) / 255;
+	chan_t g = (get_green(src) * alpha + get_green(dst) * inv_alpha) / 255;
+	chan_t b = (get_blue(src) * alpha + get_blue(dst) * inv_alpha) / 255;
+	alpha_t a = 255;
 
 	return make_color(a, r, g, b);
 }
 
 static void draw_pixel_array_scaled(uint8_t *glyph, int pitch, framebuffer_info_t *fb,
-				    int x, int y, int w, int h, int scale_x, int scale_y, color font_color)
+				    int x, int y, int w, int h, int scale_x, int scale_y, color_t font_color)
 {
 	for (int row = 0; row < h; ++row)
 	{
@@ -56,9 +57,9 @@ static void draw_pixel_array_scaled(uint8_t *glyph, int pitch, framebuffer_info_
 
 						if (px < fb->width && py < fb->height)
 						{
-							uint32_t *pixel = &((uint32_t *)fb->base)[py * pitch + px];
-							color dst_color = *pixel;
-							color blended = blend_colors(font_color, dst_color);
+							color_t *pixel = &((uint32_t *)fb->base)[py * pitch + px];
+							color_t dst_color = *pixel;
+							color_t blended = blend_colors(font_color, dst_color);
 							*pixel = blended;
 						}
 					}
@@ -66,7 +67,7 @@ static void draw_pixel_array_scaled(uint8_t *glyph, int pitch, framebuffer_info_
 	}
 }
 
-void draw_char(framebuffer_info_t *fb, char c, int x, int y, int w, int h, color font_color)
+void draw_char(framebuffer_info_t *fb, char c, int x, int y, int w, int h, color_t font_color)
 {
 	uint8_t *glyph = (uint8_t *)get_glyph(c); // Отримуємо гліф символу
 	if (glyph == 0)
@@ -78,7 +79,7 @@ void draw_char(framebuffer_info_t *fb, char c, int x, int y, int w, int h, color
 }
 
 // crutch
-void clear_char_area(framebuffer_info_t *fb, int x, int y, int w, int h, color bg_color)
+void clear_char_area(framebuffer_info_t *fb, int x, int y, int w, int h, color_t bg_color)
 {
 	int pitch = fb->pitch / 4;
 

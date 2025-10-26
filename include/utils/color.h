@@ -2,7 +2,9 @@
 
 #include <stdint.h>
 
-typedef uint32_t color;
+typedef uint32_t color_t; // 32-bit color value (ARGB)
+typedef uint8_t chan_t;	  // color channel (R, G, or B)
+typedef float alpha_t;	  // opacity / alpha value (0.0–1.0)
 
 enum Color
 {
@@ -14,10 +16,5 @@ enum Color
 	COLOR_YELLOW = 0xFFFF00
 };
 
-inline color rgb(uint8_t r, uint8_t g, uint8_t b) { return ((color)r << 16) | ((color)g << 8) | b; }
-
-inline color rgba(uint8_t r, uint8_t g, uint8_t b, float a)
-{
-	uint8_t alpha = (uint8_t)(a * 255.0f + 0.5f);
-	return rgb(r, g, b) | ((color)alpha << 24);
-}
+inline color_t rgb(chan_t r, chan_t g, chan_t b) { return ((color_t)r << 16) | ((color_t)g << 8) | b; }
+inline color_t rgba(chan_t r, chan_t g, chan_t b, alpha_t a) { return rgb(r, g, b) | ((color_t)(a * 255.0f + 0.5f) << 24); }
