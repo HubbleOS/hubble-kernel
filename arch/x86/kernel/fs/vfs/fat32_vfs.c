@@ -1,7 +1,10 @@
 #include "vfs.h"
-#include <fs/fat32/fat.h>
 #include "vfs_standart_struct.h"
 #include "printk.h"
+
+#include <fs/fat32/fat.h>
+#include <mm/kmalloc.h>
+
 #include <string.h>
 
 #define FAT32_ATTR_READ_ONLY 0x01
@@ -34,7 +37,7 @@ static VFS_Node *fat32_open_wrapper(VFS_FS *fs, const char *path)
 		return NULL;
 	}
 
-	VFS_Node *node = malloc(sizeof(VFS_Node));
+	VFS_Node *node = kmalloc(sizeof(VFS_Node));
 	memset(node, 0, sizeof(VFS_Node));
 	strncpy(node->name, path, 255);
 	node->is_dir = file->entry->attr & 0x10;

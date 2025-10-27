@@ -2,10 +2,10 @@
 #include "gpt_struct.h"
 #include "printk.h"
 #include <fs/ata/ata.h>
+#include <mm/kmalloc.h>
 
 #include <stdint.h>
 #include <string.h>
-#include <stdlib.h>
 
 uint32_t first_usable_lba = 0;
 uint32_t last_usable_lba = 0;
@@ -43,7 +43,7 @@ int gpt_init(gpt_partition_t *partitions)
 	//         //((ATA_Device *)(partitions->device))->read(partitions->device, 1, buf);
 	//         if (ata_read_sector(partitions->device, 1, buf) != 0)
 	//         {
-	//             printk("❌ Failed to read GPT header\n");
+	//             printk("Failed to read GPT header\n");
 	//             int a = ata_read_sector(partitions->device, 1, buf);
 	//             printk("ata_read_sector: %d\n", a);
 	//             return -1;
@@ -51,7 +51,7 @@ int gpt_init(gpt_partition_t *partitions)
 	//     }
 	//     else
 	//     {
-	//         printk("❌ Unsupported device type\n");
+	//         printk("Unsupported device type\n");
 	//         ata_read_sector(partitions->device, 1, buf);
 	//     }
 	printk("Reading GPT header\n");
@@ -62,7 +62,7 @@ int gpt_init(gpt_partition_t *partitions)
 
 	if (gpt_header->signature != 0x5452415020494645ULL) // "EFI PART"
 	{
-		printk("❌ Invalid GPT signature\n");
+		printk("Invalid GPT signature\n");
 		printk("GPT Signature: %llx\n", gpt_header->signature);
 		return -1;
 	}
@@ -70,10 +70,10 @@ int gpt_init(gpt_partition_t *partitions)
 	printk("GPT valid. Entries: %u\n", gpt_header->num_partition_entries);
 
 	uint32_t total_size = gpt_header->num_partition_entries * gpt_header->sizeof_partition_entry;
-	uint8_t *entry_buf = malloc(total_size);
+	uint8_t *entry_buf = kmalloc(total_size);
 	if (!entry_buf)
 	{
-		printk("❌ Failed to allocate buffer\n");
+		printk("Failed to allocate buffer\n");
 		return -1;
 	}
 

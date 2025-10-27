@@ -1,11 +1,13 @@
 #include "vfs.h"
 #include "vfs_standart_struct.h"
-#include <stdlib.h>
+
 #include <string.h>
 #include <stdarg.h>
 #include <errno.h>
 // #include "gpt.h" // Список змонтованих ФС (поки що 1)
 #include <fs/gpt/gpt.h>
+#include <mm/kmalloc.h>
+
 VFS_FS *root_fs = NULL;
 
 // ==== Реалізація VFS API ==== //
@@ -18,7 +20,7 @@ bool vfs_mount(gpt_partition_t *parition, FileSystemType type)
 		return false;
 	}
 	printk("VFS: mounting\n");
-	root_fs = malloc(sizeof(VFS_FS));
+	root_fs = kmalloc(sizeof(VFS_FS));
 	memset(root_fs, 0, sizeof(VFS_FS));
 	root_fs->type = type;
 
@@ -46,7 +48,7 @@ VFS_File *vfs_open(const char *path, int flags)
 		return ERR_PTR(-ENODEV);
 	VFS_Node *node = root_fs->open(root_fs, path);
 
-	VFS_File *f = malloc(sizeof(VFS_File));
+	VFS_File *f = kmalloc(sizeof(VFS_File));
 
 	printk("VFS: opening file %s\n", path);
 

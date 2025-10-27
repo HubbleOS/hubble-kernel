@@ -3,10 +3,11 @@
 #include "fat.h"
 #include "printk.h"
 
+#include <mm/kmalloc.h>
+
 #include <fs/ata/ata.h>
 #include <fs/vfs/vfs.h>
 
-#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 
@@ -117,7 +118,7 @@ FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 
 	PathParts parts = format_folder_path(path);
 
-	uint8_t *buf = malloc(fs->cluster_size);
+	uint8_t *buf = kmalloc(fs->cluster_size);
 	if (!buf)
 		return NULL;
 
@@ -137,14 +138,14 @@ FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 
 		if (memcmp(entry->name, parts.parts[parts.count - 1].sfn, 11) == 0)
 		{
-			FAT32_File *file = malloc(sizeof(FAT32_File));
+			FAT32_File *file = kmalloc(sizeof(FAT32_File));
 			if (!file)
 			{
 				free(buf);
 				return NULL;
 			}
 
-			file->entry = malloc(sizeof(FAT32_DirectoryEntry));
+			file->entry = kmalloc(sizeof(FAT32_DirectoryEntry));
 			if (!file->entry)
 			{
 				free(buf);
@@ -200,7 +201,7 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 
 	while (read < to_read && cluster < 0x0FFFFFF8)
 	{
-		uint8_t *cluster_buf = malloc(fs->cluster_size);
+		uint8_t *cluster_buf = kmalloc(fs->cluster_size);
 		if (!cluster_buf)
 			return -1;
 
@@ -256,7 +257,7 @@ int fat32_write(VFS_File *file, const uint8_t *buffer, uint32_t size)
 
 	while (remaining > 0 && cluster < 0x0FFFFFF8)
 	{
-		uint8_t *cluster_buf = malloc(fs->cluster_size);
+		uint8_t *cluster_buf = kmalloc(fs->cluster_size);
 		if (!cluster_buf)
 			return -1;
 
@@ -344,7 +345,7 @@ int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 		return -1;
 	}
 
-	FAT32_BPB *bpb = malloc(sizeof(FAT32_BPB));
+	FAT32_BPB *bpb = kmalloc(sizeof(FAT32_BPB));
 	if (!bpb)
 	{
 		printk("Failed to allocate memory for BPB\n");
@@ -382,7 +383,7 @@ int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 	uint32_t fat_size_bytes = bpb->fat_size_32 * bpb->bytes_per_sector;
 	printk("FAT size in bytes: %d\n", fat_size_bytes);
 
-	fs->fat_cache = malloc(fat_size_bytes);
+	fs->fat_cache = kmalloc(fat_size_bytes);
 	if (!fs->fat_cache)
 	{
 		free(bpb);
@@ -407,7 +408,7 @@ uint32_t cluster_to_lba(FAT32_FS *fs, uint32_t cluster)
 }
 int fat32_update_fat_entry(FAT32_FS *fs, FAT32_File *file)
 {
-	uint8_t *buf = malloc(fs->cluster_size);
+	uint8_t *buf = kmalloc(fs->cluster_size);
 	if (!buf)
 		return -1;
 
@@ -542,7 +543,7 @@ PathParts format_folder_path(const char *in)
 
 			// LFN (оригінальне ім’я)
 
-			result.parts[result.count].lfn = malloc(len + 1);
+			result.parts[result.count].lfn = kmalloc(len + 1);
 			memcpy(result.parts[result.count].lfn, name, len);
 			result.parts[result.count].lfn[len] = '\0';
 
@@ -578,7 +579,7 @@ int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir
 		printk("Entry already exists: %s\n", pp->lfn);
 		return -EEXIST;
 	}
-	uint8_t *buf = malloc(fs->cluster_size);
+	uint8_t *buf = kmalloc(fs->cluster_size);
 	if (!buf)
 	{
 		printk("Failed to allocate buffer\n");
@@ -634,7 +635,7 @@ int fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name)
 		printk("Entry not found: %s\n", name);
 		return -ENOENT;
 	}
-	uint8_t *buf = malloc(fs->cluster_size);
+	uint8_t *buf = kmalloc(fs->cluster_size);
 	if (!buf)
 	{
 		printk("Failed to allocate buffer\n");

@@ -1,8 +1,9 @@
 #include <stdint.h>
-#include <stdlib.h>
 
 #include "printk.h"
 #include "pci.h"
+
+#include <mm/kmalloc.h>
 
 #include <io.h>
 
@@ -22,7 +23,7 @@ static inline uint32_t pci_read_config(uint8_t bus, uint8_t slot, uint8_t func, 
 // Алокація структури pci_device
 static struct pci_device *allocate_pci_device_struct(uint8_t bus, uint8_t slot, uint8_t func)
 {
-	struct pci_device *dev = malloc(sizeof(struct pci_device));
+	struct pci_device *dev = kmalloc(sizeof(struct pci_device));
 	dev->bus = bus;
 	dev->slot = slot;
 	dev->func = func;

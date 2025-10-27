@@ -1,10 +1,11 @@
 #include "printk.h"
 #include <stdint.h>
-#include <stdlib.h>
+
 #include <fs/vfs/vfs.h>
 #include <fs/vfs/vfs_standart_struct.h>
 #include <utils/bwfvideo.h>
 #include <utils/color.h>
+#include <mm/kmalloc.h>
 
 // --- структура кадру ---
 struct BWFrameHeader
@@ -78,7 +79,7 @@ void play_bwvid(framebuffer_info_t *bi, const char *path, uint32_t pitch, uint32
 			break; // кінець файлу або помилка
 
 		// виділяємо буфер під кадр
-		uint8_t *frame_data = malloc(sizeof(hdr) + hdr.size);
+		uint8_t *frame_data = kmalloc(sizeof(hdr) + hdr.size);
 		if (!frame_data)
 			break;
 
