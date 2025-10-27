@@ -128,7 +128,7 @@ int vfs_read(VFS_File *file, void *buf, uint32_t size)
 	if (file->pos >= file->node->size)
 	{
 		printk("VFS: EOF\n");
-		return -0;
+		return 0;
 	}
 	return file->node->fs->read(file, buf, size);
 }

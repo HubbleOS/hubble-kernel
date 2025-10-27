@@ -115,6 +115,9 @@ all:
 subdirs += $(LIB_DIR)
 subdirs += $(ARCH_DIR) 
 
+USR_DIR := $(abspath usr)
+subdirs += $(USR_DIR)/src
+
 GNU_EFI_BUILD_DIR := $(OUT_DIR)/$(ARCH)/gnu-efi
 GNU_EFI_BUILT_MARK := $(GNU_EFI_BUILD_DIR)/.built
 

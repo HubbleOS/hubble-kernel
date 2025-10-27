@@ -17,6 +17,12 @@
 #define PTE_GLOBAL (1ULL << 8)
 #define PTE_NX (1ULL << 63)
 
+// Convenience macros
+#define VMM_PRESENT PTE_PRESENT
+#define VMM_WRITE PTE_WRITABLE
+#define VMM_USER PTE_USER
+#define VMM_NX PTE_NX
+
 #define KERNEL_VIRT_BASE 0xFFFFFFFF80000000ULL
 
 void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_size);
@@ -32,3 +38,8 @@ void vmm_test(void);
 // Bootstrap allocator for init
 void vmm_set_bootstrap_allocator(uint64_t base, uint64_t size);
 void vmm_disable_bootstrap_allocator(void);
+
+// For user space
+uint64_t vmm_alloc_physical_page(void);
+void vmm_free_physical_page(uint64_t phys);
+int vmm_map_page(uint64_t virt, uint64_t phys, uint64_t flags);
