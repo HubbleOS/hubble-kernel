@@ -3,6 +3,8 @@
 #include "fat.h"
 #include "printk.h"
 
+#include <mm/kmalloc.h>
+
 #include <string.h>
 
 typedef void (*directory_entry_callback_t)(const char *name, bool is_dir, Directory *context);
@@ -29,7 +31,7 @@ uint32_t resolve_path_to_cluster(FAT32_FS *fs, const char *path)
 uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const char *name11)
 {
 	printk("find_directory_entry_cluster: %s\n", name11);
-	uint8_t *buffer = malloc(fs->cluster_size);
+	uint8_t *buffer = kmalloc(fs->cluster_size);
 	int steps = 0;
 	while (dir_cluster < 0x0FFFFFF8 && steps++ < MAX_CLUSTER_CHAIN)
 	{
@@ -61,7 +63,7 @@ uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const 
 void iterate_directory(FAT32_FS *fs, uint32_t cluster, directory_entry_callback_t callback, void *ctx)
 {
 	int steps = 0;
-	uint8_t *data = malloc(fs->cluster_size);
+	uint8_t *data = kmalloc(fs->cluster_size);
 	if (!data)
 		return;
 	while (cluster < 0x0FFFFFF8 && steps++ < MAX_CLUSTER_CHAIN && cluster != 0)
