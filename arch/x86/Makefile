@@ -50,7 +50,7 @@ $(BUILD_DIR)/%.o: %.cpp
 $(OUTPUT): $(OBJ_FILES)
 	@echo "LINK_OBJS: $(LINK_OBJS)"
 	@echo "Linking kernel ELF (via g++): $@"
-	$(CXX) $(LDFLAGS)$(SRC_DIR)/linker.ld -o $@ $(LINK_OBJS) $(BUILD_DIR)/libc.a
+	$(CXX) $(LDFLAGS_NOSTDLIB)$(SRC_DIR)/linker.ld -o $@ $(LINK_OBJS) $(BUILD_DIR)/libc.a
 
 # Kernel binary
 iso: $(ISO)
