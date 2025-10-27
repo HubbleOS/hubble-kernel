@@ -1,9 +1,9 @@
+#include "printk.h"
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <fs/vfs/vfs.h>
 #include <fs/vfs/vfs_standart_struct.h>
-#include "utils/framebuffer.h"
+#include <utils/bwfvideo.h>
 #include <utils/color.h>
 
 // --- структура кадру ---
@@ -64,7 +64,7 @@ void play_bwvid(framebuffer_info_t *bi, const char *path, uint32_t pitch, uint32
 	VFS_File *file = vfs_open(path, VFS_O_RDONLY);
 	if (IS_ERR(file))
 	{
-		// printf("Не вдалося відкрити файл\n");
+		printk("Failed to open file %s\n", path);
 		return;
 	}
 
@@ -89,12 +89,12 @@ void play_bwvid(framebuffer_info_t *bi, const char *path, uint32_t pitch, uint32
 		if (r != (int)hdr.size)
 		{
 			free(frame_data);
-			// printf("frame read error %d, expected %d\n", r, hdr.size);
+			printk("frame read error %d, expected %d\n", r, hdr.size);
 			break;
 		}
-		// printf("frame size: %d\n", hdr.size);
+		printk("frame size: %d\n", hdr.size);
 		//  відмальовуємо кадр
-		// printf("Frame %dx%d, size=%d\n", hdr.width, hdr.height, hdr.size);
+		printk("Frame %dx%d, size=%d\n", hdr.width, hdr.height, hdr.size);
 
 		draw_frame(bi, frame_data, x, y);
 

@@ -1,8 +1,8 @@
 #include "fat_utils.h"
 #include "fat_structs.h"
 #include "fat.h"
+#include "printk.h"
 
-#include <stdio.h>
 #include <string.h>
 
 typedef void (*directory_entry_callback_t)(const char *name, bool is_dir, Directory *context);
@@ -11,24 +11,24 @@ uint32_t resolve_path_to_cluster(FAT32_FS *fs, const char *path)
 {
 	PathParts parts = format_folder_path(path);
 	int depth = parts.count;
-	printf("target %s depth %d", parts.parts[depth].sfn, depth);
+	printk("target %s depth %d", parts.parts[depth].sfn, depth);
 	uint32_t cluster = fs->root_cluster;
 	for (int i = 0; i < depth - 1; ++i)
 	{
-		printf("part: %s\n", parts.parts[i].sfn);
+		printk("part: %s\n", parts.parts[i].sfn);
 		cluster = find_directory_entry_cluster(fs, cluster, parts.parts[i].sfn);
-		printf("cluster: %d\n", cluster);
+		printk("cluster: %d\n", cluster);
 		if (cluster == 0 || cluster >= 0x0FFFFFF8)
 			return 0; // cluster not found
 	}
-	printf("cluster: %d\n", cluster);
+	printk("cluster: %d\n", cluster);
 	free_folder_path(&parts);
 	return cluster;
 }
 
 uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const char *name11)
 {
-	printf("find_directory_entry_cluster: %s\n", name11);
+	printk("find_directory_entry_cluster: %s\n", name11);
 	uint8_t *buffer = malloc(fs->cluster_size);
 	int steps = 0;
 	while (dir_cluster < 0x0FFFFFF8 && steps++ < MAX_CLUSTER_CHAIN)
@@ -46,7 +46,7 @@ uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const 
 			if (memcmp(entry->name, name11, 11) == 0)
 			{
 				free(buffer);
-				printf("entry cluster: high = %d, low = %d\n", entry->first_cluster_high, entry->first_cluster_low);
+				printk("entry cluster: high = %d, low = %d\n", entry->first_cluster_high, entry->first_cluster_low);
 
 				return (entry->first_cluster_high << 16) | entry->first_cluster_low;
 			}
@@ -66,9 +66,9 @@ void iterate_directory(FAT32_FS *fs, uint32_t cluster, directory_entry_callback_
 		return;
 	while (cluster < 0x0FFFFFF8 && steps++ < MAX_CLUSTER_CHAIN && cluster != 0)
 	{
-		// printf("cluster: %d\n", cluster);
+		printk("cluster: %d\n", cluster);
 		fat32_read_cluster(fs, cluster, data);
-		// printf("cluster: %d\n", cluster);
+		printk("cluster: %d\n", cluster);
 		size_t entries = fs->cluster_size / sizeof(FAT32_DirectoryEntry);
 		for (size_t i = 0; i < entries; ++i)
 		{
