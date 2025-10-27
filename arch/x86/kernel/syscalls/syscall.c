@@ -3,6 +3,32 @@
 #include <sys/syscall.h>
 #include <sys/syscall_nums.h>
 
+syscall_fn_t syscall_table[SYSCALL_COUNT] = {
+    [SYS_write] = sys_write,
+    [SYS_read] = sys_read,
+
+};
+
+long syscall_handler(long syscall_num, long arg1, long arg2,
+		     long arg3, long arg4, long arg5, long arg6)
+{
+
+	// Check
+	if (syscall_num < 0 || syscall_num >= SYSCALL_COUNT)
+	{
+		return -1; // ENOSYS
+	}
+
+	syscall_fn_t fn = syscall_table[syscall_num];
+	if (fn == NULL)
+	{
+		return -1; // ENOSYS
+	}
+
+	// Call
+	return fn(arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
 long syscall_dispatcher(long n, long a1, long a2, long a3, long a4, long a5, long a6)
 {
 	switch (n)

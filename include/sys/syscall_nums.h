@@ -5,4 +5,6 @@
 #define SYS_read 2
 #define SYS_mmap 9
 
+#define SYSCALL_COUNT 3
+
 #endif
