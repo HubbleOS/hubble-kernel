@@ -1,4 +1,5 @@
 #include "terminal.h"
+#include "printk.h"
 #include <utils/color.h>
 #include <utils/font.h>
 #include <stdio.h>
@@ -83,6 +84,9 @@ void Terminal::init()
 	terminal_input.read = terminal_read_adapter;
 	terminal_input.user_data = this;
 	register_stdin_device(&terminal_input);
+
+	printk_register_console(terminal_write_adapter, this);
+	printk_unregister_console();
 }
 
 void Terminal::clear()
