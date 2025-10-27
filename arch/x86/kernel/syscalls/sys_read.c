@@ -1,5 +1,3 @@
-#include <stdbool.h>
-#include <ctype.h>
 #include <sys/syscall.h>
 #include <sys/syscall_nums.h>
 #include <sys/input_device.h>
