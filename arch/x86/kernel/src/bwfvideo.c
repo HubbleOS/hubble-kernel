@@ -7,7 +7,7 @@
 #include <utils/color.h>
 #include <mm/kmalloc.h>
 
-// --- структура кадру ---
+// frame header
 struct BWFrameHeader
 {
 	uint16_t width;
@@ -17,14 +17,13 @@ struct BWFrameHeader
 
 void sleep_ms(uint32_t ms)
 {
-	// Константу підібрати експериментально під свою частоту CPU
+	// delay
 	for (volatile uint64_t i = 0; i < (ms * 100000); i++)
 	{
 		__asm__ __volatile__("nop");
 	}
 }
 
-// --- твоя функція малювання ---
 static inline void putpixel(framebuffer_info_t *bi, int x, int y, color_t color,
 			    uint32_t fb_pitch, uint32_t bpp)
 {
@@ -32,7 +31,7 @@ static inline void putpixel(framebuffer_info_t *bi, int x, int y, color_t color,
 	*(color_t *)ptr = color;
 }
 
-// --- відмалювання одного кадру ---
+// draw frame
 void draw_frame(framebuffer_info_t *bi, uint8_t *data, int x_start, int y_start)
 {
 	struct BWFrameHeader *hdr = (struct BWFrameHeader *)data;
@@ -59,8 +58,8 @@ void draw_frame(framebuffer_info_t *bi, uint8_t *data, int x_start, int y_start)
 	}
 }
 
-// --- програвач ---
-void play_bwvid(framebuffer_info_t *bi, const char *path, uint32_t pitch, uint32_t bpp, int x, int y)
+// play bwvid
+void play_bwvid(framebuffer_info_t *bi, const char *path, int x, int y)
 {
 	VFS_File *file = vfs_open(path, VFS_O_RDONLY);
 	if (IS_ERR(file))
