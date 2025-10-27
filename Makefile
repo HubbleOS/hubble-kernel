@@ -65,7 +65,7 @@ HOST_OBJCOPY = objcopy
 
 CFLAGS = -MMD -MP -ffreestanding -m64 -O2 -Wall -Wextra -c
 CXXFLAGS = -MMD -MP -ffreestanding -fno-exceptions -fno-rtti -m64 -O2 -Wall -Wextra -c
-LDFLAGS = -nostdlib -T
+LDFLAGS_NOSTDLIB = -nostdlib -T
 OBJCPYFLAGS = binary
 
 BOOT_CFLAGS = -Iinclude -Ignu-efi/inc \
@@ -85,7 +85,7 @@ EFI_SECTIONS = -j .text -j .sdata -j .data -j .rodata \
 export LD CC CXX AS AR OBJCOPY
 export HOST_LD HOST_CC HOST_CXX HOST_AS HOST_AR HOST_OBJCOPY
 
-export CFLAGS CXXFLAGS LDFLAGS OBJCPYFLAGS
+export CFLAGS CXXFLAGS LDFLAGS_NOSTDLIB OBJCPYFLAGS
 export BOOT_CFLAGS BOOT_LDFLAGS BOOT_LIBS EFI_SECTIONS
 
 # export ARCH
