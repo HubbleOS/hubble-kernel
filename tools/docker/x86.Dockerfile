@@ -9,6 +9,20 @@ ENV PATH=$PREFIX/bin:$PATH
 
 WORKDIR /src
 
+# Install dependencies including nasm
+RUN apt-get update && \
+    apt-get install -y \
+        curl \
+        build-essential \
+        bison \
+        flex \
+        libgmp3-dev \
+        libmpfr-dev \
+        libmpc-dev \
+        texinfo \
+        nasm && \
+    rm -rf /var/lib/apt/lists/*
+
 # Download
 RUN curl -LO https://ftp.gnu.org/gnu/binutils/binutils-2.41.tar.xz && \
 	curl -LO https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.xz && \
@@ -37,9 +51,9 @@ RUN mkdir build-gcc && \
 	make install-target-libstdc++-v3
 
 # GDB
-RUN cd /src && \
-	mkdir build-gdb && \
-	cd build-gdb && \
-	../gdb-13.2/configure --target=$TARGET --prefix=$PREFIX --disable-werror && \
-	make all-gdb -j$(nproc) && \
-	make install-gdb
+# RUN cd /src && \
+# 	mkdir build-gdb && \
+# 	cd build-gdb && \
+# 	../gdb-13.2/configure --target=$TARGET --prefix=$PREFIX --disable-werror && \
+# 	make all-gdb -j$(nproc) && \
+# 	make install-gdb

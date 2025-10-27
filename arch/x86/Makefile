@@ -2,6 +2,11 @@
 SRC_DIR := kernel
 BUILD_DIR ?= build
 
+
+ASM := nasm
+ASMFLAGS := -f elf64 -g -F dwarf
+
+
 # Output ELF and ISO
 OUTPUT := $(BUILD_DIR)/kernel.elf
 ISO := $(ISO_DIR)/kernel.bin
@@ -9,6 +14,11 @@ ISO := $(ISO_DIR)/kernel.bin
 # Kernel object files
 SRC_FILES := $(shell find $(SRC_DIR) -type f -name "*.c")
 OBJ_FILES := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRC_FILES))
+
+ASM_SRC_FILES := $(shell find $(SRC_DIR) -type f -name "*.asm")
+ASM_OBJ_FILES := $(patsubst %.asm,$(BUILD_DIR)/%.o,$(ASM_SRC_FILES))
+
+OBJ_FILES += $(ASM_OBJ_FILES)
 
 CPP_SRC_FILES := $(shell find apps -type f -name "*.cpp")
 CPP_OBJ_FILES := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SRC_FILES))
@@ -45,6 +55,11 @@ $(BUILD_DIR)/%.o: %.cpp
 	@echo "Compiling C++: $< -> $@"
 	@mkdir -p $(dir $@)
 	$(CXX) -g $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/%.o: %.asm
+	@echo "Assembling: $< -> $@"
+	@mkdir -p $(dir $@)
+	$(ASM) $(ASMFLAGS) $< -o $@
 
 # Kernel linking
 $(OUTPUT): $(OBJ_FILES)

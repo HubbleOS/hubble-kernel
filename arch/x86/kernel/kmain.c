@@ -18,6 +18,8 @@
 #include <mm/mm.h>
 
 #include "printk.h"
+#include "gdt.h"
+#include <elf/elf.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -62,12 +64,33 @@ extern void libc_init(void);
 extern VFS_FS *root_fs;
 BootInfo boot_info;
 
+extern void syscall_init(void);
+
+extern void percpu_set_kernel_stack(uint64_t stack);
+
+// Выделяем kernel stack (например, 16KB)
+static uint8_t kernel_stack[16384] __attribute__((aligned(16)));
+
 void kernel_main(BootInfo *bi)
 {
 	early_printk_init(bi->framebuffer);
 	// printk_init(bi->framebuffer);
 
 	libc_init();
+
+	printk(KERN_INFO "Initializing GDT\n");
+	gdt_init();
+
+	printk(KERN_INFO "Initializing per-CPU data\n");
+	percpu_init();
+
+	uint64_t stack_top = (uint64_t)kernel_stack + sizeof(kernel_stack);
+	percpu_set_kernel_stack(stack_top);
+
+	printk(KERN_INFO "Initializing syscall\n");
+	syscall_init();
+
+	////
 
 	printk(KERN_INFO "VMM init\n");
 	uint64_t cr3;
@@ -92,25 +115,24 @@ void kernel_main(BootInfo *bi)
 	printk("FAT32 mounted\n");
 	printk("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
 
-	Directory dir = vfs_readdir("/");
-
-	for (int i = 0; i < dir.count; i++)
-	{
-		printk("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
-	}
-	dir.free_entries(&dir);
-	VFS_File *f = vfs_open("/tesit.txt", VFS_O_CREAT | VFS_O_RDWR);
-	vfs_write(f, "Hello wo123", 11);
-	vfs_lseek(f, 0, SEEK_SET);
-	printk("Reading file: ");
-	vfs_read(f, buffer, 1024);
-	printk("File content: ");
-	for (int i = 0; i < 1024; i++)
-	{
-		if (buffer[i] == '\0')
-			break;
-		printk("%c", buffer[i]);
-	}
+	// Directory dir = vfs_readdir("/");
+	// for (int i = 0; i < dir.count; i++)
+	// {
+	// 	printk("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
+	// }
+	// dir.free_entries(&dir);
+	// VFS_File *f = vfs_open("/tesit.txt", VFS_O_CREAT | VFS_O_RDWR);
+	// vfs_write(f, "Hello wo123", 11);
+	// vfs_lseek(f, 0, SEEK_SET);
+	// printk("Reading file: ");
+	// vfs_read(f, buffer, 1024);
+	// printk("File content: ");
+	// for (int i = 0; i < 1024; i++)
+	// {
+	// 	if (buffer[i] == '\0')
+	// 		break;
+	// 	printk("%c", buffer[i]);
+	// }
 
 	printk("FAT32 init done\n");
 

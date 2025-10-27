@@ -12,12 +12,14 @@ int syscall_write(struct FILE *stream, const char *buffer, int len)
 {
 	(void)stream;
 	return syscall(SYS_write, 1, (long)buffer, len, 0, 0, 0);
+	// return syscall_dispatcher_ptr(SYS_write, 1, (long)buffer, len, 0, 0, 0);
 }
 
 int syscall_read(FILE *stream, char *buffer, int len)
 {
 	(void)stream;
 	return syscall(SYS_read, 0, (long)buffer, len, 0, 0, 0);
+	// return syscall_dispatcher_ptr(SYS_read, 0, (long)buffer, len, 0, 0, 0);
 }
 
 void stdio_init(FILE *in, FILE *out, FILE *err)
