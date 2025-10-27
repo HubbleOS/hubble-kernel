@@ -3,9 +3,10 @@
 #include "fat_structs.h"
 #include "fat_utils.h"
 #include <fs/ata/ata.h>
+#include <mm/kmalloc.h>
 
 #include <string.h>
-#include <stdlib.h>
+
 #include <stdbool.h>
 
 bool fat32_create_file(FAT32_FS *fs, const char *path)
@@ -42,7 +43,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 // 	}
 
 // 	// Find entry
-// 	uint8_t *buf = malloc(fs->cluster_size);
+// 	uint8_t *buf = kmalloc(fs->cluster_size);
 // 	if (!buf)
 // 	{
 // 		printk("Failed to init buf");
@@ -77,7 +78,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 
 // 	while (remaining > 0)
 // 	{
-// 		uint8_t *write_buf = malloc(fs->cluster_size);
+// 		uint8_t *write_buf = kmalloc(fs->cluster_size);
 // 		size_t to_write = remaining > fs->cluster_size ? fs->cluster_size : remaining;
 // 		memcpy(write_buf, data + offset, to_write);
 // 		fat32_write_cluster(fs, cluster, write_buf);
@@ -120,7 +121,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 // 		return 0;
 // 	}
 
-// 	uint8_t *buf = malloc(fs->cluster_size);
+// 	uint8_t *buf = kmalloc(fs->cluster_size);
 // 	fat32_read_cluster(fs, dir_cluster, buf);
 // 	FAT32_DirectoryEntry *entry = NULL;
 
@@ -149,7 +150,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 // 	size_t read = 0;
 // 	while (read < to_read && cluster < 0x0FFFFFF8)
 // 	{
-// 		uint8_t *cluster_buf = malloc(fs->cluster_size);
+// 		uint8_t *cluster_buf = kmalloc(fs->cluster_size);
 // 		fat32_read_cluster(fs, cluster, cluster_buf);
 
 // 		size_t chunk = (to_read - read) > fs->cluster_size ? fs->cluster_size : (to_read - read);
