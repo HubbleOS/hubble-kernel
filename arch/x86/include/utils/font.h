@@ -2,7 +2,7 @@
 #include <_cheader.h>
 #include <stdint.h>
 #include <io.h>
-#include "framebuffer.h"
+#include <bootinfo/framebuffer.h>
 #include "utils/color.h"
 
 #define CHAR_WIDTH 8

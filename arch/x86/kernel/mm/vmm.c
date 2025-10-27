@@ -1,7 +1,8 @@
 #include "vmm.h"
 #include "pmm.h"
+#include "printk.h"
+
 #include <string.h>
-#include <stdio.h>
 
 static inline void *phys_to_virt(uint64_t phys)
 {
@@ -27,14 +28,14 @@ void vmm_set_bootstrap_allocator(uint64_t base, uint64_t size)
 	bootstrap_alloc_size = size;
 	bootstrap_alloc_offset = 0;
 	use_bootstrap = 1;
-	printf("Bootstrap allocator: 0x%llx - 0x%llx (%llu KB)\n",
+	printk("Bootstrap allocator: 0x%llx - 0x%llx (%llu KB)\n",
 	       base, base + size, size / 1024);
 }
 
 void vmm_disable_bootstrap_allocator(void)
 {
 	use_bootstrap = 0;
-	printf("Bootstrap allocator disabled (used %llu bytes)\n",
+	printk("Bootstrap allocator disabled (used %llu bytes)\n",
 	       bootstrap_alloc_offset);
 }
 
@@ -55,7 +56,7 @@ static uint64_t alloc_table_phys(void)
 	{
 		if (bootstrap_alloc_offset + PAGE_SIZE > bootstrap_alloc_size)
 		{
-			printf("ERROR: Bootstrap allocator exhausted!\n");
+			printk("ERROR: Bootstrap allocator exhausted!\n");
 			return 0;
 		}
 
@@ -100,7 +101,7 @@ static uint64_t *get_pte_for(uint64_t pml4_phys, uint64_t virt, int create)
 			uint64_t new_phys = alloc_table_phys();
 			if (!new_phys)
 			{
-				printf("ERROR: Failed to allocate page table at level %d\n", level);
+				printk("ERROR: Failed to allocate page table at level %d\n", level);
 				return NULL;
 			}
 
@@ -194,21 +195,21 @@ uint64_t vmm_translate(uint64_t virt)
 
 void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_size)
 {
-	printf("=== VMM Init ===\n");
-	printf("Bootstrap CR3: 0x%llx\n", bootstrap_cr3_phys);
-	printf("Heap: 0x%llx - 0x%llx (%llu MB)\n",
+	printk("=== VMM Init ===\n");
+	printk("Bootstrap CR3: 0x%llx\n", bootstrap_cr3_phys);
+	printk("Heap: 0x%llx - 0x%llx (%llu MB)\n",
 	       heap_start, heap_start + heap_size, heap_size / (1024 * 1024));
 
 	if (!bootstrap_cr3_phys)
 	{
-		printf("FATAL: No bootstrap CR3 provided\n");
+		printk("FATAL: No bootstrap CR3 provided\n");
 		return;
 	}
 
 	// Check minimum heap size
 	if (heap_size < 16 * 1024 * 1024)
 	{
-		printf("FATAL: Heap too small (%llu MB), need >= 16MB\n",
+		printk("FATAL: Heap too small (%llu MB), need >= 16MB\n",
 		       heap_size / (1024 * 1024));
 		return;
 	}
@@ -223,7 +224,7 @@ void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_si
 	vmm_set_bootstrap_allocator(heap_start, bootstrap_size);
 
 	// CRITICAL: Map the entire heap
-	printf("Mapping heap into page tables...\n");
+	printk("Mapping heap into page tables...\n");
 	uint64_t heap_pages = (heap_size + PAGE_SIZE - 1) / PAGE_SIZE;
 
 	// We map in blocks of 512 pages for better debugging
@@ -238,9 +239,9 @@ void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_si
 		int result = vmm_map(vaddr, vaddr, to_map, PTE_WRITABLE);
 		if (result != 0)
 		{
-			printf("FATAL: Failed to map heap at 0x%llx (error %d)\n",
+			printk("FATAL: Failed to map heap at 0x%llx (error %d)\n",
 			       vaddr, result);
-			printf("Mapped: %llu/%llu pages\n", mapped, heap_pages);
+			printk("Mapped: %llu/%llu pages\n", mapped, heap_pages);
 			return;
 		}
 
@@ -248,12 +249,12 @@ void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_si
 
 		if (mapped % (1024) == 0) // Progress every 4MB
 			;
-		// printf("  Mapped %llu/%llu pages (%llu MB)\n",
-		//        mapped, heap_pages,
-		//        mapped * PAGE_SIZE / (1024 * 1024));
+		printk("  Mapped %llu/%llu pages (%llu MB)\n",
+		       mapped, heap_pages,
+		       mapped * PAGE_SIZE / (1024 * 1024));
 	}
 
-	printf("Successfully mapped %llu pages (%llu MB)\n",
+	printk("Successfully mapped %llu pages (%llu MB)\n",
 	       heap_pages, heap_pages * PAGE_SIZE / (1024 * 1024));
-	printf("=== VMM Init Complete ===\n");
+	printk("=== VMM Init Complete ===\n");
 }

@@ -1,6 +1,6 @@
-#include "utils/font.h"
-#include "utils/framebuffer.h"
-#include "utils/color.h"
+#include <bootinfo/framebuffer.h>
+#include <utils/font.h>
+#include <utils/color.h>
 
 const uint8_t *get_glyph(char c)
 {

@@ -1,11 +1,11 @@
 #include "pmm.h"
+#include "printk.h"
 #include <string.h>
-#include <stdio.h>
 
 #define PAGE_SIZE 0x1000
 
-static uint64_t heap_start_virt; // ВИРТУАЛЬНЫЙ адрес начала кучи
-static uint64_t heap_start_phys; // ФИЗИЧЕСКИЙ адрес начала кучи
+static uint64_t heap_start_virt;
+static uint64_t heap_start_phys;
 static uint64_t heap_size;
 
 static uint64_t total_pages;
@@ -31,8 +31,8 @@ static inline int test_page(size_t page)
 // Если у вас identity mapping, то virt == phys для низких адресов
 void pmm_init(uint64_t pmm_start, uint64_t pmm_size)
 {
-	printf("=== PMM Init ===\n");
-	printf("Physical region: 0x%llx - 0x%llx (%llu MB)\n",
+	printk("=== PMM Init ===\n");
+	printk("Physical region: 0x%llx - 0x%llx (%llu MB)\n",
 	       pmm_start, pmm_start + pmm_size, pmm_size / (1024 * 1024));
 
 	// ПРОВЕРКА: убеждаемся что регион доступен
@@ -41,7 +41,7 @@ void pmm_init(uint64_t pmm_start, uint64_t pmm_size)
 	*test = 0xDEADBEEF;
 	if (*test != 0xDEADBEEF)
 	{
-		printf("FATAL: PMM region not writable!\n");
+		printk("FATAL: PMM region not writable!\n");
 		return;
 	}
 
@@ -53,7 +53,7 @@ void pmm_init(uint64_t pmm_start, uint64_t pmm_size)
 	bitmap = (uint8_t *)heap_start_virt;
 	bitmap_size = (total_pages + 7) / 8;
 
-	printf("Bitmap: %llu bytes (%llu KB)\n",
+	printk("Bitmap: %llu bytes (%llu KB)\n",
 	       bitmap_size, bitmap_size / 1024);
 
 	memset(bitmap, 0, bitmap_size);
@@ -65,9 +65,9 @@ void pmm_init(uint64_t pmm_start, uint64_t pmm_size)
 	heap_size -= bitmap_pages * PAGE_SIZE;
 	total_pages = heap_size / PAGE_SIZE;
 
-	printf("Usable: %llu pages (%llu MB)\n",
+	printk("Usable: %llu pages (%llu MB)\n",
 	       total_pages, total_pages * PAGE_SIZE / (1024 * 1024));
-	printf("=== PMM Init Complete ===\n");
+	printk("=== PMM Init Complete ===\n");
 }
 
 void *pmm_alloc(size_t pages)

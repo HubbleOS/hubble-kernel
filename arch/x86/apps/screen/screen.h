@@ -1,7 +1,7 @@
 #pragma once
 
-#include "utils/framebuffer.h"
-#include "utils/color.h"
+#include <bootinfo/bootinfo.h>
+#include <utils/color.h>
 
 class Screen
 {
