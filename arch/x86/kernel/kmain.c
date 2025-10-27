@@ -64,16 +64,18 @@ BootInfo boot_info;
 
 void kernel_main(BootInfo *bi)
 {
-	printk_init(bi->framebuffer);
+	early_printk_init(bi->framebuffer);
+	// printk_init(bi->framebuffer);
+
 	libc_init();
 
-	printk("VMM init\n");
+	printk(KERN_INFO "VMM init\n");
 	uint64_t cr3;
 	asm volatile("mov %%cr3, %0" : "=r"(cr3));
 	vmm_init(cr3, bi->memory_map->heap_start, bi->memory_map->heap_size);
 	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
 
-	printk("kmalloc init\n");
+	printk(KERN_INFO "kmalloc init\n");
 	kmalloc_init();
 
 	char buffer[1024];

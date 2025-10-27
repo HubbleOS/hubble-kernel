@@ -7,61 +7,90 @@
 #include <stdbool.h>
 #include <limits.h>
 
-static int printk_x = 0;
-static int printk_y = 0;
-static framebuffer_info_t *printk_fb = NULL;
+// Ring buffer for logs
+static char log_buffer[PRINTK_BUFFER_SIZE];
+static size_t log_head = 0;	 // Position records
+static size_t log_tail = 0;	 // Reading position
+static size_t log_size = 0;	 // Current data size
+static bool log_wrapped = false; // Buffer overflowed
 
-void printk_init(framebuffer_info_t *fb)
+// Early console
+static int early_x = 0;
+static int early_y = 0;
+static framebuffer_info_t *early_fb = NULL;
+static bool early_mode = false;
+
+// Console callback
+static void (*console_write)(const char *buf, size_t len, void *data) = NULL;
+static void *console_user_data = NULL;
+
+// Add to ring buffer
+static void log_buffer_append(const char *buf, size_t len)
 {
-	printk_fb = fb;
-	printk_x = 0;
-	printk_y = 0;
+	for (size_t i = 0; i < len; i++)
+	{
+		log_buffer[log_head] = buf[i];
+		log_head = (log_head + 1) % PRINTK_BUFFER_SIZE;
+
+		if (log_size < PRINTK_BUFFER_SIZE)
+		{
+			log_size++;
+		}
+		else
+		{
+			// Буфер полон, перемещаем tail
+			log_wrapped = true;
+			log_tail = (log_tail + 1) % PRINTK_BUFFER_SIZE;
+		}
+	}
 }
 
-static void printk_putchar(char c)
+// Early console functions (как ваш старый код)
+static void early_putchar(char c)
 {
-	if (!printk_fb)
+	if (!early_fb)
 		return;
 
 	if (c == '\n')
 	{
-		printk_x = 0;
-		printk_y += CHAR_HEIGHT;
+		early_x = 0;
+		early_y += CHAR_HEIGHT;
 
-		if (printk_y + CHAR_HEIGHT > printk_fb->height)
+		if (early_y + CHAR_HEIGHT > early_fb->height)
 		{
-			size_t line_size = printk_fb->pitch;
-			uint8_t *fb_base = (uint8_t *)printk_fb->base;
+			// Scroll
+			size_t line_size = early_fb->pitch;
+			uint8_t *fb_base = (uint8_t *)early_fb->base;
 
-			for (int y = 0; y < printk_fb->height - CHAR_HEIGHT; y++)
+			for (int y = 0; y < early_fb->height - CHAR_HEIGHT; y++)
 			{
 				memcpy(fb_base + y * line_size,
 				       fb_base + (y + CHAR_HEIGHT) * line_size,
 				       line_size);
 			}
 
-			for (int y = printk_fb->height - CHAR_HEIGHT; y < printk_fb->height; y++)
+			for (int y = early_fb->height - CHAR_HEIGHT; y < early_fb->height; y++)
 			{
 				memset(fb_base + y * line_size, 0, line_size);
 			}
 
-			printk_y = printk_fb->height - CHAR_HEIGHT;
+			early_y = early_fb->height - CHAR_HEIGHT;
 		}
 		return;
 	}
 
 	if (c == '\r')
 	{
-		printk_x = 0;
+		early_x = 0;
 		return;
 	}
 
 	if (c == '\b')
 	{
-		if (printk_x >= CHAR_WIDTH)
+		if (early_x >= CHAR_WIDTH)
 		{
-			printk_x -= CHAR_WIDTH;
-			clear_char_area(printk_fb, printk_x, printk_y, CHAR_WIDTH, CHAR_HEIGHT, 0x000000);
+			early_x -= CHAR_WIDTH;
+			clear_char_area(early_fb, early_x, early_y, CHAR_WIDTH, CHAR_HEIGHT, 0x000000);
 		}
 		return;
 	}
@@ -69,27 +98,142 @@ static void printk_putchar(char c)
 	if (c == '\t')
 	{
 		for (int i = 0; i < 4; i++)
-			printk_putchar(' ');
+			early_putchar(' ');
 		return;
 	}
 
-	if (printk_x + CHAR_WIDTH > printk_fb->width)
-		printk_putchar('\n');
+	if (early_x + CHAR_WIDTH > early_fb->width)
+		early_putchar('\n');
 
-	draw_char(printk_fb, c, printk_x, printk_y, CHAR_WIDTH, CHAR_HEIGHT, COLOR_WHITE);
-	printk_x += CHAR_WIDTH;
+	draw_char(early_fb, c, early_x, early_y, CHAR_WIDTH, CHAR_HEIGHT, COLOR_WHITE);
+	early_x += CHAR_WIDTH;
 }
 
-static void printk_puts(const char *s, size_t len)
+static void early_puts(const char *s, size_t len)
 {
 	for (size_t i = 0; i < len; i++)
-		printk_putchar(s[i]);
+		early_putchar(s[i]);
+}
+
+// Checking the severity level
+static bool is_critical_level(const char *fmt)
+{
+	if (fmt[0] == '<' && fmt[1] >= '0' && fmt[1] <= '7' && fmt[2] == '>')
+	{
+		int level = fmt[1] - '0';
+		return level <= 2; // EMERG, ALERT, CRIT
+	}
+	return false;
+}
+
+void early_printk_init(framebuffer_info_t *fb)
+{
+	early_fb = fb;
+	early_x = 0;
+	early_y = 0;
+	early_mode = true;
+}
+
+void printk_init(framebuffer_info_t *fb)
+{
+	early_fb = fb;
+	early_x = 0;
+	early_y = 0;
+}
+
+void printk_register_console(void (*write_fn)(const char *buf, size_t len, void *data), void *user_data)
+{
+	console_write = write_fn;
+	console_user_data = user_data;
+	early_mode = false;
+
+	// We output accumulated logs to the terminal
+	if (console_write && log_size > 0)
+	{
+		size_t pos = log_tail;
+		size_t remaining = log_size;
+
+		while (remaining > 0)
+		{
+			size_t chunk = remaining;
+			if (pos + chunk > PRINTK_BUFFER_SIZE)
+				chunk = PRINTK_BUFFER_SIZE - pos;
+
+			console_write(log_buffer + pos, chunk, console_user_data);
+			pos = (pos + chunk) % PRINTK_BUFFER_SIZE;
+			remaining -= chunk;
+		}
+	}
+}
+
+void printk_unregister_console(void)
+{
+	console_write = NULL;
+	console_user_data = NULL;
+}
+
+void printk_set_early_mode(bool enable)
+{
+	early_mode = enable;
+}
+
+bool printk_is_early_mode(void)
+{
+	return early_mode;
+}
+
+size_t printk_get_log_buffer(char *dest, size_t max_len)
+{
+	if (!dest || max_len == 0)
+		return 0;
+
+	size_t to_copy = log_size < max_len ? log_size : max_len;
+	size_t copied = 0;
+	size_t pos = log_tail;
+
+	while (copied < to_copy)
+	{
+		dest[copied++] = log_buffer[pos];
+		pos = (pos + 1) % PRINTK_BUFFER_SIZE;
+	}
+
+	return copied;
+}
+
+void printk_clear_log_buffer(void)
+{
+	log_head = 0;
+	log_tail = 0;
+	log_size = 0;
+	log_wrapped = false;
+}
+
+size_t printk_get_log_size(void)
+{
+	return log_size;
 }
 
 static void printk_pad(char c, int count)
 {
-	for (int i = 0; i < count; i++)
-		printk_putchar(c);
+	char buf[256];
+	int written = 0;
+
+	while (count > 0)
+	{
+		int chunk = count > sizeof(buf) ? sizeof(buf) : count;
+		memset(buf, c, chunk);
+
+		// Write to the buffer
+		log_buffer_append(buf, chunk);
+
+		// Display it on the screen if necessary
+		if (early_mode && early_fb)
+			early_puts(buf, chunk);
+		else if (console_write)
+			console_write(buf, chunk, console_user_data);
+
+		count -= chunk;
+	}
 }
 
 #define FLAG_LEFT_ADJUST (1U << 0)
@@ -150,9 +294,7 @@ static const char *parse_width(const char *fmt, int *width, va_list *args)
 	{
 		*width = va_arg(*args, int);
 		if (*width < 0)
-		{
 			*width = -*width;
-		}
 		return fmt + 1;
 	}
 
@@ -174,7 +316,6 @@ static const char *parse_precision(const char *fmt, int *precision, va_list *arg
 	}
 
 	fmt++;
-
 	if (*fmt == '*')
 	{
 		*precision = va_arg(*args, int);
@@ -279,6 +420,22 @@ static char *format_int(intmax_t num, char *buf, bool *is_negative)
 	return format_uint((uintmax_t)num, buf, 10, false, 0);
 }
 
+static void output_string(const char *str, size_t len)
+{
+	// We always write to the log buffer
+	log_buffer_append(str, len);
+
+	// Display on screen
+	if (early_mode && early_fb)
+	{
+		early_puts(str, len);
+	}
+	else if (console_write)
+	{
+		console_write(str, len, console_user_data);
+	}
+}
+
 static void output_formatted(const char *str, int str_len, int width,
 			     unsigned flags, char pad_char,
 			     const char *prefix, int prefix_len)
@@ -289,35 +446,34 @@ static void output_formatted(const char *str, int str_len, int width,
 	if (flags & FLAG_LEFT_ADJUST)
 	{
 		if (prefix_len > 0)
-			printk_puts(prefix, prefix_len);
-		printk_puts(str, str_len);
+			output_string(prefix, prefix_len);
+		output_string(str, str_len);
 		printk_pad(' ', padding);
 	}
 	else
 	{
-
 		if ((flags & FLAG_ZERO_PAD) && !(flags & FLAG_LEFT_ADJUST))
 		{
 			if (prefix_len > 0)
-				printk_puts(prefix, prefix_len);
+				output_string(prefix, prefix_len);
 			printk_pad('0', padding);
-			printk_puts(str, str_len);
+			output_string(str, str_len);
 		}
 		else
 		{
 			printk_pad(pad_char, padding);
 			if (prefix_len > 0)
-				printk_puts(prefix, prefix_len);
-			printk_puts(str, str_len);
+				output_string(prefix, prefix_len);
+			output_string(str, str_len);
 		}
 	}
 }
 
 void vprintk(const char *fmt, va_list args)
 {
-	if (!printk_fb)
-		return;
+	bool is_critical = is_critical_level(fmt);
 
+	// Skiping the level prefix
 	if (fmt[0] == '<' && fmt[1] >= '0' && fmt[1] <= '7' && fmt[2] == '>')
 		fmt += 3;
 
@@ -327,10 +483,10 @@ void vprintk(const char *fmt, va_list args)
 
 	while (*fmt)
 	{
-
 		if (*fmt != '%')
 		{
-			printk_putchar(*fmt++);
+			char c = *fmt++;
+			output_string(&c, 1);
 			continue;
 		}
 
@@ -338,7 +494,8 @@ void vprintk(const char *fmt, va_list args)
 
 		if (*fmt == '%')
 		{
-			printk_putchar('%');
+			char c = '%';
+			output_string(&c, 1);
 			fmt++;
 			continue;
 		}
@@ -369,7 +526,6 @@ void vprintk(const char *fmt, va_list args)
 		{
 		case 'd':
 		case 'i':
-
 			switch (length)
 			{
 			case LEN_HH:
@@ -402,17 +558,11 @@ void vprintk(const char *fmt, va_list args)
 			str_len = strlen(str);
 
 			if (is_negative)
-			{
 				prefix[prefix_len++] = '-';
-			}
 			else if (flags & FLAG_SHOW_SIGN)
-			{
 				prefix[prefix_len++] = '+';
-			}
 			else if (flags & FLAG_SPACE)
-			{
 				prefix[prefix_len++] = ' ';
-			}
 
 			if (precision >= 0)
 				flags &= ~FLAG_ZERO_PAD;
@@ -461,9 +611,7 @@ void vprintk(const char *fmt, va_list args)
 				if (specifier == 'o')
 				{
 					if (str[0] != '0')
-					{
 						prefix[prefix_len++] = '0';
-					}
 				}
 				else if (specifier == 'x' || specifier == 'X')
 				{
@@ -512,17 +660,25 @@ void vprintk(const char *fmt, va_list args)
 		}
 
 		case 'n':
-
 			break;
 
 		default:
-			printk_putchar('%');
-			printk_putchar(specifier);
+		{
+			char tmp[2] = {'%', specifier};
+			output_string(tmp, 2);
 			break;
+		}
 		}
 	}
 
 	va_end(args_copy);
+
+	// For critical messages add some delay
+	if (is_critical && early_mode && early_fb)
+	{
+		for (volatile int i = 0; i < 10000000; i++)
+			;
+	}
 }
 
 void printk(const char *fmt, ...)
