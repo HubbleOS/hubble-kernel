@@ -1,9 +1,8 @@
 #include "vfs.h"
 #include <fs/fat32/fat.h>
-// твій драйвер
 #include "vfs_standart_struct.h"
+#include "printk.h"
 #include <string.h>
-#include <stdio.h>
 
 #define FAT32_ATTR_READ_ONLY 0x01
 #define FAT32_ATTR_HIDDEN 0x02
@@ -24,14 +23,14 @@ static void fat32_unmount_wrapper(VFS_FS *fs)
 static VFS_Node *fat32_open_wrapper(VFS_FS *fs, const char *path)
 {
 	FAT32_File *file = fat32_open(fs->fs, path);
-	printf("\nEntry open here!!: ");
+	printk("\nEntry open here!!: ");
 	// for (int i = 0; i < sizeof(FAT32_DirectoryEntry); i++)
 	// {
-	// 	printf("%c", file->entry[i]);
+	// 	printk("%c", file->entry[i]);
 	// }
 	if (!file)
 	{
-		printf("\nFailed to open file\n");
+		printk("\nFailed to open file\n");
 		return NULL;
 	}
 
@@ -59,7 +58,7 @@ static VFS_Node *fat32_open_wrapper(VFS_FS *fs, const char *path)
 	{
 		node->mode |= MODE_READ | MODE_WRITE;
 	}
-	printf("Entry open: %s\n", node->name);
+	printk("Entry open: %s\n", node->name);
 	return node;
 }
 
@@ -74,7 +73,7 @@ static int fat32_write_wrapper(VFS_File *node, const void *buf, uint32_t size)
 }
 static VFS_Node *fat32_create_file_wrapper(VFS_FS *fs, const char *path)
 {
-	printf("Creating file: %s\n", path);
+	printk("Creating file: %s\n", path);
 	fat32_create_file((FAT32_FS *)(fs->fs), path);
 	return fat32_open_wrapper(fs, path);
 }

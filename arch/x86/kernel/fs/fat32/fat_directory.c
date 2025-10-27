@@ -1,8 +1,9 @@
+#include <string.h>
+
+#include "printk.h"
 #include "fat.h"
 #include "fat_structs.h"
 #include "fat_utils.h"
-#include <string.h>
-#include <stdio.h>
 
 void fat32_format_directory_cluster(FAT32_FS *fs, uint32_t cluster, uint32_t parent_cluster)
 {
@@ -30,8 +31,8 @@ void fat32_format_directory_cluster(FAT32_FS *fs, uint32_t cluster, uint32_t par
 bool fat32_create_directory(FAT32_FS *fs, const char *path)
 {
 	PathParts parts = format_folder_path(path);
-	printf("path: %s\n", path);
-	printf("parts: %d\n", parts.count);
+	printk("path: %s\n", path);
+	printk("parts: %d\n", parts.count);
 
 	const char abs_path[256] = {0};
 	for (int i = 0; i < parts.count - 1; ++i)
@@ -110,20 +111,20 @@ bool fat32_delete_directory(FAT32_FS *fs, const char *path)
 	uint32_t parent_cluster = resolve_path_to_cluster(fs, abs_path);
 	uint32_t dir_cluster = find_directory_entry_cluster(fs, parent_cluster, parts.parts[parts.count - 1].sfn);
 	Directory dir = fat32_list_files(fs, dir_cluster);
-	printf("dir count: %d\n", dir.count);
+	printk("dir count: %d\n", dir.count);
 
 	if (dir.count > 2)
 	{
 		for (int i = 0; i < dir.count; i++)
 		{
-			printf("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
+			printk("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
 		}
-		printf("Directory not empty\n");
+		printk("Directory not empty\n");
 		return false;
 	}
 
 	fat32_delete_entry(fs, parent_cluster, parts.parts[parts.count - 1].sfn);
-	printf("📁 Directory deleted: %s\n", path);
+	printk("📁 Directory deleted: %s\n", path);
 
 	fat_flush(fs);
 	return true;

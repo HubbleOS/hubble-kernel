@@ -1,6 +1,6 @@
-#include "utils/framebuffer.h"
-#include "utils/font.h"
-#include "utils/bwfvideo.h"
+#include <bootinfo/bootinfo.h>
+#include <utils/font.h>
+#include <utils/bwfvideo.h>
 
 #include <fs/fat32/fat.h>
 #include <fs/fat32/fat_structs.h>
@@ -16,6 +16,8 @@
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <mm/mm.h>
+
+#include "printk.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -63,57 +65,53 @@ BootInfo boot_info;
 
 void kernel_main(BootInfo *bi)
 {
+	printk_init(bi->framebuffer);
 	libc_init();
 
-	// 1. Получаем текущий CR3 от UEFI
+	printk("VMM init\n");
 	uint64_t cr3;
 	asm volatile("mov %%cr3, %0" : "=r"(cr3));
-
-	// 2. VMM init БЕЗ использования PMM
-	//    Он маппит heap используя UEFI page tables
 	vmm_init(cr3, bi->memory_map->heap_start, bi->memory_map->heap_size);
-
-	// 3. ТОЛЬКО после mapping heap можно инициализировать PMM
 	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
 
-	printf("kmalloc init\n");
+	printk("kmalloc init\n");
 	kmalloc_init();
 
 	char buffer[1024];
 
 	// struct pci_device *nvme = find_nvme_qemu();
-	// printf("NVMe bus: %d", nvme->bus);
-	// printf("NVMe init\n");
+	// printk("NVMe bus: %d", nvme->bus);
+	// printk("NVMe init\n");
 
-	printf("GPT init\n");
+	printk("GPT init\n");
 	gpt_init(partitions);
 
-	printf("FAT32 init at LBA %d\n", partitions[0].first_lba);
+	printk("FAT32 init at LBA %d\n", partitions[0].first_lba);
 	vfs_mount(&partitions[0], FS_FAT32);
-	printf("FAT32 mounted\n");
-	printf("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
+	printk("FAT32 mounted\n");
+	printk("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
 
 	Directory dir = vfs_readdir("/");
 
 	for (int i = 0; i < dir.count; i++)
 	{
-		printf("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
+		printk("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
 	}
 	dir.free_entries(&dir);
 	VFS_File *f = vfs_open("/tesit.txt", VFS_O_CREAT | VFS_O_RDWR);
 	vfs_write(f, "Hello wo123", 11);
 	vfs_lseek(f, 0, SEEK_SET);
-	printf("Reading file: ");
+	printk("Reading file: ");
 	vfs_read(f, buffer, 1024);
-	printf("File content: ");
+	printk("File content: ");
 	for (int i = 0; i < 1024; i++)
 	{
 		if (buffer[i] == '\0')
 			break;
-		printf("%c", buffer[i]);
+		printk("%c", buffer[i]);
 	}
 
-	printf("FAT32 init done\n");
+	printk("FAT32 init done\n");
 
 	os_main(bi);
 

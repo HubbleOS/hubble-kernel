@@ -1,7 +1,8 @@
+#include "printk.h"
+
 #include "ata.h"
 #include <stdint.h>
 #include <string.h>
-#include <stdio.h>
 #include <io.h>
 #include <fs/fat32/fat_structs.h>
 
@@ -48,14 +49,14 @@ int ata_wait_drq(ATA_Device *dev)
 
 int ata_read_sector(void *device, uint32_t lba, void *buffer)
 {
-	// printf("ata_read_sector %d\n", lba);
+	// printk("ata_read_sector %d\n", lba);
 	ATA_Device *dev = (ATA_Device *)device;
-	// printf("bus: %d, device: %d, io_base: %d, ctrl_base: %d\n", dev->bus, dev->device, dev->io_base, dev->ctrl_base);
+	// printk("bus: %d, device: %d, io_base: %d, ctrl_base: %d\n", dev->bus, dev->device, dev->io_base, dev->ctrl_base);
 
 	uint16_t *buf = (uint16_t *)buffer;
-	// printf("ata_read_sector");
+	// printk("ata_read_sector");
 	// for (int j = 0; j < 16; j++)
-	// 	printf("%02X ", buf[j]);
+	// 	printk("%02X ", buf[j]);
 	ata_wait(dev);
 	outb(dev->ctrl_base, 0x00);
 
@@ -69,7 +70,7 @@ int ata_read_sector(void *device, uint32_t lba, void *buffer)
 	ata_wait(dev);
 	if (ata_wait_drq(dev) != 0)
 	{
-		printf("ata_wait_drq failed\n");
+		printk("ata_wait_drq failed\n");
 		return -1;
 	}
 
@@ -84,15 +85,15 @@ int ata_read_sector(void *device, uint32_t lba, void *buffer)
 int ata_write_sector(void *device, uint32_t lba, const void *buffer)
 {
 	ATA_Device *dev = (ATA_Device *)device;
-	// printf("bus: %d, device: %d, io_base: %d, ctrl_base: %d\n", dev->bus, dev->device, dev->io_base, dev->ctrl_base);
+	printk("bus: %d, device: %d, io_base: %d, ctrl_base: %d\n", dev->bus, dev->device, dev->io_base, dev->ctrl_base);
 	const uint16_t *buf = (const uint16_t *)buffer;
-	// printf("\nata_write_sector %d", lba);
+	printk("\nata_write_sector %d", lba);
 
-	// for (int j = 0; j < 16; j++)
-	// 	printf("%02X ", buf[j]);
+	for (int j = 0; j < 16; j++)
+		printk("%02X ", buf[j]);
 	if (((FAT32_DirectoryEntry *)(buf))->name[0] == 0x00)
 	{
-		printf("ata_write_sector: buffer is empty\n");
+		printk("ata_write_sector: buffer is empty\n");
 	}
 	ata_wait(dev);
 
@@ -105,7 +106,7 @@ int ata_write_sector(void *device, uint32_t lba, const void *buffer)
 
 	if (ata_wait_drq(dev) < 0)
 	{
-		printf("ata_wait_drq failed\n");
+		printk("ata_wait_drq failed\n");
 		return -1;
 	}
 
@@ -118,7 +119,7 @@ int ata_write_sector(void *device, uint32_t lba, const void *buffer)
 
 	if (inb(dev->io_base + 7) & ATA_STATUS_ERROR)
 	{
-		printf("ata_write_sector failed\n");
+		printk("ata_write_sector failed\n");
 		return -1;
 	}
 
@@ -144,26 +145,26 @@ int ata_write_sector(void *device, uint32_t lba, const void *buffer)
 //     for (int i = 0; i < 512; ++i)
 //         write_buf[i] = (uint8_t)(i & 0xFF); // просто шаблон: 00, 01, ..., FF, 00, 01 ...
 
-//     printf("📤 Writing to LBA %u...\n", test_lba);
+//     printk("📤 Writing to LBA %u...\n", test_lba);
 //     if (ata_write_sector(test_lba, write_buf) != 0)
 //     {
-//         printf("ATA write failed\n");
-//         printf("error code: %d\n", ata_write_sector(test_lba, write_buf));
+//         printk("ATA write failed\n");
+//         printk("error code: %d\n", ata_write_sector(test_lba, write_buf));
 //         return;
 //     }
 
 //     memset(read_buf, 0, sizeof(read_buf));
-//     printf("Reading from LBA %u...\n", test_lba);
+//     printk("Reading from LBA %u...\n", test_lba);
 //     ata_read_sector(test_lba, read_buf);
 
 //     // 3. Порівняння
 //     for (int i = 0; i < 16; ++i) // перевіримо перші 16 байт
 //     {
-//         printf("Byte %02d: written=0x%d read=0x%d\n", i, write_buf[i], read_buf[i]);
+//         printk("Byte %02d: written=0x%d read=0x%d\n", i, write_buf[i], read_buf[i]);
 //     }
 
 //     if (memcmp(write_buf, read_buf, 512) == 0)
-//         printf("ATA write/read successful!\n");
+//         printk("ATA write/read successful!\n");
 //     else
-//         printf("Mismatch in data!\n");
+//         printk("Mismatch in data!\n");
 // }

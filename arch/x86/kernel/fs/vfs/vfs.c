@@ -2,7 +2,6 @@
 #include "vfs_standart_struct.h"
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 #include <stdarg.h>
 #include <errno.h>
 // #include "gpt.h" // Список змонтованих ФС (поки що 1)
@@ -15,10 +14,10 @@ bool vfs_mount(gpt_partition_t *parition, FileSystemType type)
 {
 	if (root_fs != NULL)
 	{
-		printf("VFS: already mounted\n");
+		printk("VFS: already mounted\n");
 		return false;
 	}
-	printf("VFS: mounting\n");
+	printk("VFS: mounting\n");
 	root_fs = malloc(sizeof(VFS_FS));
 	memset(root_fs, 0, sizeof(VFS_FS));
 	root_fs->type = type;
@@ -31,12 +30,12 @@ bool vfs_mount(gpt_partition_t *parition, FileSystemType type)
 		fat32_init_vfs(root_fs);
 		break;
 	default:
-		printf("VFS: unsupported FS type %d\n", type);
+		printk("VFS: unsupported FS type %d\n", type);
 		free(root_fs);
 		root_fs = NULL;
 		return false;
 	}
-	printf("VFS: mounted\n");
+	printk("VFS: mounted\n");
 	return root_fs->mount(root_fs, parition->device, parition->first_lba);
 }
 
@@ -49,15 +48,15 @@ VFS_File *vfs_open(const char *path, int flags)
 
 	VFS_File *f = malloc(sizeof(VFS_File));
 
-	printf("VFS: opening file %s\n", path);
+	printk("VFS: opening file %s\n", path);
 
 	if (!node)
 	{
-		printf("VFS: file %s not found\n", path);
+		printk("VFS: file %s not found\n", path);
 
 		if (flags & VFS_O_CREAT)
 		{
-			printf("VFS: creating file %s\n", path);
+			printk("VFS: creating file %s\n", path);
 			node = vfs_create_file(path);
 			if (!node)
 			{
@@ -80,7 +79,7 @@ VFS_File *vfs_open(const char *path, int flags)
 			return ERR_PTR(-EEXIST); // існує, а ми хочемо створити з EXCL
 		}
 	}
-	printf("VFS: file opened %s\n", path);
+	printk("VFS: file opened %s\n", path);
 	// --- перевірка режимів ---
 	int access_mode = flags & 0x03; // беремо тільки нижні біти
 	switch (access_mode)
@@ -113,7 +112,7 @@ VFS_File *vfs_open(const char *path, int flags)
 	f->node = node;
 	f->flags = flags;
 	f->pos = (flags & VFS_O_APPEND) ? node->size : 0;
-	printf("VFS: file opened %s\n", path);
+	printk("VFS: file opened %s\n", path);
 	return f;
 }
 
@@ -121,12 +120,12 @@ int vfs_read(VFS_File *file, void *buf, uint32_t size)
 {
 	if (!file || !file->node->fs || !file->node->fs->read)
 	{
-		printf("VFS: read error\n");
+		printk("VFS: read error\n");
 		return -EIO;
 	}
 	if (file->pos >= file->node->size)
 	{
-		printf("VFS: EOF\n");
+		printk("VFS: EOF\n");
 		return -0;
 	}
 	return file->node->fs->read(file, buf, size);
@@ -157,7 +156,7 @@ Directory vfs_readdir(const char *path)
 
 	if (!root_fs || !root_fs->readdir)
 		return (Directory){0};
-	printf("VFS: reading directory %s\n", path);
+	printk("VFS: reading directory %s\n", path);
 	return root_fs->readdir(root_fs, path);
 }
 

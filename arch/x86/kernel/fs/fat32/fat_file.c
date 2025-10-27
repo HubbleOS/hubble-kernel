@@ -1,21 +1,21 @@
 #include "fat.h"
-
+#include "printk.h"
 #include "fat_structs.h"
 #include "fat_utils.h"
 #include <fs/ata/ata.h>
-#include <stdio.h>
+
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
 bool fat32_create_file(FAT32_FS *fs, const char *path)
 {
-	printf("Creating file: %s\n", path);
+	printk("Creating file: %s\n", path);
 	PathParts parts = format_folder_path(path);
 	char abs_path[256] = {0};
 	abs_path[0] = '\0';
-	// printf("parts: %d\n", parts.count);
-	// printf("parts: %s\n", parts.parts[parts.count - 1].sfn);
+	printk("parts: %d\n", parts.count);
+	printk("parts: %s\n", parts.parts[parts.count - 1].sfn);
 	for (int i = 0; i < parts.count - 1; ++i)
 	{
 		if (i > 0)
@@ -24,7 +24,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 	}
 
 	uint32_t parent_cluster = resolve_path_to_cluster(fs, abs_path);
-	printf("parent cluster: %d\n", parent_cluster);
+	printk("parent cluster: %d\n", parent_cluster);
 	return fat32_create_entry(fs, parent_cluster, &parts.parts[parts.count - 1], false);
 }
 
@@ -37,7 +37,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 // 	uint32_t file_cluster = resolve_path_to_cluster(fs, path);
 // 	if (file_cluster == 0)
 // 	{
-// 		printf(" File not found: %s/%s\n", path, filename11);
+// 		printk(" File not found: %s/%s\n", path, filename11);
 // 		return false;
 // 	}
 
@@ -45,7 +45,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 // 	uint8_t *buf = malloc(fs->cluster_size);
 // 	if (!buf)
 // 	{
-// 		printf("Failed to init buf");
+// 		printk("Failed to init buf");
 // 	}
 // 	fat32_read_cluster(fs, file_cluster, buf);
 // 	size_t entries = fs->cluster_size / sizeof(FAT32_DirectoryEntry);
@@ -56,7 +56,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 // 		FAT32_DirectoryEntry *e = (FAT32_DirectoryEntry *)(buf + i * sizeof(FAT32_DirectoryEntry));
 // 		if (memcmp(e->name, target, 11) == 0 && !(e->attr & 0x10))
 // 		{
-// 			printf("found entry to write\n");
+// 			printk("found entry to write\n");
 
 // 			entry = e;
 // 			break;
@@ -66,7 +66,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 // 	if (!entry)
 // 	{
 // 		free(buf);
-// 		printf("Entry not found in cluster\n");
+// 		printk("Entry not found in cluster\n");
 // 		return false;
 // 	}
 
@@ -94,7 +94,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 // 				next = fat32_allocate_cluster(fs);
 // 				if (next == 0)
 // 				{
-// 					printf("No space during write\n");
+// 					printk("No space during write\n");
 // 					free(buf);
 // 					return false;
 // 				}
@@ -116,7 +116,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 // 	uint32_t dir_cluster = resolve_path_to_cluster(fs, path);
 // 	if (dir_cluster == 0)
 // 	{
-// 		printf("Path not found: %s\n", path);
+// 		printk("Path not found: %s\n", path);
 // 		return 0;
 // 	}
 
@@ -129,7 +129,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 // 		FAT32_DirectoryEntry *e = (FAT32_DirectoryEntry *)(buf + i * sizeof(FAT32_DirectoryEntry));
 // 		if (memcmp(e->name, target, 11) == 0 && !(e->attr & 0x10))
 // 		{
-// 			printf("found entry to read\n");
+// 			printk("found entry to read\n");
 // 			entry = e;
 // 			break;
 // 		}
@@ -137,7 +137,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 
 // 	if (!entry)
 // 	{
-// 		printf("File not found: %s/%s\n", path, filename11);
+// 		printk("File not found: %s/%s\n", path, filename11);
 // 		free(buf);
 // 		return 0;
 // 	}
@@ -176,6 +176,6 @@ bool fat32_delete_file(FAT32_FS *fs, const char *path)
 	uint32_t parent_cluster = resolve_path_to_cluster(fs, abs_path);
 
 	fat32_delete_entry(fs, parent_cluster, pp.parts[pp.count - 1].sfn);
-	printf("File deleted: %s/%s\n", path, pp.parts[pp.count - 1].sfn);
+	printk("File deleted: %s/%s\n", path, pp.parts[pp.count - 1].sfn);
 	return true;
 }

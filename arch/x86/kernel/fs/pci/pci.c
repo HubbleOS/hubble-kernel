@@ -1,8 +1,7 @@
-
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "stdio.h"
+#include "printk.h"
 #include "pci.h"
 
 #include <io.h>
@@ -63,7 +62,7 @@ struct pci_device *find_nvme_qemu()
 	 * vendors that == 0xFFFF, it must be a non-existent device. */
 	if ((vendor = pciConfigReadWord(0, 3, 0, 0)) != 0xFFFF)
 	{
-		printf("vendor: %x\n", vendor);
+		printk("vendor: %x\n", vendor);
 		device = pciConfigReadWord(0, 3, 0, 2);
 		if (vendor == 0x1AF4 && device == 0x1)
 		{

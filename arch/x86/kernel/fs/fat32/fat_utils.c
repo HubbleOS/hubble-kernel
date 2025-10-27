@@ -1,13 +1,12 @@
-
 #include "fat_structs.h"
 #include "fat_utils.h"
 #include "fat.h"
+#include "printk.h"
 
 #include <fs/ata/ata.h>
 #include <fs/vfs/vfs.h>
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <errno.h>
 
@@ -99,7 +98,7 @@ bool fat32_mount(FAT32_FS *fs, VFS_Device *device, uint32_t start_lba)
 
 	fat32_init_from_lba(start_lba, fs);
 
-	printf("here is root cluster: %d\n", fs->root_cluster);
+	printk("here is root cluster: %d\n", fs->root_cluster);
 	return true;
 }
 
@@ -111,7 +110,7 @@ bool fat32_unmount(FAT32_FS *fs)
 }
 FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 {
-	printf("Opening file: %s\n", path);
+	printk("Opening file: %s\n", path);
 	uint32_t cluster = resolve_path_to_cluster(fs, path);
 	if (cluster == 0)
 		return NULL;
@@ -163,7 +162,7 @@ FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 	}
 
 	free(buf);
-	printf("File not found\n");
+	printk("File not found\n");
 	return NULL;
 }
 
@@ -173,14 +172,14 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 	FAT32_DirectoryEntry *entry = fat_file->entry;
 	FAT32_FS *fs = (FAT32_FS *)file->node->fs->fs;
 
-	// printf("cluster: %d\n", fat_file->cluster);
-	// printf("index: %d\n", fat_file->index);
-	// printf("pos: %d\n", file->pos);
+	printk("cluster: %d\n", fat_file->cluster);
+	printk("index: %d\n", fat_file->index);
+	printk("pos: %d\n", file->pos);
 
 	size_t file_size = entry->file_size;
 	if (file->pos >= file_size)
 	{
-		printf("EOF\n");
+		printk("EOF\n");
 		return 0; // EOF
 	}
 
@@ -195,9 +194,9 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 	{
 		cluster = get_fat_entry(fs, cluster);
 	}
-	// printf("cluster: %d\n", cluster);
-	// printf("in_cluster_offset: %d\n", in_cluster_offset);
-	// printf("to_read: %d\n", to_read);
+	printk("cluster: %d\n", cluster);
+	printk("in_cluster_offset: %d\n", in_cluster_offset);
+	printk("to_read: %d\n", to_read);
 
 	while (read < to_read && cluster < 0x0FFFFFF8)
 	{
@@ -207,10 +206,10 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 
 		fat32_read_cluster(fs, cluster, cluster_buf);
 		// display raw data
-		// printf("Cluster readed: %d\n", cluster);
-		// uint16_t *buf = (uint16_t *)cluster_buf;
-		// for (int j = 0; j < 16; j++)
-		//	printf("%02X ", buf[j]);
+		printk("Cluster readed: %d\n", cluster);
+		uint16_t *buf = (uint16_t *)cluster_buf;
+		for (int j = 0; j < 16; j++)
+			printk("%02X ", buf[j]);
 		size_t available = fs->cluster_size - in_cluster_offset;
 		size_t chunk = (to_read - read < available) ? (to_read - read) : available;
 
@@ -240,17 +239,17 @@ int fat32_write(VFS_File *file, const uint8_t *buffer, uint32_t size)
 		cluster = fat32_allocate_cluster(fs);
 		if (cluster == 0)
 		{
-			printf("No space for new file\n");
+			printk("No space for new file\n");
 			return -1;
 		}
-		printf("New cluster: %d\n", cluster);
+		printk("New cluster: %d\n", cluster);
 		entry->first_cluster_low = cluster & 0xFFFF;
 		entry->first_cluster_high = (cluster >> 16) & 0xFFFF;
 	}
-	// printf("entry :");
-	// for (int i = 0; i < 256; i++)
-	// 	printf("%c", entry[i]);
-	// printf("\n");
+	printk("entry :");
+	for (int i = 0; i < 256; i++)
+		printk("%c", entry[i]);
+	printk("\n");
 
 	size_t buf_offset = 0;
 	size_t remaining = size;
@@ -291,7 +290,7 @@ int fat32_write(VFS_File *file, const uint8_t *buffer, uint32_t size)
 				next = fat32_allocate_cluster(fs);
 				if (next == 0)
 				{
-					printf("No space during write\n");
+					printk("No space during write\n");
 					fat_flush(fs);
 					return buf_offset;
 				}
@@ -322,33 +321,33 @@ int fat32_delete(FAT32_FS *fs, const char *path)
 	FAT32_File *entry = fat32_open(fs, path);
 	if (entry->entry->attr & 0x10)
 	{
-		printf("Deleting directory: %s\n", path);
+		printk("Deleting directory: %s\n", path);
 		fat32_delete_directory(fs, path);
 	}
 	else
 	{
-		printf("Deleting file: %s\n", path);
+		printk("Deleting file: %s\n", path);
 		fat32_delete_file(fs, path);
 	}
 	return 0;
 }
 int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 {
-	printf("🔎 Mounting FAT32 at LBA %d\n", first_lba);
+	printk("🔎 Mounting FAT32 at LBA %d\n", first_lba);
 	uint8_t sector[512];
-	printf("Reading FAT32 signature\n");
+	printk("Reading FAT32 signature\n");
 	fs->read_sector(fs->device, first_lba, sector);
-	printf("FAT32 signature: 0x%X 0x%X\n", sector[510], sector[511]);
+	printk("FAT32 signature: 0x%X 0x%X\n", sector[510], sector[511]);
 	if (!(sector[510] == 0x55 && sector[511] == 0xAA))
 	{
-		printf("Invalid FAT32 signature: 0x%X 0x%X\n", sector[510], sector[511]);
+		printk("Invalid FAT32 signature: 0x%X 0x%X\n", sector[510], sector[511]);
 		return -1;
 	}
 
 	FAT32_BPB *bpb = malloc(sizeof(FAT32_BPB));
 	if (!bpb)
 	{
-		printf("Failed to allocate memory for BPB\n");
+		printk("Failed to allocate memory for BPB\n");
 		return -2;
 	}
 	memcpy(bpb, sector + 0x0B, sizeof(FAT32_BPB));
@@ -369,25 +368,25 @@ int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 	fs->fat_size_32 = bpb->fat_size_32;
 
 	// print all
-	printf("Total sectors: %d\n", fs->total_sectors);
-	printf("Sectors per cluster: %d\n", fs->sectors_per_cluster);
-	printf("Cluster size: %d\n", fs->cluster_size);
-	printf("Total FAT entries: %d\n", fs->total_fat_entries);
-	printf("Bytes per sector: %d\n", fs->bytes_per_sector);
-	printf("Reserved sectors: %d\n", fs->reserved_sectors);
-	printf("Number of FATs: %d\n", fs->num_fats);
-	printf("Sectors per FAT: %d\n", fs->sectors_per_fat);
-	printf("Root cluster: %d\n", fs->root_cluster);
-	printf("Cluster heap LBA: %d\n", fs->cluster_heap_lba);
+	printk("Total sectors: %d\n", fs->total_sectors);
+	printk("Sectors per cluster: %d\n", fs->sectors_per_cluster);
+	printk("Cluster size: %d\n", fs->cluster_size);
+	printk("Total FAT entries: %d\n", fs->total_fat_entries);
+	printk("Bytes per sector: %d\n", fs->bytes_per_sector);
+	printk("Reserved sectors: %d\n", fs->reserved_sectors);
+	printk("Number of FATs: %d\n", fs->num_fats);
+	printk("Sectors per FAT: %d\n", fs->sectors_per_fat);
+	printk("Root cluster: %d\n", fs->root_cluster);
+	printk("Cluster heap LBA: %d\n", fs->cluster_heap_lba);
 
 	uint32_t fat_size_bytes = bpb->fat_size_32 * bpb->bytes_per_sector;
-	printf("FAT size in bytes: %d\n", fat_size_bytes);
+	printk("FAT size in bytes: %d\n", fat_size_bytes);
 
 	fs->fat_cache = malloc(fat_size_bytes);
 	if (!fs->fat_cache)
 	{
 		free(bpb);
-		printf("Failed to allocate memory for FAT cache\n");
+		printk("Failed to allocate memory for FAT cache\n");
 		return -3;
 	}
 
@@ -413,21 +412,21 @@ int fat32_update_fat_entry(FAT32_FS *fs, FAT32_File *file)
 		return -1;
 
 	fat32_read_cluster(fs, file->cluster, buf);
-	// printf("old data: ");
-	// for (int i = 0; i < 256; i++)
-	// 	printf("%c", buf[i]);
-	// printf("\n");
+	printk("old data: ");
+	for (int i = 0; i < 256; i++)
+		printk("%c", buf[i]);
+	printk("\n");
 	FAT32_DirectoryEntry *entries = (FAT32_DirectoryEntry *)buf;
-	// printf("entry :");
-	// for (int i = 0; i < 256; i++)
-	// 	printf("%c", file->entry[i]);
-	// printf("\n");
+	printk("entry :");
+	for (int i = 0; i < 256; i++)
+		printk("%c", file->entry[i]);
+	printk("\n");
 
 	memcpy(&entries[file->index], file->entry, sizeof(FAT32_DirectoryEntry));
-	// printf("new data: ");
-	// for (int i = 0; i < 256; i++)
-	// 	printf("%c", buf[i]);
-	// printf("\n");
+	printk("new data: ");
+	for (int i = 0; i < 256; i++)
+		printk("%c", buf[i]);
+	printk("\n");
 	fat32_write_cluster(fs, file->cluster, buf);
 	free(buf);
 	return 0;
@@ -438,7 +437,7 @@ void fat32_read_cluster(FAT32_FS *fs, uint32_t cluster, uint8_t *buffer)
 	uint32_t lba = cluster_to_lba(fs, cluster);
 	for (uint32_t i = 0; i < fs->sectors_per_cluster; i++)
 	{
-		// printf("lba: %d\n", lba + i);
+		printk("lba: %d\n", lba + i);
 		fs->read_sector(fs->device, lba + i, buffer + i * fs->bytes_per_sector);
 	}
 }
@@ -447,7 +446,7 @@ void fat32_write_cluster(FAT32_FS *fs, uint32_t cluster, uint8_t *buffer)
 {
 	for (int i = 0; i < 256; i++)
 	{
-		printf("%c", buffer[i]);
+		printk("%c", buffer[i]);
 	}
 	uint32_t lba = cluster_to_lba(fs, cluster);
 	for (uint32_t i = 0; i < fs->sectors_per_cluster; i++)
@@ -455,7 +454,7 @@ void fat32_write_cluster(FAT32_FS *fs, uint32_t cluster, uint8_t *buffer)
 		fs->write_sector(fs->device, lba + i, buffer + i * fs->bytes_per_sector);
 	}
 
-	printf("\nWrote cluster %d\n", cluster);
+	printk("\nWrote cluster %d\n", cluster);
 }
 
 bool fat_flush(FAT32_FS *fs)
@@ -568,28 +567,28 @@ void free_folder_path(PathParts *pp)
 int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir)
 {
 
-	printf("sfn: %s\n", pp->sfn);
+	printk("sfn: %s\n", pp->sfn);
 	if (cluster == 0)
 	{
-		printf("Cluster not found: %s\n", pp->lfn);
+		printk("Cluster not found: %s\n", pp->lfn);
 		return -EINVAL;
 	}
 	if (find_directory_entry_cluster(fs, cluster, pp->sfn) != 0)
 	{
-		printf("Entry already exists: %s\n", pp->lfn);
+		printk("Entry already exists: %s\n", pp->lfn);
 		return -EEXIST;
 	}
 	uint8_t *buf = malloc(fs->cluster_size);
 	if (!buf)
 	{
-		printf("Failed to allocate buffer\n");
+		printk("Failed to allocate buffer\n");
 		return -ENOMEM;
 	}
 	fat32_read_cluster(fs, cluster, buf);
-	printf("Cluster data: ");
+	printk("Cluster data: ");
 	for (int i = 0; i < 256; i++)
-		printf("%c", buf[i]);
-	printf("\n\n");
+		printk("%c", buf[i]);
+	printk("\n\n");
 
 	FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)buf;
 	for (int i = 0; i < fs->cluster_size / sizeof(FAT32_DirectoryEntry); i++, entry++)
@@ -600,7 +599,7 @@ int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir
 
 			memcpy(entry->name, pp->sfn, 11);
 
-			printf("Entry created and found: %s\n", pp->sfn);
+			printk("Entry created and found: %s\n", pp->sfn);
 
 			entry->attr = is_dir ? 0x10 : 0x20;
 			uint32_t new_cluster = fat32_allocate_cluster(fs);
@@ -627,18 +626,18 @@ int fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name)
 {
 	if (cluster == 0)
 	{
-		printf("Cluster not found: %s\n", name);
+		printk("Cluster not found: %s\n", name);
 		return -EINVAL;
 	}
 	if (find_directory_entry_cluster(fs, cluster, name) == 0)
 	{
-		printf("Entry not found: %s\n", name);
+		printk("Entry not found: %s\n", name);
 		return -ENOENT;
 	}
 	uint8_t *buf = malloc(fs->cluster_size);
 	if (!buf)
 	{
-		printf("Failed to allocate buffer\n");
+		printk("Failed to allocate buffer\n");
 		return -ENOMEM;
 	}
 	fat32_read_cluster(fs, cluster, buf);

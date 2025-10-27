@@ -2,7 +2,7 @@
 #include <efilib.h>
 #include <stdint.h>
 
-#include <utils/framebuffer.h>
+#include <bootinfo/bootinfo.h>
 
 #include "globals.h"
 #include "console.h"

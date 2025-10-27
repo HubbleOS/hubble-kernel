@@ -657,66 +657,6 @@ static void cmd_ls(Terminal *term, int argc, char **argv)
 	}
 }
 
-#include "io.h"
-
-void shutdown(void)
-{
-	// outw(0x604, 0x2000);
-	outw(0x604, 0x2000);  // ACPI poweroff
-	outw(0xB004, 0x2000); // старый вариант
-	outw(0x4004, 0x3400); // ещё один способ (ISA)
-}
-
-void system_shutdown(void)
-{
-	// cli(); // отключить прерывания, если у тебя есть такая функция
-	asm volatile("cli");
-	shutdown();
-	for (;;)
-		asm volatile("hlt"); // на случай, если не сработает
-}
-
-void reboot(void)
-{
-	// Пытаемся сделать COLD RESET через ACPI
-	// Записываем значение для полной перезагрузки
-	outb(0x64, 0xFE); // Клавиатурный контроллер - COLD reset
-
-	for (volatile int i = 0; i < 1000000; i++)
-		;
-
-	// Альтернатива: полная перезагрузка через порт 0xCF9
-	// 0x0E = CPU reset + system reset + full reset
-	outb(0xCF9, 0x00);
-	outb(0xCF9, 0x0E);
-
-	for (volatile int i = 0; i < 1000000; i++)
-		;
-
-	// Triple fault как последний способ
-	struct
-	{
-		uint16_t limit;
-		uint64_t base;
-	} __attribute__((packed)) invalid_idt = {0, 0};
-
-	asm volatile("lidt %0" : : "m"(invalid_idt));
-	asm volatile("int3");
-
-	while (1)
-		asm volatile("hlt");
-}
-
-void system_reboot(void)
-{
-	asm volatile("cli"); // Отключаем прерывания
-	reboot();
-
-	// На всякий случай, если reboot() вернулся
-	for (;;)
-		asm volatile("hlt");
-}
-
 #include "apps/neofetch/neofetch.h"
 #include "utils/bwfvideo.h"
 
@@ -769,24 +709,6 @@ void Terminal::run()
 		else if (strcmp(argv[0], "ls") == 0)
 		{
 			cmd_ls(this, argc, argv);
-		}
-		else if (strcmp(argv[0], "shutdown") == 0)
-		{
-			free(input); // Освобождаем память ДО выключения
-			print("Shutting down...\n");
-			system_shutdown();
-			// Никогда не должно дойти сюда, но на всякий случай:
-			while (1)
-				asm volatile("hlt");
-		}
-		else if (strcmp(argv[0], "reboot") == 0)
-		{
-			free(input); // Освобождаем память ДО перезагрузки
-			print("Rebooting...\n");
-			system_reboot();
-			// Никогда не должно дойти сюда, но на всякий случай:
-			while (1)
-				asm volatile("hlt");
 		}
 		else if (strcmp(argv[0], "video") == 0)
 		{
