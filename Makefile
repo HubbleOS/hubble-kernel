@@ -108,7 +108,7 @@ export INCLUDES
 
 PHONY += all
 all:
-	@$(MAKE) -C tools/dev-tool
+	@$(MAKE) -C tools/dev
 
 ###########################################################################
 
@@ -163,7 +163,7 @@ run: build
 PHONY += host-run
 host-run:
 	@echo "🖥  Launching QEMU from host..."
-	$(MAKE) -C tools/dev-tool/qemu run ISO=$(ISO_DIR) ARCH=x86_64 MEM=256;
+	$(MAKE) -C tools/dev/qemu run ISO=$(ISO_DIR) ARCH=x86_64 MEM=256;
 
 ###########################################################################
 
