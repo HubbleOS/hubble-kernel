@@ -3,31 +3,49 @@
 #include <_cheader.h>
 
 #include <stdarg.h>
+#include <stddef.h>
+#include <stdbool.h>
+
 #include <bootinfo/framebuffer.h>
 
-#define KERN_EMERG "<0>"
-#define KERN_ALERT "<1>"
-#define KERN_CRIT "<2>"
-#define KERN_ERR "<3>"
-#define KERN_WARNING "<4>"
-#define KERN_NOTICE "<5>"
-#define KERN_INFO "<6>"
-#define KERN_DEBUG "<7>"
+// Log levels (как в Linux)
+#define KERN_EMERG "<0>"   // System is unusable
+#define KERN_ALERT "<1>"   // Action must be taken immediately
+#define KERN_CRIT "<2>"	   // Critical conditions
+#define KERN_ERR "<3>"	   // Error conditions
+#define KERN_WARNING "<4>" // Warning conditions
+#define KERN_NOTICE "<5>"  // Normal but significant condition
+#define KERN_INFO "<6>"	   // Informational
+#define KERN_DEBUG "<7>"   // Debug-level messages
+
+// Log buffer size (16KB по умолчанию)
+#define PRINTK_BUFFER_SIZE (16 * 1024)
 
 _Begin_C_Header;
 
-void printk(const char *fmt, ...);
-void vprintk(const char *fmt, va_list args);
+// Инициализация ранней печати (до терминала)
+void early_printk_init(framebuffer_info_t *fb);
 
+// Основная инициализация printk
 void printk_init(framebuffer_info_t *fb);
 
-_End_C_Header;
+// Регистрация консоли (терминала) для вывода
+void printk_register_console(void (*write_fn)(const char *buf, size_t len, void *data), void *user_data);
 
-#define pr_emerg(fmt, ...) printk(KERN_EMERG fmt, ##__VA_ARGS__)
-#define pr_alert(fmt, ...) printk(KERN_ALERT fmt, ##__VA_ARGS__)
-#define pr_crit(fmt, ...) printk(KERN_CRIT fmt, ##__VA_ARGS__)
-#define pr_err(fmt, ...) printk(KERN_ERR fmt, ##__VA_ARGS__)
-#define pr_warn(fmt, ...) printk(KERN_WARNING fmt, ##__VA_ARGS__)
-#define pr_notice(fmt, ...) printk(KERN_NOTICE fmt, ##__VA_ARGS__)
-#define pr_info(fmt, ...) printk(KERN_INFO fmt, ##__VA_ARGS__)
-#define pr_debug(fmt, ...) printk(KERN_DEBUG fmt, ##__VA_ARGS__)
+// Отключение консоли
+void printk_unregister_console(void);
+
+// Основные функции печати
+void printk(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+void vprintk(const char *fmt, va_list args);
+
+// Функции для работы с буфером логов
+size_t printk_get_log_buffer(char *dest, size_t max_len);
+void printk_clear_log_buffer(void);
+size_t printk_get_log_size(void);
+
+// Флаги printk
+void printk_set_early_mode(bool enable); // Режим ранней загрузки
+bool printk_is_early_mode(void);
+
+_End_C_Header;
