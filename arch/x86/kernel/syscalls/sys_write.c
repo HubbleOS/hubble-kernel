@@ -1,9 +1,5 @@
-#include <stddef.h>
-
 #include <sys/syscall.h>
 #include <sys/syscall_nums.h>
-
-#include "utils/font.h"
 
 #include <sys/output_device.h>
 
