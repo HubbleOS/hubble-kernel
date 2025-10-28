@@ -1,15 +1,26 @@
-TCC = ../bin/tcc
-OUT = ../bin
-SRC = start.c hello.c
-CFLAGS = -ffreestanding -nostdlib -m64 -I../include
-LDFLAGS = ../lib/libc.a
+ARCH     ?= x86_64
+CROSS    ?= x86_64-elf-
+CC       := $(CROSS)gcc
+LD       := $(CROSS)ld
+OBJCOPY  := $(CROSS)objcopy
 
-all: $(OUT)/hello
+BUILD_DIR := ../../build/usr
+OUT_DIR   := ../bin
 
-$(OUT)/hello: $(SRC)
-	@mkdir -p $(OUT)
-	$(TCC) $(CFLAGS) $^ $(LDFLAGS) -o $@
-	@echo "Built $@"
+SRC := user_main.c
+OUT := $(OUT_DIR)/user.elf
+
+# include и libc
+CFLAGS   := -ffreestanding -fno-pic -m64 -O2 -nostartfiles -static -I../include
+LDFLAGS  := -Tuser.ld
+LIBS     := -L../lib -lc
+
+all: $(OUT)
+
+$(OUT): $(SRC) user.ld
+	@mkdir -p $(OUT_DIR)
+	@echo "Compiling user ELF: $@"
+	$(CC) $(CFLAGS) -o $(OUT) $(SRC) $(LIBS) $(LDFLAGS)
 
 clean:
-	rm -f $(OUT)/hello
+	rm -rf $(OUT_DIR) $(BUILD_DIR)

@@ -1,108 +1,36 @@
 #include <stddef.h>
+#include <stdint.h>
 
 #include <sys/syscall.h>
-#include <sys/syscall_nums.h>
+#include <syscalls/syscall.h>
 
-syscall_fn_t syscall_table[SYSCALL_COUNT] = {
-    [SYS_write] = sys_write,
-    [SYS_read] = sys_read,
+// syscall_fn_t syscall_table[SYSCALL_COUNT] = {
+//     [SYS_write] = sys_write,
+//     [SYS_read] = sys_read,
+// };
 
-};
-
-long syscall_handler(long syscall_num, long arg1, long arg2,
-		     long arg3, long arg4, long arg5, long arg6)
-{
-
-	// Check
-	if (syscall_num < 0 || syscall_num >= SYSCALL_COUNT)
-	{
-		return -1; // ENOSYS
-	}
-
-	syscall_fn_t fn = syscall_table[syscall_num];
-	if (fn == NULL)
-	{
-		return -1; // ENOSYS
-	}
-
-	// Call
-	return fn(arg1, arg2, arg3, arg4, arg5, arg6);
-}
-
-long syscall_dispatcher(long n, long a1, long a2, long a3, long a4, long a5, long a6)
-{
-	switch (n)
-	{
-	case SYS_write:
-		return sys_write((int)a1, (const char *)a2, (size_t)a3);
-
-	case SYS_read:
-		return sys_read((int)a1, (char *)a2, (size_t)a3);
-
-	case SYS_mmap:
-		return sys_mmap((void *)a1, (size_t)a2, (int)a3, (int)a4, (int)a5, (long)a6);
-
-	default:
-		return -1; // unknown syscall
-	}
-}
-
-// static __inline long __syscall0(long n)
+// typedef struct
 // {
-// 	unsigned long ret;
-// 	__asm__ __volatile__("syscall" : "=a"(ret) : "a"(n) : "rcx", "r11", "memory");
-// 	return ret;
-// }
+// 	uint64_t rax; // syscall number
+// 	uint64_t r9;  // arg6
+// 	uint64_t r8;  // arg5
+// 	uint64_t r10; // arg4
+// 	uint64_t rdx; // arg3
+// 	uint64_t rsi; // arg2
+// 	uint64_t rdi; // arg1
+// } syscall_regs_t;
 
-// static __inline long __syscall1(long n, long a1)
+// long syscall_handler(syscall_regs_t *regs)
 // {
-// 	unsigned long ret;
-// 	__asm__ __volatile__("syscall" : "=a"(ret) : "a"(n), "D"(a1) : "rcx", "r11", "memory");
-// 	return ret;
-// }
+// 	long syscall_num = regs->rax;
 
-// static __inline long __syscall2(long n, long a1, long a2)
-// {
-// 	unsigned long ret;
-// 	__asm__ __volatile__("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2)
-// 						 : "rcx", "r11", "memory");
-// 	return ret;
-// }
+// 	if (syscall_num < 0 || syscall_num >= SYSCALL_COUNT)
+// 		return -1;
 
-// static __inline long __syscall3(long n, long a1, long a2, long a3)
-// {
-// 	unsigned long ret;
-// 	__asm__ __volatile__("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2),
-// 												 "d"(a3) : "rcx", "r11", "memory");
-// 	return ret;
-// }
+// 	syscall_fn_t fn = syscall_table[syscall_num];
+// 	if (fn == NULL)
+// 		return -1;
 
-// static __inline long __syscall4(long n, long a1, long a2, long a3, long a4)
-// {
-// 	unsigned long ret;
-// 	register long r10 __asm__("r10") = a4;
-// 	__asm__ __volatile__("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2),
-// 												 "d"(a3), "r"(r10) : "rcx", "r11", "memory");
-// 	return ret;
-// }
-
-// static __inline long __syscall5(long n, long a1, long a2, long a3, long a4, long a5)
-// {
-// 	unsigned long ret;
-// 	register long r10 __asm__("r10") = a4;
-// 	register long r8 __asm__("r8") = a5;
-// 	__asm__ __volatile__("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2),
-// 												 "d"(a3), "r"(r10), "r"(r8) : "rcx", "r11", "memory");
-// 	return ret;
-// }
-
-// static __inline long __syscall6(long n, long a1, long a2, long a3, long a4, long a5, long a6)
-// {
-// 	unsigned long ret;
-// 	register long r10 __asm__("r10") = a4;
-// 	register long r8 __asm__("r8") = a5;
-// 	register long r9 __asm__("r9") = a6;
-// 	__asm__ __volatile__("syscall" : "=a"(ret) : "a"(n), "D"(a1), "S"(a2),
-// 												 "d"(a3), "r"(r10), "r"(r8), "r"(r9) : "rcx", "r11", "memory");
-// 	return ret;
+// 	return fn(regs->rdi, regs->rsi, regs->rdx,
+// 		  regs->r10, regs->r8, regs->r9);
 // }
