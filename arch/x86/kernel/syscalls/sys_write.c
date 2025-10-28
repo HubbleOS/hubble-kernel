@@ -1,7 +1,7 @@
 #include <sys/syscall.h>
-#include <sys/syscall_nums.h>
-
 #include <sys/output_device.h>
+
+#include "printk.h"
 
 long sys_write(int fd, const char *buffer, size_t len)
 {
@@ -10,6 +10,8 @@ long sys_write(int fd, const char *buffer, size_t len)
 
 	if (!buffer)
 		return -1;
+
+	printk("write: %s\n", buffer);
 
 	output_device_t *dev = get_stdout_device();
 	if (!dev || !dev->write)

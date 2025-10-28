@@ -1,0 +1,243 @@
+#include "gdt.h"
+#include <string.h>
+
+// ============================================================================
+// GDT + TSS Tables
+// ============================================================================
+
+static gdt_entry_t gdt_entries[5]; // NULL, Code, Data, User Code, User Data
+static tss_entry_t tss_descriptor; // TSS descriptor (16 bytes)
+static gdt_ptr_t gdt_ptr;
+static tss_t tss;
+
+// Стек для Ring 0 (используется при переключении из Ring 3 в Ring 0)
+static uint8_t kernel_stack[16384] __attribute__((aligned(16)));
+
+// ============================================================================
+// GDT Helper Functions
+// ============================================================================
+
+static void gdt_set_gate(int num, uint32_t base, uint32_t limit, uint8_t access, uint8_t gran)
+{
+	gdt_entries[num].base_low = (base & 0xFFFF);
+	gdt_entries[num].base_middle = (base >> 16) & 0xFF;
+	gdt_entries[num].base_high = (base >> 24) & 0xFF;
+
+	gdt_entries[num].limit_low = (limit & 0xFFFF);
+	gdt_entries[num].granularity = (limit >> 16) & 0x0F;
+	gdt_entries[num].granularity |= gran & 0xF0;
+
+	gdt_entries[num].access = access;
+}
+
+static void tss_set_descriptor(uint64_t base, uint32_t limit)
+{
+	tss_descriptor.limit_low = limit & 0xFFFF;
+	tss_descriptor.base_low = base & 0xFFFF;
+	tss_descriptor.base_middle = (base >> 16) & 0xFF;
+	tss_descriptor.base_high = (base >> 24) & 0xFF;
+	tss_descriptor.base_upper = (base >> 32) & 0xFFFFFFFF;
+
+	tss_descriptor.access = TSS_ACCESS;
+	tss_descriptor.granularity = 0x00;
+	tss_descriptor.reserved = 0;
+}
+
+// ============================================================================
+// GDT Initialization
+// ============================================================================
+
+void gdt_init(void)
+{
+	// Размер GDT: 5 обычных дескрипторов + 1 TSS дескриптор (16 байт)
+	gdt_ptr.limit = sizeof(gdt_entries) + sizeof(tss_descriptor) - 1;
+	gdt_ptr.base = (uint64_t)&gdt_entries;
+
+	// NULL дескриптор
+	gdt_set_gate(0, 0, 0, 0, 0);
+
+	// Kernel Code Segment (0x08)
+	gdt_set_gate(1, 0, 0xFFFFF,
+		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING0 | GDT_ACCESS_SYSTEM |
+			 GDT_ACCESS_EXECUTABLE | GDT_ACCESS_RW,
+		     GDT_GRAN_4K | GDT_GRAN_64BIT);
+
+	// Kernel Data Segment (0x10)
+	gdt_set_gate(2, 0, 0xFFFFF,
+		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING0 | GDT_ACCESS_SYSTEM |
+			 GDT_ACCESS_RW,
+		     GDT_GRAN_4K | GDT_GRAN_64BIT);
+
+	// User Code Segment (0x18) - Ring 3
+	gdt_set_gate(3, 0, 0xFFFFF,
+		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
+			 GDT_ACCESS_EXECUTABLE | GDT_ACCESS_RW,
+		     GDT_GRAN_4K | GDT_GRAN_64BIT);
+
+	// User Data Segment (0x20) - Ring 3
+	gdt_set_gate(4, 0, 0xFFFFF,
+		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
+			 GDT_ACCESS_RW,
+		     GDT_GRAN_4K | GDT_GRAN_64BIT);
+
+	// Копируем TSS дескриптор после обычных дескрипторов
+	uint8_t *gdt_base = (uint8_t *)&gdt_entries;
+	uint8_t *tss_desc_ptr = gdt_base + sizeof(gdt_entries);
+
+	// Настраиваем TSS дескриптор (будет заполнен в tss_init)
+	tss_set_descriptor((uint64_t)&tss, sizeof(tss) - 1);
+
+	// Копируем TSS дескриптор
+	memcpy(tss_desc_ptr, &tss_descriptor, sizeof(tss_descriptor));
+
+	// Загружаем GDT
+	gdt_flush((uint64_t)&gdt_ptr);
+}
+
+// ============================================================================
+// TSS Initialization
+// ============================================================================
+
+void tss_init(void)
+{
+	// Очищаем TSS
+	memset(&tss, 0, sizeof(tss));
+
+	// Устанавливаем стек для Ring 0 (используется при системных вызовах)
+	tss.rsp0 = (uint64_t)(kernel_stack + sizeof(kernel_stack));
+
+	// IST можно настроить для специальных прерываний (например, Double Fault)
+	// tss.ist[0] = (uint64_t)(special_stack + STACK_SIZE);
+
+	// Загружаем TSS
+	tss_flush(GDT_TSS);
+}
+
+// ============================================================================
+// IDT Tables and Handlers
+// ============================================================================
+
+static idt_entry_t idt_entries[IDT_ENTRIES];
+static idt_ptr_t idt_ptr;
+
+// Объявления обработчиков прерываний (определены в interrupts.asm)
+extern void isr0(void);	 // Division By Zero
+extern void isr1(void);	 // Debug
+extern void isr2(void);	 // NMI
+extern void isr3(void);	 // Breakpoint
+extern void isr4(void);	 // Overflow
+extern void isr5(void);	 // Bound Range Exceeded
+extern void isr6(void);	 // Invalid Opcode
+extern void isr7(void);	 // Device Not Available
+extern void isr8(void);	 // Double Fault
+extern void isr9(void);	 // Coprocessor Segment Overrun
+extern void isr10(void); // Invalid TSS
+extern void isr11(void); // Segment Not Present
+extern void isr12(void); // Stack-Segment Fault
+extern void isr13(void); // General Protection Fault
+extern void isr14(void); // Page Fault
+extern void isr15(void); // Reserved
+extern void isr16(void); // x87 Floating-Point Exception
+extern void isr17(void); // Alignment Check
+extern void isr18(void); // Machine Check
+extern void isr19(void); // SIMD Floating-Point Exception
+extern void isr20(void); // Virtualization Exception
+extern void isr21(void); // Control Protection Exception
+
+// IRQ обработчики (hardware interrupts)
+extern void irq0(void);	 // Timer
+extern void irq1(void);	 // Keyboard
+extern void irq2(void);	 // Cascade
+extern void irq3(void);	 // COM2
+extern void irq4(void);	 // COM1
+extern void irq5(void);	 // LPT2
+extern void irq6(void);	 // Floppy
+extern void irq7(void);	 // LPT1
+extern void irq8(void);	 // RTC
+extern void irq9(void);	 // Free
+extern void irq10(void); // Free
+extern void irq11(void); // Free
+extern void irq12(void); // PS/2 Mouse
+extern void irq13(void); // FPU
+extern void irq14(void); // Primary ATA
+extern void irq15(void); // Secondary ATA
+
+// Системный вызов
+extern void isr128(void); // System call
+
+// ============================================================================
+// IDT Helper Functions
+// ============================================================================
+
+void idt_set_gate(uint8_t num, uint64_t handler, uint16_t selector, uint8_t type_attr)
+{
+	idt_entries[num].offset_low = handler & 0xFFFF;
+	idt_entries[num].offset_mid = (handler >> 16) & 0xFFFF;
+	idt_entries[num].offset_high = (handler >> 32) & 0xFFFFFFFF;
+
+	idt_entries[num].selector = selector;
+	idt_entries[num].ist = 0; // Не используем IST по умолчанию
+	idt_entries[num].type_attr = type_attr;
+	idt_entries[num].reserved = 0;
+}
+
+// ============================================================================
+// IDT Initialization
+// ============================================================================
+
+void idt_init(void)
+{
+	idt_ptr.limit = sizeof(idt_entries) - 1;
+	idt_ptr.base = (uint64_t)&idt_entries;
+
+	// Очищаем IDT
+	memset(&idt_entries, 0, sizeof(idt_entries));
+
+	// CPU Exceptions (0-31)
+	idt_set_gate(0, (uint64_t)isr0, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(1, (uint64_t)isr1, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(2, (uint64_t)isr2, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(3, (uint64_t)isr3, GDT_KERNEL_CODE, IDT_TYPE_TRAP);
+	idt_set_gate(4, (uint64_t)isr4, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(5, (uint64_t)isr5, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(6, (uint64_t)isr6, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(7, (uint64_t)isr7, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(8, (uint64_t)isr8, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(9, (uint64_t)isr9, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(10, (uint64_t)isr10, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(11, (uint64_t)isr11, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(12, (uint64_t)isr12, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(13, (uint64_t)isr13, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(14, (uint64_t)isr14, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(15, (uint64_t)isr15, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(16, (uint64_t)isr16, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(17, (uint64_t)isr17, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(18, (uint64_t)isr18, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(19, (uint64_t)isr19, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(20, (uint64_t)isr20, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(21, (uint64_t)isr21, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+
+	// IRQs (32-47) - Hardware Interrupts
+	idt_set_gate(32, (uint64_t)irq0, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(33, (uint64_t)irq1, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(34, (uint64_t)irq2, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(35, (uint64_t)irq3, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(36, (uint64_t)irq4, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(37, (uint64_t)irq5, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(38, (uint64_t)irq6, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(39, (uint64_t)irq7, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(40, (uint64_t)irq8, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(41, (uint64_t)irq9, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(42, (uint64_t)irq10, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(43, (uint64_t)irq11, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(44, (uint64_t)irq12, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(45, (uint64_t)irq13, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(46, (uint64_t)irq14, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+	idt_set_gate(47, (uint64_t)irq15, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
+
+	// System Call (0x80 = 128) - доступен из Ring 3
+	idt_set_gate(128, (uint64_t)isr128, GDT_KERNEL_CODE, IDT_TYPE_USER);
+
+	// Загружаем IDT
+	idt_flush((uint64_t)&idt_ptr);
+}

@@ -86,7 +86,7 @@ void Terminal::init()
 	register_stdin_device(&terminal_input);
 
 	printk_register_console(terminal_write_adapter, this);
-	printk_unregister_console();
+	// printk_unregister_console();
 }
 
 void Terminal::clear()
@@ -636,15 +636,8 @@ static void cmd_cat(Terminal *term, int argc, char **argv)
 	}
 
 	char buffer[512];
-	size_t bytes_read;
-
-	// while ((bytes_read = vfs_read(f, buffer, sizeof(buffer) - 1)) > 0)
-	// {
-	// 	buffer[bytes_read] = '\0';
-	// 	term->print(buffer);
-	// }
 	vfs_read(f, buffer, 512);
-	printf("%s", buffer);
+	term->print(buffer);
 
 	term->newLine();
 

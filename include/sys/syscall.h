@@ -5,8 +5,18 @@
 #define SYS_write 1
 #define SYS_read 2
 
-static inline long syscall(long num, long arg1, long arg2,
-			   long arg3, long arg4, long arg5, long arg6)
+#define SYSCALL_COUNT 3
+
+#define syscall(n, a1, a2, a3, a4, a5, a6) do_syscall(n, a1, a2, a3, a4, a5, a6)
+#define syscall0(n, a1) do_syscall(n, a1, 0, 0, 0, 0, 0)
+#define syscall1(n, a1, a2) do_syscall(n, a1, a2, 0, 0, 0, 0)
+#define syscall2(n, a1, a2, a3) do_syscall(n, a1, a2, a3, 0, 0, 0)
+#define syscall3(n, a1, a2, a3, a4) do_syscall(n, a1, a2, a3, a4, 0, 0)
+#define syscall4(n, a1, a2, a3, a4, a5) do_syscall(n, a1, a2, a3, a4, a5, 0)
+#define syscall5(n, a1, a2, a3, a4, a5, a6) do_syscall(n, a1, a2, a3, a4, a5, a6)
+#define syscall6(n, a1, a2, a3, a4, a5, a6) do_syscall(n, a1, a2, a3, a4, a5, a6)
+
+static inline long do_syscall(long num, long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
 {
 	long ret;
 
@@ -29,40 +39,4 @@ static inline long syscall(long num, long arg1, long arg2,
 	return ret;
 }
 
-static inline long read(int fd, void *buf, unsigned long count)
-{
-	return syscall(SYS_read, fd, (long)buf, count, 0, 0, 0);
-}
-
-static inline long write(int fd, const void *buf, unsigned long count)
-{
-	return syscall(SYS_write, fd, (long)buf, count, 0, 0, 0);
-}
-
-// #pragma once
-
-// #include <_cheader.h>
-
-// #include <stddef.h>
-
-typedef long (*syscall_fn_t)(long arg1, long arg2, long arg3,
-			     long arg4, long arg5, long arg6);
-
-// #define syscall(n, a1, a2, a3, a4, a5, a6) syscall_dispatcher(n, a1, a2, a3, a4, a5, a6)
-// #define syscall0(n, a1) syscall_dispatcher(n, a1, 0, 0, 0, 0, 0)
-// #define syscall1(n, a1, a2) syscall_dispatcher(n, a1, a2, 0, 0, 0, 0)
-// #define syscall2(n, a1, a2, a3) syscall_dispatcher(n, a1, a2, a3, 0, 0, 0)
-// #define syscall3(n, a1, a2, a3, a4) syscall_dispatcher(n, a1, a2, a3, a4, 0, 0)
-// #define syscall4(n, a1, a2, a3, a4, a5) syscall_dispatcher(n, a1, a2, a3, a4, a5, 0)
-// #define syscall5(n, a1, a2, a3, a4, a5, a6) syscall_dispatcher(n, a1, a2, a3, a4, a5, a6)
-// #define syscall6(n, a1, a2, a3, a4, a5, a6) syscall_dispatcher(n, a1, a2, a3, a4, a5, a6)
-
-// _Begin_C_Header;
-
-// long syscall_dispatcher(long n, long a1, long a2, long a3, long a4, long a5, long a6);
-
-long sys_read(int, char *, size_t);
-long sys_write(int, const char *, size_t);
-// long sys_mmap(void *, size_t, int, int, int, long);
-
-// _End_C_Header;
+typedef long (*syscall_fn_t)(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6);

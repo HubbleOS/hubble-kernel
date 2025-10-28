@@ -23,8 +23,6 @@
 #define VMM_USER PTE_USER
 #define VMM_NX PTE_NX
 
-#define KERNEL_VIRT_BASE 0xFFFFFFFF80000000ULL
-
 void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_size);
 uint64_t vmm_get_current_cr3_phys(void);
 void vmm_switch_cr3(uint64_t phys);
