@@ -24,22 +24,51 @@ static inline uint64_t rdmsr(uint32_t msr)
 	return ((uint64_t)high << 32) | low;
 }
 
+// void syscall_init(void)
+// {
+// 	printk("Initializing syscall...\n");
+
+// 	// 1. Включаем SYSCALL extension
+// 	uint64_t efer = rdmsr(MSR_EFER);
+// 	efer |= EFER_SCE;
+// 	wrmsr(MSR_EFER, efer);
+
+// 	// 2. STAR: сегменты для syscall/sysret
+// 	// Биты 32-47: Kernel CS (должен быть 0x08)
+// 	// Биты 48-63: User CS base (должен быть 0x10, sysret добавит +16)
+// 	uint64_t star = ((uint64_t)0x18 << 48) | ((uint64_t)0x08 << 32);
+
+// 	wrmsr(MSR_STAR, star);
+// 	printk("STAR = 0x%lx\n", star);
+
+// 	// 3. LSTAR: адрес handler
+// 	wrmsr(MSR_LSTAR, (uint64_t)syscall_entry);
+// 	printk("LSTAR = 0x%lx\n", (uint64_t)syscall_entry);
+
+// 	// 4. SFMASK: какие флаги сбрасывать при syscall
+// 	// 0x200 = IF (Interrupt Flag) - отключаем прерывания
+// 	// 0x400 = DF (Direction Flag)
+// 	wrmsr(MSR_SFMASK, 0x300); // IF + DF
+// 	// wrmsr(MSR_SFMASK, 0x600); // IF + DF
+
+// 	printk("Syscall initialized\n");
+// }
+
 void syscall_init(void)
 {
-	// 1. Включаем SYSCALL extension
+	// 1. Включаем SCE
 	uint64_t efer = rdmsr(MSR_EFER);
 	efer |= EFER_SCE;
 	wrmsr(MSR_EFER, efer);
 
-	// 2. STAR: сегменты
-	uint64_t star = 0;
-	star |= ((uint64_t)0x08 << 32); // Kernel CS
-	star |= ((uint64_t)0x18 << 48); // User CS base
+	// 2. STAR: Kernel CS и User CS
+	// Kernel CS = 0x08, User CS = 0x18
+	uint64_t star = ((uint64_t)0x10 << 48) | ((uint64_t)0x08 << 32);
 	wrmsr(MSR_STAR, star);
 
-	// 3. LSTAR: адрес handler
+	// 3. LSTAR: адрес syscall_entry
 	wrmsr(MSR_LSTAR, (uint64_t)syscall_entry);
 
-	// 4. SFMASK: сбрасываем IF и DF
-	wrmsr(MSR_SFMASK, 0x200 | 0x400);
+	// 4. SFMASK: какие флаги сбрасывать при syscall (IF + DF)
+	wrmsr(MSR_SFMASK, 0x300);
 }

@@ -7,84 +7,6 @@
 #include "globals.h"
 #include "console.h"
 
-// boot/paging.c
-#include <efi.h>
-#include <efilib.h>
-
-#define PAGE_SIZE 0x1000
-#define PTE_PRESENT (1ULL << 0)
-#define PTE_WRITABLE (1ULL << 1)
-#define PTE_USER (1ULL << 2)
-#define PTE_PS (1ULL << 7) // Page Size (2MB pages)
-
-typedef struct
-{
-	UINT64 entries[512];
-} __attribute__((aligned(4096))) PageTable;
-
-// Allocate page table using UEFI
-static PageTable *alloc_page_table(EFI_BOOT_SERVICES *BS)
-{
-	EFI_PHYSICAL_ADDRESS addr = 0;
-	EFI_STATUS status = uefi_call_wrapper(BS->AllocatePages, 4,
-					      AllocateAnyPages,
-					      EfiLoaderData,
-					      1, // 1 page
-					      &addr);
-
-	if (EFI_ERROR(status))
-		return NULL;
-
-	PageTable *table = (PageTable *)addr;
-
-	// Zero the table
-	for (int i = 0; i < 512; i++)
-		table->entries[i] = 0;
-
-	return table;
-}
-
-// Setup identity paging for first 4GB using 2MB pages
-EFI_PHYSICAL_ADDRESS setup_paging(EFI_BOOT_SERVICES *BS)
-{
-	// Allocate PML4
-	PageTable *pml4 = alloc_page_table(BS);
-	if (!pml4)
-		return 0;
-
-	// Allocate PDPT (Page Directory Pointer Table)
-	PageTable *pdpt = alloc_page_table(BS);
-	if (!pdpt)
-		return 0;
-
-	// Link PML4[0] -> PDPT
-	pml4->entries[0] = (UINT64)pdpt | PTE_PRESENT | PTE_WRITABLE;
-
-	// For each 1GB in first 4GB
-	for (int i = 0; i < 4; i++)
-	{
-		// Allocate Page Directory
-		PageTable *pd = alloc_page_table(BS);
-		if (!pd)
-			return 0;
-
-		// Link PDPT[i] -> PD
-		pdpt->entries[i] = (UINT64)pd | PTE_PRESENT | PTE_WRITABLE;
-
-		// Map 512 * 2MB = 1GB using 2MB pages
-		for (int j = 0; j < 512; j++)
-		{
-			UINT64 phys_addr = (UINT64)i * 0x40000000ULL + (UINT64)j * 0x200000ULL;
-			pd->entries[j] = phys_addr | PTE_PRESENT | PTE_WRITABLE | PTE_PS;
-		}
-	}
-
-	// CRITICAL: Recursive mapping - map PML4 to itself at index 511
-	pml4->entries[511] = (UINT64)pml4 | PTE_PRESENT | PTE_WRITABLE;
-
-	return (EFI_PHYSICAL_ADDRESS)pml4;
-}
-
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 {
 	g_image = image;
@@ -454,19 +376,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	PrintInfo(L"Jumping to kernel at 0x%lx\n", (UINT64)kernel_addr);
 	ClearConsole();
-
-	PrintInfo(L"Setting up page tables...\n");
-	EFI_PHYSICAL_ADDRESS new_cr3 = setup_paging(BS);
-	if (new_cr3 == 0)
-	{
-		PrintFail(L"Failed to setup page tables\n");
-		return EFI_OUT_OF_RESOURCES;
-	}
-	PrintOk(L"Page tables at 0x%lx\n", new_cr3);
-
-	// Load new CR3
-	__asm__ volatile("mov %0, %%cr3" : : "r"(new_cr3) : "memory");
-	PrintOk(L"CR3 loaded\n");
 
 	// === [11] Prepare BootInfo pointer ===
 	BootInfo boot_info;

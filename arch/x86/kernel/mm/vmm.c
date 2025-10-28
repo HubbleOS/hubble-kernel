@@ -83,15 +83,9 @@ static inline size_t idx_from_virt(uint64_t virt, int level)
 	return (virt >> shift) & 0x1FF;
 }
 
-// Замени существующую функцию get_pte_for в vmm.c
-static uint64_t *get_pte_for(uint64_t pml4_phys, uint64_t virt, int create, uint64_t flags)
+static uint64_t *get_pte_for(uint64_t pml4_phys, uint64_t virt, int create)
 {
 	uint64_t phys = pml4_phys;
-
-	// Определяем флаги для промежуточных таблиц
-	uint64_t table_flags = PTE_PRESENT | PTE_WRITABLE;
-	if (flags & PTE_USER)
-		table_flags |= PTE_USER; // Если целевая страница USER, то и все таблицы тоже
 
 	for (int level = 4; level > 1; level--)
 	{
@@ -111,17 +105,8 @@ static uint64_t *get_pte_for(uint64_t pml4_phys, uint64_t virt, int create, uint
 				return NULL;
 			}
 
-			table[idx] = new_phys | table_flags; // ← Используем table_flags
+			table[idx] = new_phys | PTE_PRESENT | PTE_WRITABLE;
 			entry = table[idx];
-		}
-		else
-		{
-			// Если entry уже существует, добавляем USER флаг если нужно
-			if ((flags & PTE_USER) && !(entry & PTE_USER))
-			{
-				table[idx] |= PTE_USER;
-				entry = table[idx];
-			}
 		}
 
 		phys = entry & 0x000FFFFFFFFFF000ULL;
@@ -141,7 +126,7 @@ int vmm_map(uint64_t virt, uint64_t phys, size_t pages, uint64_t flags)
 
 	for (size_t i = 0; i < pages; i++)
 	{
-		uint64_t *pte = get_pte_for(current_pml4_phys, virt + i * PAGE_SIZE, 1, flags);
+		uint64_t *pte = get_pte_for(current_pml4_phys, virt + i * PAGE_SIZE, 1);
 		if (!pte)
 			return -2;
 
@@ -163,7 +148,7 @@ int vmm_unmap(uint64_t virt, size_t pages)
 
 	for (size_t i = 0; i < pages; i++)
 	{
-		uint64_t *pte = get_pte_for(current_pml4_phys, virt + i * PAGE_SIZE, 0, 0);
+		uint64_t *pte = get_pte_for(current_pml4_phys, virt + i * PAGE_SIZE, 0);
 		if (!pte)
 			continue;
 
@@ -221,6 +206,7 @@ void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_si
 		return;
 	}
 
+	// Check minimum heap size
 	if (heap_size < 16 * 1024 * 1024)
 	{
 		printk("FATAL: Heap too small (%llu MB), need >= 16MB\n",
@@ -229,29 +215,6 @@ void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_si
 	}
 
 	current_pml4_phys = bootstrap_cr3_phys;
-
-	// ============================================
-	// КРИТИЧНО: Мапим саму PML4 таблицу!
-	// ============================================
-	printk("Ensuring PML4 is mapped...\n");
-
-	// PML4 должна быть доступна для чтения/записи
-	// Используем прямой доступ к CR3 для первого маппинга
-	uint64_t pml4_page = bootstrap_cr3_phys & ~0xFFFULL;
-
-	// Проверяем что PML4 доступна
-	volatile uint64_t *test_pml4 = (volatile uint64_t *)pml4_page;
-	printk("Testing PML4 access at 0x%llx...\n", pml4_page);
-
-	// Попытка чтения (если упадёт - значит вообще не замаплена)
-	uint64_t test_val = test_pml4[0];
-	printk("PML4[0] = 0x%llx (read OK)\n", test_val);
-
-	// Попытка записи того же значения (если упадёт - нет прав на запись)
-	test_pml4[0] = test_val;
-	printk("PML4[0] write test OK\n");
-
-	// ============================================
 
 	// We reserve 2MB for bootstrap allocator
 	uint64_t bootstrap_size = 2 * 1024 * 1024;
@@ -264,6 +227,7 @@ void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_si
 	printk("Mapping heap into page tables...\n");
 	uint64_t heap_pages = (heap_size + PAGE_SIZE - 1) / PAGE_SIZE;
 
+	// We map in blocks of 512 pages for better debugging
 	uint64_t mapped = 0;
 	const uint64_t chunk = 512;
 
@@ -283,10 +247,11 @@ void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_si
 
 		mapped += to_map;
 
-		if (mapped % (1024) == 0)
-			printk("  Mapped %llu/%llu pages (%llu MB)\n",
-			       mapped, heap_pages,
-			       mapped * PAGE_SIZE / (1024 * 1024));
+		if (mapped % (1024) == 0) // Progress every 4MB
+			;
+		printk("  Mapped %llu/%llu pages (%llu MB)\n",
+		       mapped, heap_pages,
+		       mapped * PAGE_SIZE / (1024 * 1024));
 	}
 
 	printk("Successfully mapped %llu pages (%llu MB)\n",
@@ -294,29 +259,24 @@ void vmm_init(uint64_t bootstrap_cr3_phys, uint64_t heap_start, uint64_t heap_si
 	printk("=== VMM Init Complete ===\n");
 }
 
-/////
+// USER SPACE
 
-// Выделить физическую страницу
 uint64_t vmm_alloc_physical_page(void)
 {
 	void *page = pmm_alloc(1);
 	if (!page)
-		return 0;
-
-	// Обнуляем страницу для безопасности
-	memset(page, 0, PAGE_SIZE);
-
+		return 0; // out of memory
 	return pmm_get_phys(page);
 }
 
-// Освободить физическую страницу
 void vmm_free_physical_page(uint64_t phys)
 {
-	void *virt = phys_to_virt(phys);
+	// Так как у тебя identity mapping (virt == phys)
+	// можно просто вернуть по физическому адресу.
+	void *virt = (void *)phys;
 	pmm_free(virt, 1);
 }
 
-// Маппинг одной страницы (wrapper для удобства)
 int vmm_map_page(uint64_t virt, uint64_t phys, uint64_t flags)
 {
 	return vmm_map(virt, phys, 1, flags);
