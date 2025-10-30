@@ -105,13 +105,14 @@ void kernel_main(BootInfo *bi)
 	printk("Reading file: ");
 	vfs_read(f, buffer, 1024);
 	printk("File content: ");
-	for (int i = 0; i < 1024; i++)
+	printk("%s\n", buffer);
+	vfs_lseek(f, 0, SEEK_SET);
+	vfs_close(&f);
+	if (f == NULL)
 	{
-		if (buffer[i] == '\0')
-			break;
-		printk("%c", buffer[i]);
+		printk("VFS: file was not closed kmain%s\n", f->node->name);
 	}
-
+	vfs_read(f, buffer, 1024);
 	printk("FAT32 init done\n");
 
 	os_main(bi);

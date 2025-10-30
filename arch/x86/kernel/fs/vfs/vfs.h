@@ -50,6 +50,8 @@ typedef struct VFS_FS
 
 	bool (*mkdir)(struct VFS_FS *fs, const char *path);
 	bool (*unlink)(struct VFS_FS *fs, const char *path);
+
+	int (*close)(VFS_File *file);
 	Directory (*readdir)(struct VFS_FS *fs, const char *path);
 } VFS_FS;
 // typedef enum
@@ -70,5 +72,5 @@ Directory vfs_readdir(const char *path);
 extern VFS_FS *root_fs;
 VFS_Node *vfs_create_file(const char *path);
 int vfs_lseek(VFS_File *node, int offset, int whence);
-
+int vfs_close(VFS_File **pfile);
 _End_C_Header

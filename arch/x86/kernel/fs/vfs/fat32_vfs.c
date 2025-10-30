@@ -93,6 +93,27 @@ static Directory fat32_readdir_wrapper(VFS_FS *fs, const char *path)
 {
 	return fat32_list_files_from_path((FAT32_FS *)(fs->fs), path);
 }
+static int fat32_close_wrapper(VFS_File *file)
+{
+	if (!file)
+		return -1;
+
+	VFS_Node *node = file->node;
+	const char *name = node && node->name ? node->name : "<unknown>";
+
+	printk("VFS: closing file %s\n", name);
+	if (node)
+	{
+		if (node->fs_node)
+			kfree(node->fs_node);
+		kfree(node);
+	}
+	kfree(file);
+
+	printk("VFS: file was closed %s\n", name);
+	return 0;
+}
+
 void fat32_init_vfs(VFS_FS *fs)
 {
 	fs->mount = fat32_mount_wrapper;
@@ -104,4 +125,5 @@ void fat32_init_vfs(VFS_FS *fs)
 	fs->mkdir = fat32_mkdir_wrapper;
 	fs->unlink = fat32_unlink_wrapper;
 	fs->readdir = fat32_readdir_wrapper;
+	fs->close = fat32_close_wrapper;
 }

@@ -80,7 +80,7 @@ uint32_t get_fat_entry(FAT32_FS *fs, uint32_t cluster)
 			 (sector[offset + 2] << 16) |
 			 (sector[offset + 3] << 24);
 
-	free(sector);
+	kfree(sector);
 
 	return entry & 0x0FFFFFFF;
 }
