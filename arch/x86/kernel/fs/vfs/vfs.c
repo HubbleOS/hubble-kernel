@@ -7,6 +7,7 @@
 // #include "gpt.h" // Список змонтованих ФС (поки що 1)
 #include <fs/gpt/gpt.h>
 #include <mm/kmalloc.h>
+#include "printk.h"
 
 VFS_FS *root_fs = NULL;
 
@@ -33,7 +34,7 @@ bool vfs_mount(gpt_partition_t *parition, FileSystemType type)
 		break;
 	default:
 		printk("VFS: unsupported FS type %d\n", type);
-		free(root_fs);
+		kfree(root_fs);
 		root_fs = NULL;
 		return false;
 	}
@@ -188,5 +189,19 @@ int vfs_lseek(VFS_File *file, int offset, int whence)
 		return -1;
 	}
 
+	return 0;
+}
+int vfs_close(VFS_File **pfile)
+{
+	VFS_File *file = *pfile;
+	if (!file || !file->node->fs || !file->node->fs->close)
+		return -EIO;
+	file->node->fs->close(file);
+	// *pfile = NULL;
+	if (file)
+	{
+		// printk("%s\n", file->node->name);
+		printk("VFS: file was not closed in vfs %s\n", file->node->name);
+	}
 	return 0;
 }

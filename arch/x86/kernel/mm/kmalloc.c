@@ -349,6 +349,7 @@ void kfree(void *ptr)
 	// Получаем заголовок
 	block_header_t *block = (block_header_t *)((uint64_t)ptr - HEADER_SIZE);
 
+	memset(ptr, 0, order_to_size(block->order) - HEADER_SIZE);
 	// Проверки валидности
 	if (!is_valid_address(block))
 	{
@@ -378,6 +379,8 @@ void kfree(void *ptr)
 
 	// Пытаемся объединить с buddy
 	try_merge_buddy(block);
+
+	// clear data
 }
 
 void *krealloc(void *ptr, size_t new_size)

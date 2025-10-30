@@ -26,7 +26,7 @@ void fat32_format_directory_cluster(FAT32_FS *fs, uint32_t cluster, uint32_t par
 	dotdot->first_cluster_low = parent_cluster & 0xFFFF;
 
 	fat32_write_cluster(fs, cluster, buf);
-	free(buf);
+	kfree(buf);
 }
 
 bool fat32_create_directory(FAT32_FS *fs, const char *path)
@@ -86,7 +86,7 @@ bool fat32_add_directory_entry(FAT32_FS *fs, uint32_t dir_cluster, FAT32_Directo
 			{
 				memcpy(entry, new_entry, sizeof(FAT32_DirectoryEntry));
 				fat32_write_cluster(fs, dir_cluster, buf);
-				free(buf);
+				kfree(buf);
 				return true;
 			}
 		}
@@ -94,7 +94,7 @@ bool fat32_add_directory_entry(FAT32_FS *fs, uint32_t dir_cluster, FAT32_Directo
 		dir_cluster = get_fat_entry(fs, dir_cluster);
 	}
 
-	free(buf);
+	kfree(buf);
 	return false;
 }
 bool fat32_delete_directory(FAT32_FS *fs, const char *path)

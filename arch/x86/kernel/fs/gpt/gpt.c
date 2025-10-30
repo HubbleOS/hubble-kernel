@@ -125,7 +125,7 @@ int gpt_init(gpt_partition_t *partitions)
 		memcpy(partitions[i].name, name, 36);
 	}
 
-	free(entry_buf);
+	kfree(entry_buf);
 	printk("GPT initialized\n");
 	return 0;
 }

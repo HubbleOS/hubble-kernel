@@ -47,7 +47,7 @@ uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const 
 
 			if (memcmp(entry->name, name11, 11) == 0)
 			{
-				free(buffer);
+				kfree(buffer);
 				printk("entry cluster: high = %d, low = %d\n", entry->first_cluster_high, entry->first_cluster_low);
 
 				return (entry->first_cluster_high << 16) | entry->first_cluster_low;
@@ -56,7 +56,7 @@ uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const 
 
 		dir_cluster = get_fat_entry(fs, dir_cluster);
 	}
-	free(buffer);
+	kfree(buffer);
 	return 0;
 }
 
@@ -84,7 +84,7 @@ void iterate_directory(FAT32_FS *fs, uint32_t cluster, directory_entry_callback_
 		}
 		cluster = get_fat_entry(fs, cluster);
 	}
-	free(data);
+	kfree(data);
 }
 // bool is_dir(FAT32_DirectoryEntry *entry)
 // {
