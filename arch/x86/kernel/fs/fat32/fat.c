@@ -3,6 +3,7 @@
 
 #include "fat_structs.h"
 #include "fat_utils.h"
+#include <fs/vfs/vfs_standart_struct.h>
 
 #include <fs/ata/ata.h>
 #include <mm/kmalloc.h>

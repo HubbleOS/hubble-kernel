@@ -625,9 +625,8 @@ static void cmd_cat(Terminal *term, int argc, char **argv)
 	}
 
 	const char *filename = argv[1];
-
 	VFS_File *f = vfs_open(filename, VFS_O_RDONLY);
-	if (!f)
+	if (IS_ERR(f))
 	{
 		term->print("cat: cannot open '");
 		term->print(filename);
@@ -653,7 +652,7 @@ static void cmd_cat(Terminal *term, int argc, char **argv)
 
 static void cmd_ls(Terminal *term, int argc, char **argv)
 {
-	Directory dir = vfs_readdir("/");
+	Directory dir = vfs_readdir(argv[1]);
 	for (size_t i = 0; i < dir.count; i++)
 	{
 		term->print(dir.entries[i].name);

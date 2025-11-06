@@ -62,7 +62,7 @@ typedef struct VFS_FS
 // } DeviceType;
 
 // Функції VFS
-bool vfs_mount(gpt_partition_t *partition, FileSystemType type);
+bool vfs_mount(const char *mountpoint, gpt_partition_t *partition, FileSystemType type);
 VFS_File *vfs_open(const char *path, int flags);
 int vfs_read(VFS_File *node, void *buf, uint32_t size);
 int vfs_write(VFS_File *node, const void *buf, uint32_t size);
