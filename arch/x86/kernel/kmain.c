@@ -12,6 +12,8 @@
 #include <fs/nvme/nvme.h>
 #include <fs/pci/pci.h>
 
+#include <fs/ext2/ext2.h>
+
 #include <mm/kmalloc.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
@@ -86,34 +88,51 @@ void kernel_main(BootInfo *bi)
 
 	printk("GPT init\n");
 	gpt_init(partitions);
-
+	if (!partitions[1].device->read)
+	{
+		partitions[1].device->read = &ata_read_sector;
+		partitions[1].device->write = &ata_write_sector;
+		partitions[1].device->device = &ata_devices[0];
+	}
 	printk("FAT32 init at LBA %d\n", partitions[0].first_lba);
-	vfs_mount(&partitions[0], FS_FAT32);
-	printk("FAT32 mounted\n");
-	printk("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
+	vfs_mount("/", &partitions[0], FS_FAT32);
 
-	Directory dir = vfs_readdir("/");
+	// printk("FAT32 mounted\n");
+	// printk("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
+	// vfs_create_file("/tesit.txt");
+	// Directory dir = vfs_readdir("/");
 
-	for (int i = 0; i < dir.count; i++)
-	{
-		printk("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
-	}
-	dir.free_entries(&dir);
-	VFS_File *f = vfs_open("/tesit.txt", VFS_O_CREAT | VFS_O_RDWR);
-	vfs_write(f, "Hello wo123", 11);
-	vfs_lseek(f, 0, SEEK_SET);
-	printk("Reading file: ");
-	vfs_read(f, buffer, 1024);
-	printk("File content: ");
-	printk("%s\n", buffer);
-	vfs_lseek(f, 0, SEEK_SET);
-	vfs_close(&f);
-	if (f == NULL)
-	{
-		printk("VFS: file was not closed kmain%s\n", f->node->name);
-	}
-	vfs_read(f, buffer, 1024);
-	printk("FAT32 init done\n");
+	// for (int i = 0; i < dir.count; i++)
+	// {
+	// 	printk("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
+	// }
+	// dir.free_entries(&dir);
+	// printk("EXT2 init\n");
+
+	// vfs_mount("/mnt/ext2", &partitions[1], FS_EXT2);
+	// Directory dir = vfs_readdir("/mnt/ext2");
+	// printk("trying %d count", dir.count);
+	// for (int i = 0; i < dir.count; i++)
+	// {
+	// 	printk("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
+	// }
+	// VFS_File *f = vfs_open("/tesiit.txt", VFS_O_RDONLY);
+	// vfs_write(f, "Hello wo123", 11);
+	// vfs_lseek(f, 0, SEEK_SET);
+	// printk("Reading file: ");
+	// vfs_read(f, buffer, 1024);
+	// printk("File content: ");
+	// printk("%s\n", buffer);
+	// vfs_lseek(f, 0, SEEK_SET);
+	// vfs_close(&f);
+	// if (f == NULL)
+	// {
+	// 	printk("VFS: file was not closed kmain%s\n", f->node->name);
+	// }
+	// vfs_read(f, buffer, 1024);
+	// printk("FAT32 init done\n");
+
+	// ext2_init(partitions[1]);
 
 	os_main(bi);
 
