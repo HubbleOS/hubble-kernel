@@ -37,23 +37,7 @@ int gpt_init(gpt_partition_t *partitions)
 	// GPT_Header gpt_header;
 	printk("sizeof(GPT_Header): %d\n", sizeof(GPT_Header));
 	uint8_t buf[512];
-	// ata_read_sector(1, buf);
-	//     if (partitions->type == 0)
-	//     {
-	//         //((ATA_Device *)(partitions->device))->read(partitions->device, 1, buf);
-	//         if (ata_read_sector(partitions->device, 1, buf) != 0)
-	//         {
-	//             printk("Failed to read GPT header\n");
-	//             int a = ata_read_sector(partitions->device, 1, buf);
-	//             printk("ata_read_sector: %d\n", a);
-	//             return -1;
-	//         }
-	//     }
-	//     else
-	//     {
-	//         printk("Unsupported device type\n");
-	//         ata_read_sector(partitions->device, 1, buf);
-	//     }
+
 	printk("Reading GPT header\n");
 	partitions->device->read(partitions->device->device, 1, buf);
 	printk("read address: %p device read: %p\n", partitions->device->read, partitions->device->device);
@@ -87,24 +71,30 @@ int gpt_init(gpt_partition_t *partitions)
 
 		// ata_read_sector(gpt_header->partition_entries_lba + i, entry_buf + (i * 512));
 	}
+	int8_t partition_count = 0;
 
 	for (uint32_t i = 0; i < gpt_header->num_partition_entries; i++)
 	{
 		GPT_Partition_Entry *entry = (GPT_Partition_Entry *)(entry_buf + i * gpt_header->sizeof_partition_entry);
-
+		printk("Partition %d:\n", i);
 		int is_empty = 1;
 		for (int b = 0; b < 16; b++)
 		{
 			if (entry->partition_type_guid[b] != 0)
 			{
 				is_empty = 0;
+				printk("Partition type GUID: %x\n", entry->partition_type_guid[b]);
 				break;
 			}
 		}
 		if (is_empty)
+		{
+			printk("Partition %d is empty\n", i);
 			break;
-		partitions[i].first_lba = entry->first_lba;
-		partitions[i].last_lba = entry->last_lba;
+		}
+
+		partitions[partition_count].first_lba = entry->first_lba;
+		partitions[partition_count].last_lba = entry->last_lba;
 
 		printk("Partition %d:\n", i);
 		printk("  First LBA: %d\n", entry->first_lba);
@@ -122,10 +112,11 @@ int gpt_init(gpt_partition_t *partitions)
 		printk("\n");
 		utf16_to_ascii(entry->name, name, 36);
 		printk("  Name: %s\n", name);
-		memcpy(partitions[i].name, name, 36);
+		memcpy(partitions[partition_count].name, name, 36);
+		partition_count++;
 	}
 
 	kfree(entry_buf);
-	printk("GPT initialized\n");
+	printk("GPT initialized, %d partitions found\n", partition_count);
 	return 0;
 }

@@ -98,7 +98,10 @@ bool fat32_mount(FAT32_FS *fs, VFS_Device *device, uint32_t start_lba)
 	fs->write_sector = device->write;
 
 	fat32_init_from_lba(start_lba, fs);
-
+	if (!fs)
+	{
+		printk("fs is null\n");
+	}
 	printk("here is root cluster: %d\n", fs->root_cluster);
 	return true;
 }
@@ -111,6 +114,11 @@ bool fat32_unmount(FAT32_FS *fs)
 }
 FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 {
+	if (!fs)
+	{
+		printk("fs is null\n");
+		return NULL;
+	}
 	printk("Opening file: %s\n", path);
 	uint32_t cluster = resolve_path_to_cluster(fs, path);
 	if (cluster == 0)
@@ -128,7 +136,7 @@ FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 		kfree(buf);
 		return NULL;
 	}
-
+	printk("Cluster data open: ");
 	for (int i = 0; i < fs->cluster_size / sizeof(FAT32_DirectoryEntry); i++)
 	{
 		FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)(buf + i * sizeof(FAT32_DirectoryEntry));
@@ -567,7 +575,11 @@ void free_folder_path(PathParts *pp)
 }
 int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir)
 {
-
+	if (!fs)
+	{
+		printk("fs is null, %u\n", fs->bytes_per_sector);
+		return -EINVAL;
+	}
 	printk("sfn: %s\n", pp->sfn);
 	if (cluster == 0)
 	{
@@ -604,6 +616,11 @@ int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir
 
 			entry->attr = is_dir ? 0x10 : 0x20;
 			uint32_t new_cluster = fat32_allocate_cluster(fs);
+			printk("Allocated cluster: %u (high=%04x low=%04x)\n",
+			       new_cluster,
+			       (new_cluster >> 16) & 0xFFFF,
+			       new_cluster & 0xFFFF);
+
 			entry->first_cluster_high = (new_cluster >> 16) & 0xFFFF;
 			entry->first_cluster_low = new_cluster & 0xFFFF;
 
@@ -658,27 +675,4 @@ int fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name)
 	}
 	kfree(buf);
 	return -ENOENT;
-}
-
-bool free_entries(Directory *dir)
-{
-	if (!dir || !dir->entries)
-		return false;
-
-	for (int i = 0; i < dir->count; i++)
-	{
-		kfree(dir->entries[i].name);
-	}
-
-	kfree(dir->entries);
-	dir->entries = NULL;
-	dir->count = 0;
-
-	return true;
-}
-
-Directory Directory_init(Directory dir)
-{
-	dir.free_entries = free_entries;
-	return dir;
 }

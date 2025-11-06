@@ -30,8 +30,32 @@ uint32_t resolve_path_to_cluster(FAT32_FS *fs, const char *path)
 
 uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const char *name11)
 {
+	if (!fs || !name11)
+	{
+		if (!fs)
+		{
+			printk("find_directory_entry_cluster: fs is null\n");
+		}
+		else
+		{
+			printk("find_directory_entry_cluster: name11 is null\n");
+		}
+		printk("find_directory_entry_cluster: invalid parameters \n");
+		return 0;
+	}
+
 	printk("find_directory_entry_cluster: %s\n", name11);
+
+	if (dir_cluster == 0)
+		dir_cluster = 2;
+
 	uint8_t *buffer = kmalloc(fs->cluster_size);
+	if (!buffer)
+	{
+		printk("find_directory_entry_cluster: failed to allocate buffer\n");
+		return 0;
+	}
+
 	int steps = 0;
 	while (dir_cluster < 0x0FFFFFF8 && steps++ < MAX_CLUSTER_CHAIN)
 	{
@@ -47,15 +71,17 @@ uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const 
 
 			if (memcmp(entry->name, name11, 11) == 0)
 			{
+				uint32_t cluster = (entry->first_cluster_high << 16) | entry->first_cluster_low;
+				printk("found entry cluster: high=%04x low=%04x (cluster=%08x)\n",
+				       entry->first_cluster_high, entry->first_cluster_low, cluster);
 				kfree(buffer);
-				printk("entry cluster: high = %d, low = %d\n", entry->first_cluster_high, entry->first_cluster_low);
-
-				return (entry->first_cluster_high << 16) | entry->first_cluster_low;
+				return cluster;
 			}
 		}
 
 		dir_cluster = get_fat_entry(fs, dir_cluster);
 	}
+
 	kfree(buffer);
 	return 0;
 }
