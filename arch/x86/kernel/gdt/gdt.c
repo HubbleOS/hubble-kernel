@@ -5,12 +5,17 @@
 // GDT + TSS Tables
 // ============================================================================
 
-static gdt_entry_t gdt_entries[5]; // NULL, Code, Data, User Code, User Data
-static tss_entry_t tss_descriptor; // TSS descriptor (16 bytes)
+// Об'єднана таблиця: 5 GDT дескрипторів + 1 TSS дескриптор (16 байт)
+static struct
+{
+	gdt_entry_t entries[5];	    // 40 bytes
+	tss_entry_t tss_descriptor; // 16 bytes
+} __attribute__((packed, aligned(16))) gdt_table;
+
 static gdt_ptr_t gdt_ptr;
 static tss_t tss;
 
-// Стек для Ring 0 (используется при переключении из Ring 3 в Ring 0)
+// Стек для Ring 0
 static uint8_t kernel_stack[16384] __attribute__((aligned(16)));
 
 // ============================================================================
@@ -19,28 +24,32 @@ static uint8_t kernel_stack[16384] __attribute__((aligned(16)));
 
 static void gdt_set_gate(int num, uint32_t base, uint32_t limit, uint8_t access, uint8_t gran)
 {
-	gdt_entries[num].base_low = (base & 0xFFFF);
-	gdt_entries[num].base_middle = (base >> 16) & 0xFF;
-	gdt_entries[num].base_high = (base >> 24) & 0xFF;
+	gdt_entry_t *entry = &gdt_table.entries[num];
 
-	gdt_entries[num].limit_low = (limit & 0xFFFF);
-	gdt_entries[num].granularity = (limit >> 16) & 0x0F;
-	gdt_entries[num].granularity |= gran & 0xF0;
+	entry->base_low = (base & 0xFFFF);
+	entry->base_middle = (base >> 16) & 0xFF;
+	entry->base_high = (base >> 24) & 0xFF;
 
-	gdt_entries[num].access = access;
+	entry->limit_low = (limit & 0xFFFF);
+	entry->granularity = (limit >> 16) & 0x0F;
+	entry->granularity |= gran & 0xF0;
+
+	entry->access = access;
 }
 
 static void tss_set_descriptor(uint64_t base, uint32_t limit)
 {
-	tss_descriptor.limit_low = limit & 0xFFFF;
-	tss_descriptor.base_low = base & 0xFFFF;
-	tss_descriptor.base_middle = (base >> 16) & 0xFF;
-	tss_descriptor.base_high = (base >> 24) & 0xFF;
-	tss_descriptor.base_upper = (base >> 32) & 0xFFFFFFFF;
+	tss_entry_t *desc = &gdt_table.tss_descriptor;
 
-	tss_descriptor.access = TSS_ACCESS;
-	tss_descriptor.granularity = 0x00;
-	tss_descriptor.reserved = 0;
+	desc->limit_low = limit & 0xFFFF;
+	desc->base_low = base & 0xFFFF;
+	desc->base_middle = (base >> 16) & 0xFF;
+	desc->base_high = (base >> 24) & 0xFF;
+	desc->base_upper = (base >> 32) & 0xFFFFFFFF;
+
+	desc->access = TSS_ACCESS;
+	desc->granularity = 0x00;
+	desc->reserved = 0;
 }
 
 // ============================================================================
@@ -49,9 +58,12 @@ static void tss_set_descriptor(uint64_t base, uint32_t limit)
 
 void gdt_init(void)
 {
-	// Размер GDT: 5 обычных дескрипторов + 1 TSS дескриптор (16 байт)
-	gdt_ptr.limit = sizeof(gdt_entries) + sizeof(tss_descriptor) - 1;
-	gdt_ptr.base = (uint64_t)&gdt_entries;
+	// Розмір всієї таблиці
+	gdt_ptr.limit = sizeof(gdt_table) - 1;
+	gdt_ptr.base = (uint64_t)&gdt_table;
+
+	// Очищаємо таблицю
+	memset(&gdt_table, 0, sizeof(gdt_table));
 
 	// NULL дескриптор
 	gdt_set_gate(0, 0, 0, 0, 0);
@@ -80,15 +92,8 @@ void gdt_init(void)
 			 GDT_ACCESS_RW,
 		     GDT_GRAN_4K | GDT_GRAN_64BIT);
 
-	// Копируем TSS дескриптор после обычных дескрипторов
-	uint8_t *gdt_base = (uint8_t *)&gdt_entries;
-	uint8_t *tss_desc_ptr = gdt_base + sizeof(gdt_entries);
-
-	// Настраиваем TSS дескриптор (будет заполнен в tss_init)
+	// TSS Descriptor (0x28) - 16 байт
 	tss_set_descriptor((uint64_t)&tss, sizeof(tss) - 1);
-
-	// Копируем TSS дескриптор
-	memcpy(tss_desc_ptr, &tss_descriptor, sizeof(tss_descriptor));
 
 	// Загружаем GDT
 	gdt_flush((uint64_t)&gdt_ptr);
@@ -100,21 +105,18 @@ void gdt_init(void)
 
 void tss_init(void)
 {
-	// Очищаем TSS
+	// Очищаємо TSS
 	memset(&tss, 0, sizeof(tss));
 
-	// Устанавливаем стек для Ring 0 (используется при системных вызовах)
+	// Встановлюємо стек для Ring 0
 	tss.rsp0 = (uint64_t)(kernel_stack + sizeof(kernel_stack));
-
-	// IST можно настроить для специальных прерываний (например, Double Fault)
-	// tss.ist[0] = (uint64_t)(special_stack + STACK_SIZE);
 
 	// Загружаем TSS
 	tss_flush(GDT_TSS);
 }
 
 // ============================================================================
-// IDT Tables and Handlers
+// IDT (решта коду без змін)
 // ============================================================================
 
 static idt_entry_t idt_entries[IDT_ENTRIES];
@@ -193,7 +195,7 @@ void idt_init(void)
 	// Очищаем IDT
 	memset(&idt_entries, 0, sizeof(idt_entries));
 
-	// CPU Exceptions (0-31)
+	// CPU Exceptions (0-21)
 	idt_set_gate(0, (uint64_t)isr0, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
 	idt_set_gate(1, (uint64_t)isr1, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);
 	idt_set_gate(2, (uint64_t)isr2, GDT_KERNEL_CODE, IDT_TYPE_INTERRUPT);

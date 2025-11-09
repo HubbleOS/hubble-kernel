@@ -88,7 +88,7 @@ void play_bwvid(framebuffer_info_t *bi, const char *path, int x, int y)
 		r = vfs_read(file, frame_data + sizeof(hdr), hdr.size);
 		if (r != (int)hdr.size)
 		{
-			free(frame_data);
+			kfree(frame_data);
 			printk("frame read error %d, expected %d\n", r, hdr.size);
 			break;
 		}
@@ -98,7 +98,7 @@ void play_bwvid(framebuffer_info_t *bi, const char *path, int x, int y)
 
 		draw_frame(bi, frame_data, x, y);
 
-		free(frame_data);
+		kfree(frame_data);
 		sleep_ms(33);
 		// тут можна вставити таймер/затримку для FPS
 		// наприклад: sleep_ms(33) для ~30 кадрів/с
