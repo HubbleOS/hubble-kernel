@@ -52,12 +52,12 @@ extern "C" void os_main(BootInfo *bi)
 
   // test_syscall();
 
-  int res = load_elf_and_run("/usr/bin/user.elf");
-  if (res != 0)
-  {
-    term.print("Failed to load user.elf\n");
-    return;
-  }
+  // int res = load_elf_and_run("/usr/bin/user.elf");
+  // if (res != 0)
+  // {
+  //   term.print("Failed to load user.elf\n");
+  //   return;
+  // }
 
   term.run();
 }

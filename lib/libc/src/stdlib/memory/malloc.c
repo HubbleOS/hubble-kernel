@@ -3,6 +3,7 @@
 #include <mm/mm.h>
 #include <mm/pmm.h>
 
-static memory_ops_t *memory_ops = &heap_memory_ops;
+// static memory_ops_t *memory_ops = &heap_memory_ops;
 
-void *malloc(size_t size) { return memory_ops->malloc(size); }
+// void *malloc(size_t size) { return memory_ops->malloc(size); }
+void *malloc(size_t size) {}

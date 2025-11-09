@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <mm/kmalloc.h>
+#include <mm/slab.h>
 
 typedef struct Directory Directory;
 
@@ -57,11 +57,11 @@ typedef struct
 #define VFS_O_TRUNC 0x40  // Truncate file
 #define VFS_O_APPEND 0x80 // Append to file
 // Standart file modes
-#define MODE_FILE 0x1000    // File
-#define MODE_DIR 0x2000	    // Directory
-#define MODE_CHAR 0x3000    // Character device
-#define MODE_BLOCK 0x4000   // Block device
-#define MODE_PIPE 0x5000    // Pipe
+#define MODE_FILE 0x1000	// File
+#define MODE_DIR 0x2000		// Directory
+#define MODE_CHAR 0x3000	// Character device
+#define MODE_BLOCK 0x4000	// Block device
+#define MODE_PIPE 0x5000	// Pipe
 #define MODE_SYMLINK 0x6000 // Symbolic link
 
 // Access modes
