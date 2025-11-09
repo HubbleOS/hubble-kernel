@@ -1,84 +1,60 @@
 #include "vmm.h"
 #include "pmm.h"
 #include "printk.h"
-
 #include <stdint.h>
 #include <string.h>
 
-static inline void *phys_to_virt(uint64_t phys)
-{
-	return (void *)(phys + PHYSMAP_BASE);
-}
-
-static inline uint64_t virt_to_phys(void *vptr)
-{
-	return (uint64_t)vptr - PHYSMAP_BASE;
-}
+#define PHYSMAP_BASE 0xFFFF800000000000ULL
 
 static uint64_t current_pml4_phys = 0;
+static uint64_t physmap_max = 0;
 
-// Bootstrap allocator
-static uint64_t bootstrap_alloc_base = 0;
-static uint64_t bootstrap_alloc_offset = 0;
-static uint64_t bootstrap_alloc_size = 0;
-static int use_bootstrap = 0;
+// Простейший bootstrap allocator для page tables
+// Используем конец heap для временных аллокаций
+static uint64_t bootstrap_alloc_ptr = 0;
+static uint64_t bootstrap_alloc_end = 0;
+static int bootstrap_mode = 1;
 
-void vmm_set_bootstrap_allocator(uint64_t base, uint64_t size)
+static uint64_t bootstrap_alloc_page(void)
 {
-	bootstrap_alloc_base = base;
-	bootstrap_alloc_size = size;
-	bootstrap_alloc_offset = 0;
-	use_bootstrap = 1;
-	printk("Bootstrap allocator: 0x%lx - 0x%lx (%lu KB)\n",
-	       base, base + size, size / 1024);
-}
+	if (bootstrap_alloc_ptr + PAGE_SIZE > bootstrap_alloc_end)
+	{
+		printk("ERROR: Bootstrap allocator exhausted!\n");
+		return 0;
+	}
 
-void vmm_disable_bootstrap_allocator(void)
-{
-	use_bootstrap = 0;
-	printk("Bootstrap allocator disabled (used %lu bytes)\n",
-	       bootstrap_alloc_offset);
-}
+	uint64_t page = bootstrap_alloc_ptr;
+	bootstrap_alloc_ptr += PAGE_SIZE;
 
-uint64_t vmm_get_current_cr3_phys(void)
-{
-	return current_pml4_phys;
-}
+	// Очищаем через identity mapping
+	memset((void *)page, 0, PAGE_SIZE);
 
-void vmm_switch_cr3(uint64_t phys)
-{
-	current_pml4_phys = phys;
-	asm volatile("mov %0, %%cr3" : : "r"(phys) : "memory");
+	return page;
 }
 
 static uint64_t alloc_table_phys(void)
 {
-	if (use_bootstrap)
+	if (bootstrap_mode)
 	{
-		// Check before allocation
-		if (bootstrap_alloc_offset + PAGE_SIZE > bootstrap_alloc_size)
+		// Используем bootstrap allocator
+		return bootstrap_alloc_page();
+	}
+	else
+	{
+		// Используем PMM
+		uint64_t phys = pmm_alloc_phys(1);
+		if (!phys)
 		{
-			printk("ERROR: Bootstrap allocator exhausted! Used: %lu/%lu bytes\n",
-			       bootstrap_alloc_offset, bootstrap_alloc_size);
-			return UINT64_MAX; // Return invalid value
+			printk("ERROR: PMM alloc failed in VMM\n");
+			return 0;
 		}
-		uint64_t phys = bootstrap_alloc_base + bootstrap_alloc_offset;
-		bootstrap_alloc_offset += PAGE_SIZE;
 
-		// CRITICAL: Use identity mapping for bootstrap region
-		// We can't use phys_to_virt() yet because bootstrap isn't mapped
-		void *virt = (void *)phys;
+		// Очищаем через physmap
+		void *virt = (void *)(phys + PHYSMAP_BASE);
 		memset(virt, 0, PAGE_SIZE);
+
 		return phys;
 	}
-
-	// After disabling bootstrap - use PMM
-	void *virt = pmm_alloc(1);
-	if (!virt)
-		return UINT64_MAX;
-
-	memset(virt, 0, PAGE_SIZE);
-	return pmm_get_phys(virt);
 }
 
 static inline size_t idx_from_virt(uint64_t virt, int level)
@@ -87,24 +63,25 @@ static inline size_t idx_from_virt(uint64_t virt, int level)
 	return (virt >> shift) & 0x1FF;
 }
 
+// Получить указатель на таблицу
+static uint64_t *get_table_ptr(uint64_t phys)
+{
+	// Если physmap создан для этого адреса - используем его
+	if (phys < physmap_max)
+	{
+		return (uint64_t *)(phys + PHYSMAP_BASE);
+	}
+	// Иначе используем identity mapping
+	return (uint64_t *)phys;
+}
+
 static uint64_t *get_pte_for(uint64_t pml4_phys, uint64_t virt, int create)
 {
 	uint64_t phys = pml4_phys;
+
 	for (int level = 4; level > 1; level--)
 	{
-		// CRITICAL: During bootstrap, use identity mapping
-		uint64_t *table;
-		if (use_bootstrap)
-		{
-			// Bootstrap region is identity-mapped, use direct access
-			table = (uint64_t *)phys;
-		}
-		else
-		{
-			// After bootstrap, use physmap
-			table = (uint64_t *)phys_to_virt(phys);
-		}
-
+		uint64_t *table = get_table_ptr(phys);
 		size_t idx = idx_from_virt(virt, level);
 		uint64_t entry = table[idx];
 
@@ -114,40 +91,30 @@ static uint64_t *get_pte_for(uint64_t pml4_phys, uint64_t virt, int create)
 				return NULL;
 
 			uint64_t new_phys = alloc_table_phys();
-			if (new_phys == UINT64_MAX)
-			{
-				printk("ERROR: Failed to allocate page table at level %d\n", level);
+			if (!new_phys)
 				return NULL;
-			}
+
 			table[idx] = new_phys | PTE_PRESENT | PTE_WRITABLE;
+
+			// Flush TLB для родительской таблицы
+			asm volatile("invlpg (%0)" : : "r"(table) : "memory");
+
 			entry = table[idx];
 		}
+
 		phys = entry & 0x000FFFFFFFFFF000ULL;
 	}
 
-	// Get final PT (level 1)
-	uint64_t *pt;
-	if (use_bootstrap)
-	{
-		pt = (uint64_t *)phys;
-	}
-	else
-	{
-		pt = (uint64_t *)phys_to_virt(phys);
-	}
-
+	uint64_t *pt = get_table_ptr(phys);
 	size_t tidx = idx_from_virt(virt, 1);
 	return &pt[tidx];
 }
 
 int vmm_map(uint64_t virt, uint64_t phys, size_t pages, uint64_t flags)
 {
-	if (virt & (PAGE_SIZE - 1))
-		return -1;
-	if (phys & (PAGE_SIZE - 1))
+	if (virt & (PAGE_SIZE - 1) || phys & (PAGE_SIZE - 1))
 		return -1;
 
-	// Ensure flags contain PTE_PRESENT
 	flags |= PTE_PRESENT;
 
 	for (size_t i = 0; i < pages; i++)
@@ -157,26 +124,13 @@ int vmm_map(uint64_t virt, uint64_t phys, size_t pages, uint64_t flags)
 
 		uint64_t *pte = get_pte_for(current_pml4_phys, curr_virt, 1);
 		if (!pte)
-			return -2;
-
-		// Check existing mapping
-		if (*pte & PTE_PRESENT)
 		{
-			uint64_t old_phys = *pte & 0x000FFFFFFFFFF000ULL;
-			if (old_phys != curr_phys)
-			{
-				printk("WARNING: Remapping VA=0x%lx: PA=0x%lx -> PA=0x%lx\n",
-				       curr_virt, old_phys, curr_phys);
-			}
+			printk("ERROR: Failed to get PTE for virt 0x%lx\n", curr_virt);
+			return -2;
 		}
 
 		*pte = curr_phys | flags;
-	}
-
-	// Invalidate TLB
-	for (size_t i = 0; i < pages; i++)
-	{
-		asm volatile("invlpg (%0)" : : "r"(virt + i * PAGE_SIZE) : "memory");
+		asm volatile("invlpg (%0)" : : "r"(curr_virt) : "memory");
 	}
 
 	return 0;
@@ -199,7 +153,7 @@ int vmm_unmap(uint64_t virt, size_t pages, int free_pages)
 			if (free_pages)
 			{
 				uint64_t phys = *pte & 0x000FFFFFFFFFF000ULL;
-				vmm_free_physical_page(phys);
+				pmm_free_phys(phys, 1);
 			}
 			*pte = 0;
 		}
@@ -216,16 +170,7 @@ uint64_t vmm_translate(uint64_t virt)
 
 	for (int level = 4; level >= 1; level--)
 	{
-		uint64_t *table;
-		if (use_bootstrap)
-		{
-			table = (uint64_t *)phys;
-		}
-		else
-		{
-			table = (uint64_t *)phys_to_virt(phys);
-		}
-
+		uint64_t *table = get_table_ptr(phys);
 		size_t idx = idx_from_virt(virt, level);
 		uint64_t entry = table[idx];
 
@@ -243,16 +188,7 @@ uint64_t vmm_translate(uint64_t virt)
 		phys = entry & 0x000FFFFFFFFFF000ULL;
 	}
 
-	uint64_t *pt;
-	if (use_bootstrap)
-	{
-		pt = (uint64_t *)phys;
-	}
-	else
-	{
-		pt = (uint64_t *)phys_to_virt(phys);
-	}
-
+	uint64_t *pt = get_table_ptr(phys);
 	size_t tidx = idx_from_virt(virt, 1);
 	uint64_t e = pt[tidx];
 
@@ -262,173 +198,156 @@ uint64_t vmm_translate(uint64_t virt)
 	return (e & 0x000FFFFFFFFFF000ULL) | (virt & 0xFFF);
 }
 
-void vmm_init(uint64_t bootstrap_cr3_phys,
-	      uint64_t bootstrap_start, uint64_t bootstrap_size,
-	      uint64_t heap_start, uint64_t heap_size)
+void vmm_init(uint64_t uefi_cr3_phys, uint64_t heap_start, uint64_t heap_size)
 {
 	printk("=== VMM Init ===\n");
-	printk("Bootstrap CR3: 0x%lx\n", bootstrap_cr3_phys);
-	printk("Bootstrap allocator: 0x%lx - 0x%lx (%lu MB)\n",
-	       bootstrap_start, bootstrap_start + bootstrap_size,
-	       bootstrap_size / (1024 * 1024));
-	printk("Heap: 0x%lx - 0x%lx (%lu MB)\n",
-	       heap_start, heap_start + heap_size, heap_size / (1024 * 1024));
 
-	if (!bootstrap_cr3_phys)
+	current_pml4_phys = uefi_cr3_phys;
+
+	// Резервируем последние 4MB heap для bootstrap allocator
+	uint64_t bootstrap_size = 4 * 1024 * 1024;
+	bootstrap_alloc_end = heap_start + heap_size;
+	bootstrap_alloc_ptr = bootstrap_alloc_end - bootstrap_size;
+
+	printk("Bootstrap allocator: 0x%lx - 0x%lx (4 MB)\n",
+	       bootstrap_alloc_ptr, bootstrap_alloc_end);
+
+	// Уменьшаем доступный heap (PMM не должен трогать эту область)
+	heap_size -= bootstrap_size;
+
+	// Определяем сколько нужно замапить
+	uint64_t heap_end = heap_start + heap_size;
+	uint64_t max_phys_to_map = heap_end;
+
+	// Ограничиваем разумным пределом
+	uint64_t reasonable_limit = 16ULL * 1024 * 1024 * 1024;
+	if (max_phys_to_map > reasonable_limit)
 	{
-		printk("FATAL: No bootstrap CR3 provided\n");
-		return;
+		max_phys_to_map = reasonable_limit;
 	}
 
-	// Check minimum sizes
-	if (heap_size < 16 * 1024 * 1024)
-	{
-		printk("FATAL: Heap too small (%lu MB), need >= 16MB\n",
-		       heap_size / (1024 * 1024));
-		return;
-	}
+	max_phys_to_map = (max_phys_to_map + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 
-	if (bootstrap_size < 2 * 1024 * 1024)
-	{
-		printk("FATAL: Bootstrap allocator too small (%lu MB), need >= 2MB\n",
-		       bootstrap_size / (1024 * 1024));
-		return;
-	}
+	printk("Creating physmap: 0 - 0x%lx (%lu MB)\n",
+	       max_phys_to_map, max_phys_to_map / (1024 * 1024));
 
-	current_pml4_phys = bootstrap_cr3_phys;
-
-	// Initialize bootstrap allocator with the DEDICATED region
-	vmm_set_bootstrap_allocator(bootstrap_start, bootstrap_size);
-
-	// NOTE: We DON'T map bootstrap region first!
-	// Bootstrap uses identity mapping (VA = PA) during allocation
-	// This is safe because UEFI already identity-mapped low memory
-
-	// Map the heap
-	printk("Mapping heap into page tables...\n");
-	uint64_t heap_pages = (heap_size + PAGE_SIZE - 1) / PAGE_SIZE;
-	printk("  Total pages to map: %lu (%lu MB)\n",
-	       heap_pages, heap_pages * PAGE_SIZE / (1024 * 1024));
-
+	// Мапим небольшими блоками с прогрессом
+	uint64_t block_size = 64 * 1024 * 1024; // 64MB
 	uint64_t mapped = 0;
-	const uint64_t chunk = 512; // Map in 2MB chunks
+	int progress = 0;
 
-	while (mapped < heap_pages)
+	while (mapped < max_phys_to_map)
 	{
-		uint64_t to_map = (heap_pages - mapped) > chunk ? chunk : (heap_pages - mapped);
-		uint64_t vaddr = heap_start + mapped * PAGE_SIZE;
-
-		int result = vmm_map(vaddr, vaddr, to_map, PTE_PRESENT | PTE_WRITABLE);
-		if (result != 0)
+		uint64_t to_map = block_size;
+		if (mapped + to_map > max_phys_to_map)
 		{
-			printk("FATAL: Failed to map heap at 0x%lx (error %d)\n",
-			       vaddr, result);
-			printk("  Mapped: %lu/%lu pages (%lu MB)\n",
-			       mapped, heap_pages, mapped * PAGE_SIZE / (1024 * 1024));
-			printk("  Bootstrap used: %lu/%lu bytes (%lu%%)\n",
-			       bootstrap_alloc_offset, bootstrap_alloc_size,
-			       (bootstrap_alloc_offset * 100) / bootstrap_alloc_size);
-			return;
+			to_map = max_phys_to_map - mapped;
+		}
+
+		uint64_t vaddr = PHYSMAP_BASE + mapped;
+		uint64_t paddr = mapped;
+		uint64_t pages = to_map / PAGE_SIZE;
+
+		int ret = vmm_map(vaddr, paddr, pages, PTE_PRESENT | PTE_WRITABLE);
+		if (ret != 0)
+		{
+			printk("ERROR: vmm_map failed at 0x%lx (ret=%d)\n", mapped, ret);
+			break;
 		}
 
 		mapped += to_map;
+		physmap_max = mapped;
 
-		// Progress report every 4MB
-		if (mapped % 1024 == 0)
+		// Показываем прогресс каждые 25%
+		int new_progress = (mapped * 100) / max_phys_to_map;
+		if (new_progress >= progress + 25)
 		{
-			printk("  Mapped %lu/%lu pages (%lu MB)\n",
-			       mapped, heap_pages,
-			       mapped * PAGE_SIZE / (1024 * 1024));
+			printk("  Progress: %d%% (%lu MB / %lu MB)\n",
+			       new_progress,
+			       mapped / (1024 * 1024),
+			       max_phys_to_map / (1024 * 1024));
+			progress = new_progress;
 		}
 	}
 
-	// Verify mapping
-	printk("Verifying heap mapping...\n");
-	uint64_t test_addr = heap_start;
-	uint64_t test_phys = vmm_translate(test_addr);
-	if (!test_phys)
-	{
-		printk("FATAL: Heap mapping verification failed at 0x%lx!\n", test_addr);
-		return;
-	}
-	printk("  Heap start 0x%lx -> 0x%lx (OK)\n", test_addr, test_phys);
+	printk("Physmap created: %lu MB (0x%lx - 0x%lx)\n",
+	       physmap_max / (1024 * 1024),
+	       PHYSMAP_BASE, PHYSMAP_BASE + physmap_max);
 
-	// Test write
-	volatile uint64_t *test_ptr = (uint64_t *)heap_start;
-	*test_ptr = 0xDEADBEEFCAFEBABE;
-	if (*test_ptr == 0xDEADBEEFCAFEBABE)
-	{
-		printk("  Heap write test: OK\n");
-	}
-	else
-	{
-		printk("  Heap write test: FAILED (wrote 0xDEADBEEFCAFEBABE, read 0x%lx)\n",
-		       *test_ptr);
-	}
+	// Выключаем bootstrap mode - теперь можно использовать PMM
+	bootstrap_mode = 0;
+	printk("Bootstrap allocator disabled, using PMM\n");
 
-	printk("Successfully mapped heap: %lu pages (%lu MB)\n",
-	       heap_pages, heap_pages * PAGE_SIZE / (1024 * 1024));
-	printk("Bootstrap allocator used: %lu/%lu bytes (%lu%%)\n",
-	       bootstrap_alloc_offset, bootstrap_alloc_size,
-	       (bootstrap_alloc_offset * 100) / bootstrap_alloc_size);
+	// Тест physmap
+	printk("Testing physmap...\n");
+	if (heap_start < physmap_max)
+	{
+		volatile uint64_t *test_ptr = (uint64_t *)(PHYSMAP_BASE + heap_start + 0x1000);
+		*test_ptr = 0xDEADBEEF12345678ULL;
+
+		// Проверяем через identity mapping
+		volatile uint64_t *test_identity = (uint64_t *)(heap_start + 0x1000);
+		if (*test_identity == 0xDEADBEEF12345678ULL)
+		{
+			printk("  Physmap test: OK (physmap == identity)\n");
+		}
+		else
+		{
+			printk("  Physmap test: FAILED (0x%lx != 0x%lx)\n",
+			       *test_ptr, *test_identity);
+		}
+	}
 
 	printk("=== VMM Init Complete ===\n");
 }
 
-static int is_table_empty(uint64_t *table)
+uint64_t vmm_get_current_cr3_phys(void)
 {
-	for (int i = 0; i < 512; i++)
-	{
-		if (table[i] & PTE_PRESENT)
-			return 0;
-	}
-	return 1;
+	return current_pml4_phys;
 }
 
-void vmm_cleanup_empty_tables(uint64_t virt)
+void vmm_switch_cr3(uint64_t phys)
 {
-	uint64_t phys = current_pml4_phys;
-
-	for (int level = 4; level > 1; level--)
-	{
-		uint64_t *table = (uint64_t *)phys_to_virt(phys);
-		size_t idx = idx_from_virt(virt, level);
-		uint64_t entry = table[idx];
-
-		if (!(entry & PTE_PRESENT))
-			return;
-
-		uint64_t next_phys = entry & 0x000FFFFFFFFFF000ULL;
-		uint64_t *next_table = (uint64_t *)phys_to_virt(next_phys);
-
-		if (is_table_empty(next_table))
-		{
-			table[idx] = 0;
-			vmm_free_physical_page(next_phys);
-			printk("Freed empty page table at level %d\n", level - 1);
-		}
-		else
-		{
-			phys = next_phys;
-		}
-	}
-}
-
-uint64_t vmm_alloc_physical_page(void)
-{
-	void *page = pmm_alloc(1);
-	if (!page)
-		return 0;
-	return pmm_get_phys(page);
-}
-
-void vmm_free_physical_page(uint64_t phys)
-{
-	void *virt = phys_to_virt(phys);
-	pmm_free(virt, 1);
+	current_pml4_phys = phys;
+	asm volatile("mov %0, %%cr3" : : "r"(phys) : "memory");
 }
 
 int vmm_map_page(uint64_t virt, uint64_t phys, uint64_t flags)
 {
 	return vmm_map(virt, phys, 1, flags);
+}
+
+uint64_t vmm_alloc_physical_page(void)
+{
+	return pmm_alloc_phys(1);
+}
+
+void vmm_free_physical_page(uint64_t phys)
+{
+	pmm_free_phys(phys, 1);
+}
+
+int vmm_ensure_physmap(uint64_t phys_addr, uint64_t size)
+{
+	uint64_t needed = phys_addr + size;
+	needed = (needed + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+
+	if (needed <= physmap_max)
+	{
+		return 0;
+	}
+
+	printk("Extending physmap: 0x%lx -> 0x%lx\n", physmap_max, needed);
+
+	uint64_t pages = (needed - physmap_max) / PAGE_SIZE;
+	uint64_t vaddr = PHYSMAP_BASE + physmap_max;
+	uint64_t paddr = physmap_max;
+
+	int ret = vmm_map(vaddr, paddr, pages, PTE_PRESENT | PTE_WRITABLE);
+	if (ret == 0)
+	{
+		physmap_max = needed;
+	}
+
+	return ret;
 }

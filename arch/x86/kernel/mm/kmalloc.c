@@ -240,7 +240,7 @@ void kmalloc_init(void)
 	size_t initial_heap_size = 16 * 1024 * 1024; // 16 MB
 	size_t pages = initial_heap_size / PAGE_SIZE;
 
-	void *heap_virt = pmm_alloc(pages);
+	void *heap_virt = pmm_alloc_phys(pages);
 	if (!heap_virt)
 	{
 		printk("FATAL: Cannot allocate heap from PMM\n");
@@ -250,7 +250,7 @@ void kmalloc_init(void)
 	heap_start = (uint64_t)heap_virt;
 	heap_size = initial_heap_size;
 
-	printk("Heap region: 0x%llx - 0x%llx (%llu MB)\n",
+	printk("Heap region: 0x%lx - 0x%lx (%lu\n MB)\n",
 	       heap_start, heap_start + heap_size, heap_size / (1024 * 1024));
 
 	// Инициализируем free lists
@@ -308,7 +308,7 @@ void *kmalloc(size_t size)
 
 	if (order > MAX_ORDER)
 	{
-		printk("kmalloc: size %llu too large (max %llu)\n",
+		printk("kmalloc: size %lu\n too large (max %lu\n)\n",
 		       size, (1ULL << MAX_ORDER) - HEADER_SIZE);
 		stats.failed_allocs++;
 		return NULL;
@@ -318,7 +318,7 @@ void *kmalloc(size_t size)
 
 	if (!block)
 	{
-		printk("kmalloc: out of memory (requested %llu bytes)\n", size);
+		printk("kmalloc: out of memory (requested %lu\n bytes)\n", size);
 		stats.failed_allocs++;
 		return NULL;
 	}
@@ -354,19 +354,19 @@ void kfree(void *ptr)
 	// Проверки валидности
 	if (!is_valid_address(block))
 	{
-		printk("kfree: invalid pointer 0x%llx\n", (uint64_t)ptr);
+		printk("kfree: invalid pointer 0x%lx\n", (uint64_t)ptr);
 		return;
 	}
 
 	if (block->magic != BLOCK_MAGIC)
 	{
-		printk("kfree: corrupted block (bad magic) at 0x%llx\n", (uint64_t)block);
+		printk("kfree: corrupted block (bad magic) at 0x%lx\n", (uint64_t)block);
 		return;
 	}
 
 	if (block->free)
 	{
-		printk("kfree: double free detected at 0x%llx\n", (uint64_t)ptr);
+		printk("kfree: double free detected at 0x%lx\n", (uint64_t)ptr);
 		return;
 	}
 
@@ -448,19 +448,19 @@ void *kmalloc_aligned(size_t size, size_t alignment)
 void kmalloc_stats(void)
 {
 	printk("\n=== kmalloc Statistics ===\n");
-	printk("Heap region: 0x%llx - 0x%llx\n", heap_start, heap_start + heap_size);
-	printk("Total size: %llu KB\n", heap_size / 1024);
-	printk("Used: %llu KB (%llu%%)\n",
+	printk("Heap region: 0x%lx - 0x%lx\n", heap_start, heap_start + heap_size);
+	printk("Total size: %lu\n KB\n", heap_size / 1024);
+	printk("Used: %lu\n KB (%lu\n%%)\n",
 	       heap_used / 1024,
 	       heap_size > 0 ? (heap_used * 100 / heap_size) : 0);
-	printk("Free: %llu KB\n", (heap_size - heap_used) / 1024);
+	printk("Free: %lu\n KB\n", (heap_size - heap_used) / 1024);
 	printk("\nOperations:\n");
-	printk("  Total allocs: %llu\n", stats.total_allocs);
-	printk("  Total frees: %llu\n", stats.total_frees);
-	printk("  Failed allocs: %llu\n", stats.failed_allocs);
-	printk("  Current blocks: %llu\n", stats.current_blocks);
-	printk("  Splits: %llu\n", stats.splits);
-	printk("  Merges: %llu\n", stats.merges);
+	printk("  Total allocs: %lu\n\n", stats.total_allocs);
+	printk("  Total frees: %lu\n\n", stats.total_frees);
+	printk("  Failed allocs: %lu\n\n", stats.failed_allocs);
+	printk("  Current blocks: %lu\n\n", stats.current_blocks);
+	printk("  Splits: %lu\n\n", stats.splits);
+	printk("  Merges: %lu\n\n", stats.merges);
 
 	printk("\nFree lists:\n");
 	for (int i = 0; i < NUM_ORDERS; i++)
