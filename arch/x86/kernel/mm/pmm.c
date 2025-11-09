@@ -1,149 +1,147 @@
 #include "pmm.h"
-#include "printk.h"
 #include <string.h>
 
-#define PAGE_SIZE 0x1000
-#define PHYSMAP_BASE 0xFFFF800000000000ULL
+// Глобальна структура PMM
+static pmm_info_t g_pmm_info = {0};
 
-static uint64_t heap_phys_start;
-static uint64_t heap_size;
-static uint64_t total_pages;
-static uint64_t bitmap_phys;
-static size_t bitmap_size;
+// Початок heap-області (куди можемо розміщувати bitmap та виділяти сторінки)
+static uint64_t g_heap_start = 0;
+static uint64_t g_heap_end = 0;
 
-static int physmap_available = 0;
+// Для швидкого пошуку вільних сторінок
+static uint64_t g_last_search_index = 0;
 
-// Всегда используем identity mapping для bitmap
-// (т.к. bitmap находится в низкой памяти, которая всегда identity-mapped)
-static inline uint8_t *get_bitmap(void)
+// === Bitmap Helper Functions ===
+
+static inline void bitmap_set_bit(uint8_t *bitmap, uint64_t bit)
 {
-	if (physmap_available)
-	{
-		// Используем physmap если доступен
-		return (uint8_t *)(bitmap_phys + PHYSMAP_BASE);
-	}
-	else
-	{
-		// Используем identity mapping (bootstrap)
-		return (uint8_t *)bitmap_phys;
-	}
+	bitmap[bit / 8] |= (1 << (bit % 8));
 }
 
-static inline void set_page(size_t page)
+static inline void bitmap_clear_bit(uint8_t *bitmap, uint64_t bit)
 {
-	uint8_t *bitmap = get_bitmap();
-	bitmap[page / 8] |= 1 << (page % 8);
+	bitmap[bit / 8] &= ~(1 << (bit % 8));
 }
 
-static inline void clear_page(size_t page)
+static inline bool bitmap_test_bit(uint8_t *bitmap, uint64_t bit)
 {
-	uint8_t *bitmap = get_bitmap();
-	bitmap[page / 8] &= ~(1 << (page % 8));
+	return (bitmap[bit / 8] & (1 << (bit % 8))) != 0;
 }
 
-static inline int test_page(size_t page)
+// === PMM Core Functions ===
+
+void pmm_init(uint64_t heap_start, uint64_t heap_size)
 {
-	uint8_t *bitmap = get_bitmap();
-	return bitmap[page / 8] & (1 << (page % 8));
-}
+	g_heap_start = heap_start;
+	g_heap_end = heap_start + heap_size;
 
-void pmm_init(uint64_t heap_phys, uint64_t size)
-{
-	printk("=== PMM Init ===\n");
+	// Обчислюємо кількість сторінок
+	g_pmm_info.total_memory = heap_size;
+	g_pmm_info.usable_memory = heap_size;
+	g_pmm_info.total_pages = heap_size / PAGE_SIZE;
 
-	// VMM уже зарезервировал последние 4MB для bootstrap allocator
-	// Уменьшаем размер еще на 4MB чтобы не конфликтовать
-	uint64_t bootstrap_reserve = 4 * 1024 * 1024;
-	if (size > bootstrap_reserve)
-	{
-		size -= bootstrap_reserve;
-	}
+	// Обчислюємо розмір bitmap (1 біт на сторінку)
+	g_pmm_info.bitmap_size = (g_pmm_info.total_pages + 7) / 8; // округлення вгору
 
-	printk("Physical region: 0x%lx - 0x%lx (%lu MB)\n",
-	       heap_phys, heap_phys + size, size / (1024 * 1024));
+	// Вирівнюємо розмір bitmap до сторінки
+	g_pmm_info.bitmap_size = PAGE_ALIGN_UP(g_pmm_info.bitmap_size);
 
-	heap_phys_start = heap_phys;
-	heap_size = size;
-	total_pages = heap_size / PAGE_SIZE;
+	// Розміщуємо bitmap на початку heap
+	g_pmm_info.bitmap = (uint8_t *)heap_start;
 
-	bitmap_phys = heap_phys_start;
-	bitmap_size = (total_pages + 7) / 8;
+	// Очищуємо bitmap (всі біти = 0 означає "вільно")
+	memset(g_pmm_info.bitmap, 0, g_pmm_info.bitmap_size);
 
-	printk("Bitmap: %lu bytes (%lu KB) at phys 0x%lx\n",
-	       bitmap_size, bitmap_size / 1024, bitmap_phys);
-
-	// На этом этапе physmap еще НЕ создан
-	physmap_available = 0;
-
-	// Очистка bitmap через identity mapping
-	uint8_t *bitmap_virt = get_bitmap();
-	memset(bitmap_virt, 0, bitmap_size);
-
-	// Резервируем страницы под bitmap
-	uint64_t bitmap_pages = (bitmap_size + PAGE_SIZE - 1) / PAGE_SIZE;
+	// Позначаємо сторінки, які займає bitmap, як зайняті
+	uint64_t bitmap_pages = g_pmm_info.bitmap_size / PAGE_SIZE;
 	for (uint64_t i = 0; i < bitmap_pages; i++)
 	{
-		set_page(i);
+		bitmap_set_bit(g_pmm_info.bitmap, i);
+		g_pmm_info.used_pages++;
 	}
 
-	// Обновляем доступное пространство
-	heap_phys_start += bitmap_pages * PAGE_SIZE;
-	heap_size -= bitmap_pages * PAGE_SIZE;
-	total_pages = heap_size / PAGE_SIZE;
+	g_pmm_info.used_memory = g_pmm_info.used_pages * PAGE_SIZE;
 
-	printk("Reserved bitmap: %lu pages\n", bitmap_pages);
-	printk("Usable: %lu pages (%lu MB)\n",
-	       total_pages, total_pages * PAGE_SIZE / (1024 * 1024));
-	printk("=== PMM Init Complete ===\n");
+	// Оновлюємо heap_start, щоб вказував після bitmap
+	g_heap_start += g_pmm_info.bitmap_size;
+
+	g_last_search_index = bitmap_pages;
 }
 
-void pmm_enable_physmap(void)
+uint64_t pmm_alloc_page(void)
 {
-	printk("PMM: Enabling physmap access\n");
-
-	// Проверяем что physmap действительно работает
-	uint8_t *test_identity = (uint8_t *)bitmap_phys;
-	uint8_t *test_physmap = (uint8_t *)(bitmap_phys + PHYSMAP_BASE);
-
-	uint8_t orig = test_identity[0];
-	test_physmap[0] = 0xAB;
-
-	if (test_identity[0] == 0xAB)
+	// Шукаємо першу вільну сторінку
+	for (uint64_t i = g_last_search_index; i < g_pmm_info.total_pages; i++)
 	{
-		printk("PMM: Physmap verification OK\n");
-		test_identity[0] = orig; // Восстанавливаем
-		physmap_available = 1;
+		if (!bitmap_test_bit(g_pmm_info.bitmap, i))
+		{
+			// Знайшли вільну сторінку
+			bitmap_set_bit(g_pmm_info.bitmap, i);
+			g_pmm_info.used_pages++;
+			g_pmm_info.used_memory += PAGE_SIZE;
+			g_last_search_index = i + 1;
+
+			// Обчислюємо фізичну адресу
+			uint64_t phys_addr = (g_heap_start - g_pmm_info.bitmap_size) + (i * PAGE_SIZE);
+			return phys_addr;
+		}
 	}
-	else
+
+	// Якщо не знайшли, шукаємо з початку
+	for (uint64_t i = 0; i < g_last_search_index; i++)
 	{
-		printk("PMM: WARNING - Physmap not working, staying with identity\n");
-		test_identity[0] = orig;
+		if (!bitmap_test_bit(g_pmm_info.bitmap, i))
+		{
+			bitmap_set_bit(g_pmm_info.bitmap, i);
+			g_pmm_info.used_pages++;
+			g_pmm_info.used_memory += PAGE_SIZE;
+			g_last_search_index = i + 1;
+
+			uint64_t phys_addr = (g_heap_start - g_pmm_info.bitmap_size) + (i * PAGE_SIZE);
+			return phys_addr;
+		}
 	}
+
+	// Немає вільних сторінок
+	return 0;
 }
 
-uint64_t pmm_alloc_phys(size_t pages)
+uint64_t pmm_alloc_pages(size_t count)
 {
-	if (pages == 0)
+	if (count == 0)
 		return 0;
+	if (count == 1)
+		return pmm_alloc_page();
 
-	size_t consecutive = 0;
-	size_t start_page = 0;
+	// Шукаємо послідовні вільні сторінки
+	uint64_t consecutive = 0;
+	uint64_t start_index = 0;
 
-	for (size_t i = 0; i < total_pages; i++)
+	for (uint64_t i = 0; i < g_pmm_info.total_pages; i++)
 	{
-		if (!test_page(i))
+		if (!bitmap_test_bit(g_pmm_info.bitmap, i))
 		{
 			if (consecutive == 0)
-				start_page = i;
+			{
+				start_index = i;
+			}
 			consecutive++;
 
-			if (consecutive == pages)
+			if (consecutive == count)
 			{
-				// Отмечаем как занятые
-				for (size_t j = start_page; j < start_page + pages; j++)
-					set_page(j);
+				// Знайшли достатньо послідовних сторінок
+				for (uint64_t j = 0; j < count; j++)
+				{
+					bitmap_set_bit(g_pmm_info.bitmap, start_index + j);
+				}
 
-				return heap_phys_start + start_page * PAGE_SIZE;
+				g_pmm_info.used_pages += count;
+				g_pmm_info.used_memory += count * PAGE_SIZE;
+				g_last_search_index = start_index + count;
+
+				uint64_t phys_addr = (g_heap_start - g_pmm_info.bitmap_size) +
+						     (start_index * PAGE_SIZE);
+				return phys_addr;
 			}
 		}
 		else
@@ -152,37 +150,95 @@ uint64_t pmm_alloc_phys(size_t pages)
 		}
 	}
 
+	// Не знайшли достатньо послідовних сторінок
 	return 0;
 }
 
-void pmm_free_phys(uint64_t phys_addr, size_t pages)
+void pmm_free_page(uint64_t addr)
 {
-	if (phys_addr < heap_phys_start)
-		return;
-
-	size_t page = (phys_addr - heap_phys_start) / PAGE_SIZE;
-	if (page >= total_pages)
-		return;
-
-	for (size_t i = 0; i < pages; i++)
+	// Перевіряємо вирівнювання
+	if (addr % PAGE_SIZE != 0)
 	{
-		if (page + i < total_pages)
-			clear_page(page + i);
+		return;
+	}
+
+	// Обчислюємо індекс сторінки
+	uint64_t base_addr = g_heap_start - g_pmm_info.bitmap_size;
+	if (addr < base_addr || addr >= g_heap_end)
+	{
+		return; // Адреса поза межами heap
+	}
+
+	uint64_t page_index = (addr - base_addr) / PAGE_SIZE;
+
+	if (page_index >= g_pmm_info.total_pages)
+	{
+		return;
+	}
+
+	// Звільняємо сторінку
+	if (bitmap_test_bit(g_pmm_info.bitmap, page_index))
+	{
+		bitmap_clear_bit(g_pmm_info.bitmap, page_index);
+		g_pmm_info.used_pages--;
+		g_pmm_info.used_memory -= PAGE_SIZE;
+
+		// Оновлюємо індекс пошуку для оптимізації
+		if (page_index < g_last_search_index)
+		{
+			g_last_search_index = page_index;
+		}
 	}
 }
 
-size_t pmm_get_free_pages(void)
+void pmm_free_pages(uint64_t addr, size_t count)
 {
-	size_t free = 0;
-	for (size_t i = 0; i < total_pages; i++)
+	for (size_t i = 0; i < count; i++)
 	{
-		if (!test_page(i))
-			free++;
+		pmm_free_page(addr + (i * PAGE_SIZE));
 	}
-	return free;
 }
 
-size_t pmm_get_total_pages(void)
+void pmm_mark_page_used(uint64_t addr)
 {
-	return total_pages;
+	if (addr % PAGE_SIZE != 0)
+	{
+		addr = PAGE_ALIGN_DOWN(addr);
+	}
+
+	uint64_t base_addr = g_heap_start - g_pmm_info.bitmap_size;
+	if (addr < base_addr || addr >= g_heap_end)
+	{
+		return;
+	}
+
+	uint64_t page_index = (addr - base_addr) / PAGE_SIZE;
+
+	if (page_index >= g_pmm_info.total_pages)
+	{
+		return;
+	}
+
+	if (!bitmap_test_bit(g_pmm_info.bitmap, page_index))
+	{
+		bitmap_set_bit(g_pmm_info.bitmap, page_index);
+		g_pmm_info.used_pages++;
+		g_pmm_info.used_memory += PAGE_SIZE;
+	}
+}
+
+void pmm_mark_region_used(uint64_t addr, uint64_t size)
+{
+	uint64_t start = PAGE_ALIGN_DOWN(addr);
+	uint64_t end = PAGE_ALIGN_UP(addr + size);
+
+	for (uint64_t page = start; page < end; page += PAGE_SIZE)
+	{
+		pmm_mark_page_used(page);
+	}
+}
+
+pmm_info_t *pmm_get_info(void)
+{
+	return &g_pmm_info;
 }

@@ -1,353 +1,455 @@
 #include "vmm.h"
 #include "pmm.h"
-#include "printk.h"
-#include <stdint.h>
 #include <string.h>
 
-#define PHYSMAP_BASE 0xFFFF800000000000ULL
+// Поточний адресний простір
+static address_space_t *g_current_as = NULL;
 
-static uint64_t current_pml4_phys = 0;
-static uint64_t physmap_max = 0;
+// Kernel адресний простір
+static address_space_t g_kernel_as = {0};
 
-// Простейший bootstrap allocator для page tables
-// Используем конец heap для временных аллокаций
-static uint64_t bootstrap_alloc_ptr = 0;
-static uint64_t bootstrap_alloc_end = 0;
-static int bootstrap_mode = 1;
-
-static uint64_t bootstrap_alloc_page(void)
+// Статистика
+static struct
 {
-	if (bootstrap_alloc_ptr + PAGE_SIZE > bootstrap_alloc_end)
-	{
-		printk("ERROR: Bootstrap allocator exhausted!\n");
-		return 0;
-	}
+	uint64_t mapped_pages;
+	uint64_t page_faults;
+	uint64_t tlb_flushes;
+} g_vmm_stats = {0};
 
-	uint64_t page = bootstrap_alloc_ptr;
-	bootstrap_alloc_ptr += PAGE_SIZE;
+// === Helper Functions ===
 
-	// Очищаем через identity mapping
-	memset((void *)page, 0, PAGE_SIZE);
+// Отримує PTE через рекурсивний мапінг
+static inline pte_t *vmm_get_pte(uint64_t virt)
+{
+	uint64_t pml4_idx = PML4_INDEX(virt);
+	uint64_t pdpt_idx = PDPT_INDEX(virt);
+	uint64_t pd_idx = PD_INDEX(virt);
+	uint64_t pt_idx = PT_INDEX(virt);
 
-	return page;
+	page_table_t *pt = (page_table_t *)PT_VADDR(pml4_idx, pdpt_idx, pd_idx);
+	return &pt->entries[pt_idx];
 }
 
-static uint64_t alloc_table_phys(void)
+// Отримує або створює page table
+static page_table_t *vmm_get_or_create_table(page_table_t *parent, uint64_t index, uint64_t flags)
 {
-	if (bootstrap_mode)
+	pte_t *entry = &parent->entries[index];
+
+	// Якщо таблиця вже існує
+	if (*entry & PAGE_PRESENT)
 	{
-		// Используем bootstrap allocator
-		return bootstrap_alloc_page();
+		return (page_table_t *)(*entry & PTE_ADDR_MASK);
+	}
+
+	// Створюємо нову таблицю
+	uint64_t phys = pmm_alloc_page();
+	if (!phys)
+	{
+		return NULL;
+	}
+
+	// Очищуємо таблицю
+	page_table_t *table = (page_table_t *)phys;
+	memset(table, 0, PAGE_SIZE_4K);
+
+	// Встановлюємо entry
+	*entry = phys | flags | PAGE_PRESENT | PAGE_WRITE;
+
+	return table;
+}
+
+// Створює рекурсивний мапінг для PML4
+static void vmm_setup_recursive_mapping(page_table_t *pml4)
+{
+	uint64_t pml4_phys = (uint64_t)pml4;
+	pml4->entries[RECURSIVE_INDEX] = pml4_phys | PAGE_PRESENT | PAGE_WRITE;
+}
+
+// === Public API ===
+
+void vmm_init(void)
+{
+	// Виділяємо PML4 для kernel
+	uint64_t pml4_phys = pmm_alloc_page();
+	if (!pml4_phys)
+	{
+		// Критична помилка
+		return;
+	}
+
+	page_table_t *pml4 = (page_table_t *)pml4_phys;
+	memset(pml4, 0, PAGE_SIZE_4K);
+
+	// Налаштовуємо рекурсивний мапінг
+	vmm_setup_recursive_mapping(pml4);
+
+	// Ініціалізуємо kernel address space
+	g_kernel_as.pml4_phys = pml4_phys;
+	g_kernel_as.pml4_virt = pml4;
+	g_kernel_as.heap_start = 0;
+	g_kernel_as.heap_end = 0;
+	g_kernel_as.stack_start = 0;
+	g_kernel_as.stack_end = 0;
+
+	g_current_as = &g_kernel_as;
+
+	// Перемикаємося на нову PML4
+	// vmm_set_cr3(pml4_phys);
+
+	while (1)
+	{
+		asm volatile("hlt");
+	}
+
+	// Тепер ми можемо створювати мапінги через рекурсивний доступ
+	// Identity map перші 4GB для kernel (опціонально, залежить від твоєї архітектури)
+	// vmm_map_range(0, 0, 0x100000000, PAGE_KERNEL);
+}
+
+address_space_t *vmm_create_address_space(void)
+{
+	// Виділяємо структуру address_space
+	address_space_t *as = (address_space_t *)kmalloc(sizeof(address_space_t));
+	if (!as)
+	{
+		return NULL;
+	}
+
+	// Виділяємо PML4
+	uint64_t pml4_phys = pmm_alloc_page();
+	if (!pml4_phys)
+	{
+		kfree(as);
+		return NULL;
+	}
+
+	// Тимчасово мапимо PML4 для ініціалізації
+	page_table_t *pml4 = (page_table_t *)pml4_phys;
+	memset(pml4, 0, PAGE_SIZE_4K);
+
+	// Налаштовуємо рекурсивний мапінг
+	vmm_setup_recursive_mapping(pml4);
+
+	// Копіюємо kernel мапінги (верхня половина адресного простору)
+	page_table_t *kernel_pml4 = (page_table_t *)g_kernel_as.pml4_phys;
+	for (int i = 256; i < 512; i++)
+	{
+		pml4->entries[i] = kernel_pml4->entries[i];
+	}
+
+	as->pml4_phys = pml4_phys;
+	as->pml4_virt = pml4;
+	as->heap_start = 0x0000000000400000; // 4MB
+	as->heap_end = 0x0000000000400000;
+	as->stack_start = 0x00007FFFFFFFF000; // Top of user space
+	as->stack_end = 0x00007FFFFFFFF000;
+
+	return as;
+}
+
+void vmm_destroy_address_space(address_space_t *as)
+{
+	if (!as || as == &g_kernel_as)
+	{
+		return;
+	}
+
+	// Тут треба пройтись по всіх page tables та звільнити їх
+	// Для простоти зараз просто звільняємо PML4
+	// У production версії треба рекурсивно звільнити всі таблиці
+
+	pmm_free_page(as->pml4_phys);
+	kfree(as);
+}
+
+void vmm_switch_address_space(address_space_t *as)
+{
+	if (!as)
+	{
+		return;
+	}
+
+	g_current_as = as;
+	vmm_set_cr3(as->pml4_phys);
+	g_vmm_stats.tlb_flushes++;
+}
+
+address_space_t *vmm_get_current_address_space(void)
+{
+	return g_current_as;
+}
+
+bool vmm_map_page(uint64_t virt, uint64_t phys, uint64_t flags)
+{
+	// Вирівнюємо адреси
+	virt &= ~0xFFFULL;
+	phys &= ~0xFFFULL;
+
+	uint64_t pml4_idx = PML4_INDEX(virt);
+	uint64_t pdpt_idx = PDPT_INDEX(virt);
+	uint64_t pd_idx = PD_INDEX(virt);
+	uint64_t pt_idx = PT_INDEX(virt);
+
+	// Отримуємо PML4 через рекурсивний мапінг
+	page_table_t *pml4 = (page_table_t *)PML4_VADDR;
+
+	// Отримуємо або створюємо PDPT
+	page_table_t *pdpt;
+	if (!(pml4->entries[pml4_idx] & PAGE_PRESENT))
+	{
+		uint64_t pdpt_phys = pmm_alloc_page();
+		if (!pdpt_phys)
+			return false;
+
+		pdpt = (page_table_t *)pdpt_phys;
+		memset(pdpt, 0, PAGE_SIZE_4K);
+		pml4->entries[pml4_idx] = pdpt_phys | PAGE_PRESENT | PAGE_WRITE | (flags & PAGE_USER);
 	}
 	else
 	{
-		// Используем PMM
-		uint64_t phys = pmm_alloc_phys(1);
+		pdpt = (page_table_t *)PDPT_VADDR(pml4_idx);
+	}
+
+	// Отримуємо або створюємо PD
+	page_table_t *pd;
+	if (!(pdpt->entries[pdpt_idx] & PAGE_PRESENT))
+	{
+		uint64_t pd_phys = pmm_alloc_page();
+		if (!pd_phys)
+			return false;
+
+		pd = (page_table_t *)pd_phys;
+		memset(pd, 0, PAGE_SIZE_4K);
+		pdpt->entries[pdpt_idx] = pd_phys | PAGE_PRESENT | PAGE_WRITE | (flags & PAGE_USER);
+	}
+	else
+	{
+		pd = (page_table_t *)PD_VADDR(pml4_idx, pdpt_idx);
+	}
+
+	// Отримуємо або створюємо PT
+	page_table_t *pt;
+	if (!(pd->entries[pd_idx] & PAGE_PRESENT))
+	{
+		uint64_t pt_phys = pmm_alloc_page();
+		if (!pt_phys)
+			return false;
+
+		pt = (page_table_t *)pt_phys;
+		memset(pt, 0, PAGE_SIZE_4K);
+		pd->entries[pd_idx] = pt_phys | PAGE_PRESENT | PAGE_WRITE | (flags & PAGE_USER);
+	}
+	else
+	{
+		pt = (page_table_t *)PT_VADDR(pml4_idx, pdpt_idx, pd_idx);
+	}
+
+	// Встановлюємо PTE
+	pt->entries[pt_idx] = phys | flags | PAGE_PRESENT;
+
+	// Інвалідуємо TLB
+	vmm_invlpg(virt);
+
+	g_vmm_stats.mapped_pages++;
+
+	return true;
+}
+
+void vmm_unmap_page(uint64_t virt)
+{
+	virt &= ~0xFFFULL;
+
+	uint64_t pml4_idx = PML4_INDEX(virt);
+	uint64_t pdpt_idx = PDPT_INDEX(virt);
+	uint64_t pd_idx = PD_INDEX(virt);
+	uint64_t pt_idx = PT_INDEX(virt);
+
+	page_table_t *pml4 = (page_table_t *)PML4_VADDR;
+
+	if (!(pml4->entries[pml4_idx] & PAGE_PRESENT))
+		return;
+
+	page_table_t *pdpt = (page_table_t *)PDPT_VADDR(pml4_idx);
+	if (!(pdpt->entries[pdpt_idx] & PAGE_PRESENT))
+		return;
+
+	page_table_t *pd = (page_table_t *)PD_VADDR(pml4_idx, pdpt_idx);
+	if (!(pd->entries[pd_idx] & PAGE_PRESENT))
+		return;
+
+	page_table_t *pt = (page_table_t *)PT_VADDR(pml4_idx, pdpt_idx, pd_idx);
+
+	// Очищуємо PTE
+	pt->entries[pt_idx] = 0;
+
+	// Інвалідуємо TLB
+	vmm_invlpg(virt);
+
+	g_vmm_stats.mapped_pages--;
+}
+
+uint64_t vmm_virt_to_phys(uint64_t virt)
+{
+	virt &= ~0xFFFULL;
+
+	uint64_t pml4_idx = PML4_INDEX(virt);
+	uint64_t pdpt_idx = PDPT_INDEX(virt);
+	uint64_t pd_idx = PD_INDEX(virt);
+	uint64_t pt_idx = PT_INDEX(virt);
+
+	page_table_t *pml4 = (page_table_t *)PML4_VADDR;
+
+	if (!(pml4->entries[pml4_idx] & PAGE_PRESENT))
+		return 0;
+
+	page_table_t *pdpt = (page_table_t *)PDPT_VADDR(pml4_idx);
+	if (!(pdpt->entries[pdpt_idx] & PAGE_PRESENT))
+		return 0;
+
+	page_table_t *pd = (page_table_t *)PD_VADDR(pml4_idx, pdpt_idx);
+	if (!(pd->entries[pd_idx] & PAGE_PRESENT))
+		return 0;
+
+	page_table_t *pt = (page_table_t *)PT_VADDR(pml4_idx, pdpt_idx, pd_idx);
+
+	if (!(pt->entries[pt_idx] & PAGE_PRESENT))
+		return 0;
+
+	return pt->entries[pt_idx] & PTE_ADDR_MASK;
+}
+
+bool vmm_map_range(uint64_t virt_start, uint64_t phys_start, uint64_t size, uint64_t flags)
+{
+	uint64_t virt = virt_start & ~0xFFFULL;
+	uint64_t phys = phys_start & ~0xFFFULL;
+	uint64_t end = (virt_start + size + 0xFFF) & ~0xFFFULL;
+
+	while (virt < end)
+	{
+		if (!vmm_map_page(virt, phys, flags))
+		{
+			return false;
+		}
+		virt += PAGE_SIZE_4K;
+		phys += PAGE_SIZE_4K;
+	}
+
+	return true;
+}
+
+void vmm_unmap_range(uint64_t virt_start, uint64_t size)
+{
+	uint64_t virt = virt_start & ~0xFFFULL;
+	uint64_t end = (virt_start + size + 0xFFF) & ~0xFFFULL;
+
+	while (virt < end)
+	{
+		vmm_unmap_page(virt);
+		virt += PAGE_SIZE_4K;
+	}
+}
+
+uint64_t vmm_alloc(uint64_t size, uint64_t flags)
+{
+	// Простий лінійний allocator для kernel space
+	// У production версії треба використовувати більш розумний алгоритм
+
+	static uint64_t next_virt = 0xFFFF800000000000ULL; // Kernel space start
+
+	uint64_t pages = (size + PAGE_SIZE_4K - 1) / PAGE_SIZE_4K;
+	uint64_t virt = next_virt;
+
+	// Виділяємо фізичні сторінки та мапимо їх
+	for (uint64_t i = 0; i < pages; i++)
+	{
+		uint64_t phys = pmm_alloc_page();
 		if (!phys)
 		{
-			printk("ERROR: PMM alloc failed in VMM\n");
+			// Відкат при помилці
+			vmm_unmap_range(virt, i * PAGE_SIZE_4K);
 			return 0;
 		}
 
-		// Очищаем через physmap
-		void *virt = (void *)(phys + PHYSMAP_BASE);
-		memset(virt, 0, PAGE_SIZE);
-
-		return phys;
-	}
-}
-
-static inline size_t idx_from_virt(uint64_t virt, int level)
-{
-	int shift = 12 + (level - 1) * 9;
-	return (virt >> shift) & 0x1FF;
-}
-
-// Получить указатель на таблицу
-static uint64_t *get_table_ptr(uint64_t phys)
-{
-	// Если physmap создан для этого адреса - используем его
-	if (phys < physmap_max)
-	{
-		return (uint64_t *)(phys + PHYSMAP_BASE);
-	}
-	// Иначе используем identity mapping
-	return (uint64_t *)phys;
-}
-
-static uint64_t *get_pte_for(uint64_t pml4_phys, uint64_t virt, int create)
-{
-	uint64_t phys = pml4_phys;
-
-	for (int level = 4; level > 1; level--)
-	{
-		uint64_t *table = get_table_ptr(phys);
-		size_t idx = idx_from_virt(virt, level);
-		uint64_t entry = table[idx];
-
-		if (!(entry & PTE_PRESENT))
+		if (!vmm_map_page(virt + i * PAGE_SIZE_4K, phys, flags))
 		{
-			if (!create)
-				return NULL;
-
-			uint64_t new_phys = alloc_table_phys();
-			if (!new_phys)
-				return NULL;
-
-			table[idx] = new_phys | PTE_PRESENT | PTE_WRITABLE;
-
-			// Flush TLB для родительской таблицы
-			asm volatile("invlpg (%0)" : : "r"(table) : "memory");
-
-			entry = table[idx];
-		}
-
-		phys = entry & 0x000FFFFFFFFFF000ULL;
-	}
-
-	uint64_t *pt = get_table_ptr(phys);
-	size_t tidx = idx_from_virt(virt, 1);
-	return &pt[tidx];
-}
-
-int vmm_map(uint64_t virt, uint64_t phys, size_t pages, uint64_t flags)
-{
-	if (virt & (PAGE_SIZE - 1) || phys & (PAGE_SIZE - 1))
-		return -1;
-
-	flags |= PTE_PRESENT;
-
-	for (size_t i = 0; i < pages; i++)
-	{
-		uint64_t curr_virt = virt + i * PAGE_SIZE;
-		uint64_t curr_phys = phys + i * PAGE_SIZE;
-
-		uint64_t *pte = get_pte_for(current_pml4_phys, curr_virt, 1);
-		if (!pte)
-		{
-			printk("ERROR: Failed to get PTE for virt 0x%lx\n", curr_virt);
-			return -2;
-		}
-
-		*pte = curr_phys | flags;
-		asm volatile("invlpg (%0)" : : "r"(curr_virt) : "memory");
-	}
-
-	return 0;
-}
-
-int vmm_unmap(uint64_t virt, size_t pages, int free_pages)
-{
-	if (virt & (PAGE_SIZE - 1))
-		return -1;
-
-	for (size_t i = 0; i < pages; i++)
-	{
-		uint64_t curr_virt = virt + i * PAGE_SIZE;
-		uint64_t *pte = get_pte_for(current_pml4_phys, curr_virt, 0);
-		if (!pte)
-			continue;
-
-		if (*pte & PTE_PRESENT)
-		{
-			if (free_pages)
-			{
-				uint64_t phys = *pte & 0x000FFFFFFFFFF000ULL;
-				pmm_free_phys(phys, 1);
-			}
-			*pte = 0;
-		}
-
-		asm volatile("invlpg (%0)" : : "r"(curr_virt) : "memory");
-	}
-
-	return 0;
-}
-
-uint64_t vmm_translate(uint64_t virt)
-{
-	uint64_t phys = current_pml4_phys;
-
-	for (int level = 4; level >= 1; level--)
-	{
-		uint64_t *table = get_table_ptr(phys);
-		size_t idx = idx_from_virt(virt, level);
-		uint64_t entry = table[idx];
-
-		if (!(entry & PTE_PRESENT))
+			pmm_free_page(phys);
+			vmm_unmap_range(virt, i * PAGE_SIZE_4K);
 			return 0;
-
-		if (level > 1 && (entry & PTE_PS))
-		{
-			uint64_t base = entry & 0x000FFFFFFFFFF000ULL;
-			int shift = 12 + (level - 1) * 9;
-			uint64_t offset = virt & ((1ULL << shift) - 1);
-			return base + offset;
 		}
-
-		phys = entry & 0x000FFFFFFFFFF000ULL;
 	}
 
-	uint64_t *pt = get_table_ptr(phys);
-	size_t tidx = idx_from_virt(virt, 1);
-	uint64_t e = pt[tidx];
+	next_virt += pages * PAGE_SIZE_4K;
 
-	if (!(e & PTE_PRESENT))
+	return virt;
+}
+
+void vmm_free(uint64_t virt, uint64_t size)
+{
+	uint64_t pages = (size + PAGE_SIZE_4K - 1) / PAGE_SIZE_4K;
+
+	// Звільняємо фізичні сторінки
+	for (uint64_t i = 0; i < pages; i++)
+	{
+		uint64_t phys = vmm_virt_to_phys(virt + i * PAGE_SIZE_4K);
+		if (phys)
+		{
+			pmm_free_page(phys);
+		}
+	}
+
+	// Анмапимо віртуальні сторінки
+	vmm_unmap_range(virt, size);
+}
+
+bool vmm_is_mapped(uint64_t virt)
+{
+	return vmm_virt_to_phys(virt) != 0;
+}
+
+bool vmm_set_flags(uint64_t virt, uint64_t flags)
+{
+	uint64_t phys = vmm_virt_to_phys(virt);
+	if (!phys)
+	{
+		return false;
+	}
+
+	vmm_unmap_page(virt);
+	return vmm_map_page(virt, phys, flags);
+}
+
+uint64_t vmm_get_flags(uint64_t virt)
+{
+	virt &= ~0xFFFULL;
+
+	uint64_t pml4_idx = PML4_INDEX(virt);
+	uint64_t pdpt_idx = PDPT_INDEX(virt);
+	uint64_t pd_idx = PD_INDEX(virt);
+	uint64_t pt_idx = PT_INDEX(virt);
+
+	page_table_t *pml4 = (page_table_t *)PML4_VADDR;
+
+	if (!(pml4->entries[pml4_idx] & PAGE_PRESENT))
 		return 0;
 
-	return (e & 0x000FFFFFFFFFF000ULL) | (virt & 0xFFF);
-}
-
-void vmm_init(uint64_t uefi_cr3_phys, uint64_t heap_start, uint64_t heap_size)
-{
-	printk("=== VMM Init ===\n");
-
-	current_pml4_phys = uefi_cr3_phys;
-
-	// Резервируем последние 4MB heap для bootstrap allocator
-	uint64_t bootstrap_size = 4 * 1024 * 1024;
-	bootstrap_alloc_end = heap_start + heap_size;
-	bootstrap_alloc_ptr = bootstrap_alloc_end - bootstrap_size;
-
-	printk("Bootstrap allocator: 0x%lx - 0x%lx (4 MB)\n",
-	       bootstrap_alloc_ptr, bootstrap_alloc_end);
-
-	// Уменьшаем доступный heap (PMM не должен трогать эту область)
-	heap_size -= bootstrap_size;
-
-	// Определяем сколько нужно замапить
-	uint64_t heap_end = heap_start + heap_size;
-	uint64_t max_phys_to_map = heap_end;
-
-	// Ограничиваем разумным пределом
-	uint64_t reasonable_limit = 16ULL * 1024 * 1024 * 1024;
-	if (max_phys_to_map > reasonable_limit)
-	{
-		max_phys_to_map = reasonable_limit;
-	}
-
-	max_phys_to_map = (max_phys_to_map + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-
-	printk("Creating physmap: 0 - 0x%lx (%lu MB)\n",
-	       max_phys_to_map, max_phys_to_map / (1024 * 1024));
-
-	// Мапим небольшими блоками с прогрессом
-	uint64_t block_size = 64 * 1024 * 1024; // 64MB
-	uint64_t mapped = 0;
-	int progress = 0;
-
-	while (mapped < max_phys_to_map)
-	{
-		uint64_t to_map = block_size;
-		if (mapped + to_map > max_phys_to_map)
-		{
-			to_map = max_phys_to_map - mapped;
-		}
-
-		uint64_t vaddr = PHYSMAP_BASE + mapped;
-		uint64_t paddr = mapped;
-		uint64_t pages = to_map / PAGE_SIZE;
-
-		int ret = vmm_map(vaddr, paddr, pages, PTE_PRESENT | PTE_WRITABLE);
-		if (ret != 0)
-		{
-			printk("ERROR: vmm_map failed at 0x%lx (ret=%d)\n", mapped, ret);
-			break;
-		}
-
-		mapped += to_map;
-		physmap_max = mapped;
-
-		// Показываем прогресс каждые 25%
-		int new_progress = (mapped * 100) / max_phys_to_map;
-		if (new_progress >= progress + 25)
-		{
-			printk("  Progress: %d%% (%lu MB / %lu MB)\n",
-			       new_progress,
-			       mapped / (1024 * 1024),
-			       max_phys_to_map / (1024 * 1024));
-			progress = new_progress;
-		}
-	}
-
-	printk("Physmap created: %lu MB (0x%lx - 0x%lx)\n",
-	       physmap_max / (1024 * 1024),
-	       PHYSMAP_BASE, PHYSMAP_BASE + physmap_max);
-
-	// Выключаем bootstrap mode - теперь можно использовать PMM
-	bootstrap_mode = 0;
-	printk("Bootstrap allocator disabled, using PMM\n");
-
-	// Тест physmap
-	printk("Testing physmap...\n");
-	if (heap_start < physmap_max)
-	{
-		volatile uint64_t *test_ptr = (uint64_t *)(PHYSMAP_BASE + heap_start + 0x1000);
-		*test_ptr = 0xDEADBEEF12345678ULL;
-
-		// Проверяем через identity mapping
-		volatile uint64_t *test_identity = (uint64_t *)(heap_start + 0x1000);
-		if (*test_identity == 0xDEADBEEF12345678ULL)
-		{
-			printk("  Physmap test: OK (physmap == identity)\n");
-		}
-		else
-		{
-			printk("  Physmap test: FAILED (0x%lx != 0x%lx)\n",
-			       *test_ptr, *test_identity);
-		}
-	}
-
-	printk("=== VMM Init Complete ===\n");
-}
-
-uint64_t vmm_get_current_cr3_phys(void)
-{
-	return current_pml4_phys;
-}
-
-void vmm_switch_cr3(uint64_t phys)
-{
-	current_pml4_phys = phys;
-	asm volatile("mov %0, %%cr3" : : "r"(phys) : "memory");
-}
-
-int vmm_map_page(uint64_t virt, uint64_t phys, uint64_t flags)
-{
-	return vmm_map(virt, phys, 1, flags);
-}
-
-uint64_t vmm_alloc_physical_page(void)
-{
-	return pmm_alloc_phys(1);
-}
-
-void vmm_free_physical_page(uint64_t phys)
-{
-	pmm_free_phys(phys, 1);
-}
-
-int vmm_ensure_physmap(uint64_t phys_addr, uint64_t size)
-{
-	uint64_t needed = phys_addr + size;
-	needed = (needed + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-
-	if (needed <= physmap_max)
-	{
+	page_table_t *pdpt = (page_table_t *)PDPT_VADDR(pml4_idx);
+	if (!(pdpt->entries[pdpt_idx] & PAGE_PRESENT))
 		return 0;
-	}
 
-	printk("Extending physmap: 0x%lx -> 0x%lx\n", physmap_max, needed);
+	page_table_t *pd = (page_table_t *)PD_VADDR(pml4_idx, pdpt_idx);
+	if (!(pd->entries[pd_idx] & PAGE_PRESENT))
+		return 0;
 
-	uint64_t pages = (needed - physmap_max) / PAGE_SIZE;
-	uint64_t vaddr = PHYSMAP_BASE + physmap_max;
-	uint64_t paddr = physmap_max;
+	page_table_t *pt = (page_table_t *)PT_VADDR(pml4_idx, pdpt_idx, pd_idx);
 
-	int ret = vmm_map(vaddr, paddr, pages, PTE_PRESENT | PTE_WRITABLE);
-	if (ret == 0)
-	{
-		physmap_max = needed;
-	}
+	return pt->entries[pt_idx] & PTE_FLAGS_MASK;
+}
 
-	return ret;
+void vmm_print_stats(void)
+{
+	// kprintf("=== VMM Statistics ===\n");
+	// kprintf("Mapped pages: %llu\n", g_vmm_stats.mapped_pages);
+	// kprintf("Page faults: %llu\n", g_vmm_stats.page_faults);
+	// kprintf("TLB flushes: %llu\n", g_vmm_stats.tlb_flushes);
+	// kprintf("Current CR3: 0x%llx\n", vmm_get_cr3());
 }

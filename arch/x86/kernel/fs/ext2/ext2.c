@@ -1,7 +1,7 @@
 
 #include "printk.h"
 
-#include <mm/kmalloc.h>
+#include <mm/slab.h>
 
 #include <fs/gpt/gpt_struct.h>
 
