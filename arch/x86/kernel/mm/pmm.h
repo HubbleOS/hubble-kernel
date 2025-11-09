@@ -1,31 +1,76 @@
-// #pragma once
-
-// #include <stdint.h>
-// #include <stddef.h>
-
-// void pmm_init(uint64_t pmm_start, uint64_t pmm_size);
-// void *pmm_alloc_phys(size_t pages);
-// void pmm_free_physvoid *addr, size_t pages);
-
-// // Получить физический адрес из того что возвращает pmm_alloc
-// uint64_t pmm_get_phys(void *virt_ptr);
-
 #pragma once
+
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
-// Инициализация PMM (работает через identity mapping)
-void pmm_init(uint64_t heap_phys_start, uint64_t heap_size);
+// Розмір сторінки: 4KB
+#define PAGE_SIZE 4096
 
-// Включение physmap после vmm_init
-void pmm_enable_physmap(void);
+// Макроси для вирівнювання адрес
+#define PAGE_ALIGN_DOWN(addr) ((addr) & ~(PAGE_SIZE - 1))
+#define PAGE_ALIGN_UP(addr) (((addr) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
 
-// Аллокация физических страниц (возвращает физический адрес)
-uint64_t pmm_alloc_phys(size_t pages);
+// Структура для інформації про PMM
+typedef struct
+{
+	uint64_t total_memory;	// Загальний обсяг пам'яті в байтах
+	uint64_t usable_memory; // Доступна пам'ять
+	uint64_t used_memory;	// Використана пам'ять
+	uint64_t total_pages;	// Загальна кількість сторінок
+	uint64_t used_pages;	// Кількість використаних сторінок
+	uint8_t *bitmap;	// Вказівник на bitmap
+	uint64_t bitmap_size;	// Розмір bitmap в байтах
+} pmm_info_t;
 
-// Освобождение физических страниц
-void pmm_free_phys(uint64_t phys_addr, size_t pages);
+/**
+ * Ініціалізує Physical Memory Manager
+ * @param heap_start Початок heap-області з bootloader'а
+ * @param heap_size Розмір heap-області
+ */
+void pmm_init(uint64_t heap_start, uint64_t heap_size);
 
-// Статистика
-size_t pmm_get_free_pages(void);
-size_t pmm_get_total_pages(void);
+/**
+ * Виділяє одну фізичну сторінку (4KB)
+ * @return Фізична адреса виділеної сторінки або 0 при помилці
+ */
+uint64_t pmm_alloc_page(void);
+
+/**
+ * Виділяє кілька послідовних фізичних сторінок
+ * @param count Кількість сторінок
+ * @return Фізична адреса першої сторінки або 0 при помилці
+ */
+uint64_t pmm_alloc_pages(size_t count);
+
+/**
+ * Звільняє одну фізичну сторінку
+ * @param addr Фізична адреса сторінки
+ */
+void pmm_free_page(uint64_t addr);
+
+/**
+ * Звільняє кілька послідовних фізичних сторінок
+ * @param addr Фізична адреса першої сторінки
+ * @param count Кількість сторінок
+ */
+void pmm_free_pages(uint64_t addr, size_t count);
+
+/**
+ * Позначає сторінку як зайняту (використовується при ініціалізації)
+ * @param addr Фізична адреса сторінки
+ */
+void pmm_mark_page_used(uint64_t addr);
+
+/**
+ * Позначає діапазон сторінок як зайнятий
+ * @param addr Початкова адреса
+ * @param size Розмір в байтах
+ */
+void pmm_mark_region_used(uint64_t addr, uint64_t size);
+
+/**
+ * Отримує інформацію про стан PMM
+ * @return Вказівник на структуру з інформацією
+ */
+pmm_info_t *pmm_get_info(void);

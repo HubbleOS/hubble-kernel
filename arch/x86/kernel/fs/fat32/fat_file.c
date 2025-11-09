@@ -3,7 +3,7 @@
 #include "fat_structs.h"
 #include "fat_utils.h"
 #include <fs/ata/ata.h>
-#include <mm/kmalloc.h>
+#include <mm/slab.h>
 
 #include <string.h>
 

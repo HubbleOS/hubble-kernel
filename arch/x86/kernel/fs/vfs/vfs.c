@@ -6,7 +6,7 @@
 #include <errno.h>
 // #include "gpt.h" // Список змонтованих ФС (поки що 1)
 #include <fs/gpt/gpt.h>
-#include <mm/kmalloc.h>
+#include <mm/slab.h>
 #include "printk.h"
 
 typedef struct VFS_Mount

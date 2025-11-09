@@ -3,7 +3,7 @@
 #include "fat.h"
 #include "printk.h"
 
-#include <mm/kmalloc.h>
+#include <mm/slab.h>
 
 #include <string.h>
 
@@ -73,7 +73,7 @@ uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const 
 			{
 				uint32_t cluster = (entry->first_cluster_high << 16) | entry->first_cluster_low;
 				printk("found entry cluster: high=%04x low=%04x (cluster=%08x)\n",
-				       entry->first_cluster_high, entry->first_cluster_low, cluster);
+					   entry->first_cluster_high, entry->first_cluster_low, cluster);
 				kfree(buffer);
 				return cluster;
 			}
