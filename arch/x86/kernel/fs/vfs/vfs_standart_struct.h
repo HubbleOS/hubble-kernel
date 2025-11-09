@@ -1,6 +1,8 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <mm/kmalloc.h>
 
 typedef struct Directory Directory;
 
@@ -73,3 +75,27 @@ typedef struct
 #define SEEK_END 2 // End position
 
 // extern void *fb;
+
+static bool free_entries(Directory *dir)
+{
+	if (!dir || !dir->entries)
+		return false;
+
+	for (int i = 0; i < dir->count; i++)
+	{
+		kfree(dir->entries[i].name);
+	}
+
+	kfree(dir->entries);
+	dir->entries = NULL;
+	dir->count = 0;
+
+	return true;
+}
+
+static Directory Directory_init(Directory dir)
+{
+	dir.free_entries = free_entries;
+	dir.count = 0;
+	return dir;
+}

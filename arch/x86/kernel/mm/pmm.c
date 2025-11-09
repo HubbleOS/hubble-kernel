@@ -27,23 +27,11 @@ static inline int test_page(size_t page)
 	return bitmap[page / 8] & (1 << (page % 8));
 }
 
-// ВАЖНО: pmm_start должен быть ФИЗИЧЕСКИМ адресом!
-// Если у вас identity mapping, то virt == phys для низких адресов
 void pmm_init(uint64_t pmm_start, uint64_t pmm_size)
 {
 	printk("=== PMM Init ===\n");
 	printk("Physical region: 0x%llx - 0x%llx (%llu MB)\n",
 	       pmm_start, pmm_start + pmm_size, pmm_size / (1024 * 1024));
-
-	// ПРОВЕРКА: убеждаемся что регион доступен
-	// Пробуем записать в начало
-	volatile uint64_t *test = (volatile uint64_t *)pmm_start;
-	*test = 0xDEADBEEF;
-	if (*test != 0xDEADBEEF)
-	{
-		printk("FATAL: PMM region not writable!\n");
-		return;
-	}
 
 	heap_start_phys = pmm_start;
 	heap_start_virt = pmm_start;
@@ -58,7 +46,6 @@ void pmm_init(uint64_t pmm_start, uint64_t pmm_size)
 
 	memset(bitmap, 0, bitmap_size);
 
-	// Выравниваем начало на границу страницы
 	uint64_t bitmap_pages = (bitmap_size + PAGE_SIZE - 1) / PAGE_SIZE;
 	heap_start_virt += bitmap_pages * PAGE_SIZE;
 	heap_start_phys += bitmap_pages * PAGE_SIZE;
@@ -87,7 +74,6 @@ void *pmm_alloc(size_t pages)
 				for (size_t j = start_page; j < start_page + pages; j++)
 					set_page(j);
 
-				// Возвращаем ВИРТУАЛЬНЫЙ адрес (identity mapped)
 				return (void *)(heap_start_virt + start_page * PAGE_SIZE);
 			}
 		}
@@ -108,7 +94,6 @@ void pmm_free(void *addr, size_t pages)
 		clear_page(page + i);
 }
 
-// Получить физический адрес из виртуального (для identity mapping)
 uint64_t pmm_get_phys(void *virt_ptr)
 {
 	uint64_t offset = (uint64_t)virt_ptr - heap_start_virt;

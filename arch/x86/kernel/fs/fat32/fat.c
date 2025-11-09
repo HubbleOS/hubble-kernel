@@ -3,6 +3,7 @@
 
 #include "fat_structs.h"
 #include "fat_utils.h"
+#include <fs/vfs/vfs_standart_struct.h>
 
 #include <fs/ata/ata.h>
 #include <mm/kmalloc.h>
@@ -80,7 +81,7 @@ uint32_t get_fat_entry(FAT32_FS *fs, uint32_t cluster)
 			 (sector[offset + 2] << 16) |
 			 (sector[offset + 3] << 24);
 
-	free(sector);
+	kfree(sector);
 
 	return entry & 0x0FFFFFFF;
 }

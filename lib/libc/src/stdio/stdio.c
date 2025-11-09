@@ -10,13 +10,13 @@ FILE *__stderrp;
 int syscall_write(struct FILE *stream, const char *buffer, int len)
 {
 	(void)stream;
-	return syscall2(SYS_write, 1, (long)buffer, len);
+	return syscall3(SYS_write, 1, (long)buffer, len);
 }
 
 int syscall_read(FILE *stream, char *buffer, int len)
 {
 	(void)stream;
-	return syscall2(SYS_read, 0, (long)buffer, len);
+	return syscall3(SYS_read, 0, (long)buffer, len);
 }
 
 void stdio_init(FILE *in, FILE *out, FILE *err)

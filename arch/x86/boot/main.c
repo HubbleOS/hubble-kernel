@@ -31,6 +31,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		return status;
 	}
 	PrintOk(L"GOP found\n");
+
 	// === [2] Locate filesystem and open kernel ===
 	EFI_GUID fs_guid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
 	EFI_HANDLE *HandleBuffer = NULL;
@@ -135,9 +136,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	PrintOk(L"Kernel loaded at 0x%lx\n", kernel_addr);
 	uefi_call_wrapper(KernelFile->Close, 1, KernelFile);
 
-	// === [6] We divide the region BEFORE selection ===
-
-	// Getting a memory map
+	// === [6] Find largest memory region ===
 	EFI_MEMORY_DESCRIPTOR *mem_map = NULL;
 	UINTN mem_map_size = 0, map_key, desc_size;
 	UINT32 desc_version;
@@ -172,7 +171,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		if (desc->Type == EfiConventionalMemory)
 		{
 			UINT64 size = desc->NumberOfPages * EFI_PAGE_SIZE;
-			PrintDebug(L"Scanning  Region %u: 0x%lx - 0x%lx (%lu MB)\n",
+			PrintDebug(L"  Region %u: 0x%lx - 0x%lx (%lu MB)\n",
 				   i, desc->PhysicalStart,
 				   desc->PhysicalStart + size,
 				   size / (1024 * 1024));
@@ -191,12 +190,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		return EFI_OUT_OF_RESOURCES;
 	}
 
-	PrintOk(L"KernelLargest region: 0x%lx - 0x%lx (%lu MB)\n",
+	PrintOk(L"Largest region: 0x%lx - 0x%lx (%lu MB)\n",
 		largest->PhysicalStart,
 		largest->PhysicalStart + largest_size,
 		largest_size / (1024 * 1024));
 
-	// CRITICAL: Open the ramdisk file to find out the size
+	// === [7] Get ramdisk size ===
 	EFI_FILE_HANDLE RamdiskFile = NULL;
 	UINTN ramdisk_size = 0;
 
@@ -205,7 +204,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	if (!EFI_ERROR(status))
 	{
-		EFI_GUID FileInfoGuid = EFI_FILE_INFO_ID;
 		EFI_FILE_INFO *RamdiskFileInfo = NULL;
 		UINTN FileInfoSize = 0;
 
@@ -234,68 +232,63 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	}
 	else
 	{
-		PrintOk(L"KernelRamdisk size: %lu MB\n", ramdisk_size / (1024 * 1024));
+		PrintOk(L"Ramdisk size: %lu MB\n", ramdisk_size / (1024 * 1024));
 	}
 
-	// We are planning to divide the largest region:
-	// [RAMDISK][1MB buffer][ HEAP (minimum 32MB) ]
-
+	// === [8] Calculate memory layout: [RAMDISK][BOOTSTRAP][BUFFER][HEAP] ===
 	UINTN ramdisk_pages = (ramdisk_size + 0xFFF) / 0x1000;
+	UINTN bootstrap_pages = 1024;			    // 4MB for page tables
 	UINTN buffer_pages = 256;			    // 1MB buffer
 	UINTN min_heap_pages = (32 * 1024 * 1024) / 0x1000; // 32MB minimum
 
-	UINTN required_pages = ramdisk_pages + buffer_pages + min_heap_pages;
+	UINTN required_pages = ramdisk_pages + bootstrap_pages + buffer_pages + min_heap_pages;
 
 	if (largest->NumberOfPages < required_pages)
 	{
-		PrintFail(L"Largest region too small for ramdisk + heap\n");
+		PrintFail(L"Largest region too small\n");
 		PrintFail(L"Need %lu pages, have %lu pages\n",
 			  required_pages, largest->NumberOfPages);
 		PrintFail(L"Try: 1) Reduce ramdisk size, or 2) Increase VM memory\n");
 		return EFI_OUT_OF_RESOURCES;
 	}
 
-	// Calculating addresses
+	// Calculate addresses
 	EFI_PHYSICAL_ADDRESS ramdisk_addr = largest->PhysicalStart;
-	EFI_PHYSICAL_ADDRESS heap_addr = ramdisk_addr +
-					 (ramdisk_pages + buffer_pages) * 0x1000;
-	UINT64 heap_size = (largest->NumberOfPages - ramdisk_pages - buffer_pages) * 0x1000;
+	EFI_PHYSICAL_ADDRESS bootstrap_addr = ramdisk_addr + ramdisk_pages * 0x1000;
+	EFI_PHYSICAL_ADDRESS heap_addr = bootstrap_addr +
+					 (bootstrap_pages + buffer_pages) * 0x1000;
+	UINT64 bootstrap_size = bootstrap_pages * 0x1000;
+	UINT64 heap_size = (largest->NumberOfPages - ramdisk_pages -
+			    bootstrap_pages - buffer_pages) *
+			   0x1000;
 
-	PrintInfo(L"Kernel Memory layout:\n");
-	PrintInfo(L"  Ramdisk: 0x%lx - 0x%lx (%lu MB)\n",
-		  ramdisk_addr,
-		  ramdisk_addr + ramdisk_pages * 0x1000,
-		  (ramdisk_pages * 0x1000) / (1024 * 1024));
-	PrintInfo(L"  Buffer:  0x%lx - 0x%lx (1 MB)\n",
-		  ramdisk_addr + ramdisk_pages * 0x1000,
+	PrintInfo(L"Memory layout:\n");
+	if (ramdisk_size > 0)
+	{
+		PrintInfo(L"  Ramdisk:   0x%lx - 0x%lx (%lu MB)\n",
+			  ramdisk_addr,
+			  ramdisk_addr + ramdisk_pages * 0x1000,
+			  (ramdisk_pages * 0x1000) / (1024 * 1024));
+	}
+	PrintInfo(L"  Bootstrap: 0x%lx - 0x%lx (%lu MB)\n",
+		  bootstrap_addr,
+		  bootstrap_addr + bootstrap_size,
+		  bootstrap_size / (1024 * 1024));
+	PrintInfo(L"  Buffer:    0x%lx - 0x%lx (1 MB)\n",
+		  bootstrap_addr + bootstrap_size,
 		  heap_addr);
-	PrintInfo(L"  Heap:    0x%lx - 0x%lx (%lu MB)\n",
+	PrintInfo(L"  Heap:      0x%lx - 0x%lx (%lu MB)\n",
 		  heap_addr,
 		  heap_addr + heap_size,
 		  heap_size / (1024 * 1024));
 
-	// IMPORTANT: First we reserve HEAP (from the end of the region)
-	EFI_PHYSICAL_ADDRESS heap_phys = heap_addr;
-	UINTN heap_pages = heap_size / 0x1000;
+	// === [9] Allocate regions ===
 
-	status = uefi_call_wrapper(BS->AllocatePages, 4,
-				   AllocateAddress,
-				   EfiLoaderData,
-				   heap_pages,
-				   &heap_phys);
-	if (EFI_ERROR(status))
-	{
-		PrintFail(L"Failed to reserve heap: %r\n", status);
-		return status;
-	}
-	PrintOk(L"KernelHeap reserved at 0x%lx\n", heap_phys);
-
-	// Now select the ramdisk (from the beginning of the region)
+	// Allocate ramdisk if needed
 	void *ramdisk_ptr = NULL;
 	if (ramdisk_size > 0 && RamdiskFile)
 	{
 		EFI_PHYSICAL_ADDRESS ramdisk_phys = ramdisk_addr;
-
 		status = uefi_call_wrapper(BS->AllocatePages, 4,
 					   AllocateAddress,
 					   EfiLoaderData,
@@ -312,7 +305,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 						   ramdisk_ptr);
 			if (!EFI_ERROR(status))
 			{
-				PrintOk(L"KernelRamdisk loaded at 0x%lx\n", (UINT64)ramdisk_ptr);
+				PrintOk(L"Ramdisk loaded at 0x%lx\n", (UINT64)ramdisk_ptr);
 			}
 			else
 			{
@@ -329,13 +322,43 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		}
 	}
 
+	// Allocate bootstrap allocator
+	EFI_PHYSICAL_ADDRESS bootstrap_phys = bootstrap_addr;
+	status = uefi_call_wrapper(BS->AllocatePages, 4,
+				   AllocateAddress,
+				   EfiLoaderData,
+				   bootstrap_pages,
+				   &bootstrap_phys);
+	if (EFI_ERROR(status))
+	{
+		PrintFail(L"Failed to reserve bootstrap: %r\n", status);
+		return status;
+	}
+	PrintOk(L"Bootstrap reserved at 0x%lx\n", bootstrap_phys);
+
+	// Allocate heap
+	EFI_PHYSICAL_ADDRESS heap_phys = heap_addr;
+	UINTN heap_pages = heap_size / 0x1000;
+
+	status = uefi_call_wrapper(BS->AllocatePages, 4,
+				   AllocateAddress,
+				   EfiLoaderData,
+				   heap_pages,
+				   &heap_phys);
+	if (EFI_ERROR(status))
+	{
+		PrintFail(L"Failed to reserve heap: %r\n", status);
+		return status;
+	}
+	PrintOk(L"Heap reserved at 0x%lx\n", heap_phys);
+
 	if (RamdiskFile)
 		uefi_call_wrapper(RamdiskFile->Close, 1, RamdiskFile);
 
 	uefi_call_wrapper(RootFS->Close, 1, RootFS);
 	uefi_call_wrapper(BS->FreePool, 1, mem_map);
 
-	// === [7] Allocate boot info structures ===
+	// === [10] Allocate boot info structures ===
 	EFI_PHYSICAL_ADDRESS boot_info_addr = 0;
 	UINTN boot_info_pages = 1;
 
@@ -351,25 +374,32 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	ram_info_t *ram_info = (ram_info_t *)((uint8_t *)fb_info + sizeof(framebuffer_info_t));
 	ramdisk_info_t *ramdisk_info = (ramdisk_info_t *)((uint8_t *)ram_info + sizeof(ram_info_t));
 
-	// === [8] Fill framebuffer info ===
+	// === [11] Fill framebuffer info ===
 	fb_info->base = (void *)gop->Mode->FrameBufferBase;
 	fb_info->width = gop->Mode->Info->HorizontalResolution;
 	fb_info->height = gop->Mode->Info->VerticalResolution;
 	fb_info->pitch = gop->Mode->Info->PixelsPerScanLine * 4;
 	fb_info->bpp = 32;
 
-	PrintOk(L"KernelFramebuffer: %ux%u @ 0x%lx\n",
+	PrintOk(L"Framebuffer: %ux%u @ 0x%lx\n",
 		fb_info->width, fb_info->height, (UINT64)fb_info->base);
 
-	// === [9] Fill ramdisk info ===
+	// === [12] Fill ramdisk info ===
 	ramdisk_info->ramdisk_base = ramdisk_ptr;
 	ramdisk_info->ramdisk_size = ramdisk_size;
 
-	// === [10] Fill heap info ===
+	// === [13] Fill memory info ===
+	ram_info->bootstrap_start = bootstrap_phys;
+	ram_info->bootstrap_size = bootstrap_size;
 	ram_info->heap_start = heap_phys;
 	ram_info->heap_size = heap_size;
 
-	PrintOk(L"KernelFinal heap: 0x%lx - 0x%lx (%lu MB)\n",
+	PrintOk(L"Final memory layout:\n");
+	PrintOk(L"  Bootstrap: 0x%lx - 0x%lx (%lu MB)\n",
+		ram_info->bootstrap_start,
+		ram_info->bootstrap_start + ram_info->bootstrap_size,
+		ram_info->bootstrap_size / (1024 * 1024));
+	PrintOk(L"  Heap:      0x%lx - 0x%lx (%lu MB)\n",
 		ram_info->heap_start,
 		ram_info->heap_start + ram_info->heap_size,
 		ram_info->heap_size / (1024 * 1024));
@@ -377,13 +407,13 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	PrintInfo(L"Jumping to kernel at 0x%lx\n", (UINT64)kernel_addr);
 	ClearConsole();
 
-	// === [11] Prepare BootInfo pointer ===
+	// === [14] Prepare BootInfo pointer ===
 	BootInfo boot_info;
 	boot_info.framebuffer = fb_info;
 	boot_info.memory_map = ram_info;
 	boot_info.disk_info = ramdisk_info;
 
-	// === [12] Final ExitBootServices ===
+	// === [15] Final ExitBootServices ===
 	mem_map = NULL;
 	mem_map_size = 0;
 
@@ -407,7 +437,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	if (EFI_ERROR(status))
 		return status;
 
-	// === [13] Jump to kernel ===
+	// === [16] Jump to kernel ===
 	void (*kernel_entry)(BootInfo *) = (void *)kernel_addr;
 	kernel_entry(&boot_info);
 

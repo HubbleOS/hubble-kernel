@@ -98,8 +98,5 @@ static inline long do_syscall_int(long num, long arg1, long arg2, long arg3,
 #define syscall1(n, a1) do_syscall(n, a1, 0, 0, 0, 0, 0)
 #define syscall2(n, a1, a2) do_syscall(n, a1, a2, 0, 0, 0, 0)
 #define syscall3(n, a1, a2, a3) do_syscall(n, a1, a2, a3, 0, 0, 0)
-#define syscall4(n, a1, a2, a3, a4) do_syscall(n, a1, a2, a3, a4, 0, 0)
-#define syscall5(n, a1, a2, a3, a4, a5) do_syscall(n, a1, a2, a3, a4, a5, 0)
-#define syscall6(n, a1, a2, a3, a4, a5, a6) do_syscall(n, a1, a2, a3, a4, a5, a6)
 
 typedef long (*syscall_fn_t)(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6);

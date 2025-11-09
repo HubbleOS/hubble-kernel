@@ -13,6 +13,32 @@
 
 extern "C" int load_elf_and_run(const char *path);
 
+void test_syscall(void)
+{
+  uint64_t result;
+
+  printk("Test 1: int $0x80 syscall(0)\n");
+  asm volatile(
+      "movq $0, %%rax\n"
+      "int $0x80\n"
+      "movq %%rax, %0"
+      : "=r"(result)
+      :
+      : "rax");
+  printk("  Result: %lu\n", result);
+
+  // Тест SYSCALL
+  printk("Test 2: syscall instruction syscall(0)\n");
+  asm volatile(
+      "movq $0, %%rax\n"
+      "syscall\n"
+      "movq %%rax, %0"
+      : "=r"(result)
+      :
+      : "rax", "rcx", "r11");
+  printk("  Result: %lu\n", result);
+}
+
 extern "C" void os_main(BootInfo *bi)
 {
   Screen screen(bi->framebuffer);
@@ -23,6 +49,8 @@ extern "C" void os_main(BootInfo *bi)
 
   Terminal term(win);
   term.init();
+
+  // test_syscall();
 
   int res = load_elf_and_run("/usr/bin/user.elf");
   if (res != 0)

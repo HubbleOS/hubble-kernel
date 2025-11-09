@@ -15,6 +15,7 @@
 
 static bool fat32_mount_wrapper(VFS_FS *fs, VFS_Device *device, uint32_t start_lba)
 {
+	fs->fs = kmalloc(sizeof(FAT32_FS));
 	return fat32_mount(fs->fs, device, start_lba);
 }
 
@@ -25,6 +26,12 @@ static void fat32_unmount_wrapper(VFS_FS *fs)
 
 static VFS_Node *fat32_open_wrapper(VFS_FS *fs, const char *path)
 {
+	if (!fs->fs)
+	{
+		printk("fs not mounted\n");
+		return NULL;
+	}
+	printk("Opening file: %s\n", path);
 	FAT32_File *file = fat32_open(fs->fs, path);
 	printk("\nEntry open here!!: ");
 	// for (int i = 0; i < sizeof(FAT32_DirectoryEntry); i++)
@@ -67,6 +74,7 @@ static VFS_Node *fat32_open_wrapper(VFS_FS *fs, const char *path)
 
 static int fat32_read_wrapper(VFS_File *node, void *buf, uint32_t size)
 {
+	memset(buf, 0, size);
 	return fat32_read(node, buf, size);
 }
 
@@ -77,6 +85,13 @@ static int fat32_write_wrapper(VFS_File *node, const void *buf, uint32_t size)
 static VFS_Node *fat32_create_file_wrapper(VFS_FS *fs, const char *path)
 {
 	printk("Creating file: %s\n", path);
+
+	if (!fs->fs)
+	{
+		printk("fs not mounted\n");
+		return NULL;
+	}
+
 	fat32_create_file((FAT32_FS *)(fs->fs), path);
 	return fat32_open_wrapper(fs, path);
 }
@@ -93,6 +108,27 @@ static Directory fat32_readdir_wrapper(VFS_FS *fs, const char *path)
 {
 	return fat32_list_files_from_path((FAT32_FS *)(fs->fs), path);
 }
+static int fat32_close_wrapper(VFS_File *file)
+{
+	if (!file)
+		return -1;
+
+	VFS_Node *node = file->node;
+	const char *name = node && node->name ? node->name : "<unknown>";
+
+	printk("VFS: closing file %s\n", name);
+	if (node)
+	{
+		if (node->fs_node)
+			kfree(node->fs_node);
+		kfree(node);
+	}
+	kfree(file);
+
+	printk("VFS: file was closed %s\n", name);
+	return 0;
+}
+
 void fat32_init_vfs(VFS_FS *fs)
 {
 	fs->mount = fat32_mount_wrapper;
@@ -104,4 +140,5 @@ void fat32_init_vfs(VFS_FS *fs)
 	fs->mkdir = fat32_mkdir_wrapper;
 	fs->unlink = fat32_unlink_wrapper;
 	fs->readdir = fat32_readdir_wrapper;
+	fs->close = fat32_close_wrapper;
 }
