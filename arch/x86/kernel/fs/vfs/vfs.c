@@ -7,114 +7,127 @@
 // #include "gpt.h" // Список змонтованих ФС (поки що 1)
 #include <fs/gpt/gpt.h>
 #include <mm/kmalloc.h>
+#include "printk.h"
 
-VFS_FS *root_fs = NULL;
-
-// ==== Реалізація VFS API ==== //
-
-bool vfs_mount(gpt_partition_t *parition, FileSystemType type)
+typedef struct VFS_Mount
 {
-	if (root_fs != NULL)
-	{
-		printk("VFS: already mounted\n");
-		return false;
-	}
-	printk("VFS: mounting\n");
-	root_fs = kmalloc(sizeof(VFS_FS));
-	memset(root_fs, 0, sizeof(VFS_FS));
-	root_fs->type = type;
+	char mountpoint[10];
+	VFS_FS *fs;
+	struct VFS_Mount *next;
+} VFS_Mount;
 
-	// вибір драйвера
+static VFS_Mount *vfs_mounts = NULL;
+
+static const char *vfs_get_relpath(const char *path, const char *mountpoint)
+{
+	size_t mlen = strlen(mountpoint);
+
+	// Якщо шлях точно дорівнює mountpoint
+	if (strcmp(path, mountpoint) == 0)
+		return "/"; // корінь цієї ФС
+
+	// Якщо шлях починається з точки монтування
+	if (strncmp(path, mountpoint, mlen) == 0)
+	{
+		const char *rel = path + mlen;
+		if (*rel == '/')
+			rel++; // пропускаємо зайву '/'
+		return rel;
+	}
+
+	// Інакше — це не цей mount
+	return NULL;
+}
+
+bool vfs_mount(const char *mountpoint, gpt_partition_t *partition, FileSystemType type)
+{
+	VFS_FS *fs = kmalloc(sizeof(VFS_FS));
+	memset(fs, 0, sizeof(VFS_FS));
+	fs->type = type;
+
 	switch (type)
 	{
 	case FS_FAT32:
-		extern void fat32_init_vfs(VFS_FS * fs); // функція з fat32_vfs.c
-		fat32_init_vfs(root_fs);
+		printk("VFS: init fat32 vfs\n");
+		extern void fat32_init_vfs(VFS_FS * fs);
+		fat32_init_vfs(fs);
+		break;
+	case FS_EXT2:
+		printk("VFS: init ext2 vfs\n");
+		extern void ext2_init_vfs(VFS_FS * fs);
+		ext2_init_vfs(fs);
 		break;
 	default:
 		printk("VFS: unsupported FS type %d\n", type);
-		free(root_fs);
-		root_fs = NULL;
+		kfree(fs);
 		return false;
 	}
-	printk("VFS: mounted\n");
-	return root_fs->mount(root_fs, parition->device, parition->first_lba);
+	printk("VFS: mount %d at %s\n", type, mountpoint);
+	if (!partition->device->read)
+	{
+		printk("partition has no device\n");
+	}
+	printk("VFS: mount %d at %s\n", type, mountpoint);
+	if (!fs->mount(fs, partition->device, partition->first_lba))
+	{
+		printk("VFS: failed to mount %d at %s\n", type, mountpoint);
+		return false;
+	}
+	if (!fs->fs)
+	{
+		printk("VFS: failed to mount %d at %s\n", type, mountpoint);
+	}
+	VFS_Mount *mnt = kmalloc(sizeof(VFS_Mount));
+	strcpy(mnt->mountpoint, mountpoint);
+	mnt->fs = fs;
+	mnt->next = vfs_mounts;
+	vfs_mounts = mnt;
+
+	printk("VFS: mounted %d at %s\n", type, mountpoint);
+	return true;
+}
+
+static VFS_Mount *vfs_find_mount_for_path(const char *path)
+{
+	VFS_Mount *best = NULL;
+	size_t best_len = 0;
+
+	for (VFS_Mount *m = vfs_mounts; m; m = m->next)
+	{
+		size_t len = strlen(m->mountpoint);
+		if (strncmp(path, m->mountpoint, len) == 0)
+		{
+			if (len > best_len)
+			{ // найглибший збіг
+				best = m;
+				best_len = len;
+			}
+		}
+	}
+	return best;
 }
 
 VFS_File *vfs_open(const char *path, int flags)
-
 {
-	if (!root_fs || !root_fs->open)
-		return ERR_PTR(-ENODEV);
-	VFS_Node *node = root_fs->open(root_fs, path);
+	printk("VFS: opening file %s\n", path);
+	VFS_Mount *mnt = vfs_find_mount_for_path(path);
+	if (!mnt)
+		return ERR_PTR(-ENOENT);
+
+	const char *relpath = vfs_get_relpath(path, mnt->mountpoint);
+	if (*relpath == '/')
+		relpath++;
+	printk("VFS: opening file %s\n", relpath);
+	VFS_Node *node = mnt->fs->open(mnt->fs, relpath);
+	if (!node && (flags & VFS_O_CREAT))
+		node = mnt->fs->create_file(mnt->fs, relpath);
+	if (!node)
+		return ERR_PTR(-ENOENT);
 
 	VFS_File *f = kmalloc(sizeof(VFS_File));
-
-	printk("VFS: opening file %s\n", path);
-
-	if (!node)
-	{
-		printk("VFS: file %s not found\n", path);
-
-		if (flags & VFS_O_CREAT)
-		{
-			printk("VFS: creating file %s\n", path);
-			node = vfs_create_file(path);
-			if (!node)
-			{
-				// f->flags = -EIO;
-				return ERR_PTR(-EIO);
-			}
-		}
-		else
-		{
-			// f->flags = -ENOENT;
-			return ERR_PTR(-ENOENT);
-		}
-	}
-	else
-	{
-		// Якщо файл вже існує
-		if ((flags & VFS_O_CREAT) && (flags & VFS_O_EXCL))
-		{
-			// return NULL;
-			return ERR_PTR(-EEXIST); // існує, а ми хочемо створити з EXCL
-		}
-	}
-	printk("VFS: file opened %s\n", path);
-	// --- перевірка режимів ---
-	int access_mode = flags & 0x03; // беремо тільки нижні біти
-	switch (access_mode)
-	{
-	case VFS_O_RDONLY:
-		if (!(node->mode & MODE_READ))
-			return ERR_PTR(-EACCES);
-		break;
-	case VFS_O_WRONLY:
-		if (!(node->mode & MODE_WRITE))
-			return ERR_PTR(-EACCES);
-		break;
-	case VFS_O_RDWR:
-		if (!(node->mode & MODE_READ) || !(node->mode & MODE_WRITE))
-			return ERR_PTR(-EACCES);
-		break;
-	default:
-		return ERR_PTR(-EINVAL);
-	}
-
-	// --- trunc ---
-	// if ((flags & VFS_O_TRUNC) && (access_mode != VFS_O_RDONLY))
-	//{
-	//    node->size = 0;
-	//    fs_truncate(node); // драйвер FS реально обрізає
-	//}
-
-	// --- append ---
-
 	f->node = node;
 	f->flags = flags;
-	f->pos = (flags & VFS_O_APPEND) ? node->size : 0;
-	printk("VFS: file opened %s\n", path);
+	f->pos = 0;
 	return f;
 }
 
@@ -142,31 +155,56 @@ int vfs_write(VFS_File *file, const void *buf, uint32_t size)
 
 VFS_Node *vfs_create_file(const char *path)
 {
-	if (!root_fs || !root_fs->create_file)
+	// if (!root_fs || !root_fs->create_file)
+	// 	return NULL;
+	// return root_fs->create_file(root_fs, path);
+	VFS_Mount *mnt = vfs_find_mount_for_path(path);
+	const char *relpath = vfs_get_relpath(path, mnt->mountpoint);
+	if (!mnt || !mnt->fs || !mnt->fs->create_file)
+	{
+		printk("VFS: failed to create file %s\n", path);
 		return NULL;
-	return root_fs->create_file(root_fs, path);
+	}
+	return mnt->fs->create_file(mnt->fs, relpath);
 }
 
 bool vfs_mkdir(const char *path)
 {
-	if (!root_fs || !root_fs->mkdir)
+	// if (!root_fs || !root_fs->mkdir)
+	// 	return false;
+	// return root_fs->mkdir(root_fs, path);
+	VFS_Mount *mnt = vfs_find_mount_for_path(path);
+	const char *relpath = vfs_get_relpath(path, mnt->mountpoint);
+	if (!mnt)
 		return false;
-	return root_fs->mkdir(root_fs, path);
+	return mnt->fs->mkdir(mnt->fs, relpath);
 }
 Directory vfs_readdir(const char *path)
 {
 
-	if (!root_fs || !root_fs->readdir)
+	// if (!root_fs || !root_fs->readdir)
+	// 	return (Directory){0};
+	// printk("VFS: reading directory %s\n", path);
+	// return root_fs->readdir(root_fs, path);
+	VFS_Mount *mnt = vfs_find_mount_for_path(path);
+	const char *relpath = vfs_get_relpath(path, mnt->mountpoint);
+	if (!mnt)
+	{
 		return (Directory){0};
-	printk("VFS: reading directory %s\n", path);
-	return root_fs->readdir(root_fs, path);
+	}
+	return mnt->fs->readdir(mnt->fs, relpath);
 }
 
 bool vfs_unlink(const char *path)
 {
-	if (!root_fs || !root_fs->unlink)
+	// if (!root_fs || !root_fs->unlink)
+	// 	return false;
+	// return root_fs->unlink(root_fs, path);
+	VFS_Mount *mnt = vfs_find_mount_for_path(path);
+	const char *relpath = vfs_get_relpath(path, mnt->mountpoint);
+	if (!mnt)
 		return false;
-	return root_fs->unlink(root_fs, path);
+	return mnt->fs->unlink(mnt->fs, relpath);
 }
 int vfs_lseek(VFS_File *file, int offset, int whence)
 {
@@ -188,5 +226,19 @@ int vfs_lseek(VFS_File *file, int offset, int whence)
 		return -1;
 	}
 
+	return 0;
+}
+int vfs_close(VFS_File **pfile)
+{
+	VFS_File *file = *pfile;
+	if (!file || !file->node->fs || !file->node->fs->close)
+		return -EIO;
+	file->node->fs->close(file);
+	// *pfile = NULL;
+	if (file)
+	{
+		// printk("%s\n", file->node->name);
+		printk("VFS: file was not closed in vfs %s\n", file->node->name);
+	}
 	return 0;
 }

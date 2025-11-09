@@ -98,7 +98,10 @@ bool fat32_mount(FAT32_FS *fs, VFS_Device *device, uint32_t start_lba)
 	fs->write_sector = device->write;
 
 	fat32_init_from_lba(start_lba, fs);
-
+	if (!fs)
+	{
+		printk("fs is null\n");
+	}
 	printk("here is root cluster: %d\n", fs->root_cluster);
 	return true;
 }
@@ -106,11 +109,16 @@ bool fat32_mount(FAT32_FS *fs, VFS_Device *device, uint32_t start_lba)
 bool fat32_unmount(FAT32_FS *fs)
 {
 	fat_cleanup(fs);
-	free(fs);
+	kfree(fs);
 	return true;
 }
 FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 {
+	if (!fs)
+	{
+		printk("fs is null\n");
+		return NULL;
+	}
 	printk("Opening file: %s\n", path);
 	uint32_t cluster = resolve_path_to_cluster(fs, path);
 	if (cluster == 0)
@@ -125,10 +133,10 @@ FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 	fat32_read_cluster(fs, cluster, buf);
 	if (!buf)
 	{
-		free(buf);
+		kfree(buf);
 		return NULL;
 	}
-
+	printk("Cluster data open: ");
 	for (int i = 0; i < fs->cluster_size / sizeof(FAT32_DirectoryEntry); i++)
 	{
 		FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)(buf + i * sizeof(FAT32_DirectoryEntry));
@@ -141,15 +149,15 @@ FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 			FAT32_File *file = kmalloc(sizeof(FAT32_File));
 			if (!file)
 			{
-				free(buf);
+				kfree(buf);
 				return NULL;
 			}
 
 			file->entry = kmalloc(sizeof(FAT32_DirectoryEntry));
 			if (!file->entry)
 			{
-				free(buf);
-				free(file);
+				kfree(buf);
+				kfree(file);
 				return NULL;
 			}
 
@@ -157,12 +165,12 @@ FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 			file->cluster = cluster;
 			file->index = i;
 
-			free(buf);
+			kfree(buf);
 			return file;
 		}
 	}
 
-	free(buf);
+	kfree(buf);
 	printk("File not found\n");
 	return NULL;
 }
@@ -217,7 +225,7 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 		memcpy(buffer + read, cluster_buf + in_cluster_offset, chunk);
 		read += chunk;
 
-		free(cluster_buf);
+		kfree(cluster_buf);
 		cluster = get_fat_entry(fs, cluster);
 
 		in_cluster_offset = 0; // після першого кластера завжди читаємо з початку
@@ -277,7 +285,7 @@ int fat32_write(VFS_File *file, const uint8_t *buffer, uint32_t size)
 		memcpy(cluster_buf + in_cluster_offset, buffer + buf_offset, to_write);
 		fat32_write_cluster(fs, cluster, cluster_buf);
 
-		free(cluster_buf);
+		kfree(cluster_buf);
 
 		remaining -= to_write;
 		buf_offset += to_write;
@@ -386,7 +394,7 @@ int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 	fs->fat_cache = kmalloc(fat_size_bytes);
 	if (!fs->fat_cache)
 	{
-		free(bpb);
+		kfree(bpb);
 		printk("Failed to allocate memory for FAT cache\n");
 		return -3;
 	}
@@ -398,7 +406,7 @@ int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 	}
 
 	fs->fat_dirty = false;
-	free(bpb); // звільняємо тільки тут, після використання
+	kfree(bpb); // звільняємо тільки тут, після використання
 	return 0;
 }
 
@@ -429,7 +437,7 @@ int fat32_update_fat_entry(FAT32_FS *fs, FAT32_File *file)
 		printk("%c", buf[i]);
 	printk("\n");
 	fat32_write_cluster(fs, file->cluster, buf);
-	free(buf);
+	kfree(buf);
 	return 0;
 }
 
@@ -485,7 +493,7 @@ void fat_cleanup(FAT32_FS *fs)
 	if (fs->fat_cache)
 	{
 		fat_flush(fs);
-		free(fs->fat_cache);
+		kfree(fs->fat_cache);
 		fs->fat_cache = NULL;
 	}
 }
@@ -561,13 +569,17 @@ void free_folder_path(PathParts *pp)
 {
 	for (int i = 0; i < pp->count; i++)
 	{
-		free(pp->parts[i].lfn);
+		kfree(pp->parts[i].lfn);
 	}
 	pp->count = 0;
 }
 int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir)
 {
-
+	if (!fs)
+	{
+		printk("fs is null, %u\n", fs->bytes_per_sector);
+		return -EINVAL;
+	}
 	printk("sfn: %s\n", pp->sfn);
 	if (cluster == 0)
 	{
@@ -604,13 +616,18 @@ int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir
 
 			entry->attr = is_dir ? 0x10 : 0x20;
 			uint32_t new_cluster = fat32_allocate_cluster(fs);
+			printk("Allocated cluster: %u (high=%04x low=%04x)\n",
+			       new_cluster,
+			       (new_cluster >> 16) & 0xFFFF,
+			       new_cluster & 0xFFFF);
+
 			entry->first_cluster_high = (new_cluster >> 16) & 0xFFFF;
 			entry->first_cluster_low = new_cluster & 0xFFFF;
 
 			entry->file_size = 0;
 			fat32_write_cluster(fs, cluster, buf);
 
-			free(buf);
+			kfree(buf);
 
 			// add entry to directory
 			if (is_dir)
@@ -620,7 +637,7 @@ int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir
 		}
 	}
 
-	free(buf);
+	kfree(buf);
 	return -ENOSPC; // нема місця в директорії
 }
 int fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name)
@@ -651,34 +668,11 @@ int fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name)
 		{
 			entry->name[0] = 0xE5;
 			fat32_write_cluster(fs, cluster, buf);
-			free(buf);
+			kfree(buf);
 			fat_flush(fs);
 			return 0;
 		}
 	}
-	free(buf);
+	kfree(buf);
 	return -ENOENT;
-}
-
-bool free_entries(Directory *dir)
-{
-	if (!dir || !dir->entries)
-		return false;
-
-	for (int i = 0; i < dir->count; i++)
-	{
-		free(dir->entries[i].name);
-	}
-
-	free(dir->entries);
-	dir->entries = NULL;
-	dir->count = 0;
-
-	return true;
-}
-
-Directory Directory_init(Directory dir)
-{
-	dir.free_entries = free_entries;
-	return dir;
 }

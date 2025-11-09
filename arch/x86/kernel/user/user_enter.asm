@@ -6,20 +6,27 @@ global user_enter
 ; rdi = entry_point
 ; rsi = user_stack_top
 
+; rdi = entry_point
+; rsi = user_stack_top
+; Має правильно встановити DS/ES на user data segment
 user_enter:
-    cli                         ; Отключаем прерывания на время настройки
-
-    mov ax, 0x20                ; user data selector (Ring 3)
+    cli
+    
+    ; User data segment (0x20 | 3 = 0x23)
+    mov ax, 0x23
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
-
-    ; Подготовка стека для iretq
-    push qword 0x20             ; SS (user data selector)
-    push qword rsi              ; RSP (user stack top)
-    pushfq                      ; RFLAGS
-    push qword 0x18             ; CS (user code selector)
-    push qword rdi              ; RIP (entry point)
-
-    iretq                       ; Перейти в user space (CPL=3)
+    
+    ; Підготовка для iretq
+    mov rcx, rsp        ; Зберігаємо kernel RSP
+    
+    push 0x23           ; SS (user data)
+    push rsi            ; RSP (user stack)
+    pushfq              ; RFLAGS
+    or qword [rsp], 0x200  ; Enable interrupts
+    push 0x1B           ; CS (user code: 0x18 | 3)
+    push rdi            ; RIP
+    
+    iretq
