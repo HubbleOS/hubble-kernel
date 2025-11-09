@@ -69,58 +69,186 @@ extern void keyboard_handler(registers_t *regs);
 
 void kernel_main(BootInfo *bi)
 {
+	// ========================================================================
+	// Ранняя инициализация вывода
+	// ========================================================================
 	early_printk_init(bi->framebuffer);
 	printk(KERN_INFO "Kernel starting...\n");
 
-	// GDT, IDT, etc.
+	// ========================================================================
+	// CPU инициализация: GDT, IDT, Interrupts, Syscalls
+	// ========================================================================
 	printk(KERN_INFO "GDT init\n");
 	gdt_init();
+
 	printk(KERN_INFO "TSS init\n");
 	tss_init();
+
 	printk(KERN_INFO "IDT init\n");
 	idt_init();
+
 	printk(KERN_INFO "Interrupts init\n");
 	interrupts_init();
+
 	printk(KERN_INFO "Syscalls init\n");
 	syscall_init();
 
-	// Memory initialization - CORRECT ORDER
-	printk(KERN_INFO "VMM init\n");
+	printk(KERN_INFO "=== Memory Initialization ===\n");
+
+	// Получаем текущий CR3 от bootloader
 	uint64_t cr3;
 	asm volatile("mov %%cr3, %0" : "=r"(cr3));
+	printk("Current CR3: 0x%lx\n", cr3);
 
-	// Pass bootstrap allocator region separately from heap
-	vmm_init(cr3,
-		 bi->memory_map->bootstrap_start,
-		 bi->memory_map->bootstrap_size,
-		 bi->memory_map->heap_start,
-		 bi->memory_map->heap_size);
+	// Выводим информацию о heap
+	printk("Heap region: 0x%lx - 0x%lx (%lu MB)\n",
+	       bi->memory_map->heap_start,
+	       bi->memory_map->heap_start + bi->memory_map->heap_size,
+	       bi->memory_map->heap_size / (1024 * 1024));
 
-	printk(KERN_INFO "PMM init\n");
-	// PMM only uses the heap, NOT the bootstrap region
+	// ШАГ 1: PMM init
+	// PMM работает через identity mapping от UEFI
+	// Bitmap будет в начале heap региона
+	printk(KERN_INFO "PMM init (using UEFI identity mapping)...\n");
 	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
 
-	// NOW we can safely disable bootstrap allocator
-	printk(KERN_INFO "Disabling bootstrap allocator\n");
-	vmm_disable_bootstrap_allocator();
+	// ШАГ 2: VMM init
+	// VMM создает physmap, используя PMM для аллокации page tables
+	printk(KERN_INFO "VMM init (creating physmap)...\n");
+	vmm_init(cr3, bi->memory_map->heap_start, bi->memory_map->heap_size);
 
-	printk(KERN_INFO "kmalloc init\n");
+	// ШАГ 2.5: Включаем physmap в PMM
+	// После создания physmap, PMM может использовать его вместо identity mapping
+	printk(KERN_INFO "Enabling physmap in PMM...\n");
+	// pmm_enable_physmap();
+
+	// ШАГ 3: kmalloc init
+	// kmalloc использует PMM/VMM для выделения памяти
+	printk(KERN_INFO "kmalloc init...\n");
 	kmalloc_init();
 
-	// Test heap after all initialization
-	printk("Testing heap write access...\n");
-	volatile uint64_t *test_ptr = (uint64_t *)(bi->memory_map->heap_start + 0x1000);
-	*test_ptr = 0xDEADBEEF;
-	if (*test_ptr == 0xDEADBEEF)
+	while (1)
 	{
-		printk("  Final heap test: OK\n");
+		asm volatile("hlt");
+	}
+
+	// ========================================================================
+	// Тесты памяти
+	// ========================================================================
+	printk(KERN_INFO "=== Memory Tests ===\n");
+
+	// Тест 1: Identity mapping (от UEFI)
+	printk("Test 1: Identity mapping write...\n");
+	volatile uint64_t *test_id = (uint64_t *)(bi->memory_map->heap_start + 0x1000);
+	*test_id = 0xDEADBEEF;
+	if (*test_id == 0xDEADBEEF)
+	{
+		printk("  Identity mapping: OK\n");
 	}
 	else
 	{
-		printk("  Final heap test: FAILED!\n");
+		printk("  Identity mapping: FAILED!\n");
 	}
 
-	// Rest of initialization...
+	// Тест 2: PMM аллокация
+	printk("Test 2: PMM allocation...\n");
+	uint64_t phys = pmm_alloc_phys(1);
+	if (phys)
+	{
+		printk("  Allocated physical page: 0x%lx\n", phys);
+
+		// Проверяем запись через physmap
+		uint64_t virt = phys + 0xFFFF800000000000ULL;
+		volatile uint64_t *ptr = (uint64_t *)virt;
+		*ptr = 0xCAFEBABE;
+
+		if (*ptr == 0xCAFEBABE)
+		{
+			printk("  Physmap write: OK\n");
+		}
+		else
+		{
+			printk("  Physmap write: FAILED!\n");
+		}
+
+		pmm_free_phys(phys, 1);
+		printk("  Page freed\n");
+	}
+	else
+	{
+		printk("  PMM allocation: FAILED!\n");
+	}
+
+	// Тест 3: kmalloc
+	printk("Test 3: kmalloc...\n");
+	void *ptr = kmalloc(1024);
+	if (ptr)
+	{
+		printk("  kmalloc(1024): 0x%lx\n", (uint64_t)ptr);
+		memset(ptr, 0xAB, 1024);
+		printk("  memset: OK\n");
+		kfree(ptr);
+		printk("  kfree: OK\n");
+	}
+	else
+	{
+		printk("  kmalloc: FAILED!\n");
+	}
+
+	// Тест 4: Большая аллокация
+	printk("Test 4: Large allocation (1 MB)...\n");
+	void *large = kmalloc(1024 * 1024);
+	if (large)
+	{
+		printk("  kmalloc(1 MB): 0x%lx\n", (uint64_t)large);
+
+		// Проверяем что можем писать
+		volatile uint32_t *test_array = (uint32_t *)large;
+		for (int i = 0; i < 256; i++)
+		{
+			test_array[i] = 0x12345678 + i;
+		}
+
+		// Проверяем чтение
+		int ok = 1;
+		for (int i = 0; i < 256; i++)
+		{
+			if (test_array[i] != 0x12345678 + i)
+			{
+				ok = 0;
+				break;
+			}
+		}
+
+		if (ok)
+		{
+			printk("  Read/write test: OK\n");
+		}
+		else
+		{
+			printk("  Read/write test: FAILED!\n");
+		}
+
+		kfree(large);
+		printk("  Large block freed\n");
+	}
+	else
+	{
+		printk("  Large allocation: FAILED!\n");
+	}
+
+	// Статистика PMM
+	size_t free_pages = pmm_get_free_pages();
+	size_t total_pages = pmm_get_total_pages();
+	printk("PMM Statistics:\n");
+	printk("  Free:  %lu pages (%lu MB)\n", free_pages, free_pages * 4 / 1024);
+	printk("  Total: %lu pages (%lu MB)\n", total_pages, total_pages * 4 / 1024);
+	printk("  Used:  %lu pages (%lu MB)\n",
+	       total_pages - free_pages, (total_pages - free_pages) * 4 / 1024);
+
+	// ========================================================================
+	// Остальная инициализация
+	// ========================================================================
 	printk(KERN_INFO "GPT init\n");
 	gpt_init(partitions);
 
@@ -129,16 +257,17 @@ void kernel_main(BootInfo *bi)
 
 	printk(KERN_INFO "Kernel initialization complete\n");
 
-	// Test interrupts...
-	printk(KERN_INFO "Testing interrupts...\n");
+	// ========================================================================
+	// Тесты прерываний и системных вызовов
+	// ========================================================================
+	printk(KERN_INFO "=== Interrupt Tests ===\n");
 
 	uint16_t cs, ds;
 	asm volatile("mov %%cs, %0" : "=r"(cs));
 	asm volatile("mov %%ds, %0" : "=r"(ds));
 	printk("CS: 0x%x, DS: 0x%x\n", cs, ds);
 
-	// Test system call
-	printk(KERN_INFO "Test 1: syscall(0) - expecting 666\n");
+	printk(KERN_INFO "Test syscall(0) - expecting 666\n");
 	uint64_t result;
 
 	asm volatile(
@@ -149,8 +278,11 @@ void kernel_main(BootInfo *bi)
 	    :
 	    : "rax");
 
-	printk(KERN_INFO " Result: %lu (0x%lx)\n", result, result);
+	printk(KERN_INFO "Result: %lu (0x%lx)\n", result, result);
 
+	// ========================================================================
+	// Переход в основной код ядра
+	// ========================================================================
 	os_main(bi);
 
 	printk(KERN_INFO "Entering main loop\n");

@@ -53,17 +53,18 @@ typedef struct
 static void *alloc_and_map_user_page(uint64_t user_va, uint64_t flags)
 {
 	// Allocate physical page - pmm_alloc returns VIRTUAL address
-	void *phys_virt = pmm_alloc(1);
+	void *phys_virt = pmm_alloc_phys(1);
 	if (!phys_virt)
 	{
-		printk("ERROR: pmm_alloc() returned NULL\n");
+		printk("ERROR: pmm_alloc_phys() returned NULL\n");
 		return NULL;
 	}
 
-	printk("  pmm_alloc() returned: %p\n", phys_virt);
+	printk("  pmm_alloc_phys() returned: %p\n", phys_virt);
 
 	// Get physical address
-	uint64_t phys = pmm_get_phys(phys_virt);
+	// uint64_t phys = pmm_get_phys(phys_virt);
+	uint64_t phys;
 	printk("  Physical address: 0x%lx\n", phys);
 
 	// Map to user space
@@ -71,7 +72,7 @@ static void *alloc_and_map_user_page(uint64_t user_va, uint64_t flags)
 	if (vmm_map_page(user_va, phys, flags) != 0)
 	{
 		printk("ERROR: vmm_map_page() failed\n");
-		pmm_free(phys_virt, 1);
+		pmm_free_phys(phys_virt, 1);
 		return NULL;
 	}
 
