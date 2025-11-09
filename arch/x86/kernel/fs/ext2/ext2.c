@@ -224,7 +224,7 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode)
 			memcpy(dir.entries[dir.count].name, entry->name, entry->name_len);
 			printk("teto3 count - %d\n", dir.count);
 			dir.entries[dir.count]
-			    .name[entry->name_len] = '\0';
+				.name[entry->name_len] = '\0';
 			dir.entries[dir.count].is_dir = entry->file_type == 0x10;
 			dir.entries[dir.count].cluster = entry->inode;
 			dir.count++;
@@ -416,7 +416,7 @@ uint32_t ext2_parse_path(EXT2_FS *fs, uint32_t inode, const char *path)
 
 // void ext2_init(gpt_partition_t part)
 // {
-// 	printk("Initializing EXT2 on partition starting at LBA %llu\n", part.first_lba);
+// 	printk("Initializing EXT2 on partition starting at LBA %lu\n\n", part.first_lba);
 
 // 	VFS_Device *device = part.device;
 
