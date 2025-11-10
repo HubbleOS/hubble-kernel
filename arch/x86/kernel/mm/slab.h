@@ -87,6 +87,14 @@ void slab_free(slab_cache_t *cache, void *ptr);
 void *kmalloc(size_t size);
 
 /**
+ * Загальний kmalloc - виділяє пам'ять оптимального розміру
+ * @param ptr вказіник на памʼять
+ * @param new_size новий розмір
+ * @return Вказівник на виділену пам'ять або NULL
+ */
+void *krealloc(void *ptr, size_t new_size);
+
+/**
  * Загальний kfree - звільняє пам'ять
  * @param ptr Вказівник на пам'ять
  */
@@ -99,11 +107,6 @@ void kfree(void *ptr);
  * @return Вказівник на виділену пам'ять або NULL
  */
 void *kmalloc_aligned(size_t size, size_t align);
-
-/**
- * Виводить статистику всіх slab cache'ів
- */
-void slab_print_stats(void);
 
 /**
  * Отримує cache за розміром об'єкта

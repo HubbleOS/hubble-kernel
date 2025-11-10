@@ -67,10 +67,12 @@ static void vmm_setup_recursive_mapping(page_table_t *pml4)
 
 // === Public API ===
 
-void vmm_init(void)
+// void vmm_init(void)
+void vmm_init(uint64_t bootloader_pml4_phys)
 {
 	// Виділяємо PML4 для kernel
-	uint64_t pml4_phys = pmm_alloc_page();
+	// uint64_t pml4_phys = pmm_alloc_page();
+	uint64_t pml4_phys = bootloader_pml4_phys;
 	if (!pml4_phys)
 	{
 		// Критична помилка
@@ -78,7 +80,7 @@ void vmm_init(void)
 	}
 
 	page_table_t *pml4 = (page_table_t *)pml4_phys;
-	memset(pml4, 0, PAGE_SIZE_4K);
+	// memset(pml4, 0, PAGE_SIZE_4K);
 
 	// Налаштовуємо рекурсивний мапінг
 	vmm_setup_recursive_mapping(pml4);
@@ -94,12 +96,7 @@ void vmm_init(void)
 	g_current_as = &g_kernel_as;
 
 	// Перемикаємося на нову PML4
-	// vmm_set_cr3(pml4_phys);
-
-	while (1)
-	{
-		asm volatile("hlt");
-	}
+	vmm_set_cr3(pml4_phys);
 
 	// Тепер ми можемо створювати мапінги через рекурсивний доступ
 	// Identity map перші 4GB для kernel (опціонально, залежить від твоєї архітектури)
