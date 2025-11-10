@@ -194,51 +194,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		largest->PhysicalStart + largest_size,
 		largest_size / (1024 * 1024));
 
-	// === [7] Get ramdisk size ===
-	EFI_FILE_HANDLE RamdiskFile = NULL;
-	UINTN ramdisk_size = 0;
-
-	status = uefi_call_wrapper(RootFS->Open, 5, RootFS, &RamdiskFile,
-				   L"\\ramdisk.img", EFI_FILE_MODE_READ, 0);
-
-	if (!EFI_ERROR(status))
-	{
-		EFI_FILE_INFO *RamdiskFileInfo = NULL;
-		UINTN FileInfoSize = 0;
-
-		status = uefi_call_wrapper(RamdiskFile->GetInfo, 4, RamdiskFile,
-					   &FileInfoGuid, &FileInfoSize, NULL);
-		if (status == EFI_BUFFER_TOO_SMALL)
-		{
-			status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData,
-						   FileInfoSize, (void **)&RamdiskFileInfo);
-			if (!EFI_ERROR(status))
-			{
-				status = uefi_call_wrapper(RamdiskFile->GetInfo, 4, RamdiskFile,
-							   &FileInfoGuid, &FileInfoSize, RamdiskFileInfo);
-				if (!EFI_ERROR(status))
-				{
-					ramdisk_size = RamdiskFileInfo->FileSize;
-				}
-				uefi_call_wrapper(BS->FreePool, 1, RamdiskFileInfo);
-			}
-		}
-	}
-
-	if (ramdisk_size == 0)
-	{
-		PrintWarn(L"ramdisk.img not found or empty\n");
-	}
-	else
-	{
-		PrintOk(L"Ramdisk size: %lu MB\n", ramdisk_size / (1024 * 1024));
-	}
-
 	// === [8] Simplified scheme - only heap ===
-	UINTN ramdisk_pages = (ramdisk_size + 0xFFF) / 0x1000;
 	UINTN min_heap_pages = (64 * 1024 * 1024) / 0x1000;
-
-	UINTN required_pages = ramdisk_pages + min_heap_pages;
+	UINTN required_pages = min_heap_pages;
 
 	if (largest->NumberOfPages < required_pages)
 	{
@@ -246,41 +204,16 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		return EFI_OUT_OF_RESOURCES;
 	}
 
-	// Layout: [ramdisk] [heap - the rest]
-	EFI_PHYSICAL_ADDRESS ramdisk_addr = largest->PhysicalStart;
-	EFI_PHYSICAL_ADDRESS heap_addr = ramdisk_addr + ramdisk_pages * 0x1000;
-	UINT64 heap_size = (largest->NumberOfPages - ramdisk_pages) * 0x1000;
+	// Layout: [heap - the rest]
+	EFI_PHYSICAL_ADDRESS heap_addr = largest->PhysicalStart;
+	UINT64 heap_size = (largest->NumberOfPages) * 0x1000;
 
 	PrintInfo(L"Memory layout:\n");
-	if (ramdisk_size > 0)
-	{
-		PrintInfo(L"  Ramdisk: 0x%lx - 0x%lx (%lu MB)\n",
-			  ramdisk_addr, ramdisk_addr + ramdisk_pages * 0x1000,
-			  (ramdisk_pages * 0x1000) / (1024 * 1024));
-	}
 	PrintInfo(L"  Heap:    0x%lx - 0x%lx (%lu MB)\n",
 		  heap_addr, heap_addr + heap_size,
 		  heap_size / (1024 * 1024));
 
 	// === [9] Allocate regions ===
-	void *ramdisk_ptr = NULL;
-	if (ramdisk_size > 0 && RamdiskFile)
-	{
-		EFI_PHYSICAL_ADDRESS ramdisk_phys = ramdisk_addr;
-		status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAddress,
-					   EfiLoaderData, ramdisk_pages, &ramdisk_phys);
-		if (!EFI_ERROR(status))
-		{
-			ramdisk_ptr = (void *)ramdisk_phys;
-			UINTN read_size = ramdisk_size;
-			status = uefi_call_wrapper(RamdiskFile->Read, 3, RamdiskFile,
-						   &read_size, ramdisk_ptr);
-			if (!EFI_ERROR(status))
-			{
-				PrintOk(L"Ramdisk loaded at 0x%lx\n", (UINT64)ramdisk_ptr);
-			}
-		}
-	}
 
 	// Reserve heap
 	EFI_PHYSICAL_ADDRESS heap_phys = heap_addr;
@@ -294,11 +227,142 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	}
 	PrintOk(L"Heap reserved at 0x%lx (%lu MB)\n", heap_phys, heap_size / (1024 * 1024));
 
-	// === [10] UEFI has already created identity mapping - we do nothing! ===
-	PrintInfo(L"Using UEFI identity mapping (kernel will create physmap)\n");
+	// Исправленная версия создания page tables в загрузчике
 
-	if (RamdiskFile)
-		uefi_call_wrapper(RamdiskFile->Close, 1, RamdiskFile);
+	// === [10] Create identity mapping for kernel ===
+	PrintInfo(L"Creating identity page tables...\n");
+
+	// Выделяем PML4
+	EFI_PHYSICAL_ADDRESS pml4_addr = 0;
+	status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages,
+				   EfiLoaderData, 1, &pml4_addr);
+	if (EFI_ERROR(status))
+	{
+		PrintFail(L"Failed to allocate PML4: %r\n", status);
+		return status;
+	}
+
+	// ⚠️ ВАЖНО: В UEFI физ. адрес == виртуальный (identity mapped)
+	UINT64 *pml4 = (UINT64 *)pml4_addr;
+
+	// Очищаем PML4
+	for (int i = 0; i < 512; i++)
+	{
+		pml4[i] = 0;
+	}
+
+	// 1. Мапим первые 4GB (kernel code, видеопамять и т.д.)
+	for (UINT64 phys = 0; phys < 0x100000000ULL; phys += 0x200000)
+	{
+		UINT64 pml4_idx = (phys >> 39) & 0x1FF;
+		UINT64 pdpt_idx = (phys >> 30) & 0x1FF;
+		UINT64 pd_idx = (phys >> 21) & 0x1FF;
+
+		// Создаем PDPT если нужно
+		if (!(pml4[pml4_idx] & 0x1))
+		{
+			EFI_PHYSICAL_ADDRESS pdpt_addr = 0;
+			status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages,
+						   EfiLoaderData, 1, &pdpt_addr);
+			if (EFI_ERROR(status))
+			{
+				PrintFail(L"Failed to allocate PDPT\n");
+				return status;
+			}
+
+			UINT64 *pdpt = (UINT64 *)pdpt_addr;
+			for (int i = 0; i < 512; i++)
+				pdpt[i] = 0;
+
+			pml4[pml4_idx] = pdpt_addr | 0x3; // Present + Write
+		}
+
+		UINT64 *pdpt = (UINT64 *)(pml4[pml4_idx] & ~0xFFFULL);
+
+		// Создаем PD если нужно
+		if (!(pdpt[pdpt_idx] & 0x1))
+		{
+			EFI_PHYSICAL_ADDRESS pd_addr = 0;
+			status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages,
+						   EfiLoaderData, 1, &pd_addr);
+			if (EFI_ERROR(status))
+			{
+				PrintFail(L"Failed to allocate PD\n");
+				return status;
+			}
+
+			UINT64 *pd = (UINT64 *)pd_addr;
+			for (int i = 0; i < 512; i++)
+				pd[i] = 0;
+
+			pdpt[pdpt_idx] = pd_addr | 0x3; // Present + Write
+		}
+
+		UINT64 *pd = (UINT64 *)(pdpt[pdpt_idx] & ~0xFFFULL);
+
+		// Мапим 2MB huge page
+		pd[pd_idx] = phys | 0x83; // Present + Write + Huge (2MB)
+	}
+
+	// 2. КРИТИЧНО: Мапим всю heap область (с выравниванием вниз/вверх)
+	UINT64 heap_start_aligned = heap_phys & ~0x1FFFFFULL;			     // Round down to 2MB
+	UINT64 heap_end_aligned = (heap_phys + heap_size + 0x1FFFFF) & ~0x1FFFFFULL; // Round up
+
+	PrintInfo(L"Mapping heap range: 0x%lx - 0x%lx\n", heap_start_aligned, heap_end_aligned);
+
+	for (UINT64 phys = heap_start_aligned; phys < heap_end_aligned; phys += 0x200000)
+	{
+		UINT64 pml4_idx = (phys >> 39) & 0x1FF;
+		UINT64 pdpt_idx = (phys >> 30) & 0x1FF;
+		UINT64 pd_idx = (phys >> 21) & 0x1FF;
+
+		// Создаем PDPT если нужно
+		if (!(pml4[pml4_idx] & 0x1))
+		{
+			EFI_PHYSICAL_ADDRESS pdpt_addr = 0;
+			status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages,
+						   EfiLoaderData, 1, &pdpt_addr);
+			if (EFI_ERROR(status))
+				return status;
+
+			UINT64 *pdpt = (UINT64 *)pdpt_addr;
+			for (int i = 0; i < 512; i++)
+				pdpt[i] = 0;
+
+			pml4[pml4_idx] = pdpt_addr | 0x3;
+		}
+
+		UINT64 *pdpt = (UINT64 *)(pml4[pml4_idx] & ~0xFFFULL);
+
+		// Создаем PD если нужно
+		if (!(pdpt[pdpt_idx] & 0x1))
+		{
+			EFI_PHYSICAL_ADDRESS pd_addr = 0;
+			status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages,
+						   EfiLoaderData, 1, &pd_addr);
+			if (EFI_ERROR(status))
+				return status;
+
+			UINT64 *pd = (UINT64 *)pd_addr;
+			for (int i = 0; i < 512; i++)
+				pd[i] = 0;
+
+			pdpt[pdpt_idx] = pd_addr | 0x3;
+		}
+
+		UINT64 *pd = (UINT64 *)(pdpt[pdpt_idx] & ~0xFFFULL);
+		pd[pd_idx] = phys | 0x83; // Present + Write + Huge (2MB)
+	}
+
+	// 3. Добавляем рекурсивный mapping (511-й entry PML4 указывает на себя)
+	pml4[511] = pml4_addr | 0x3; // Present + Write
+
+	PrintOk(L"Identity page tables created at 0x%lx\n", pml4_addr);
+
+	// Устанавливаем новую PML4
+	asm volatile("mov %0, %%cr3" : : "r"(pml4_addr) : "memory");
+	PrintOk(L"Switched to new page tables\n");
+
 	uefi_call_wrapper(RootFS->Close, 1, RootFS);
 	uefi_call_wrapper(BS->FreePool, 1, mem_map);
 
@@ -316,7 +380,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	framebuffer_info_t *fb_info = (framebuffer_info_t *)boot_info_addr;
 	ram_info_t *ram_info = (ram_info_t *)((uint8_t *)fb_info + sizeof(framebuffer_info_t));
-	ramdisk_info_t *ramdisk_info = (ramdisk_info_t *)((uint8_t *)ram_info + sizeof(ram_info_t));
 
 	fb_info->base = (void *)gop->Mode->FrameBufferBase;
 	fb_info->width = gop->Mode->Info->HorizontalResolution;
@@ -324,11 +387,11 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	fb_info->pitch = gop->Mode->Info->PixelsPerScanLine * 4;
 	fb_info->bpp = 32;
 
-	ramdisk_info->ramdisk_base = ramdisk_ptr;
-	ramdisk_info->ramdisk_size = ramdisk_size;
-
 	ram_info->heap_start = heap_phys;
 	ram_info->heap_size = heap_size;
+
+	// Зберігаємо адресу PML4 в boot info
+	ram_info->pml4_phys = pml4_addr;
 
 	PrintOk(L"Framebuffer: %ux%u @ 0x%lx\n",
 		fb_info->width, fb_info->height, (UINT64)fb_info->base);
@@ -339,7 +402,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	BootInfo boot_info;
 	boot_info.framebuffer = fb_info;
 	boot_info.memory_map = ram_info;
-	boot_info.disk_info = ramdisk_info;
 
 	// === [12] Final ExitBootServices ===
 	mem_map = NULL;
