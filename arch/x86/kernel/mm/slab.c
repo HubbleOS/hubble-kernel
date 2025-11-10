@@ -547,22 +547,61 @@ void *kmalloc_aligned(size_t size, size_t align)
 	return (void *)aligned;
 }
 
-void slab_print_stats(void)
+void *krealloc(void *ptr, size_t new_size)
 {
-	// Ця функція залежить від твоєї системи виведення
-	// kprintf("=== Slab Allocator Statistics ===\n");
+	if (!ptr)
+		return kmalloc(new_size);
 
+	if (new_size == 0)
+	{
+		kfree(ptr);
+		return NULL;
+	}
+
+	// Определяем, большой ли блок
+	large_alloc_t *header = (large_alloc_t *)((uintptr_t)ptr - sizeof(large_alloc_t));
+	if (header->magic == SLAB_MAGIC)
+	{
+		// Это большое выделение через PMM
+		size_t old_size = header->size - sizeof(large_alloc_t);
+		if (new_size <= old_size)
+			return ptr; // помещается в старый блок
+
+		void *new_ptr = kmalloc(new_size);
+		if (!new_ptr)
+			return NULL;
+
+		memcpy(new_ptr, ptr, old_size);
+		kfree(ptr);
+		return new_ptr;
+	}
+
+	// Иначе это slab-выделение
 	slab_cache_t *cache = g_cache_list;
+	size_t old_size = 0;
+
 	while (cache)
 	{
-		// kprintf("Cache: %s\n", cache->name);
-		// kprintf("  Object size: %zu bytes\n", cache->object_size);
-		// kprintf("  Total objects: %u\n", cache->total_objects);
-		// kprintf("  Used objects: %u\n", cache->used_objects);
-		// kprintf("  Free objects: %u\n", cache->total_objects - cache->used_objects);
-		// kprintf("  Slab count: %u\n", cache->slab_count);
-		// kprintf("  Memory usage: %zu KB\n", cache->slab_count * PAGE_SIZE / 1024);
-
+		slab_t *slab = slab_find(cache, ptr);
+		if (slab)
+		{
+			old_size = cache->object_size;
+			break;
+		}
 		cache = cache->next;
 	}
+
+	if (!old_size)
+		return NULL; // не нашли блок
+
+	if (new_size <= old_size)
+		return ptr; // помещается в старый блок
+
+	void *new_ptr = kmalloc(new_size);
+	if (!new_ptr)
+		return NULL;
+
+	memcpy(new_ptr, ptr, old_size);
+	kfree(ptr);
+	return new_ptr;
 }

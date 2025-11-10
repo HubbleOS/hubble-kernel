@@ -68,9 +68,9 @@ typedef struct address_space
 
 /**
  * Ініціалізує VMM та створює kernel page tables
- * Створює identity mapping для kernel та physmap для всієї RAM
+ * @param bootloader_pml4_phys Фізична адреса PML4 створеної bootloader'ом
  */
-void vmm_init(void);
+void vmm_init(uint64_t bootloader_pml4_phys);
 
 /**
  * Створює новий адресний простір (для процесу)
