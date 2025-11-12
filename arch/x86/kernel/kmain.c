@@ -1,28 +1,32 @@
+// kernel_main.c - Higher-Half Kernel Entry Point
+
 #include <bootinfo/bootinfo.h>
 #include <utils/font.h>
 #include <utils/bwfvideo.h>
-
 #include <fs/fat32/fat.h>
-#include <fs/fat32/fat_structs.h>
 #include <fs/ata/ata.h>
 #include <fs/gpt/gpt.h>
-#include <fs/gpt/gpt_struct.h>
 #include <fs/vfs/vfs.h>
-#include <fs/vfs/vfs_standart_struct.h>
-#include <fs/nvme/nvme.h>
-#include <fs/pci/pci.h>
-
-#include <fs/ext2/ext2.h>
-
 #include <mm/slab.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <mm/mm.h>
-
 #include "printk.h"
+#include "gdt/gdt.h"
+#include "gdt/interrupt.h"
+
+#include "higher_half.h"
 
 typedef char symbol[];
 
+// BSS section markers from linker
+// ============================================================================
+extern symbol _bss_start, _bss_end;
+extern symbol _kernel_start, _kernel_end;
+
+// ============================================================================
+// Static device structures
+// ============================================================================
 static ATA_Device ata_devices[2] = {
     {.bus = 0,
      .device = 0,
@@ -33,458 +37,243 @@ static ATA_Device ata_devices[2] = {
      .io_base = 0x170,
      .ctrl_base = 0x376},
 };
-// static struct nvme_controller nvme_devices[1] = {
-//     {
-// 	.admin_cq = NULL,
-// 	.admin_cq_head = 0,
-// 	.admin_sq = NULL,
-// 	.admin_sq_tail = 0,
-// 	.bar = (volatile uint8_t *)0x100000, // фіксована адреса для QEMU
-// 	.phase = 1,
-//     }};
 
 static VFS_Device devi[2] = {
     {
 	.device = &ata_devices[0],
 	.read = &ata_read_sector,
 	.write = &ata_write_sector,
-
     },
-    //      {
-    // 	 .device = &nvme_devices[0],
-    // 	 .read = &vfs_nvme_read,
-    // 	 .write = &vfs_nvme_write,
 };
 
 static gpt_partition_t partitions[20] = {{.device = &devi[0]}};
 
+// ============================================================================
+// External functions
+// ============================================================================
 extern void os_main(BootInfo *bi);
 extern VFS_FS *root_fs;
-BootInfo boot_info;
-
 extern void syscall_init(void);
 
-#include "gdt/gdt.h"
-#include "gdt/interrupt.h"
+// ============================================================================
+// Helper functions
+// ============================================================================
 
-extern void keyboard_handler(registers_t *regs);
-
-// void test_slab_allocator(void);
-
-// // Приклад структур для виділення
-typedef struct task
+/**
+ * @brief Clear BSS section
+ *
+ * BSS должен быть очищен перед использованием глобальных переменных
+ */
+static inline void clear_bss(void)
 {
-	uint64_t id;
-	uint64_t state;
-	uint64_t stack_pointer;
-	uint64_t page_table;
-	char name[32];
-} task_t;
+	uint64_t start = (uint64_t)_bss_start;
+	uint64_t end = (uint64_t)_bss_end;
 
-typedef struct file_descriptor
-{
-	uint64_t inode;
-	uint64_t offset;
-	uint32_t flags;
-	uint32_t refcount;
-} fd_t;
+	for (uint64_t addr = start; addr < end; addr++)
+		*(uint8_t *)addr = 0;
+}
 
-void kernel_main(BootInfo *bi)
+/**
+ * @brief Convert bootloader physical addresses to higher-half virtual
+ *
+ * @param bi Boot info structure with physical addresses
+ */
+static void relocate_boot_info(BootInfo *bi)
 {
-	ram_info_t *ram_info = bi->memory_map;
+	// Framebuffer base остается физическим (identity mapped 0-4GB)
+	// Но структуры boot info нужно конвертировать
+
+	if (bi->framebuffer)
+	{
+		// Проверяем, если адрес еще не в higher-half
+		if ((uint64_t)bi->framebuffer < KERNEL_VIRT_BASE)
+		{
+			bi->framebuffer = PHYS_TO_VIRT(bi->framebuffer);
+		}
+	}
+
+	if (bi->memory_map)
+	{
+		if ((uint64_t)bi->memory_map < KERNEL_VIRT_BASE)
+		{
+			bi->memory_map = PHYS_TO_VIRT(bi->memory_map);
+		}
+	}
+}
+
+// ============================================================================
+// ENTRY POINT - MUST BE IN .text.boot SECTION
+// ============================================================================
+
+/**
+ * @brief Main kernel entry point
+ *
+ * Вызывается из загрузчика с виртуальным адресом 0xFFFFFFFF80100000
+ * Stack уже настроен загрузчиком
+ *
+ * КРИТИЧНО: Эта функция должна быть первой в .text секции!
+ */
+__attribute__((section(".text.boot")))
+__attribute__((used)) void
+kernel_entry(BootInfo *bi)
+{
+	// ========================================================================
+	// 1. Clear BSS first (критично для глобальных переменных!)
+	// ========================================================================
+	clear_bss();
 
 	// ========================================================================
-	// Ранняя инициализация вывода
+	// 2. Convert boot info addresses to higher-half
+	// ========================================================================
+	relocate_boot_info(bi);
+
+	// ========================================================================
+	// 3. Ранняя инициализация вывода
 	// ========================================================================
 	early_printk_init(bi->framebuffer);
-	printk(KERN_INFO "Kernel starting...\n");
+
+	printk(KERN_INFO "=== Higher-Half Kernel Starting ===\n");
+	printk(KERN_INFO "Kernel virtual base: 0x%lx\n", (uint64_t)KERNEL_VIRT_BASE);
+	printk(KERN_INFO "Kernel range: 0x%lx - 0x%lx\n",
+	       (uint64_t)_kernel_start, (uint64_t)_kernel_end);
 
 	// ========================================================================
-	// CPU инициализация: GDT, IDT, Interrupts, Syscalls
+	// 4. CPU инициализация: GDT, IDT, Interrupts, Syscalls
 	// ========================================================================
-	printk(KERN_INFO "GDT init\n");
+	printk(KERN_INFO "Initializing CPU subsystems...\n");
+
+	printk(KERN_DEBUG "  GDT init\n");
 	gdt_init();
 
-	printk(KERN_INFO "TSS init\n");
+	printk(KERN_DEBUG "  TSS init\n");
 	tss_init();
 
-	printk(KERN_INFO "IDT init\n");
+	printk(KERN_DEBUG "  IDT init\n");
 	idt_init();
 
-	printk(KERN_INFO "Interrupts init\n");
+	printk(KERN_DEBUG "  Interrupts init\n");
 	interrupts_init();
 
-	printk(KERN_INFO "Syscalls init\n");
+	printk(KERN_DEBUG "  Syscalls init\n");
 	syscall_init();
 
-	printk("\n=== Initializing Memory Management ===\n");
+	printk(KERN_INFO "CPU initialization complete\n");
 
-	printk("Initializing PMM...\n");
+	// ========================================================================
+	// 5. Memory Management
+	// ========================================================================
+	printk(KERN_INFO "\n=== Initializing Memory Management ===\n");
+
+	printk(KERN_DEBUG "Heap physical: 0x%lx - 0x%lx (%lu MB)\n",
+	       bi->memory_map->heap_start,
+	       bi->memory_map->heap_start + bi->memory_map->heap_size,
+	       bi->memory_map->heap_size / (1024 * 1024));
+
+	// PMM работает с физическими адресами
+	printk(KERN_DEBUG "Initializing PMM...\n");
 	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
-	printk("PMM initialized\n");
+	printk(KERN_INFO "PMM initialized\n");
 
-	printk("Initializing Slab Allocator...\n");
+	// Slab allocator для kernel heap
+	printk(KERN_DEBUG "Initializing Slab Allocator...\n");
 	slab_init();
-	printk("Slab Allocator initialized\n");
+	printk(KERN_INFO "Slab Allocator initialized\n");
 
-	printk("Initializing VMM...\n");
+	// VMM теперь использует higher-half адреса
+	printk(KERN_DEBUG "Initializing VMM (higher-half mode)...\n");
 	vmm_init(bi->memory_map->pml4_phys);
-	printk("VMM initialized\n");
+	printk(KERN_INFO "VMM initialized\n");
 
-	char buffer[1024];
+	// ========================================================================
+	// 6. Storage subsystems
+	// ========================================================================
+	printk(KERN_INFO "\n=== Initializing Storage ===\n");
 
-	// struct pci_device *nvme = find_nvme_qemu();
-	// printk("NVMe bus: %d", nvme->bus);
-	// printk("NVMe init\n");
-
-	printk("GPT init\n");
+	printk(KERN_DEBUG "GPT init...\n");
 	gpt_init(partitions);
+
+	// Setup partition device callbacks if needed
 	if (!partitions[1].device->read)
 	{
 		partitions[1].device->read = &ata_read_sector;
 		partitions[1].device->write = &ata_write_sector;
 		partitions[1].device->device = &ata_devices[0];
 	}
-	printk("FAT32 init at LBA %d\n", partitions[0].first_lba);
+
+	printk(KERN_DEBUG "Mounting FAT32 at LBA %d...\n", partitions[0].first_lba);
 	vfs_mount("/", &partitions[0], FS_FAT32);
-
-	// printk("FAT32 mounted\n");
-	// printk("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
-	// vfs_create_file("/tesit.txt");
-	// Directory dir = vfs_readdir("/");
-
-	// for (int i = 0; i < dir.count; i++)
-	// {
-	// 	printk("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
-	// }
-	// dir.free_entries(&dir);
-	// printk("EXT2 init\n");
-
-	// vfs_mount("/mnt/ext2", &partitions[1], FS_EXT2);
-	// Directory dir = vfs_readdir("/mnt/ext2");
-	// printk("trying %d count", dir.count);
-	// for (int i = 0; i < dir.count; i++)
-	// {
-	// 	printk("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
-	// }
-	// VFS_File *f = vfs_open("/tesiit.txt", VFS_O_RDONLY);
-	// vfs_write(f, "Hello wo123", 11);
-	// vfs_lseek(f, 0, SEEK_SET);
-	// printk("Reading file: ");
-	// vfs_read(f, buffer, 1024);
-	// printk("File content: ");
-	// printk("%s\n", buffer);
-	// vfs_lseek(f, 0, SEEK_SET);
-	// vfs_close(&f);
-	// if (f == NULL)
-	// {
-	// 	printk("VFS: file was not closed kmain%s\n", f->node->name);
-	// }
-	// vfs_read(f, buffer, 1024);
-	// printk("FAT32 init done\n");
-
-	// ext2_init(partitions[1]);
-
-	printk(KERN_INFO "Kernel initialization complete\n");
+	printk(KERN_INFO "Filesystem mounted\n");
 
 	// ========================================================================
-	// Тест прерываний
+	// 7. Verify CPU state
 	// ========================================================================
-
-	printk(KERN_INFO "Testing interrupts...\n");
-
+	printk(KERN_INFO "\n=== Verifying CPU State ===\n");
 	uint16_t cs, ds;
+	uint64_t cr3, rip;
 	asm volatile("mov %%cs, %0" : "=r"(cs));
 	asm volatile("mov %%ds, %0" : "=r"(ds));
-	printk("CS: 0x%x, DS: 0x%x\n", cs, ds);
+	asm volatile("mov %%cr3, %0" : "=r"(cr3));
+	asm volatile("lea (%%rip), %0" : "=r"(rip));
 
-	// Тест системного вызова
-	// printk(KERN_INFO "Test 1: syscall(0) - expecting 666\n");
+	printk(KERN_DEBUG "CS: 0x%x, DS: 0x%x\n", cs, ds);
+	printk(KERN_DEBUG "CR3 (page tables): 0x%lx\n", cr3);
+	printk(KERN_DEBUG "RIP: 0x%lx\n", rip);
 
-	// uint64_t result;
-	// asm volatile(
-	//     "movq $0, %%rax\n"
-	//     "syscall\n"
-	//     "movq %%rax, %0\n"
-	//     : "=r"(result)
-	//     :
-	//     : "rax", "rcx", "r11", "memory");
-
-	// printk(KERN_INFO "  Result: %lu (0x%lx)\n", result, result);
-
-	// printk(KERN_INFO "Test 2: syscall(5, 0, 0, 0, 0, 0, 0) - expecting 666\n");
-	// long ret;
-	// long num = 5;
-	// long arg1 = 0;
-	// long arg2 = 0;
-	// long arg3 = 0;
-	// long arg4 = 0;
-	// long arg5 = 0;
-	// long arg6 = 0;
-
-	// // for x86_64 с syscall instruction
-	// __asm__ volatile(
-	//     "movq %1, %%rax\n" // num syscall
-	//     "movq %2, %%rdi\n" // arg1
-	//     "movq %3, %%rsi\n" // arg2
-	//     "movq %4, %%rdx\n" // arg3
-	//     "movq %5, %%r10\n" // arg4
-	//     "movq %6, %%r8\n"  // arg5
-	//     "movq %7, %%r9\n"  // arg6
-	//     "syscall\n"	       // or int $0x80
-	// 		       //     "int $0x80\n"
-	//     "movq %%rax, %0\n" // result
-	//     : "=r"(ret)
-	//     : "r"(num), "r"(arg1), "r"(arg2),
-	//       "r"(arg3), "r"(arg4), "r"(arg5), "r"(arg6)
-	//     : "rax", "rdi", "rsi", "rdx", "r10", "r8", "r9", "memory");
-
-	// printk(KERN_INFO "  Result: %ld (0x%lx)\n", ret, ret);
+	// Verify we're running in higher-half
+	if (rip >= KERNEL_VIRT_BASE)
+	{
+		printk(KERN_INFO "Running in higher-half: ✓\n");
+	}
+	else
+	{
+		printk(KERN_ERR "ERROR: Not in higher-half! RIP: 0x%lx\n", rip);
+		while (1)
+			asm("hlt");
+	}
 
 	// ========================================================================
-	// Основной цикл
+	// 8. Kernel initialization complete
 	// ========================================================================
+	printk(KERN_INFO "\n=== Kernel Initialization Complete ===\n\n");
 
+	// ========================================================================
+	// 9. Transfer control to OS main
+	// ========================================================================
+	printk(KERN_INFO "Starting OS main loop...\n");
 	os_main(bi);
 
-	printk(KERN_INFO "Entering main loop\n");
-
+	// ========================================================================
+	// 10. Should never reach here
+	// ========================================================================
+	printk(KERN_WARNING "os_main() returned! Entering infinite loop...\n");
 	while (1)
 	{
-		// Ждем прерываний
 		asm volatile("hlt");
 	}
 }
 
-// void kernel_main(BootInfo *bi)
-// {
-// 	// Инициализация раннего printk
-// 	early_printk_init(bi->framebuffer);
+// ============================================================================
+// Compatibility wrapper for old kernel_main name
+// ============================================================================
+void kernel_main(BootInfo *bi) __attribute__((alias("kernel_entry")));
 
-// 	printk(KERN_INFO "Kernel starting...\n");
+// ============================================================================
+// Helper для конвертации физ. адреса в виртуальный
+// ============================================================================
+void *phys_to_virt(uint64_t phys_addr)
+{
+	return (void *)(phys_addr + KERNEL_VIRT_BASE);
+}
 
-// 	// ========================================================================
-// 	// Инициализация GDT, TSS, IDT
-// 	// ========================================================================
-
-// 	printk(KERN_INFO "GDT init\n");
-// 	gdt_init();
-
-// 	printk(KERN_INFO "TSS init\n");
-// 	tss_init();
-
-// 	printk(KERN_INFO "IDT init\n");
-// 	idt_init();
-
-// 	printk(KERN_INFO "Interrupts init\n");
-// 	interrupts_init(); // Перепрограммирует PIC и включает прерывания
-
-// 	printk(KERN_INFO "Syscalls init\n");
-// 	syscall_init();
-
-// 	// ========================================================================
-// 	// Установка обработчиков
-// 	// ========================================================================
-
-// 	// IRQ 0 - Timer
-// 	// irq_install_handler(0, timer_handler);
-// 	// irq_clear_mask(0); // Разрешаем прерывание таймера
-
-// 	// IRQ 1 - Keyboard
-// 	// irq_install_handler(1, keyboard_handler);
-// 	// irq_clear_mask(1); // Разрешаем прерывание клавиатуры
-
-// 	printk(KERN_INFO "Interrupt handlers installed\n");
-
-// 	// ========================================================================
-// 	// Остальная инициализация
-// 	// ========================================================================
-
-// 	printk(KERN_INFO "VMM init\n");
-// 	uint64_t cr3;
-// 	asm volatile("mov %%cr3, %0" : "=r"(cr3));
-// 	vmm_init(cr3, bi->memory_map->heap_start, bi->memory_map->heap_size);
-
-// 	printk(KERN_INFO "PMM init\n");
-// 	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
-
-// 	// DISABLE BOOTSTRAP
-// 	vmm_disable_bootstrap_allocator();
-
-// 	printk(KERN_INFO "kmalloc init\n");
-// 	kmalloc_init();
-
-// 	printk("Testing heap write access...\n");
-// 	volatile uint64_t *test_ptr = (uint64_t *)(bi->memory_map->heap_start + 0x1000);
-// 	*test_ptr = 0xDEADBEEF;
-// 	if (*test_ptr == 0xDEADBEEF)
-// 	{
-// 		printk("  Heap write test: OK\n");
-// 	}
-// 	else
-// 	{
-// 		printk("  Heap write test: FAILED!\n");
-// 	}
-
-// 	printk(KERN_INFO "GPT init\n");
-// 	gpt_init(partitions);
-
-// 	if (!partitions[1].device->read)
-// 	{
-// 		partitions[1].device->read = &ata_read_sector;
-// 		partitions[1].device->write = &ata_write_sector;
-// 		partitions[1].device->device = &ata_devices[0];
-// 	}
-// 	printk("FAT32 init at LBA %d\n", partitions[0].first_lba);
-// 	vfs_mount("/", &partitions[0], FS_FAT32);
-
-// 	// printk("FAT32 mounted\n");
-// 	// printk("root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
-// 	// vfs_create_file("/tesit.txt");
-// 	// Directory dir = vfs_readdir("/");
-
-// 	// for (int i = 0; i < dir.count; i++)
-// 	// {
-// 	// 	printk("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
-// 	// }
-// 	// dir.free_entries(&dir);
-// 	// printk("EXT2 init\n");
-
-// 	// vfs_mount("/mnt/ext2", &partitions[1], FS_EXT2);
-// 	// Directory dir = vfs_readdir("/mnt/ext2");
-// 	// printk("trying %d count", dir.count);
-// 	// for (int i = 0; i < dir.count; i++)
-// 	// {
-// 	// 	printk("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
-// 	// }
-// 	// VFS_File *f = vfs_open("/tesiit.txt", VFS_O_RDONLY);
-// 	// vfs_write(f, "Hello wo123", 11);
-// 	// vfs_lseek(f, 0, SEEK_SET);
-// 	// printk("Reading file: ");
-// 	// vfs_read(f, buffer, 1024);
-// 	// printk("File content: ");
-// 	// printk("%s\n", buffer);
-// 	// vfs_lseek(f, 0, SEEK_SET);
-// 	// vfs_close(&f);
-// 	// if (f == NULL)
-// 	// {
-// 	// 	printk("VFS: file was not closed kmain%s\n", f->node->name);
-// 	// }
-// 	// vfs_read(f, buffer, 1024);
-// 	// printk("FAT32 init done\n");
-
-// 	// ext2_init(partitions[1]);
-
-// 	// printk(KERN_INFO "FAT32 init at LBA %d\n", partitions[0].first_lba);
-// 	// vfs_mount(&partitions[0], FS_FAT32);
-
-// 	printk(KERN_INFO "FAT32 mounted\n");
-// 	// printk(KERN_INFO "root cluster: %d\n", ((FAT32_FS *)(root_fs->fs))->root_cluster);
-
-// 	// Directory dir = vfs_readdir("/");
-// 	// 	// for (int i = 0; i < dir.count; i++)
-// 	// 	// {
-// 	// 	// 	printk("%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
-// 	// 	// }
-// 	// 	// dir.free_entries(&dir);
-// 	// 	// VFS_File *f = vfs_open("/tesit.txt", VFS_O_CREAT | VFS_O_RDWR);
-// 	// 	// vfs_write(f, "Hello wo123", 11);
-// 	// 	// vfs_lseek(f, 0, SEEK_SET);
-// 	// 	// printk("Reading file: ");
-// 	// 	// vfs_read(f, buffer, 1024);
-// 	// 	// printk("File content: ");
-// 	// 	// for (int i = 0; i < 1024; i++)
-// 	// 	// {
-// 	// 	// 	if (buffer[i] == '\0')
-// 	// 	// 		break;
-// 	// 	// 	printk("%c", buffer[i]);
-// 	// 	// }
-
-// 	printk(KERN_INFO "Kernel initialization complete\n");
-
-// 	// ========================================================================
-// 	// Тест прерываний
-// 	// ========================================================================
-
-// 	printk(KERN_INFO "Testing interrupts...\n");
-
-// 	uint16_t cs, ds;
-// 	asm volatile("mov %%cs, %0" : "=r"(cs));
-// 	asm volatile("mov %%ds, %0" : "=r"(ds));
-// 	printk("CS: 0x%x, DS: 0x%x\n", cs, ds);
-
-// 	// Тест breakpoint (INT 3)
-// 	// asm volatile("int3");
-
-// 	// Тест системного вызова
-
-// 	printk(KERN_INFO "Test 1: syscall(0) - expecting 666\n");
-// 	uint64_t result;
-
-// 	asm volatile(
-// 	    "movq $0, %%rax\n"
-// 	    "int $0x80\n"
-// 	    // "syscall\n"
-// 	    "movq %%rax, %0"
-// 	    : "=r"(result)
-// 	    :
-// 	    : "rax");
-
-// 	printk(KERN_INFO " Result: %lu (0x%lx)\n", result, result);
-
-// 	// printk(KERN_INFO "Test 1: syscall(0) - expecting 666\n");
-
-// 	// uint64_t result;
-// 	// asm volatile(
-// 	//     "movq $0, %%rax\n"
-// 	//     "syscall\n"
-// 	//     "movq %%rax, %0\n"
-// 	//     : "=r"(result)
-// 	//     :
-// 	//     : "rax", "rcx", "r11", "memory");
-
-// 	// printk(KERN_INFO "  Result: %lu (0x%lx)\n", result, result);
-
-// 	// printk(KERN_INFO "Test 2: syscall(5, 0, 0, 0, 0, 0, 0) - expecting 666\n");
-// 	// long ret;
-// 	// long num = 5;
-// 	// long arg1 = 0;
-// 	// long arg2 = 0;
-// 	// long arg3 = 0;
-// 	// long arg4 = 0;
-// 	// long arg5 = 0;
-// 	// long arg6 = 0;
-
-// 	// // for x86_64 с syscall instruction
-// 	// __asm__ volatile(
-// 	//     "movq %1, %%rax\n" // num syscall
-// 	//     "movq %2, %%rdi\n" // arg1
-// 	//     "movq %3, %%rsi\n" // arg2
-// 	//     "movq %4, %%rdx\n" // arg3
-// 	//     "movq %5, %%r10\n" // arg4
-// 	//     "movq %6, %%r8\n"  // arg5
-// 	//     "movq %7, %%r9\n"  // arg6
-// 	//     "syscall\n"	       // or int $0x80
-// 	// 		       //     "int $0x80\n"
-// 	//     "movq %%rax, %0\n" // result
-// 	//     : "=r"(ret)
-// 	//     : "r"(num), "r"(arg1), "r"(arg2),
-// 	//       "r"(arg3), "r"(arg4), "r"(arg5), "r"(arg6)
-// 	//     : "rax", "rdi", "rsi", "rdx", "r10", "r8", "r9", "memory");
-
-// 	// printk(KERN_INFO "  Result: %ld (0x%lx)\n", ret, ret);
-
-// 	// ========================================================================
-// 	// Основной цикл
-// 	// ========================================================================
-
-// 	os_main(bi);
-
-// 	printk(KERN_INFO "Entering main loop\n");
-
-// 	while (1)
-// 	{
-// 		// Ждем прерываний
-// 		asm volatile("hlt");
-// 	}
-// }
+// ============================================================================
+// Helper для конвертации виртуального адреса в физ.
+// ============================================================================
+uint64_t virt_to_phys(void *virt_addr)
+{
+	uint64_t addr = (uint64_t)virt_addr;
+	if (addr >= KERNEL_VIRT_BASE)
+	{
+		return addr - KERNEL_VIRT_BASE;
+	}
+	return addr; // Already physical (shouldn't happen in kernel space)
+}

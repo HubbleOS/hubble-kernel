@@ -96,6 +96,10 @@ void vmm_init(uint64_t bootloader_pml4_phys)
 	g_current_as = &g_kernel_as;
 
 	// Перемикаємося на нову PML4
+	while (1)
+	{
+		asm volatile("hlt");
+	}
 	vmm_set_cr3(pml4_phys);
 
 	// Тепер ми можемо створювати мапінги через рекурсивний доступ
