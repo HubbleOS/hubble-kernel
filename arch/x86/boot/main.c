@@ -1,11 +1,11 @@
 #include <efi.h>
 #include <efilib.h>
 #include <stdint.h>
-
 #include <bootinfo/bootinfo.h>
-
 #include "globals.h"
 #include "console.h"
+
+#include "higher_half.h"
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 {
@@ -15,7 +15,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	InitializeLib(image, systab);
 	ClearConsole();
 
-	PrintMessage(L"BOOT", EFI_LIGHTGRAY, L"Starting...\n");
+	PrintMessage(L"BOOT", EFI_LIGHTGRAY, L"Starting Higher-Half Kernel...\n");
 
 	EFI_STATUS status;
 
@@ -113,30 +113,39 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	uefi_call_wrapper(BS->FreePool, 1, KernelFileInfo);
 
-	// === [4] Allocate kernel at fixed address ===
-	EFI_PHYSICAL_ADDRESS kernel_addr = 0x100000;
+	// === [4] Allocate kernel at PHYSICAL address ===
+	EFI_PHYSICAL_ADDRESS kernel_phys_addr = KERNEL_PHYS_BASE;
 	UINTN kernel_pages = (kernel_size + 0xFFF) / 0x1000;
 
 	status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAddress,
-				   EfiLoaderData, kernel_pages, &kernel_addr);
+				   EfiLoaderData, kernel_pages, &kernel_phys_addr);
 	if (EFI_ERROR(status))
 	{
 		PrintFail(L"AllocatePages for kernel failed: %r\n", status);
 		return status;
 	}
 
-	// === [5] Read kernel ===
+	// === [5] Read kernel to PHYSICAL address ===
 	status = uefi_call_wrapper(KernelFile->Read, 3, KernelFile,
-				   &kernel_size, (void *)kernel_addr);
+				   &kernel_size, (void *)kernel_phys_addr);
 	if (EFI_ERROR(status))
 	{
 		PrintFail(L"Read kernel failed: %r\n", status);
 		return status;
 	}
-	PrintOk(L"Kernel loaded at 0x%lx\n", kernel_addr);
+	PrintOk(L"Kernel loaded at physical 0x%lx\n", kernel_phys_addr);
+
+	// DEBUG: Проверим первые байты ядра
+	uint8_t *kernel_bytes = (uint8_t *)kernel_phys_addr;
+	PrintDebug(L"First 16 bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+		   kernel_bytes[0], kernel_bytes[1], kernel_bytes[2], kernel_bytes[3],
+		   kernel_bytes[4], kernel_bytes[5], kernel_bytes[6], kernel_bytes[7],
+		   kernel_bytes[8], kernel_bytes[9], kernel_bytes[10], kernel_bytes[11],
+		   kernel_bytes[12], kernel_bytes[13], kernel_bytes[14], kernel_bytes[15]);
+
 	uefi_call_wrapper(KernelFile->Close, 1, KernelFile);
 
-	// === [6] Find largest memory region ===
+	// === [6] Find largest memory region for heap ===
 	EFI_MEMORY_DESCRIPTOR *mem_map = NULL;
 	UINTN mem_map_size = 0, map_key, desc_size;
 	UINT32 desc_version;
@@ -194,30 +203,11 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		largest->PhysicalStart + largest_size,
 		largest_size / (1024 * 1024));
 
-	// === [8] Simplified scheme - only heap ===
-	UINTN min_heap_pages = (64 * 1024 * 1024) / 0x1000;
-	UINTN required_pages = min_heap_pages;
+	// === [7] Reserve heap ===
+	EFI_PHYSICAL_ADDRESS heap_phys = largest->PhysicalStart;
+	UINT64 heap_size = largest->NumberOfPages * 0x1000;
+	UINTN heap_pages = largest->NumberOfPages;
 
-	if (largest->NumberOfPages < required_pages)
-	{
-		PrintFail(L"Largest region too small\n");
-		return EFI_OUT_OF_RESOURCES;
-	}
-
-	// Layout: [heap - the rest]
-	EFI_PHYSICAL_ADDRESS heap_addr = largest->PhysicalStart;
-	UINT64 heap_size = (largest->NumberOfPages) * 0x1000;
-
-	PrintInfo(L"Memory layout:\n");
-	PrintInfo(L"  Heap:    0x%lx - 0x%lx (%lu MB)\n",
-		  heap_addr, heap_addr + heap_size,
-		  heap_size / (1024 * 1024));
-
-	// === [9] Allocate regions ===
-
-	// Reserve heap
-	EFI_PHYSICAL_ADDRESS heap_phys = heap_addr;
-	UINTN heap_pages = heap_size / 0x1000;
 	status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAddress,
 				   EfiLoaderData, heap_pages, &heap_phys);
 	if (EFI_ERROR(status))
@@ -227,12 +217,10 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	}
 	PrintOk(L"Heap reserved at 0x%lx (%lu MB)\n", heap_phys, heap_size / (1024 * 1024));
 
-	// Исправленная версия создания page tables в загрузчике
+	// === [8] Create page tables with higher-half mapping ===
+	PrintInfo(L"Creating higher-half page tables...\n");
 
-	// === [10] Create identity mapping for kernel ===
-	PrintInfo(L"Creating identity page tables...\n");
-
-	// Выделяем PML4
+	// Allocate PML4
 	EFI_PHYSICAL_ADDRESS pml4_addr = 0;
 	status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages,
 				   EfiLoaderData, 1, &pml4_addr);
@@ -242,81 +230,20 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		return status;
 	}
 
-	// ⚠️ ВАЖНО: В UEFI физ. адрес == виртуальный (identity mapped)
 	UINT64 *pml4 = (UINT64 *)pml4_addr;
-
-	// Очищаем PML4
 	for (int i = 0; i < 512; i++)
-	{
 		pml4[i] = 0;
-	}
 
-	// 1. Мапим первые 4GB (kernel code, видеопамять и т.д.)
+	// === Create mappings ===
+
+	// 1. Identity map first 4GB
+	PrintInfo(L"Creating identity mapping (0-4GB)...\n");
 	for (UINT64 phys = 0; phys < 0x100000000ULL; phys += 0x200000)
 	{
 		UINT64 pml4_idx = (phys >> 39) & 0x1FF;
 		UINT64 pdpt_idx = (phys >> 30) & 0x1FF;
 		UINT64 pd_idx = (phys >> 21) & 0x1FF;
 
-		// Создаем PDPT если нужно
-		if (!(pml4[pml4_idx] & 0x1))
-		{
-			EFI_PHYSICAL_ADDRESS pdpt_addr = 0;
-			status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages,
-						   EfiLoaderData, 1, &pdpt_addr);
-			if (EFI_ERROR(status))
-			{
-				PrintFail(L"Failed to allocate PDPT\n");
-				return status;
-			}
-
-			UINT64 *pdpt = (UINT64 *)pdpt_addr;
-			for (int i = 0; i < 512; i++)
-				pdpt[i] = 0;
-
-			pml4[pml4_idx] = pdpt_addr | 0x3; // Present + Write
-		}
-
-		UINT64 *pdpt = (UINT64 *)(pml4[pml4_idx] & ~0xFFFULL);
-
-		// Создаем PD если нужно
-		if (!(pdpt[pdpt_idx] & 0x1))
-		{
-			EFI_PHYSICAL_ADDRESS pd_addr = 0;
-			status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages,
-						   EfiLoaderData, 1, &pd_addr);
-			if (EFI_ERROR(status))
-			{
-				PrintFail(L"Failed to allocate PD\n");
-				return status;
-			}
-
-			UINT64 *pd = (UINT64 *)pd_addr;
-			for (int i = 0; i < 512; i++)
-				pd[i] = 0;
-
-			pdpt[pdpt_idx] = pd_addr | 0x3; // Present + Write
-		}
-
-		UINT64 *pd = (UINT64 *)(pdpt[pdpt_idx] & ~0xFFFULL);
-
-		// Мапим 2MB huge page
-		pd[pd_idx] = phys | 0x83; // Present + Write + Huge (2MB)
-	}
-
-	// 2. КРИТИЧНО: Мапим всю heap область (с выравниванием вниз/вверх)
-	UINT64 heap_start_aligned = heap_phys & ~0x1FFFFFULL;			     // Round down to 2MB
-	UINT64 heap_end_aligned = (heap_phys + heap_size + 0x1FFFFF) & ~0x1FFFFFULL; // Round up
-
-	PrintInfo(L"Mapping heap range: 0x%lx - 0x%lx\n", heap_start_aligned, heap_end_aligned);
-
-	for (UINT64 phys = heap_start_aligned; phys < heap_end_aligned; phys += 0x200000)
-	{
-		UINT64 pml4_idx = (phys >> 39) & 0x1FF;
-		UINT64 pdpt_idx = (phys >> 30) & 0x1FF;
-		UINT64 pd_idx = (phys >> 21) & 0x1FF;
-
-		// Создаем PDPT если нужно
 		if (!(pml4[pml4_idx] & 0x1))
 		{
 			EFI_PHYSICAL_ADDRESS pdpt_addr = 0;
@@ -334,7 +261,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 		UINT64 *pdpt = (UINT64 *)(pml4[pml4_idx] & ~0xFFFULL);
 
-		// Создаем PD если нужно
 		if (!(pdpt[pdpt_idx] & 0x1))
 		{
 			EFI_PHYSICAL_ADDRESS pd_addr = 0;
@@ -351,35 +277,122 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		}
 
 		UINT64 *pd = (UINT64 *)(pdpt[pdpt_idx] & ~0xFFFULL);
-		pd[pd_idx] = phys | 0x83; // Present + Write + Huge (2MB)
+		pd[pd_idx] = phys | 0x83; // Present + Write + Huge (2MB pages)
 	}
 
-	// 3. Добавляем рекурсивный mapping (511-й entry PML4 указывает на себя)
-	pml4[511] = pml4_addr | 0x3; // Present + Write
+	// 2. Higher-half mapping: 0xFFFFFFFF80000000 -> 0x0 (full 4GB)
+	// ВАЖНО: Делаем это ДО recursive mapping, чтобы не перезаписать PML4[511]
+	PrintInfo(L"Creating higher-half mapping (0-4GB)...\n");
 
-	PrintOk(L"Identity page tables created at 0x%lx\n", pml4_addr);
+	// Выделяем отдельный PDPT для higher-half (PML4[511])
+	EFI_PHYSICAL_ADDRESS hh_pdpt_addr = 0;
+	status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages,
+				   EfiLoaderData, 1, &hh_pdpt_addr);
+	if (EFI_ERROR(status))
+		return status;
 
-	// Устанавливаем новую PML4
-	asm volatile("mov %0, %%cr3" : : "r"(pml4_addr) : "memory");
-	PrintOk(L"Switched to new page tables\n");
+	UINT64 *hh_pdpt = (UINT64 *)hh_pdpt_addr;
+	for (int i = 0; i < 512; i++)
+		hh_pdpt[i] = 0;
+
+	// Устанавливаем PML4[511] для higher-half
+	pml4[511] = hh_pdpt_addr | 0x3;
+
+	// Теперь заполняем маппинг для 0xFFFFFFFF80000000 -> 0x0
+	for (UINT64 offset = 0; offset < 0x100000000ULL; offset += 0x200000)
+	{
+		UINT64 virt = PHYS_TO_VIRT(offset);
+		UINT64 phys = offset;
+
+		UINT64 pml4_idx = (virt >> 39) & 0x1FF; // Будет 511
+		UINT64 pdpt_idx = (virt >> 30) & 0x1FF; // 510 для 0x80000000
+		UINT64 pd_idx = (virt >> 21) & 0x1FF;
+
+		// pml4[511] уже установлен выше
+		UINT64 *pdpt = hh_pdpt;
+
+		if (!(pdpt[pdpt_idx] & 0x1))
+		{
+			EFI_PHYSICAL_ADDRESS pd_addr = 0;
+			status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages,
+						   EfiLoaderData, 1, &pd_addr);
+			if (EFI_ERROR(status))
+				return status;
+
+			UINT64 *pd = (UINT64 *)pd_addr;
+			for (int i = 0; i < 512; i++)
+				pd[i] = 0;
+
+			pdpt[pdpt_idx] = pd_addr | 0x3;
+		}
+
+		UINT64 *pd = (UINT64 *)(pdpt[pdpt_idx] & ~0xFFFULL);
+		pd[pd_idx] = phys | 0x83;
+	}
+
+	// 3. Recursive mapping в PML4[510] (не 511, так как там higher-half!)
+	// Это позволит ядру манипулировать page tables
+	pml4[510] = pml4_addr | 0x3;
+
+	PrintOk(L"Page tables created at 0x%lx\n", pml4_addr);
+
+	// DEBUG: Verify page table mapping for kernel entry
+	UINT64 test_virt = PHYS_TO_VIRT(KERNEL_PHYS_BASE);
+	UINT64 pml4_idx = (test_virt >> 39) & 0x1FF;
+	UINT64 pdpt_idx = (test_virt >> 30) & 0x1FF;
+	UINT64 pd_idx = (test_virt >> 21) & 0x1FF;
+
+	PrintDebug(L"Verifying mapping for 0x%lx:\n", test_virt);
+	PrintDebug(L"  Indices: PML4[%u] PDPT[%u] PD[%u]\n", pml4_idx, pdpt_idx, pd_idx);
+	PrintDebug(L"  PML4[%u] = 0x%lx\n", pml4_idx, pml4[pml4_idx]);
+
+	if (pml4[pml4_idx] & 0x1)
+	{
+		UINT64 *pdpt = (UINT64 *)(pml4[pml4_idx] & ~0xFFFULL);
+		PrintDebug(L"  PDPT[%u] = 0x%lx\n", pdpt_idx, pdpt[pdpt_idx]);
+
+		if (pdpt[pdpt_idx] & 0x1)
+		{
+			UINT64 *pd = (UINT64 *)(pdpt[pdpt_idx] & ~0xFFFULL);
+			PrintDebug(L"  PD[%u] = 0x%lx\n", pd_idx, pd[pd_idx]);
+
+			if (pd[pd_idx] & 0x1)
+			{
+				UINT64 phys_mapped = pd[pd_idx] & ~0x1FFFFFULL;
+				PrintOk(L"  Maps to physical: 0x%lx (expected 0x%lx)\n",
+					phys_mapped, KERNEL_PHYS_BASE & ~0x1FFFFFULL);
+			}
+			else
+			{
+				PrintFail(L"  PD entry not present!\n");
+			}
+		}
+		else
+		{
+			PrintFail(L"  PDPT entry not present!\n");
+		}
+	}
+	else
+	{
+		PrintFail(L"  PML4 entry not present!\n");
+	}
 
 	uefi_call_wrapper(RootFS->Close, 1, RootFS);
 	uefi_call_wrapper(BS->FreePool, 1, mem_map);
 
-	// === [11] Allocate boot info structures ===
+	// === [9] Allocate and FILL boot info ===
 	EFI_PHYSICAL_ADDRESS boot_info_addr = 0;
-	UINTN boot_info_pages = 1;
-
 	status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages,
-				   EfiLoaderData, boot_info_pages, &boot_info_addr);
+				   EfiLoaderData, 1, &boot_info_addr);
 	if (EFI_ERROR(status))
 	{
 		PrintFail(L"AllocatePages for boot_info failed: %r\n", status);
 		return status;
 	}
 
-	framebuffer_info_t *fb_info = (framebuffer_info_t *)boot_info_addr;
-	ram_info_t *ram_info = (ram_info_t *)((uint8_t *)fb_info + sizeof(framebuffer_info_t));
+	BootInfo *boot_info = (BootInfo *)boot_info_addr;
+	framebuffer_info_t *fb_info = &boot_info->framebuffer_data;
+	ram_info_t *ram_info = &boot_info->memory_data;
 
 	fb_info->base = (void *)gop->Mode->FrameBufferBase;
 	fb_info->width = gop->Mode->Info->HorizontalResolution;
@@ -389,21 +402,45 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	ram_info->heap_start = heap_phys;
 	ram_info->heap_size = heap_size;
-
-	// Зберігаємо адресу PML4 в boot info
 	ram_info->pml4_phys = pml4_addr;
+
+	boot_info->framebuffer = fb_info;
+	boot_info->memory_map = ram_info;
 
 	PrintOk(L"Framebuffer: %ux%u @ 0x%lx\n",
 		fb_info->width, fb_info->height, (UINT64)fb_info->base);
+	PrintOk(L"Boot info at physical: 0x%lx\n", boot_info_addr);
 
-	PrintInfo(L"Jumping to kernel at 0x%lx\n", (UINT64)kernel_addr);
-	ClearConsole();
+	// === [9.5] Allocate stack BEFORE ExitBootServices ===
+	EFI_PHYSICAL_ADDRESS stack_phys = 0;
+	status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages,
+				   EfiLoaderData, 16, &stack_phys);
+	if (EFI_ERROR(status))
+	{
+		PrintFail(L"Failed to allocate stack: %r\n", status);
+		return status;
+	}
 
-	BootInfo boot_info;
-	boot_info.framebuffer = fb_info;
-	boot_info.memory_map = ram_info;
+	// Stack grows down, so point to top
+	UINT64 stack_top = stack_phys + (16 * 0x1000);
+	UINT64 stack_virt = PHYS_TO_VIRT(stack_top);
+	PrintOk(L"Stack allocated at physical: 0x%lx (top: 0x%lx)\n", stack_phys, stack_top);
 
-	// === [12] Final ExitBootServices ===
+	// Вычисляем виртуальные адреса
+	UINT64 kernel_virt_entry = PHYS_TO_VIRT(KERNEL_PHYS_BASE);
+	UINT64 boot_info_virt = PHYS_TO_VIRT(boot_info_addr);
+
+	PrintInfo(L"Kernel virtual entry: 0x%lx\n", kernel_virt_entry);
+	PrintInfo(L"Boot info virtual: 0x%lx\n", boot_info_virt);
+	PrintInfo(L"Stack virtual: 0x%lx\n", stack_virt);
+
+	// PrintInfo(L"Press any key to jump to kernel...\n");
+	// // Wait for key
+	// EFI_INPUT_KEY key;
+	// while (uefi_call_wrapper(systab->ConIn->ReadKeyStroke, 2, systab->ConIn, &key) != EFI_SUCCESS)
+	// 	;
+
+	// === [10] ExitBootServices ===
 	mem_map = NULL;
 	mem_map_size = 0;
 
@@ -425,14 +462,53 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	status = uefi_call_wrapper(BS->ExitBootServices, 2, image, map_key);
 	if (EFI_ERROR(status))
+	{
+		uefi_call_wrapper(BS->FreePool, 1, mem_map);
 		return status;
+	}
 
-	// === [13] Jump to kernel ===
-	void (*kernel_entry)(BootInfo *) = (void *)kernel_addr;
-	kernel_entry(&boot_info);
+	// === POINT OF NO RETURN ===
 
+	// === [11] Switch to new page tables and TEST ===
+	asm volatile("mov %0, %%cr3" : : "r"(pml4_addr) : "memory");
+
+	// TEST: Try to write to framebuffer through virtual address
+	// Framebuffer physical is 0x80000000, so virtual should be 0xFFFFFFFF80000000 + 0x80000000
+	// But wait, that's wrong! Framebuffer is at 0x80000000 which is already in lower 4GB
+	// So identity mapping gives us 0x80000000, and we DON'T want higher-half for it
+	uint32_t *fb_test = (uint32_t *)gop->Mode->FrameBufferBase;
+
+	// Draw RED line at top (test that paging works)
+	for (int i = 0; i < 100; i++)
+	{
+		fb_test[i] = 0x00FF0000;
+	}
+
+	// Small delay to see the red line
+	for (volatile int i = 0; i < 10000000; i++)
+		;
+
+	// === [12] Setup stack and jump ===
+	asm volatile(
+	    "mov %[stack], %%rsp\n" // установить стек
+	    "xor %%rbp, %%rbp\n"    // просто обнулить base pointer, если нужно
+	    "xor %%rax, %%rax\n"
+	    "xor %%rbx, %%rbx\n"
+	    "xor %%rcx, %%rcx\n"
+	    "xor %%rdx, %%rdx\n"
+	    "xor %%rsi, %%rsi\n"
+	    "mov %[boot], %%rdi\n"  // аргумент ядра
+	    "mov %[entry], %%r11\n" // адрес entry
+	    "jmp *%%r11\n"	    // прыжок в ядро
+	    :
+	    : [stack] "r"(stack_virt),
+	      [entry] "r"(kernel_virt_entry),
+	      [boot] "r"(boot_info_virt)
+	    : "memory", "r11", "rax", "rbx", "rcx", "rdx", "rsi", "rdi");
+
+	// Should never reach here
 	while (1)
-		asm("hlt");
+		asm volatile("hlt");
 
 	return EFI_SUCCESS;
 }

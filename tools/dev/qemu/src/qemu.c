@@ -40,7 +40,10 @@ void qemu_build_command(const QemuOptions *opts, char *cmd, size_t len)
 	pos += snprintf(cmd + pos, len - pos, "-drive if=pflash,format=raw,readonly=on,file=%s ", ovmf_path);
 
 	// Serial
-	// pos += snprintf(cmd + pos, len - pos, "-serial stdio ");
+	pos += snprintf(cmd + pos, len - pos, "-serial stdio ");
+
+	// Debug
+	// pos += snprintf(cmd + pos, len - pos, "-S -s ");
 }
 
 int qemu_run(const QemuOptions *opts)

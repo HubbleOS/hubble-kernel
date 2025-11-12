@@ -6,6 +6,9 @@ LIBC_OUT := $(BUILD_DIR)/libc.a
 
 INCLUDES ?= -Iinclude
 
+CFLAGS += -mcmodel=kernel
+CXXFLAGS += -mcmodel=kernel
+
 all: $(LIBC_OUT)
 
 $(BUILD_DIR)/%.o: %.c
