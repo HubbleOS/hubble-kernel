@@ -2,15 +2,14 @@
 
 #include <bootinfo/framebuffer.h>
 #include <bootinfo/raminfo.h>
-#include <bootinfo/diskinfo.h>
 
 #include <stdint.h>
 
 typedef struct
 {
-	framebuffer_info_t *framebuffer;
-	ram_info_t *memory_map;
-	ramdisk_info_t *disk_info;
+	framebuffer_info_t framebuffer_data; // Встроенная структура
+	ram_info_t memory_data;		     // Встроенная структура
+	framebuffer_info_t *framebuffer;     // Указатель для совместимости
+	ram_info_t *memory_map;		     // Указатель для совместимости
 } BootInfo;
-
 extern BootInfo *g_boot_info;
