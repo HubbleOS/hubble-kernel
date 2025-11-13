@@ -2,9 +2,21 @@
 #include "printk.h"
 #include <utils/color.h>
 #include <utils/font.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+
+#include <mm/kmalloc.h>
+
+#include <sys/output_device.h>
+#include <sys/input_device.h>
+#include <sys/keymap.h>
+#include <sys/keyboard.h>
+
+#include <fs/vfs/vfs.h>
+#include <fs/vfs/vfs_standart_struct.h>
+
+#include "apps/neofetch/neofetch.h"
+#include "utils/bwfvideo.h"
 
 Terminal::Terminal(Window &window, color_t color)
 	: win(window), cursor_X(0), cursor_Y(0), text_color(color),
@@ -16,11 +28,6 @@ Terminal::Terminal(Window &window, color_t color)
 	for (size_t i = 0; i < MAX_HISTORY; i++)
 		history[i] = nullptr;
 }
-
-#include <sys/output_device.h>
-#include <sys/input_device.h>
-#include <sys/keymap.h>
-#include <sys/keyboard.h>
 
 static void terminal_write_adapter(const char *buf, size_t len, void *user_data)
 {
@@ -86,7 +93,6 @@ void Terminal::init()
 	register_stdin_device(&terminal_input);
 
 	printk_register_console(terminal_write_adapter, this);
-	// printk_unregister_console();
 }
 
 void Terminal::clear()
@@ -109,7 +115,6 @@ void Terminal::scrollUp()
 	{
 		for (int x = win_x; x < win_x + win_width; x++)
 		{
-			// Copy a pixel from the line below
 			uint32_t *pixel_src = (uint32_t *)((uint8_t *)fb->base +
 											   (y + char_height) * fb->pitch + x * (fb->bpp / 8));
 			uint32_t *pixel_dst = (uint32_t *)((uint8_t *)fb->base +
@@ -212,8 +217,7 @@ void Terminal::addToHistory(const char *line)
 {
 	if (history_count >= MAX_HISTORY)
 	{
-		free(history[0]);
-		// shift the array to the left
+		kfree(history[0]);
 		for (size_t i = 1; i < MAX_HISTORY; i++)
 			history[i - 1] = history[i];
 		history_count--;
@@ -224,7 +228,6 @@ void Terminal::addToHistory(const char *line)
 
 const char *Terminal::getHistory(int &index, int direction)
 {
-	// direction: -1 = вверх, +1 = вниз
 	if (history_count == 0)
 		return nullptr;
 
@@ -240,14 +243,11 @@ const char *Terminal::getHistory(int &index, int direction)
 	return history[index];
 }
 
-// Checks if the command is valid
 static bool isValidCommand(const char *buffer, size_t length)
 {
-	// List of known commands
 	const char *commands[] = {"neofetch", "clear", "help", "cd", "pwd", "echo", "cat", "ls", "video"};
 	const int num_commands = sizeof(commands) / sizeof(commands[0]);
 
-	// Skip leading spaces
 	size_t start = 0;
 	while (start < length && (buffer[start] == ' ' || buffer[start] == '\t'))
 		start++;
@@ -255,12 +255,11 @@ static bool isValidCommand(const char *buffer, size_t length)
 	if (start >= length)
 		return false;
 
-	// Finding the first word (command)
 	size_t cmd_len = 0;
-	while (start + cmd_len < length && buffer[start + cmd_len] != ' ' && buffer[start + cmd_len] != '\n' && buffer[start + cmd_len] != '\t')
+	while (start + cmd_len < length && buffer[start + cmd_len] != ' ' &&
+		   buffer[start + cmd_len] != '\n' && buffer[start + cmd_len] != '\t')
 		cmd_len++;
 
-	// Compare with famous teams
 	for (int i = 0; i < num_commands; i++)
 	{
 		size_t known_len = strlen(commands[i]);
@@ -277,18 +276,16 @@ char *Terminal::readLine()
 	size_t length = 0;
 	size_t cursor_pos = 0;
 
-	char *buffer = (char *)malloc(capacity);
+	char *buffer = (char *)kmalloc(capacity);
 	if (!buffer)
 		return nullptr;
 
 	int line_start_x = cursor_X;
 	int line_start_y = cursor_Y;
-
 	size_t prev_length = 0;
 
 	auto clearLine = [&]()
 	{
-		// Очищаем всю область, где могла быть старая строка
 		int x = line_start_x;
 		int y = line_start_y;
 
@@ -306,31 +303,25 @@ char *Terminal::readLine()
 				y += char_height;
 			}
 		}
-		// Очищаем ещё один символ на всякий случай
 		if (y + char_height <= win.getHeight())
 			drawChar(win, ' ', x, y, char_width, char_height, win.getBgColor());
 	};
 
 	auto redrawLine = [&]()
 	{
-		// Сначала очищаем старую строку
 		clearLine();
-
-		// Обновляем prev_length
 		prev_length = length;
 
-		// Определяем цвет для первого слова
 		bool is_valid = isValidCommand(buffer, length);
-		color_t cmd_color = is_valid ? COLOR_GREEN : COLOR_RED; // зелёный или красный
+		color_t cmd_color = is_valid ? COLOR_GREEN : COLOR_RED;
 
-		// Пропускаем начальные пробелы для определения конца команды
 		size_t start = 0;
 		while (start < length && (buffer[start] == ' ' || buffer[start] == '\t'))
 			start++;
 
-		// Находим конец первого слова
 		size_t first_word_end = start;
-		while (first_word_end < length && buffer[first_word_end] != ' ' && buffer[first_word_end] != '\n' && buffer[first_word_end] != '\t')
+		while (first_word_end < length && buffer[first_word_end] != ' ' &&
+			   buffer[first_word_end] != '\n' && buffer[first_word_end] != '\t')
 			first_word_end++;
 
 		int x = line_start_x;
@@ -341,7 +332,6 @@ char *Terminal::readLine()
 			if (y + char_height > win.getHeight())
 				break;
 
-			// Выбираем цвет: команда или обычный текст
 			color_t color = (i >= start && i < first_word_end) ? cmd_color : text_color;
 			drawChar(win, buffer[i], x, y, char_width, char_height, color);
 
@@ -353,7 +343,6 @@ char *Terminal::readLine()
 			}
 		}
 
-		// Вычисляем позицию курсора
 		cursor_X = line_start_x;
 		cursor_Y = line_start_y;
 		for (size_t i = 0; i < cursor_pos; i++)
@@ -376,14 +365,12 @@ char *Terminal::readLine()
 		if (evt.released)
 			continue;
 
-		// Ctrl + C -> прерывание ввода
+		// Ctrl + C
 		if (evt.is_ctrl && evt.id.scancode == KEY_C)
 		{
-			// cursor_X = line_start_x;
-			// cursor_Y = line_start_y;
 			putChar('^');
 			putChar('C');
-			free(buffer);
+			kfree(buffer);
 			return nullptr;
 		}
 
@@ -411,16 +398,15 @@ char *Terminal::readLine()
 			if (length + 1 >= capacity)
 			{
 				capacity *= 2;
-				char *new_buf = (char *)realloc(buffer, capacity);
+				char *new_buf = (char *)krealloc(buffer, capacity);
 				if (!new_buf)
 				{
-					free(buffer);
+					kfree(buffer);
 					return nullptr;
 				}
 				buffer = new_buf;
 			}
 
-			// Вставляем перенос строки
 			for (size_t i = length; i > cursor_pos; i--)
 				buffer[i] = buffer[i - 1];
 			buffer[cursor_pos] = '\n';
@@ -446,22 +432,21 @@ char *Terminal::readLine()
 			continue;
 		}
 
-		// Стрелка вверх
+		// Arrow UP
 		if (evt.id.scancode == KEY_UP)
 		{
 			const char *hist_line = getHistory(history_index, -1);
 			if (!hist_line)
 				continue;
 
-			// Копируем из истории в буфер
 			length = cursor_pos = strlen(hist_line);
 			if (length >= capacity)
 			{
 				capacity = length + 1;
-				char *new_buf = (char *)realloc(buffer, capacity);
+				char *new_buf = (char *)krealloc(buffer, capacity);
 				if (!new_buf)
 				{
-					free(buffer);
+					kfree(buffer);
 					return nullptr;
 				}
 				buffer = new_buf;
@@ -472,22 +457,21 @@ char *Terminal::readLine()
 			continue;
 		}
 
-		// Стрелка вниз
+		// Arrow DOWN
 		if (evt.id.scancode == KEY_DOWN)
 		{
 			const char *hist_line = getHistory(history_index, +1);
 			if (!hist_line)
 				continue;
 
-			// Копируем из истории в буфер
 			length = cursor_pos = strlen(hist_line);
 			if (length >= capacity)
 			{
 				capacity = length + 1;
-				char *new_buf = (char *)realloc(buffer, capacity);
+				char *new_buf = (char *)krealloc(buffer, capacity);
 				if (!new_buf)
 				{
-					free(buffer);
+					kfree(buffer);
 					return nullptr;
 				}
 				buffer = new_buf;
@@ -498,24 +482,24 @@ char *Terminal::readLine()
 			continue;
 		}
 
-		// Обычные символы
-		char c = keymap_lookup_char(evt.id.scancode, evt.id.extended, evt.is_shift, evt.is_caps_lock);
+		// Regular characters
+		char c = keymap_lookup_char(evt.id.scancode, evt.id.extended,
+									evt.is_shift, evt.is_caps_lock);
 		if (c == 0)
 			continue;
 
 		if (length + 1 >= capacity)
 		{
 			capacity *= 2;
-			char *new_buf = (char *)realloc(buffer, capacity);
+			char *new_buf = (char *)krealloc(buffer, capacity);
 			if (!new_buf)
 			{
-				free(buffer);
+				kfree(buffer);
 				return nullptr;
 			}
 			buffer = new_buf;
 		}
 
-		// Вставка символа в позицию курсора
 		for (size_t i = length; i > cursor_pos; i--)
 			buffer[i] = buffer[i - 1];
 		buffer[cursor_pos] = c;
@@ -526,29 +510,22 @@ char *Terminal::readLine()
 	}
 }
 
-#include <ctype.h>
 static char *trim(char *str)
 {
 	if (!str)
 		return nullptr;
 
-	// Убираем пробелы в начале
-	// while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r')
 	while (isspace(*str))
 		str++;
 
 	if (*str == '\0')
 		return str;
 
-	// Убираем пробелы в конце
 	char *end = str + strlen(str) - 1;
-	// while (end > str && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r'))
-	while (end > str && (isspace(*end)))
+	while (end > str && isspace(*end))
 		end--;
 
-	// Ставим null-terminator после последнего непробельного символа
 	*(end + 1) = '\0';
-
 	return str;
 }
 
@@ -602,9 +579,6 @@ static int parse_args(char *input, char **argv, int max_args)
 	return argc;
 }
 
-#include <fs/vfs/vfs.h>
-#include <fs/vfs/vfs_standart_struct.h>
-
 static void cmd_echo(Terminal *term, int argc, char **argv)
 {
 	for (int i = 1; i < argc; i++)
@@ -639,8 +613,6 @@ static void cmd_cat(Terminal *term, int argc, char **argv)
 	term->print(buffer);
 
 	term->newLine();
-
-	// vfs_close(f);
 }
 
 static void cmd_ls(Terminal *term, int argc, char **argv)
@@ -652,9 +624,6 @@ static void cmd_ls(Terminal *term, int argc, char **argv)
 		term->print("\n");
 	}
 }
-
-#include "apps/neofetch/neofetch.h"
-#include "utils/bwfvideo.h"
 
 void Terminal::run()
 {
@@ -673,7 +642,7 @@ void Terminal::run()
 
 		if (*trimmed == '\0')
 		{
-			free(input);
+			kfree(input);
 			continue;
 		}
 
@@ -682,7 +651,7 @@ void Terminal::run()
 
 		if (argc == 0)
 		{
-			free(input);
+			kfree(input);
 			continue;
 		}
 
@@ -708,16 +677,18 @@ void Terminal::run()
 		}
 		else if (strcmp(argv[0], "video") == 0)
 		{
-			Window VideoPlayer(*(win.getScreen()), win.getWidth() / 2 - 240, win.getHeight() / 2 - 180, 480, 360, rgba(141, 141, 141, 1));
+			Window VideoPlayer(*(win.getScreen()),
+							   win.getWidth() / 2 - 240,
+							   win.getHeight() / 2 - 180,
+							   480, 360,
+							   rgba(141, 141, 141, 1));
 			VideoPlayer.clear();
 			framebuffer_info_t *fb = VideoPlayer.getScreen()->getFramebuffer();
 
-			printf("%d %d", VideoPlayer.getX(), VideoPlayer.getY());
 			play_bwvid(fb, "/output.bwv", VideoPlayer.getX(), VideoPlayer.getY());
 
 			VideoPlayer.setBgColor(win.getBgColor());
 			VideoPlayer.clear();
-			continue;
 		}
 		else if (strcmp(argv[0], "help") == 0)
 		{
@@ -737,6 +708,6 @@ void Terminal::run()
 			print("\n");
 		}
 
-		free(input);
+		kfree(input);
 	}
 }

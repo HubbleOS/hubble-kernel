@@ -70,14 +70,14 @@ static int load_segment(VFS_File *f, Elf64_Phdr *phdr)
 	printk("  Pages: %lu (0x%lx - 0x%lx)\n", num_pages, seg_start, seg_end);
 
 	// Determine page flags
-	uint64_t flags = PAGE_PRESENT | PAGE_USER;
+	uint64_t flags = PTE_PRESENT | PTE_USER;
 	if (phdr->p_flags & PF_W)
 	{
-		flags |= PAGE_WRITE;
+		flags |= PTE_WRITE;
 	}
 	if (!(phdr->p_flags & PF_X))
 	{
-		flags |= PAGE_NX;
+		flags |= PTE_NX;
 	}
 
 	// Allocate and map pages

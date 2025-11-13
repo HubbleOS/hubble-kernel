@@ -4,7 +4,7 @@
 
 #include <fs/ext2/ext2.h>
 #include <fs/ext2/ext2_struct.h>
-#include <mm/slab.h>
+#include <mm/kmalloc.h>
 
 #include <string.h>
 

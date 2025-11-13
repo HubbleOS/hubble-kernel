@@ -4,7 +4,7 @@
 #include "fat.h"
 #include "fat_structs.h"
 #include "fat_utils.h"
-#include <mm/slab.h>
+#include <mm/kmalloc.h>
 
 void fat32_format_directory_cluster(FAT32_FS *fs, uint32_t cluster, uint32_t parent_cluster)
 {
