@@ -21,27 +21,26 @@ static uint64_t g_kernel_heap_next = 0;
 // ============================================================================
 
 // Recursive mapping base для PML4[510]
-#define RECURSIVE_BASE 0xFFFFFD8000000000ULL
 
 /**
  * @brief Швидкий доступ до page table entries через recursive mapping
  */
 static inline uint64_t *vmm_get_pml4(void)
 {
-	return (uint64_t *)(RECURSIVE_BASE | (510ULL << 39) | (510ULL << 30) | (510ULL << 21) | (510ULL << 12));
+	return (uint64_t *)(RECURSIVE_MAPPING | (510ULL << 39) | (510ULL << 30) | (510ULL << 21) | (510ULL << 12));
 }
 
 static inline uint64_t *vmm_get_pdpt(uint64_t virt)
 {
 	uint64_t pml4_idx = PML4_INDEX(virt);
-	return (uint64_t *)(RECURSIVE_BASE | (510ULL << 39) | (510ULL << 30) | (510ULL << 21) | (pml4_idx << 12));
+	return (uint64_t *)(RECURSIVE_MAPPING | (510ULL << 39) | (510ULL << 30) | (510ULL << 21) | (pml4_idx << 12));
 }
 
 static inline uint64_t *vmm_get_pd(uint64_t virt)
 {
 	uint64_t pml4_idx = PML4_INDEX(virt);
 	uint64_t pdpt_idx = PDPT_INDEX(virt);
-	return (uint64_t *)(RECURSIVE_BASE | (510ULL << 39) | (510ULL << 30) | (pml4_idx << 21) | (pdpt_idx << 12));
+	return (uint64_t *)(RECURSIVE_MAPPING | (510ULL << 39) | (510ULL << 30) | (pml4_idx << 21) | (pdpt_idx << 12));
 }
 
 static inline uint64_t *vmm_get_pt(uint64_t virt)
@@ -49,7 +48,7 @@ static inline uint64_t *vmm_get_pt(uint64_t virt)
 	uint64_t pml4_idx = PML4_INDEX(virt);
 	uint64_t pdpt_idx = PDPT_INDEX(virt);
 	uint64_t pd_idx = PD_INDEX(virt);
-	return (uint64_t *)(RECURSIVE_BASE | (510ULL << 39) | (pml4_idx << 30) | (pdpt_idx << 21) | (pd_idx << 12));
+	return (uint64_t *)(RECURSIVE_MAPPING | (510ULL << 39) | (pml4_idx << 30) | (pdpt_idx << 21) | (pd_idx << 12));
 }
 
 // ============================================================================

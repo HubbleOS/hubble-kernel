@@ -6,8 +6,9 @@
  * для конвертации между физическими и виртуальными адресами.
  */
 
-#ifndef HIGHER_HALF_H
-#define HIGHER_HALF_H
+#pragma once
+
+#include <lib/misc.k.h>
 
 #include <stdint.h>
 
@@ -36,7 +37,6 @@
  * 511-й entry PML4 указывает на саму PML4 для доступа к page tables
  */
 #define RECURSIVE_MAPPING 0xFFFFFF8000000000ULL
-
 /**
  * Heap Virtual Base
  *
@@ -129,26 +129,22 @@
 /**
  * @brief Align address down to page boundary
  */
-#define PAGE_ALIGN_DOWN(addr) \
-	((uint64_t)(addr) & ~0xFFFULL)
+#define PAGE_ALIGN_DOWN(addr) ALIGN_DOWN(addr, PAGE_SIZE)
 
 /**
  * @brief Align address up to page boundary
  */
-#define PAGE_ALIGN_UP(addr) \
-	(((uint64_t)(addr) + 0xFFF) & ~0xFFFULL)
+#define PAGE_ALIGN_UP(addr) ALIGN_UP(addr, PAGE_SIZE)
 
 /**
  * @brief Align address down to 2MB boundary (huge page)
  */
-#define HUGE_PAGE_ALIGN_DOWN(addr) \
-	((uint64_t)(addr) & ~0x1FFFFFULL)
+#define HUGE_PAGE_ALIGN_DOWN(addr) ALIGN_DOWN(addr, 2 * 1024 * 1024)
 
 /**
  * @brief Align address up to 2MB boundary (huge page)
  */
-#define HUGE_PAGE_ALIGN_UP(addr) \
-	(((uint64_t)(addr) + 0x1FFFFF) & ~0x1FFFFFULL)
+#define HUGE_PAGE_ALIGN_UP(addr) ALIGN_UP(addr, 2 * 1024 * 1024)
 
 // ============================================================================
 // Recursive Page Table Access
@@ -283,5 +279,3 @@ static inline void invlpg(void *virt)
 }
 
 #endif /* __ASSEMBLER__ */
-
-#endif /* HIGHER_HALF_H */
