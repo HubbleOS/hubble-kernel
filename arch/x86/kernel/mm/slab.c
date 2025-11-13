@@ -1225,6 +1225,8 @@ void slab_init(void)
 		char name[32];
 		make_cache_name(name, sizeof(name), "kmalloc", g_standard_sizes[i]);
 
+		printk("Creating slab cache: %s\n", name);
+
 		g_standard_caches[i] = slab_cache_create(
 		    name,
 		    g_standard_sizes[i],
