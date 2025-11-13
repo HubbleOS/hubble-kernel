@@ -3,7 +3,7 @@
 #include "printk.h"
 
 #include <fs/fat32/fat.h>
-#include <mm/slab.h>
+#include <mm/kmalloc.h>
 
 #include <string.h>
 

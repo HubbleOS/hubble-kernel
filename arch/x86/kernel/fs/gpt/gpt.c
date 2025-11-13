@@ -2,7 +2,7 @@
 #include "gpt_struct.h"
 #include "printk.h"
 #include <fs/ata/ata.h>
-#include <mm/slab.h>
+#include <mm/kmalloc.h>
 
 #include <stdint.h>
 #include <string.h>

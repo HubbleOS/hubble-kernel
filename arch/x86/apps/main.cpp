@@ -11,6 +11,8 @@
 #include <sys/syscall.h>
 #include <syscalls/syscall.h>
 
+#include "mm/slab.h"
+
 extern "C" void os_main(BootInfo *bi)
 {
   Screen screen(bi->framebuffer);

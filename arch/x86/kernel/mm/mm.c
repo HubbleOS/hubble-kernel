@@ -1,8 +1,8 @@
 #include "mm.h"
-#include "slab.h"
+#include "kmalloc.h"
 
 memory_ops_t heap_memory_ops = {
     .malloc = kmalloc,
-    .realloc = kmalloc,
+    .realloc = krealloc,
     .free = kfree,
 };
