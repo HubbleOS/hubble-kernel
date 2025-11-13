@@ -6,7 +6,7 @@
 #include <fs/vfs/vfs_standart_struct.h>
 
 #include <fs/ata/ata.h>
-#include <mm/slab.h>
+#include <mm/kmalloc.h>
 
 #include <string.h>
 
@@ -77,9 +77,9 @@ uint32_t get_fat_entry(FAT32_FS *fs, uint32_t cluster)
 	fs->read_sector(fs->device, fat_sector, sector);
 
 	uint32_t entry = sector[offset] |
-					 (sector[offset + 1] << 8) |
-					 (sector[offset + 2] << 16) |
-					 (sector[offset + 3] << 24);
+			 (sector[offset + 1] << 8) |
+			 (sector[offset + 2] << 16) |
+			 (sector[offset + 3] << 24);
 
 	kfree(sector);
 

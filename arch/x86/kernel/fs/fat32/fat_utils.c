@@ -3,7 +3,7 @@
 #include "fat.h"
 #include "printk.h"
 
-#include <mm/slab.h>
+#include <mm/kmalloc.h>
 
 #include <fs/ata/ata.h>
 #include <fs/vfs/vfs.h>
@@ -402,7 +402,7 @@ int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 	for (uint32_t i = 0; i < bpb->fat_size_32; i++)
 	{
 		fs->read_sector(fs->device, fs->fat_start_lba + i,
-						((uint8_t *)(fs->fat_cache) + i * bpb->bytes_per_sector));
+				((uint8_t *)(fs->fat_cache) + i * bpb->bytes_per_sector));
 	}
 
 	fs->fat_dirty = false;
@@ -478,7 +478,7 @@ bool fat_flush(FAT32_FS *fs)
 		for (uint32_t s = 0; s < fat_size_sectors; ++s)
 		{
 			if (!fs->write_sector(fs->device, base + s,
-								  ((uint8_t *)fs->fat_cache) + s * fs->bytes_per_sector))
+					      ((uint8_t *)fs->fat_cache) + s * fs->bytes_per_sector))
 			{
 				return false; // error!
 			}
@@ -617,9 +617,9 @@ int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir
 			entry->attr = is_dir ? 0x10 : 0x20;
 			uint32_t new_cluster = fat32_allocate_cluster(fs);
 			printk("Allocated cluster: %u (high=%04x low=%04x)\n",
-				   new_cluster,
-				   (new_cluster >> 16) & 0xFFFF,
-				   new_cluster & 0xFFFF);
+			       new_cluster,
+			       (new_cluster >> 16) & 0xFFFF,
+			       new_cluster & 0xFFFF);
 
 			entry->first_cluster_high = (new_cluster >> 16) & 0xFFFF;
 			entry->first_cluster_low = new_cluster & 0xFFFF;

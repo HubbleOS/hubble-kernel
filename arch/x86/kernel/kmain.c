@@ -11,6 +11,7 @@
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <mm/mm.h>
+#include <mm/kmalloc.h>
 #include "printk.h"
 #include "gdt/gdt.h"
 #include "gdt/interrupt.h"
@@ -105,6 +106,314 @@ static void relocate_boot_info(BootInfo *bi)
 // ENTRY POINT - MUST BE IN .text.boot SECTION
 // ============================================================================
 
+void vmm_test_basic_mapping(void)
+{
+	printk(KERN_INFO "=== VMM Basic Mapping Test ===\n");
+
+	// Test 1: Map single page
+	uint64_t test_phys = pmm_alloc_page();
+	uint64_t test_virt = 0xFFFFFFFF90000000ULL;
+
+	printk(KERN_DEBUG "Mapping 0x%lx -> 0x%lx\n", test_virt, test_phys);
+
+	if (vmm_map_page(test_virt, test_phys, PTE_WRITE) == 0)
+	{
+		printk(KERN_INFO "✓ Page mapped successfully\n");
+
+		// Test write/read
+		uint32_t *ptr = (uint32_t *)test_virt;
+		*ptr = 0xDEADBEEF;
+
+		if (*ptr == 0xDEADBEEF)
+		{
+			printk(KERN_INFO "✓ Read/Write test passed\n");
+		}
+		else
+		{
+			printk(KERN_ERR "✗ Read/Write test failed\n");
+		}
+
+		// Verify physical address translation
+		uint64_t phys_check = vmm_get_physical(test_virt);
+		if (phys_check == test_phys)
+		{
+			printk(KERN_INFO "✓ Physical address translation correct\n");
+		}
+		else
+		{
+			printk(KERN_ERR "✗ Physical address mismatch: 0x%lx != 0x%lx\n",
+			       phys_check, test_phys);
+		}
+
+		// Cleanup
+		vmm_unmap_page(test_virt);
+		pmm_free_page(test_phys);
+	}
+	else
+	{
+		printk(KERN_ERR "✗ Failed to map page\n");
+		pmm_free_page(test_phys);
+	}
+}
+
+/**
+ * @brief Test range mapping
+ */
+void vmm_test_range_mapping(void)
+{
+	printk(KERN_INFO "\n=== VMM Range Mapping Test ===\n");
+
+	// Allocate 16 pages (64KB)
+	size_t pages = 16;
+	uint64_t phys_start = pmm_alloc_pages(pages);
+	uint64_t virt_start = 0xFFFFFFFF91000000ULL;
+
+	if (phys_start == 0)
+	{
+		printk(KERN_ERR "✗ Failed to allocate physical pages\n");
+		return;
+	}
+
+	printk(KERN_DEBUG "Mapping range: 0x%lx -> 0x%lx (%lu pages)\n",
+	       virt_start, phys_start, pages);
+
+	if (vmm_map_range(virt_start, phys_start, pages * PAGE_SIZE, PTE_WRITE) == 0)
+	{
+		printk(KERN_INFO "✓ Range mapped successfully\n");
+
+		// Test write pattern across entire range
+		uint32_t *ptr = (uint32_t *)virt_start;
+		size_t count = (pages * PAGE_SIZE) / sizeof(uint32_t);
+
+		for (size_t i = 0; i < count; i++)
+		{
+			ptr[i] = (uint32_t)i;
+		}
+
+		// Verify pattern
+		bool success = true;
+		for (size_t i = 0; i < count; i++)
+		{
+			if (ptr[i] != (uint32_t)i)
+			{
+				success = false;
+				printk(KERN_ERR "✗ Pattern mismatch at index %lu\n", i);
+				break;
+			}
+		}
+
+		if (success)
+		{
+			printk(KERN_INFO "✓ Range write/read test passed\n");
+		}
+
+		// Cleanup
+		vmm_unmap_range(virt_start, pages * PAGE_SIZE);
+		pmm_free_pages(phys_start, pages);
+	}
+	else
+	{
+		printk(KERN_ERR "✗ Failed to map range\n");
+		pmm_free_pages(phys_start, pages);
+	}
+}
+
+/**
+ * @brief Test kernel page allocation
+ */
+void vmm_test_kernel_allocation(void)
+{
+	printk(KERN_INFO "\n=== VMM Kernel Allocation Test ===\n");
+
+	// Allocate 8 pages in kernel space
+	size_t pages = 8;
+	void *buffer = vmm_alloc_kernel_pages(pages);
+
+	if (buffer)
+	{
+		printk(KERN_INFO "✓ Allocated %lu pages at 0x%lx\n", pages, (uint64_t)buffer);
+
+		// Test the buffer
+		uint64_t *ptr = (uint64_t *)buffer;
+		size_t count = (pages * PAGE_SIZE) / sizeof(uint64_t);
+
+		for (size_t i = 0; i < count; i++)
+		{
+			ptr[i] = 0xCAFEBABE00000000ULL | i;
+		}
+
+		// Verify
+		bool success = true;
+		for (size_t i = 0; i < count; i++)
+		{
+			if (ptr[i] != (0xCAFEBABE00000000ULL | i))
+			{
+				success = false;
+				break;
+			}
+		}
+
+		if (success)
+		{
+			printk(KERN_INFO "✓ Kernel buffer test passed\n");
+		}
+		else
+		{
+			printk(KERN_ERR "✗ Kernel buffer test failed\n");
+		}
+
+		// Free
+		vmm_free_kernel_pages(buffer, pages);
+		printk(KERN_INFO "✓ Kernel pages freed\n");
+	}
+	else
+	{
+		printk(KERN_ERR "✗ Failed to allocate kernel pages\n");
+	}
+}
+
+/**
+ * @brief Test page flag modifications
+ */
+void vmm_test_flags(void)
+{
+	printk(KERN_INFO "\n=== VMM Flags Test ===\n");
+
+	uint64_t phys = pmm_alloc_page();
+	uint64_t virt = 0xFFFFFFFF92000000ULL;
+
+	// Map as writable
+	vmm_map_page(virt, phys, PTE_WRITE);
+
+	uint32_t *ptr = (uint32_t *)virt;
+	*ptr = 0x12345678;
+
+	printk(KERN_INFO "✓ Write to writable page: 0x%x\n", *ptr);
+
+	// Change to read-only
+	vmm_set_flags(virt, 0);
+	printk(KERN_INFO "✓ Page set to read-only\n");
+
+	// NOTE: Writing to read-only page would cause page fault
+	// In real test, you'd catch the fault and verify it occurred
+
+	// Cleanup
+	vmm_unmap_page(virt);
+	pmm_free_page(phys);
+}
+
+/**
+ * @brief Test VMM statistics
+ */
+void vmm_test_statistics(void)
+{
+	printk(KERN_INFO "\n=== VMM Statistics ===\n");
+
+	vmm_info_t *info = vmm_get_info();
+
+	printk(KERN_INFO "PML4 Physical: 0x%lx\n", info->pml4_phys);
+	printk(KERN_INFO "PML4 Virtual:  0x%lx\n", (uint64_t)info->pml4_virt);
+	printk(KERN_INFO "Total Mapped Pages: %lu (%lu MB)\n",
+	       info->total_mapped_pages,
+	       (info->total_mapped_pages * PAGE_SIZE) / (1024 * 1024));
+	printk(KERN_INFO "Kernel Pages: %lu (%lu MB)\n",
+	       info->kernel_pages,
+	       (info->kernel_pages * PAGE_SIZE) / (1024 * 1024));
+}
+
+/**
+ * @brief Run all VMM tests
+ */
+void vmm_run_tests(void)
+{
+	printk(KERN_INFO "\n");
+	printk(KERN_INFO "╔════════════════════════════════════╗\n");
+	printk(KERN_INFO "║   VMM Test Suite                  ║\n");
+	printk(KERN_INFO "╚════════════════════════════════════╝\n");
+	printk(KERN_INFO "\n");
+
+	vmm_test_basic_mapping();
+	vmm_test_range_mapping();
+	vmm_test_kernel_allocation();
+	vmm_test_flags();
+	vmm_test_statistics();
+
+	printk(KERN_INFO "\n");
+	printk(KERN_INFO "╔════════════════════════════════════╗\n");
+	printk(KERN_INFO "║   All VMM Tests Complete          ║\n");
+	printk(KERN_INFO "╚════════════════════════════════════╝\n");
+	printk(KERN_INFO "\n");
+}
+
+/**
+ * @brief Example: Map framebuffer
+ */
+void vmm_example_map_framebuffer(uint64_t fb_phys, size_t fb_size)
+{
+	printk(KERN_INFO "Mapping framebuffer: 0x%lx (%lu MB)\n",
+	       fb_phys, fb_size / (1024 * 1024));
+
+	// Framebuffer is already identity-mapped by bootloader
+	// But we can remap it with specific flags if needed
+
+	uint64_t fb_virt = PHYS_TO_VIRT(fb_phys);
+
+	// Remap with device memory flags (uncached, write-combining)
+	vmm_map_range(fb_virt, fb_phys, fb_size,
+		      PTE_WRITE | PTE_NOCACHE | PTE_WRITETHROUGH);
+
+	printk(KERN_INFO "Framebuffer mapped at: 0x%lx\n", fb_virt);
+}
+
+/**
+ * @brief Example: Create heap region
+ */
+void *vmm_example_create_heap(size_t size_mb)
+{
+	size_t pages = (size_mb * 1024 * 1024) / PAGE_SIZE;
+
+	printk(KERN_INFO "Creating %lu MB heap (%lu pages)\n", size_mb, pages);
+
+	void *heap = vmm_alloc_kernel_pages(pages);
+	if (heap)
+	{
+		printk(KERN_INFO "Heap created at: 0x%lx\n", (uint64_t)heap);
+
+		// Initialize heap (zero out)
+		uint8_t *ptr = (uint8_t *)heap;
+		for (size_t i = 0; i < pages * PAGE_SIZE; i++)
+		{
+			ptr[i] = 0;
+		}
+
+		printk(KERN_INFO "Heap initialized\n");
+	}
+
+	return heap;
+}
+
+/**
+ * @brief Example: Map memory-mapped device
+ */
+void vmm_example_map_mmio(uint64_t mmio_base, size_t mmio_size)
+{
+	printk(KERN_INFO "Mapping MMIO device: 0x%lx (%lu KB)\n",
+	       mmio_base, mmio_size / 1024);
+
+	uint64_t virt = PHYS_TO_VIRT(mmio_base);
+
+	// Map with device flags (uncached, no write-combining)
+	vmm_map_device(virt, mmio_base, mmio_size);
+
+	printk(KERN_INFO "MMIO mapped at: 0x%lx\n", virt);
+
+	// Can now access device through virt address
+	volatile uint32_t *device = (volatile uint32_t *)virt;
+	uint32_t status = device[0]; // Read device status register
+
+	printk(KERN_DEBUG "Device status: 0x%x\n", status);
+}
+
 /**
  * @brief Main kernel entry point
  *
@@ -181,8 +490,10 @@ kernel_entry(BootInfo *bi)
 
 	// VMM теперь использует higher-half адреса
 	printk(KERN_DEBUG "Initializing VMM (higher-half mode)...\n");
-	vmm_init(bi->memory_map->pml4_phys);
+	vmm_init();
 	printk(KERN_INFO "VMM initialized\n");
+
+	vmm_run_tests();
 
 	// ========================================================================
 	// 6. Storage subsystems

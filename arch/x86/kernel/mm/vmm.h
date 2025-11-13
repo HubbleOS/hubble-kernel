@@ -1,190 +1,315 @@
-#pragma once
+/**
+ * @file vmm.h
+ * @brief Virtual Memory Manager - Higher-Half Kernel Edition
+ *
+ * Керує віртуальною пам'яттю в higher-half kernel mode.
+ * Використовує recursive mapping для доступу до page tables.
+ */
+
+#ifndef VMM_H
+#define VMM_H
+
+#include "_cheader.h"
+
+_Begin_C_Header;
 
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 
-// Page flags (біти у PTE)
-#define PAGE_PRESENT (1ULL << 0)       // Сторінка присутня у пам'яті
-#define PAGE_WRITE (1ULL << 1)	       // Дозволений запис
-#define PAGE_USER (1ULL << 2)	       // Доступ для user mode
-#define PAGE_WRITETHROUGH (1ULL << 3)  // Write-through caching
-#define PAGE_CACHE_DISABLE (1ULL << 4) // Вимкнути кешування
-#define PAGE_ACCESSED (1ULL << 5)      // Сторінка була доступна
-#define PAGE_DIRTY (1ULL << 6)	       // Сторінка була змінена
-#define PAGE_HUGE (1ULL << 7)	       // Huge page (2MB/1GB)
-#define PAGE_GLOBAL (1ULL << 8)	       // Глобальна сторінка
-#define PAGE_NX (1ULL << 63)	       // No Execute
+// ============================================================================
+// Virtual Memory Configuration
+// ============================================================================
 
-// Стандартні комбінації флагів
-#define PAGE_KERNEL (PAGE_PRESENT | PAGE_WRITE)
-#define PAGE_USERSPACE (PAGE_PRESENT | PAGE_WRITE | PAGE_USER)
-#define PAGE_READONLY (PAGE_PRESENT)
+#define VMM_PAGE_SIZE 4096
+#define VMM_HUGE_PAGE_SIZE (2 * 1024 * 1024) // 2MB
 
-// Розміри сторінок
-#define PAGE_SIZE_4K 0x1000
-#define PAGE_SIZE_2M 0x200000
-#define PAGE_SIZE_1G 0x40000000
+// ============================================================================
+// Page Table Entry Flags (дублюємо з higher_half.h для зручності)
+// ============================================================================
 
-// Маски для Page Table Entry
-#define PTE_ADDR_MASK 0x000FFFFFFFFFF000ULL
-#define PTE_FLAGS_MASK 0xFFF0000000000FFFULL
+#ifndef PTE_PRESENT
+#define PTE_PRESENT (1ULL << 0)	     // Page is present
+#define PTE_WRITE (1ULL << 1)	     // Page is writable
+#define PTE_USER (1ULL << 2)	     // User mode access
+#define PTE_WRITETHROUGH (1ULL << 3) // Write-through caching
+#define PTE_NOCACHE (1ULL << 4)	     // Disable caching
+#define PTE_ACCESSED (1ULL << 5)     // Page accessed
+#define PTE_DIRTY (1ULL << 6)	     // Page written to
+#define PTE_HUGE (1ULL << 7)	     // Huge page (2MB/1GB)
+#define PTE_GLOBAL (1ULL << 8)	     // Global page
+#define PTE_NX (1ULL << 63)	     // No execute
+#endif
 
-// Індекси у Page Table
-#define PML4_INDEX(addr) (((addr) >> 39) & 0x1FF)
-#define PDPT_INDEX(addr) (((addr) >> 30) & 0x1FF)
-#define PD_INDEX(addr) (((addr) >> 21) & 0x1FF)
-#define PT_INDEX(addr) (((addr) >> 12) & 0x1FF)
+// ============================================================================
+// Common flag combinations
+// ============================================================================
 
-// Адреса рекурсивного мапінгу (останній запис PML4)
-#define RECURSIVE_INDEX 511
-#define RECURSIVE_BASE 0xFFFFFF8000000000ULL
+#define VMM_FLAGS_KERNEL (PTE_WRITE)			     // Kernel RW
+#define VMM_FLAGS_KERNEL_RO (0)				     // Kernel R
+#define VMM_FLAGS_USER (PTE_WRITE | PTE_USER)		     // User RW
+#define VMM_FLAGS_USER_RO (PTE_USER)			     // User R
+#define VMM_FLAGS_DEVICE (PTE_WRITE | PTE_NOCACHE)	     // Device memory
+#define VMM_FLAGS_CODE (0)				     // Executable code
+#define VMM_FLAGS_CODE_NX (PTE_NX)			     // Non-executable data
+#define VMM_FLAGS_STACK (PTE_WRITE | PTE_NX)		     // Stack
+#define VMM_FLAGS_HEAP (PTE_WRITE | PTE_NX)		     // Heap
+#define VMM_FLAGS_GLOBAL (PTE_WRITE | PTE_GLOBAL)	     // Global mapping
+#define VMM_FLAGS_USER_STACK (PTE_WRITE | PTE_USER | PTE_NX) // User stack
+#define VMM_FLAGS_USER_HEAP (PTE_WRITE | PTE_USER | PTE_NX)  // User heap
 
-// Адреси для доступу до page tables через рекурсивний мапінг
-#define PML4_VADDR (RECURSIVE_BASE | (RECURSIVE_INDEX << 39) | (RECURSIVE_INDEX << 30) | (RECURSIVE_INDEX << 21) | (RECURSIVE_INDEX << 12))
-#define PDPT_VADDR(i) (RECURSIVE_BASE | (RECURSIVE_INDEX << 39) | (RECURSIVE_INDEX << 30) | (RECURSIVE_INDEX << 21) | ((i) << 12))
-#define PD_VADDR(i, j) (RECURSIVE_BASE | (RECURSIVE_INDEX << 39) | (RECURSIVE_INDEX << 30) | ((i) << 21) | ((j) << 12))
-#define PT_VADDR(i, j, k) (RECURSIVE_BASE | (RECURSIVE_INDEX << 39) | ((i) << 30) | ((j) << 21) | ((k) << 12))
+// ============================================================================
+// VMM Information Structure
+// ============================================================================
 
-// Структура для Page Table Entry
-typedef uint64_t pte_t;
-
-// Структура для Page Table
 typedef struct
 {
-	pte_t entries[512];
-} __attribute__((aligned(4096))) page_table_t;
+	uint64_t *pml4_virt;	       // Virtual address of PML4
+	uint64_t pml4_phys;	       // Physical address of PML4
+	uint64_t total_mapped_pages;   // Total mapped pages
+	uint64_t kernel_pages;	       // Kernel allocated pages
+	uint64_t user_pages;	       // User allocated pages
+	uint64_t total_virtual_memory; // Total virtual address space (256TB)
+	uint64_t used_virtual_memory;  // Used virtual memory
+} vmm_info_t;
 
-// Структура адресного простору
-typedef struct address_space
-{
-	uint64_t pml4_phys;	 // Фізична адреса PML4
-	page_table_t *pml4_virt; // Віртуальна адреса PML4 (якщо змаповано)
-	uint64_t heap_start;	 // Початок user heap
-	uint64_t heap_end;	 // Кінець user heap
-	uint64_t stack_start;	 // Початок user stack
-	uint64_t stack_end;	 // Кінець user stack
-} address_space_t;
-
-/**
- * Ініціалізує VMM та створює kernel page tables
- * @param bootloader_pml4_phys Фізична адреса PML4 створеної bootloader'ом
- */
-void vmm_init(uint64_t bootloader_pml4_phys);
+// ============================================================================
+// VMM Core Functions
+// ============================================================================
 
 /**
- * Створює новий адресний простір (для процесу)
- * @return Вказівник на address_space або NULL при помилці
+ * @brief Initialize Virtual Memory Manager
+ *
+ * Встановлює VMM для роботи з існуючими page tables,
+ * створеними bootloader'ом. Використовує recursive mapping
+ * для доступу до page tables.
  */
-address_space_t *vmm_create_address_space(void);
+void vmm_init(void);
 
 /**
- * Видаляє адресний простір
- * @param as Вказівник на address_space
+ * @brief Map single page
+ *
+ * @param virt_addr Virtual address (must be page-aligned)
+ * @param phys_addr Physical address (must be page-aligned)
+ * @param flags Page flags (PTE_WRITE, PTE_USER, etc.)
+ * @return 0 on success, -1 on error
+ *
+ * Example:
+ *   vmm_map_page(0xFFFFFFFF80500000, 0x500000, PTE_WRITE);
  */
-void vmm_destroy_address_space(address_space_t *as);
+int vmm_map_page(uint64_t virt_addr, uint64_t phys_addr, uint64_t flags);
 
 /**
- * Перемикається на інший адресний простір
- * @param as Вказівник на address_space
+ * @brief Map range of pages
+ *
+ * @param virt_start Virtual start address
+ * @param phys_start Physical start address
+ * @param size Size in bytes (will be page-aligned)
+ * @param flags Page flags
+ * @return 0 on success, -1 on error
+ *
+ * Example:
+ *   // Map 4MB region
+ *   vmm_map_range(0xFFFFFFFF80600000, 0x600000, 4*1024*1024, PTE_WRITE);
  */
-void vmm_switch_address_space(address_space_t *as);
+int vmm_map_range(uint64_t virt_start, uint64_t phys_start, size_t size, uint64_t flags);
 
 /**
- * Отримує поточний адресний простір
- * @return Вказівник на поточний address_space
+ * @brief Unmap single page
+ *
+ * @param virt_addr Virtual address to unmap
+ *
+ * Note: Does NOT free physical memory - use pmm_free_page() separately
  */
-address_space_t *vmm_get_current_address_space(void);
+void vmm_unmap_page(uint64_t virt_addr);
 
 /**
- * Мапить фізичну сторінку на віртуальну адресу
- * @param virt Віртуальна адреса
- * @param phys Фізична адреса
- * @param flags Флаги сторінки (PAGE_*)
- * @return true при успіху, false при помилці
+ * @brief Unmap range of pages
+ *
+ * @param virt_start Virtual start address
+ * @param size Size in bytes
+ *
+ * Note: Does NOT free physical memory
  */
-bool vmm_map_page(uint64_t virt, uint64_t phys, uint64_t flags);
+void vmm_unmap_range(uint64_t virt_start, size_t size);
 
 /**
- * Анмапить віртуальну сторінку
- * @param virt Віртуальна адреса
+ * @brief Get physical address for virtual address
+ *
+ * @param virt_addr Virtual address
+ * @return Physical address or 0 if not mapped
+ *
+ * Example:
+ *   uint64_t phys = vmm_get_physical(0xFFFFFFFF80500123);
+ *   // Returns 0x500123 if mapped
  */
-void vmm_unmap_page(uint64_t virt);
+uint64_t vmm_get_physical(uint64_t virt_addr);
 
 /**
- * Отримує фізичну адресу для віртуальної
- * @param virt Віртуальна адреса
- * @return Фізична адреса або 0 якщо не змаповано
+ * @brief Change page flags
+ *
+ * @param virt_addr Virtual address
+ * @param flags New flags
+ * @return 0 on success, -1 on error
+ *
+ * Example:
+ *   // Make page read-only
+ *   vmm_set_flags(addr, 0);
+ *   // Make page writable
+ *   vmm_set_flags(addr, PTE_WRITE);
  */
-uint64_t vmm_virt_to_phys(uint64_t virt);
+int vmm_set_flags(uint64_t virt_addr, uint64_t flags);
+
+// ============================================================================
+// Kernel Memory Allocation
+// ============================================================================
 
 /**
- * Мапить діапазон сторінок
- * @param virt_start Початкова віртуальна адреса
- * @param phys_start Початкова фізична адреса
- * @param size Розмір у байтах
- * @param flags Флаги сторінок
- * @return true при успіху
+ * @brief Allocate pages in kernel space
+ *
+ * Allocates physical pages and maps them in kernel virtual space.
+ * Returns virtual address ready to use.
+ *
+ * @param count Number of pages to allocate
+ * @return Virtual address of allocated region or NULL on error
+ *
+ * Example:
+ *   void *buffer = vmm_alloc_kernel_pages(16); // 64KB buffer
+ *   if (buffer) {
+ *       // Use buffer...
+ *       vmm_free_kernel_pages(buffer, 16);
+ *   }
  */
-bool vmm_map_range(uint64_t virt_start, uint64_t phys_start, uint64_t size, uint64_t flags);
+void *vmm_alloc_kernel_pages(size_t count);
 
 /**
- * Анмапить діапазон сторінок
- * @param virt_start Початкова віртуальна адреса
- * @param size Розмір у байтах
+ * @brief Free kernel pages
+ *
+ * Frees both virtual mapping and physical memory.
+ *
+ * @param virt_addr Virtual address (from vmm_alloc_kernel_pages)
+ * @param count Number of pages to free
  */
-void vmm_unmap_range(uint64_t virt_start, uint64_t size);
+void vmm_free_kernel_pages(void *virt_addr, size_t count);
+
+// ============================================================================
+// Information and Debugging
+// ============================================================================
 
 /**
- * Виділяє віртуальну пам'ять (знаходить вільний діапазон)
- * @param size Розмір у байтах
- * @param flags Флаги сторінок
- * @return Віртуальна адреса або 0 при помилці
+ * @brief Get VMM statistics
+ *
+ * @return Pointer to VMM info structure
  */
-uint64_t vmm_alloc(uint64_t size, uint64_t flags);
+vmm_info_t *vmm_get_info(void);
 
 /**
- * Звільняє віртуальну пам'ять
- * @param virt Віртуальна адреса
- * @param size Розмір у байтах
+ * @brief Dump mapping info for virtual address
+ *
+ * Prints page table hierarchy for debugging.
+ *
+ * @param virt_addr Virtual address to inspect
  */
-void vmm_free(uint64_t virt, uint64_t size);
+void vmm_dump_mapping(uint64_t virt_addr);
+
+// ============================================================================
+// Helper Macros
+// ============================================================================
 
 /**
- * Перевіряє чи змаповано сторінку
- * @param virt Віртуальна адреса
- * @return true якщо сторінка присутня
+ * @brief Check if page is mapped
  */
-bool vmm_is_mapped(uint64_t virt);
+#define vmm_is_mapped(virt) \
+	(vmm_get_physical(virt) != 0)
 
 /**
- * Змінює флаги сторінки
- * @param virt Віртуальна адреса
- * @param flags Нові флаги
- * @return true при успіху
+ * @brief Map physical memory to kernel space
  */
-bool vmm_set_flags(uint64_t virt, uint64_t flags);
+#define vmm_map_physical(phys, size, flags) \
+	vmm_map_range(PHYS_TO_VIRT(phys), phys, size, flags)
 
 /**
- * Отримує флаги сторінки
- * @param virt Віртуальна адреса
- * @return Флаги або 0 якщо не змаповано
+ * @brief Map device memory (uncached)
  */
-uint64_t vmm_get_flags(uint64_t virt);
+#define vmm_map_device(virt, phys, size) \
+	vmm_map_range(virt, phys, size, VMM_FLAGS_DEVICE)
 
 /**
- * Інвалідує TLB для сторінки
- * @param virt Віртуальна адреса
+ * @brief Map kernel code (read-only)
  */
-static inline void vmm_invlpg(uint64_t virt)
-{
-	asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
-}
+#define vmm_map_code(virt, phys, size) \
+	vmm_map_range(virt, phys, size, VMM_FLAGS_CODE)
 
 /**
- * Перезавантажує CR3 (інвалідує весь TLB)
+ * @brief Map kernel data (read-write)
  */
-static inline void vmm_reload_cr3(void)
+#define vmm_map_data(virt, phys, size) \
+	vmm_map_range(virt, phys, size, VMM_FLAGS_KERNEL)
+
+// ============================================================================
+// Bulk Operations
+// ============================================================================
+
+/**
+ * @brief Copy page mappings from one range to another
+ *
+ * @param dst_virt Destination virtual address
+ * @param src_virt Source virtual address
+ * @param size Size in bytes
+ * @param flags Flags for destination mappings
+ * @return 0 on success, -1 on error
+ */
+int vmm_copy_range(uint64_t dst_virt, uint64_t src_virt, size_t size, uint64_t flags);
+
+/**
+ * @brief Check if entire range is mapped
+ *
+ * @param virt Virtual address start
+ * @param size Size in bytes
+ * @return true if all pages mapped, false otherwise
+ */
+bool vmm_is_range_mapped(uint64_t virt, size_t size);
+
+// ============================================================================
+// Advanced Functions
+// ============================================================================
+
+/**
+ * @brief Clone address space for new process
+ *
+ * Creates new page tables with kernel mappings copied.
+ * User space can be copied or marked copy-on-write.
+ *
+ * @param flags Clone flags (COW, shared, etc.)
+ * @return Physical address of new PML4 or 0 on error
+ */
+uint64_t vmm_clone_address_space(uint32_t flags);
+
+/**
+ * @brief Switch to different address space
+ *
+ * @param pml4_phys Physical address of PML4 to switch to
+ */
+void vmm_switch_address_space(uint64_t pml4_phys);
+
+/**
+ * @brief Destroy address space
+ *
+ * Frees all user space page tables and the PML4.
+ * Does NOT touch kernel mappings.
+ *
+ * @param pml4_phys Physical address of PML4 to destroy
+ */
+void vmm_destroy_address_space(uint64_t pml4_phys);
+
+// ============================================================================
+// TLB Management
+// ============================================================================
+
+/**
+ * @brief Flush entire TLB
+ */
+static inline void vmm_flush_tlb(void)
 {
 	uint64_t cr3;
 	asm volatile("mov %%cr3, %0" : "=r"(cr3));
@@ -192,24 +317,13 @@ static inline void vmm_reload_cr3(void)
 }
 
 /**
- * Отримує поточне значення CR3
+ * @brief Flush TLB entry for specific address
  */
-static inline uint64_t vmm_get_cr3(void)
+static inline void vmm_flush_tlb_single(uint64_t virt_addr)
 {
-	uint64_t cr3;
-	asm volatile("mov %%cr3, %0" : "=r"(cr3));
-	return cr3;
+	asm volatile("invlpg (%0)" : : "r"(virt_addr) : "memory");
 }
 
-/**
- * Встановлює значення CR3
- */
-static inline void vmm_set_cr3(uint64_t cr3)
-{
-	asm volatile("mov %0, %%cr3" : : "r"(cr3) : "memory");
-}
+_End_C_Header;
 
-/**
- * Друкує статистику VMM
- */
-void vmm_print_stats(void);
+#endif /* VMM_H */

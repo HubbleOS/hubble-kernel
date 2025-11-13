@@ -434,6 +434,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	PrintInfo(L"Boot info virtual: 0x%lx\n", boot_info_virt);
 	PrintInfo(L"Stack virtual: 0x%lx\n", stack_virt);
 
+	PrintInfo(L"Jump to kernel\n");
+	ClearConsole();
+
 	// PrintInfo(L"Press any key to jump to kernel...\n");
 	// // Wait for key
 	// EFI_INPUT_KEY key;

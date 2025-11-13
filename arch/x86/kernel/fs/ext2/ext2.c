@@ -1,7 +1,7 @@
 
 #include "printk.h"
 
-#include <mm/slab.h>
+#include <mm/kmalloc.h>
 
 #include <fs/gpt/gpt_struct.h>
 
@@ -224,7 +224,7 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode)
 			memcpy(dir.entries[dir.count].name, entry->name, entry->name_len);
 			printk("teto3 count - %d\n", dir.count);
 			dir.entries[dir.count]
-				.name[entry->name_len] = '\0';
+			    .name[entry->name_len] = '\0';
 			dir.entries[dir.count].is_dir = entry->file_type == 0x10;
 			dir.entries[dir.count].cluster = entry->inode;
 			dir.count++;
