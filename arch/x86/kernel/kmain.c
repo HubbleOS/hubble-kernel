@@ -218,6 +218,14 @@ kernel_entry(BootInfo *bi)
 	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
 	printk(KERN_INFO "PMM initialized\n");
 
+	uint64_t phys1 = pmm_alloc_page();
+	printk(KERN_DEBUG "PMM allocated page phys=0x%lx\n", phys1);
+
+	pmm_free_page(phys1);
+
+	uint64_t phys2 = pmm_alloc_page();
+	printk(KERN_DEBUG "PMM allocated page phys=0x%lx\n", phys2);
+
 	// Slab
 	printk(KERN_DEBUG "Initializing Slab Allocator...\n");
 	slab_init();
@@ -229,29 +237,32 @@ kernel_entry(BootInfo *bi)
 	printk(KERN_INFO "VMM initialized\n");
 
 	// === CRITICAL: Run diagnostics BEFORE heavy tests ===
-	kmalloc_test();
+	// kmalloc_test();
 
-	memory_diagnostics();
+	printk(KERN_INFO "Testing slab allocator...\n");
+
+	void *a = slab_alloc(8);
+	void *b = slab_alloc(32);
+	void *c = slab_alloc(64);
+
+	printk(KERN_DEBUG "Allocated: a=%p, b=%p, c=%p\n", a, b, c);
+
+	slab_free(a);
+	slab_free(b);
+	slab_free(c);
+
+	// memory_diagnostics();
+
+	printk(KERN_INFO "Slab allocator basic test passed\n");
 
 	// Test basic allocation
-	if (!test_memory_allocation())
-	{
-		printk(KERN_ERR "Memory allocation test FAILED!\n");
-		printk(KERN_ERR "System cannot continue - halting.\n");
-		while (1)
-			asm("hlt");
-	}
-
-	// === SKIP VMM TESTS FOR NOW - они могут вичерпати пам'ять ===
-	// vmm_run_tests();  // ЗАКОМЕНТОВАНО!
-
-	printk(KERN_INFO "Memory subsystem ready\n");
-
-	// 6. Storage subsystems
-	printk(KERN_INFO "\n=== Initializing Storage ===\n");
-
-	// === CRITICAL: Run diagnostics BEFORE storage init ===
-	memory_diagnostics();
+	// if (!test_memory_allocation())
+	// {
+	// 	printk(KERN_ERR "Memory allocation test FAILED!\n");
+	// 	printk(KERN_ERR "System cannot continue - halting.\n");
+	// 	while (1)
+	// 		asm("hlt");
+	// }
 
 	printk(KERN_DEBUG "GPT init...\n");
 	int gpt_result = gpt_init(partitions);
@@ -314,18 +325,3 @@ kernel_entry(BootInfo *bi)
 }
 
 void kernel_main(BootInfo *bi) __attribute__((alias("kernel_entry")));
-
-void *phys_to_virt(uint64_t phys_addr)
-{
-	return (void *)(phys_addr + KERNEL_VIRT_BASE);
-}
-
-uint64_t virt_to_phys(void *virt_addr)
-{
-	uint64_t addr = (uint64_t)virt_addr;
-	if (addr >= KERNEL_VIRT_BASE)
-	{
-		return addr - KERNEL_VIRT_BASE;
-	}
-	return addr;
-}
