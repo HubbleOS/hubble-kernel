@@ -6,10 +6,9 @@
  * Використовує recursive mapping для доступу до page tables.
  */
 
-#ifndef VMM_H
-#define VMM_H
+#pragma once
 
-#include "_cheader.h"
+#include <_cheader.h>
 
 _Begin_C_Header;
 
@@ -71,6 +70,8 @@ typedef struct
 	uint64_t user_pages;	       // User allocated pages
 	uint64_t total_virtual_memory; // Total virtual address space (256TB)
 	uint64_t used_virtual_memory;  // Used virtual memory
+
+	bool initialized; // True if VMM is initialized
 } vmm_info_t;
 
 // ============================================================================
@@ -85,6 +86,13 @@ typedef struct
  * для доступу до page tables.
  */
 void vmm_init(void);
+
+/**
+ * @brief Check if VMM is initialized
+ *
+ * @return True if VMM is initialized, false otherwise
+ */
+bool vmm_is_initialized(void);
 
 /**
  * @brief Map single page
@@ -325,5 +333,3 @@ static inline void vmm_flush_tlb_single(uint64_t virt_addr)
 }
 
 _End_C_Header;
-
-#endif /* VMM_H */

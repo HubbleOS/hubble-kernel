@@ -120,6 +120,13 @@ void vmm_init(void)
 	// Підрахунок існуючих mappings (опціонально)
 	g_vmm.total_mapped_pages = 0;
 	g_vmm.kernel_pages = 0;
+
+	g_vmm.initialized = true;
+}
+
+bool vmm_is_initialized(void)
+{
+	return g_vmm.initialized;
 }
 
 int vmm_map_page(uint64_t virt, uint64_t phys, uint64_t flags)
