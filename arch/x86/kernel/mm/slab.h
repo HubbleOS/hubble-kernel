@@ -20,7 +20,6 @@
 #define SLAB_MIN_SIZE 8	    // Мінімальний розмір об'єкта
 #define SLAB_MAX_SIZE 4096  // Максимальний розмір об'єкта
 #define SLAB_CACHE_COUNT 12 // Кількість стандартних кешів
-#define SLAB_NAME_MAX 32    // Максимальна довжина імені кешу
 
 // ============================================================================
 // Slab Structures
@@ -44,9 +43,8 @@ typedef struct slab
  */
 typedef struct slab_cache
 {
-	char name[SLAB_NAME_MAX]; // Ім'я кешу
-	size_t object_size;	  // Розмір об'єкта
-	size_t align;		  // Вирівнювання
+	size_t object_size; // Розмір об'єкта
+	size_t align;	    // Вирівнювання
 
 	slab_t *slabs_full;    // Повністю зайняті slabs
 	slab_t *slabs_partial; // Частково зайняті slabs
@@ -132,15 +130,14 @@ void *slab_realloc(void *ptr, size_t new_size);
 /**
  * @brief Create custom cache
  *
- * @param name Cache name
  * @param size Object size
  * @param align Alignment (must be power of 2)
  * @return Pointer to cache or NULL
  *
  * Example:
- *   slab_cache_t *task_cache = slab_cache_create("task_struct", 512, 8);
+ *   slab_cache_t *task_cache = slab_cache_create(512, 8);
  */
-slab_cache_t *slab_cache_create(const char *name, size_t size, size_t align);
+slab_cache_t *slab_cache_create(size_t size, size_t align);
 
 /**
  * @brief Allocate from specific cache
