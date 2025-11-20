@@ -223,7 +223,7 @@ kernel_entry(BootInfo *bi)
 	slab_init();
 	printk(KERN_INFO "Slab Allocator initialized\n");
 
-	void *slab_test = slab_alloc(4096 * 2);
+	void *slab_test = slab_alloc(128);
 	printk(KERN_DEBUG "Slab allocated 128 bytes at %p\n", slab_test);
 	slab_free(slab_test);
 
@@ -310,7 +310,7 @@ kernel_entry(BootInfo *bi)
 
 	// 10. Transfer control to OS main
 	printk(KERN_INFO "Starting OS main loop...\n");
-	os_main(bi);
+	// os_main(bi);
 
 	// Should never reach here
 	printk(KERN_WARNING "os_main() returned! Entering infinite loop...\n");

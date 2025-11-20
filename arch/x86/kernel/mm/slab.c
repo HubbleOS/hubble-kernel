@@ -1,6 +1,6 @@
 /**
  * @file slab.c
- * @brief Slab Allocator Implementation (PMM-only, no VMM dependency)
+ * @brief Fixed Slab Allocator Implementation
  */
 
 #include "slab.h"
@@ -27,9 +27,6 @@ static slab_cache_t *g_standard_caches[12] = {NULL};
 // Memory Allocation Helpers (PMM-only)
 // ============================================================================
 
-/**
- * @brief Виділити сторінку через PMM (Higher-Half mapped)
- */
 static void *slab_alloc_page(void)
 {
 	uint64_t phys = pmm_alloc_page();
@@ -39,9 +36,6 @@ static void *slab_alloc_page(void)
 	return (void *)PHYS_TO_VIRT(phys);
 }
 
-/**
- * @brief Звільнити сторінку через PMM
- */
 static void slab_free_page(void *addr)
 {
 	if (!addr)
@@ -63,6 +57,13 @@ static inline size_t align_up(size_t size, size_t align)
 static inline bool is_power_of_2(size_t n)
 {
 	return (n != 0) && ((n & (n - 1)) == 0);
+}
+
+// Перевірка чи вказівник знаходиться в валідному діапазоні higher-half
+static inline bool is_valid_kernel_ptr(void *ptr)
+{
+	uint64_t addr = (uint64_t)ptr;
+	return (addr >= KERNEL_VIRT_BASE && addr != 0);
 }
 
 static slab_cache_t *find_cache(size_t size)
@@ -97,6 +98,9 @@ static slab_t *slab_create(slab_cache_t *cache)
 	void *page = slab_alloc_page();
 	if (!page)
 		return NULL;
+
+	// Обнуляємо всю сторінку для безпеки
+	memset(page, 0, PAGE_SIZE);
 
 	slab_t *slab = (slab_t *)page;
 
@@ -181,69 +185,60 @@ static void slab_remove_from_list(slab_t **list, slab_t *slab)
 	slab->prev = NULL;
 }
 
-// Безпечна перевірка чи вказівник знаходиться в діапазоні slab
-static inline bool ptr_in_slab(void *ptr, slab_t *slab)
+// Безпечна перевірка чи вказівник належить до slab
+static inline bool ptr_in_slab_range(void *ptr, slab_t *slab)
 {
 	uint64_t slab_start = (uint64_t)slab;
 	uint64_t slab_end = slab_start + PAGE_SIZE;
 	uint64_t obj_addr = (uint64_t)ptr;
 
+	// Об'єкт має бути в межах сторінки slab'а
 	return (obj_addr >= slab_start && obj_addr < slab_end);
 }
 
-static slab_t *find_slab_for_object_safe(slab_cache_t *cache, void *ptr)
+// ВИПРАВЛЕНО: Безпечний пошук slab для об'єкта
+static slab_t *find_slab_for_object(slab_cache_t *cache, void *ptr)
 {
-	if (!cache || !ptr)
+	if (!cache || !ptr || !is_valid_kernel_ptr(ptr) || !is_valid_kernel_ptr(cache))
 		return NULL;
 
-	// Перевіряємо що cache в валідному діапазоні
-	uint64_t cache_addr = (uint64_t)cache;
-	if (cache_addr < KERNEL_VIRT_BASE || cache_addr == 0)
+	// Перевіряємо що pointer вирівняний до розміру об'єкта
+	uint64_t addr = (uint64_t)ptr;
+	if ((addr & (cache->align - 1)) != 0)
 	{
-		printk(KERN_ERR "Invalid cache pointer: %p\n", cache);
+		printk(KERN_ERR "Unaligned pointer: %p (align=%zu)\n", ptr, cache->align);
 		return NULL;
 	}
 
-	// Перевіряємо що pointer в розумному діапазоні (higher-half)
-	uint64_t addr = (uint64_t)ptr;
-	if (addr < KERNEL_VIRT_BASE)
-		return NULL;
-
-	// Безпечно читаємо вказівники на списки
-	slab_t *slabs_partial = cache->slabs_partial;
-	slab_t *slabs_full = cache->slabs_full;
-	slab_t *slabs_free = cache->slabs_free;
-
-	slab_t *lists[] = {slabs_partial, slabs_full, slabs_free};
-
-	for (int i = 0; i < 3; i++)
+	// Пошук у partial slabs (найбільш ймовірно)
+	slab_t *slab = cache->slabs_partial;
+	int safety = 0;
+	while (slab && safety++ < 100)
 	{
-		slab_t *slab = lists[i];
-		int safety_counter = 0;
+		if (!is_valid_kernel_ptr(slab))
+			break;
 
-		while (slab && safety_counter < 1000)
-		{
-			// Перевіряємо що slab в валідному діапазоні
-			uint64_t slab_addr = (uint64_t)slab;
-			if (slab_addr < KERNEL_VIRT_BASE)
-				break;
+		if (ptr_in_slab_range(ptr, slab))
+			return slab;
 
-			if (ptr_in_slab(ptr, slab))
-			{
-				return slab;
-			}
+		slab = slab->next;
+	}
 
-			slab = slab->next;
-			safety_counter++;
-		}
+	// Пошук у full slabs
+	slab = cache->slabs_full;
+	safety = 0;
+	while (slab && safety++ < 100)
+	{
+		if (!is_valid_kernel_ptr(slab))
+			break;
+
+		if (ptr_in_slab_range(ptr, slab))
+			return slab;
+
+		slab = slab->next;
 	}
 
 	return NULL;
-}
-
-static slab_t *find_slab_for_object(slab_cache_t *cache, void *ptr)
-{
-	return find_slab_for_object_safe(cache, ptr);
 }
 
 // ============================================================================
@@ -262,17 +257,20 @@ slab_cache_t *slab_cache_create(size_t size, size_t align)
 		align = 8;
 	}
 
+	// ВИПРАВЛЕНО: Виділяємо окрему сторінку для структури cache
 	slab_cache_t *cache = (slab_cache_t *)slab_alloc_page();
 	if (!cache)
 	{
 		return NULL;
 	}
 
-	memset(cache, 0, sizeof(slab_cache_t));
+	// Обнуляємо всю структуру
+	memset(cache, 0, PAGE_SIZE);
 
 	cache->object_size = align_up(size, align);
 	cache->align = align;
 
+	// Обчислюємо кількість об'єктів на slab
 	size_t metadata_size = align_up(sizeof(slab_t), align);
 	size_t available = PAGE_SIZE - metadata_size;
 	cache->objects_per_slab = available / cache->object_size;
@@ -283,16 +281,20 @@ slab_cache_t *slab_cache_create(size_t size, size_t align)
 		return NULL;
 	}
 
+	// Додаємо в глобальний список
 	cache->next = g_cache_list;
 	g_cache_list = cache;
 	g_slab_info.cache_count++;
+
+	printk(KERN_DEBUG "Created cache: size=%zu, align=%zu, objs_per_slab=%u\n",
+	       cache->object_size, cache->align, cache->objects_per_slab);
 
 	return cache;
 }
 
 void *slab_cache_alloc(slab_cache_t *cache)
 {
-	if (!cache)
+	if (!cache || !is_valid_kernel_ptr(cache))
 	{
 		return NULL;
 	}
@@ -326,6 +328,7 @@ void *slab_cache_alloc(slab_cache_t *cache)
 	void *obj = slab->free_list;
 	if (!obj)
 	{
+		printk(KERN_ERR "Slab free_list is NULL but slab is in partial list!\n");
 		return NULL;
 	}
 
@@ -347,19 +350,22 @@ void *slab_cache_alloc(slab_cache_t *cache)
 
 void slab_cache_free(slab_cache_t *cache, void *ptr)
 {
-	if (!cache || !ptr)
+	if (!cache || !ptr || !is_valid_kernel_ptr(cache) || !is_valid_kernel_ptr(ptr))
 	{
+		printk(KERN_ERR "slab_cache_free: invalid parameters\n");
 		return;
 	}
 
 	slab_t *slab = find_slab_for_object(cache, ptr);
 	if (!slab)
 	{
+		printk(KERN_ERR "slab_cache_free: object %p not found in cache\n", ptr);
 		return;
 	}
 
 	bool was_full = (slab->in_use == slab->capacity);
 
+	// Додаємо об'єкт назад у free list
 	*(void **)ptr = slab->free_list;
 	slab->free_list = ptr;
 	slab->in_use--;
@@ -383,9 +389,7 @@ void slab_cache_free(slab_cache_t *cache, void *ptr)
 void slab_cache_destroy(slab_cache_t *cache)
 {
 	if (!cache)
-	{
 		return;
-	}
 
 	while (cache->slabs_free)
 	{
@@ -432,9 +436,7 @@ void slab_cache_destroy(slab_cache_t *cache)
 uint32_t slab_cache_shrink(slab_cache_t *cache)
 {
 	if (!cache)
-	{
 		return 0;
-	}
 
 	uint32_t freed = 0;
 
@@ -455,18 +457,24 @@ uint32_t slab_cache_shrink(slab_cache_t *cache)
 
 void slab_init(void)
 {
+	printk(KERN_INFO "Initializing %zu standard slab caches...\n", g_standard_count);
+
 	for (size_t i = 0; i < g_standard_count; i++)
 	{
 		g_standard_caches[i] = slab_cache_create(g_standard_sizes[i], 8);
-		printk("Created cache for size %zu at %p\n",
-		       g_standard_sizes[i],
-		       g_standard_caches[i]);
 
 		if (!g_standard_caches[i])
 		{
-			printk("FAILED to create cache for size %d!\n", i + 1);
+			printk(KERN_ERR "FAILED to create cache for size %zu!\n",
+			       g_standard_sizes[i]);
+			return;
 		}
+
+		printk(KERN_DEBUG "  [%zu] size=%zu at %p\n",
+		       i, g_standard_sizes[i], g_standard_caches[i]);
 	}
+
+	printk(KERN_INFO "Slab allocator initialized successfully\n");
 }
 
 void *slab_alloc(size_t size)
@@ -479,25 +487,31 @@ void *slab_alloc(size_t size)
 	slab_cache_t *cache = find_cache(size);
 	if (!cache)
 	{
+		printk(KERN_ERR "No suitable cache for size %zu\n", size);
 		return NULL;
 	}
 
-	return slab_cache_alloc(cache);
+	void *ptr = slab_cache_alloc(cache);
+
+	if (ptr)
+	{
+		printk(KERN_DEBUG "slab_alloc(%zu) -> %p (cache=%p, obj_size=%zu)\n",
+		       size, ptr, cache, cache->object_size);
+	}
+
+	return ptr;
 }
+
 void slab_free(void *ptr)
 {
 	if (!ptr)
-	{
 		return;
-	}
 
-	printk(KERN_DEBUG "slab_free: freeing %p\n", ptr);
+	printk(KERN_DEBUG "slab_free(%p)\n", ptr);
 
-	// Перевіряємо що pointer валідний
-	uint64_t addr = (uint64_t)ptr;
-	if (addr < KERNEL_VIRT_BASE)
+	if (!is_valid_kernel_ptr(ptr))
 	{
-		printk(KERN_ERR "slab_free: invalid pointer %p (not in higher-half)\n", ptr);
+		printk(KERN_ERR "slab_free: invalid pointer %p\n", ptr);
 		return;
 	}
 
@@ -505,59 +519,36 @@ void slab_free(void *ptr)
 	for (size_t i = 0; i < g_standard_count; i++)
 	{
 		slab_cache_t *cache = g_standard_caches[i];
-
-		// Перевіряємо що cache валідний
-		if (!cache)
+		if (!cache || !is_valid_kernel_ptr(cache))
 			continue;
 
-		uint64_t cache_addr = (uint64_t)cache;
-		if (cache_addr < KERNEL_VIRT_BASE)
-		{
-			printk(KERN_ERR "Invalid standard cache[%zu]: %p\n", i, cache);
-			continue;
-		}
-
-		printk(KERN_DEBUG "Checking standard cache[%zu] at %p, size=%zu\n",
-		       i, cache, cache->object_size);
-
-		slab_t *slab = find_slab_for_object_safe(cache, ptr);
+		slab_t *slab = find_slab_for_object(cache, ptr);
 		if (slab)
 		{
-			printk(KERN_DEBUG "Found in standard cache[%zu]\n", i);
+			printk(KERN_DEBUG "  Found in standard cache[%zu]\n", i);
 			slab_cache_free(cache, ptr);
 			return;
 		}
 	}
 
-	printk(KERN_DEBUG "Not found in standard caches, checking dynamic caches\n");
-	printk(KERN_DEBUG "g_cache_list = %p\n", g_cache_list);
-
-	// Потім шукаємо в динамічно створених кешах
+	// Шукаємо в динамічних кешах
 	slab_cache_t *cache = g_cache_list;
-	int cache_counter = 0;
+	int safety = 0;
 
-	while (cache && cache_counter < 100)
+	while (cache && safety++ < 100)
 	{
-		// Перевіряємо валідність cache
-		uint64_t cache_addr = (uint64_t)cache;
-		if (cache_addr < KERNEL_VIRT_BASE)
-		{
-			printk(KERN_ERR "Invalid dynamic cache: %p\n", cache);
+		if (!is_valid_kernel_ptr(cache))
 			break;
-		}
 
-		printk(KERN_DEBUG "Checking dynamic cache %d at %p\n", cache_counter, cache);
-
-		slab_t *slab = find_slab_for_object_safe(cache, ptr);
+		slab_t *slab = find_slab_for_object(cache, ptr);
 		if (slab)
 		{
-			printk(KERN_DEBUG "Found in dynamic cache\n");
+			printk(KERN_DEBUG "  Found in dynamic cache\n");
 			slab_cache_free(cache, ptr);
 			return;
 		}
 
 		cache = cache->next;
-		cache_counter++;
 	}
 
 	printk(KERN_WARNING "slab_free: pointer %p not found in any cache!\n", ptr);
@@ -576,9 +567,7 @@ void *slab_calloc(size_t size)
 void *slab_realloc(void *ptr, size_t new_size)
 {
 	if (!ptr)
-	{
 		return slab_alloc(new_size);
-	}
 
 	if (new_size == 0)
 	{
@@ -586,49 +575,43 @@ void *slab_realloc(void *ptr, size_t new_size)
 		return NULL;
 	}
 
+	// Знаходимо поточний розмір
 	size_t old_size = 0;
-	slab_cache_t *cache = g_cache_list;
-	while (cache)
+
+	for (size_t i = 0; i < g_standard_count; i++)
 	{
-		slab_t *slab = find_slab_for_object(cache, ptr);
-		if (slab)
+		slab_cache_t *cache = g_standard_caches[i];
+		if (cache && find_slab_for_object(cache, ptr))
 		{
 			old_size = cache->object_size;
 			break;
 		}
-		cache = cache->next;
 	}
 
 	if (old_size == 0)
 	{
-		for (size_t i = 0; i < g_standard_count; i++)
+		slab_cache_t *cache = g_cache_list;
+		while (cache)
 		{
-			if (g_standard_caches[i])
+			if (find_slab_for_object(cache, ptr))
 			{
-				slab_t *slab = find_slab_for_object(g_standard_caches[i], ptr);
-				if (slab)
-				{
-					old_size = g_standard_caches[i]->object_size;
-					break;
-				}
+				old_size = cache->object_size;
+				break;
 			}
+			cache = cache->next;
 		}
 	}
 
 	if (old_size == 0)
-	{
 		return NULL;
-	}
 
 	if (new_size <= old_size)
-	{
 		return ptr;
-	}
 
 	void *new_ptr = slab_alloc(new_size);
 	if (new_ptr)
 	{
-		memcpy(new_ptr, ptr, old_size < new_size ? old_size : new_size);
+		memcpy(new_ptr, ptr, old_size);
 		slab_free(ptr);
 	}
 
@@ -667,14 +650,10 @@ bool slab_validate(void)
 			while (slab)
 			{
 				if (slab->capacity != cache->objects_per_slab)
-				{
 					return false;
-				}
 
 				if (slab->in_use > slab->capacity)
-				{
 					return false;
-				}
 
 				slab = slab->next;
 			}
