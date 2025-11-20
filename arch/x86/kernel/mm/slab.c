@@ -8,6 +8,8 @@
 #include "higher_half.h"
 #include <string.h>
 
+#include "printk.h"
+
 // ============================================================================
 // Global State
 // ============================================================================
@@ -16,7 +18,7 @@ static slab_cache_t *g_cache_list = NULL;
 static slab_info_t g_slab_info = {0};
 
 static const size_t g_standard_sizes[] = {
-    8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096};
+    8, 16, 32, 64, 128, 256, 512, 1024, 2048};
 static const size_t g_standard_count = sizeof(g_standard_sizes) / sizeof(size_t);
 
 static slab_cache_t *g_standard_caches[12] = {NULL};
@@ -179,29 +181,69 @@ static void slab_remove_from_list(slab_t **list, slab_t *slab)
 	slab->prev = NULL;
 }
 
-static slab_t *find_slab_for_object(slab_cache_t *cache, void *ptr)
+// Безпечна перевірка чи вказівник знаходиться в діапазоні slab
+static inline bool ptr_in_slab(void *ptr, slab_t *slab)
 {
-	slab_t *lists[] = {cache->slabs_full, cache->slabs_partial, cache->slabs_free};
+	uint64_t slab_start = (uint64_t)slab;
+	uint64_t slab_end = slab_start + PAGE_SIZE;
+	uint64_t obj_addr = (uint64_t)ptr;
+
+	return (obj_addr >= slab_start && obj_addr < slab_end);
+}
+
+static slab_t *find_slab_for_object_safe(slab_cache_t *cache, void *ptr)
+{
+	if (!cache || !ptr)
+		return NULL;
+
+	// Перевіряємо що cache в валідному діапазоні
+	uint64_t cache_addr = (uint64_t)cache;
+	if (cache_addr < KERNEL_VIRT_BASE || cache_addr == 0)
+	{
+		printk(KERN_ERR "Invalid cache pointer: %p\n", cache);
+		return NULL;
+	}
+
+	// Перевіряємо що pointer в розумному діапазоні (higher-half)
+	uint64_t addr = (uint64_t)ptr;
+	if (addr < KERNEL_VIRT_BASE)
+		return NULL;
+
+	// Безпечно читаємо вказівники на списки
+	slab_t *slabs_partial = cache->slabs_partial;
+	slab_t *slabs_full = cache->slabs_full;
+	slab_t *slabs_free = cache->slabs_free;
+
+	slab_t *lists[] = {slabs_partial, slabs_full, slabs_free};
 
 	for (int i = 0; i < 3; i++)
 	{
 		slab_t *slab = lists[i];
-		while (slab)
-		{
-			uint64_t slab_start = (uint64_t)slab;
-			uint64_t slab_end = slab_start + PAGE_SIZE;
-			uint64_t obj_addr = (uint64_t)ptr;
+		int safety_counter = 0;
 
-			if (obj_addr >= slab_start && obj_addr < slab_end)
+		while (slab && safety_counter < 1000)
+		{
+			// Перевіряємо що slab в валідному діапазоні
+			uint64_t slab_addr = (uint64_t)slab;
+			if (slab_addr < KERNEL_VIRT_BASE)
+				break;
+
+			if (ptr_in_slab(ptr, slab))
 			{
 				return slab;
 			}
 
 			slab = slab->next;
+			safety_counter++;
 		}
 	}
 
 	return NULL;
+}
+
+static slab_t *find_slab_for_object(slab_cache_t *cache, void *ptr)
+{
+	return find_slab_for_object_safe(cache, ptr);
 }
 
 // ============================================================================
@@ -416,6 +458,9 @@ void slab_init(void)
 	for (size_t i = 0; i < g_standard_count; i++)
 	{
 		g_standard_caches[i] = slab_cache_create(g_standard_sizes[i], 8);
+		printk("Created cache for size %zu at %p\n",
+		       g_standard_sizes[i],
+		       g_standard_caches[i]);
 
 		if (!g_standard_caches[i])
 		{
@@ -439,7 +484,6 @@ void *slab_alloc(size_t size)
 
 	return slab_cache_alloc(cache);
 }
-
 void slab_free(void *ptr)
 {
 	if (!ptr)
@@ -447,30 +491,76 @@ void slab_free(void *ptr)
 		return;
 	}
 
-	slab_cache_t *cache = g_cache_list;
-	while (cache)
+	printk(KERN_DEBUG "slab_free: freeing %p\n", ptr);
+
+	// Перевіряємо що pointer валідний
+	uint64_t addr = (uint64_t)ptr;
+	if (addr < KERNEL_VIRT_BASE)
 	{
-		slab_t *slab = find_slab_for_object(cache, ptr);
+		printk(KERN_ERR "slab_free: invalid pointer %p (not in higher-half)\n", ptr);
+		return;
+	}
+
+	// Спочатку шукаємо в стандартних кешах
+	for (size_t i = 0; i < g_standard_count; i++)
+	{
+		slab_cache_t *cache = g_standard_caches[i];
+
+		// Перевіряємо що cache валідний
+		if (!cache)
+			continue;
+
+		uint64_t cache_addr = (uint64_t)cache;
+		if (cache_addr < KERNEL_VIRT_BASE)
+		{
+			printk(KERN_ERR "Invalid standard cache[%zu]: %p\n", i, cache);
+			continue;
+		}
+
+		printk(KERN_DEBUG "Checking standard cache[%zu] at %p, size=%zu\n",
+		       i, cache, cache->object_size);
+
+		slab_t *slab = find_slab_for_object_safe(cache, ptr);
 		if (slab)
 		{
+			printk(KERN_DEBUG "Found in standard cache[%zu]\n", i);
 			slab_cache_free(cache, ptr);
 			return;
 		}
-		cache = cache->next;
 	}
 
-	for (size_t i = 0; i < g_standard_count; i++)
+	printk(KERN_DEBUG "Not found in standard caches, checking dynamic caches\n");
+	printk(KERN_DEBUG "g_cache_list = %p\n", g_cache_list);
+
+	// Потім шукаємо в динамічно створених кешах
+	slab_cache_t *cache = g_cache_list;
+	int cache_counter = 0;
+
+	while (cache && cache_counter < 100)
 	{
-		if (g_standard_caches[i])
+		// Перевіряємо валідність cache
+		uint64_t cache_addr = (uint64_t)cache;
+		if (cache_addr < KERNEL_VIRT_BASE)
 		{
-			slab_t *slab = find_slab_for_object(g_standard_caches[i], ptr);
-			if (slab)
-			{
-				slab_cache_free(g_standard_caches[i], ptr);
-				return;
-			}
+			printk(KERN_ERR "Invalid dynamic cache: %p\n", cache);
+			break;
 		}
+
+		printk(KERN_DEBUG "Checking dynamic cache %d at %p\n", cache_counter, cache);
+
+		slab_t *slab = find_slab_for_object_safe(cache, ptr);
+		if (slab)
+		{
+			printk(KERN_DEBUG "Found in dynamic cache\n");
+			slab_cache_free(cache, ptr);
+			return;
+		}
+
+		cache = cache->next;
+		cache_counter++;
 	}
+
+	printk(KERN_WARNING "slab_free: pointer %p not found in any cache!\n", ptr);
 }
 
 void *slab_calloc(size_t size)
