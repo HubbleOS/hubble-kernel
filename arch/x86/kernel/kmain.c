@@ -218,18 +218,14 @@ kernel_entry(BootInfo *bi)
 	pmm_init(bi->memory_map->heap_start, bi->memory_map->heap_size);
 	printk(KERN_INFO "PMM initialized\n");
 
-	uint64_t phys1 = pmm_alloc_page();
-	printk(KERN_DEBUG "PMM allocated page phys=0x%lx\n", phys1);
-
-	pmm_free_page(phys1);
-
-	uint64_t phys2 = pmm_alloc_page();
-	printk(KERN_DEBUG "PMM allocated page phys=0x%lx\n", phys2);
-
 	// Slab
 	printk(KERN_DEBUG "Initializing Slab Allocator...\n");
 	slab_init();
 	printk(KERN_INFO "Slab Allocator initialized\n");
+
+	void *slab_test = slab_alloc(4096 * 2);
+	printk(KERN_DEBUG "Slab allocated 128 bytes at %p\n", slab_test);
+	slab_free(slab_test);
 
 	// VMM
 	printk(KERN_DEBUG "Initializing VMM...\n");
