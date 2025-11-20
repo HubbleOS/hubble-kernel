@@ -41,7 +41,7 @@ typedef struct alloc_header
  */
 static size_t get_slab_bucket(size_t size)
 {
-	// Slab buckets: 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096
+	// Slab buckets: 8, 16, 32, 64, 128, 256, 512, 1024, 2048
 	if (size <= 8)
 		return 8;
 	if (size <= 16)
@@ -60,8 +60,6 @@ static size_t get_slab_bucket(size_t size)
 		return 1024;
 	if (size <= 2048)
 		return 2048;
-	if (size <= 4096)
-		return 4096;
 
 	return 0; // Too large for slab
 }
