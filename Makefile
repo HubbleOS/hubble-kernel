@@ -68,7 +68,8 @@ CXXFLAGS = -MMD -MP -ffreestanding -fno-exceptions -fno-rtti -m64 -O2 -Wall -Wex
 LDFLAGS_NOSTDLIB = -nostdlib -T
 OBJCPYFLAGS = binary
 
-BOOT_CFLAGS = -Iinclude -Ignu-efi/inc \
+BOOT_CFLAGS = -Iinclude -Ikernel\
+			-Ignu-efi -Ignu-efi/inc \
 			-fpic -ffreestanding -fno-stack-protector \
 			-fno-stack-check -fshort-wchar -mno-red-zone \
 			-maccumulate-outgoing-args -c

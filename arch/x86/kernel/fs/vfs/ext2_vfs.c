@@ -20,7 +20,7 @@
 bool ext2_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba)
 {
 	printk("Initializing device\n");
-	EXT2_FS *ext2_fs = kmalloc(sizeof(EXT2_FS));
+	EXT2_FS *ext2_fs = kmalloc(sizeof(EXT2_FS), GFP_KERNEL);
 	ext2_fs->device = device->device;
 	ext2_fs->read_sector = device->read;
 	if (!ext2_fs->read_sector)
@@ -80,7 +80,7 @@ Directory ext2_vfs_readdir(VFS_FS *fs, const char *path)
 {
 
 	printk("path: %s\n", path);
-	Ext2Inode *inode = kmalloc(sizeof(Ext2Inode));
+	Ext2Inode *inode = kmalloc(sizeof(Ext2Inode), GFP_KERNEL);
 	// inode = ext2_find_dir_entry(fs->fs, 2, path);
 	ext2_read_inode(fs->fs, ext2_parse_path(fs->fs, 2, path), inode);
 	return ext2_list_dir(fs->fs, inode);

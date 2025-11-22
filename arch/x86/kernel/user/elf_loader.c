@@ -176,7 +176,7 @@ int load_elf_and_run(const char *path)
 
 	// Read program headers
 	size_t phdrs_size = ehdr.e_phnum * ehdr.e_phentsize;
-	Elf64_Phdr *phdrs = kmalloc(phdrs_size);
+	Elf64_Phdr *phdrs = kmalloc(phdrs_size, GFP_KERNEL);
 	if (!phdrs)
 	{
 		printk("ERROR: Out of memory for program headers\n");

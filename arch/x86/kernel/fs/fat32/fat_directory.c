@@ -8,7 +8,7 @@
 
 void fat32_format_directory_cluster(FAT32_FS *fs, uint32_t cluster, uint32_t parent_cluster)
 {
-	uint8_t *buf = kmalloc(fs->cluster_size);
+	uint8_t *buf = kmalloc(fs->cluster_size, GFP_KERNEL);
 	memset(buf, 0, fs->cluster_size);
 
 	// Entry "."
@@ -72,7 +72,7 @@ bool parse_directory_entry(FAT32_DirectoryEntry *entry, char *name_out, bool *is
 
 bool fat32_add_directory_entry(FAT32_FS *fs, uint32_t dir_cluster, FAT32_DirectoryEntry *new_entry)
 {
-	uint8_t *buf = kmalloc(fs->cluster_size);
+	uint8_t *buf = kmalloc(fs->cluster_size, GFP_KERNEL);
 
 	while (dir_cluster < 0x0FFFFFF8)
 	{

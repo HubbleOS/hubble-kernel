@@ -49,7 +49,7 @@ uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const 
 	if (dir_cluster == 0)
 		dir_cluster = 2;
 
-	uint8_t *buffer = kmalloc(fs->cluster_size);
+	uint8_t *buffer = kmalloc(fs->cluster_size, GFP_KERNEL);
 	if (!buffer)
 	{
 		printk("find_directory_entry_cluster: failed to allocate buffer\n");
@@ -89,7 +89,7 @@ uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const 
 void iterate_directory(FAT32_FS *fs, uint32_t cluster, directory_entry_callback_t callback, void *ctx)
 {
 	int steps = 0;
-	uint8_t *data = kmalloc(fs->cluster_size);
+	uint8_t *data = kmalloc(fs->cluster_size, GFP_KERNEL);
 	if (!data)
 		return;
 	while (cluster < 0x0FFFFFF8 && steps++ < MAX_CLUSTER_CHAIN && cluster != 0)
