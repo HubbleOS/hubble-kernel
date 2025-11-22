@@ -276,7 +276,7 @@ char *Terminal::readLine()
 	size_t length = 0;
 	size_t cursor_pos = 0;
 
-	char *buffer = (char *)kmalloc(capacity);
+	char *buffer = (char *)kmalloc(capacity, GFP_KERNEL);
 	if (!buffer)
 		return nullptr;
 
@@ -398,7 +398,7 @@ char *Terminal::readLine()
 			if (length + 1 >= capacity)
 			{
 				capacity *= 2;
-				char *new_buf = (char *)krealloc(buffer, capacity);
+				char *new_buf = (char *)krealloc(buffer, capacity, GFP_KERNEL);
 				if (!new_buf)
 				{
 					kfree(buffer);
@@ -443,7 +443,7 @@ char *Terminal::readLine()
 			if (length >= capacity)
 			{
 				capacity = length + 1;
-				char *new_buf = (char *)krealloc(buffer, capacity);
+				char *new_buf = (char *)krealloc(buffer, capacity, GFP_KERNEL);
 				if (!new_buf)
 				{
 					kfree(buffer);
@@ -468,7 +468,7 @@ char *Terminal::readLine()
 			if (length >= capacity)
 			{
 				capacity = length + 1;
-				char *new_buf = (char *)krealloc(buffer, capacity);
+				char *new_buf = (char *)krealloc(buffer, capacity, GFP_KERNEL);
 				if (!new_buf)
 				{
 					kfree(buffer);
@@ -491,7 +491,7 @@ char *Terminal::readLine()
 		if (length + 1 >= capacity)
 		{
 			capacity *= 2;
-			char *new_buf = (char *)krealloc(buffer, capacity);
+			char *new_buf = (char *)krealloc(buffer, capacity, GFP_KERNEL);
 			if (!new_buf)
 			{
 				kfree(buffer);

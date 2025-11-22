@@ -2,7 +2,7 @@
 #include "kmalloc.h"
 
 memory_ops_t heap_memory_ops = {
-    .malloc = kmalloc,
+    .malloc = kzalloc,
     .realloc = krealloc,
     .free = kfree,
 };

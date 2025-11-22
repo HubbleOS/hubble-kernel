@@ -188,8 +188,62 @@ uint64_t syscall_handler_wrapper(registers_t *regs)
 // Init
 // ============================================================================
 
+#include <sys/keyboard.h>
+
+#define KBD_BUFFER_SIZE 128
+
+static key_event_t kbd_buffer[KBD_BUFFER_SIZE];
+static volatile size_t kbd_head = 0;
+static volatile size_t kbd_tail = 0;
+
+static void kbd_push(key_event_t e)
+{
+	size_t next = (kbd_head + 1) % KBD_BUFFER_SIZE;
+	if (next != kbd_tail)
+	{
+		kbd_buffer[kbd_head] = e;
+		kbd_head = next;
+	}
+}
+
+static bool kbd_pop(key_event_t *out)
+{
+	if (kbd_tail == kbd_head)
+		return false;
+	*out = kbd_buffer[kbd_tail];
+	kbd_tail = (kbd_tail + 1) % KBD_BUFFER_SIZE;
+	return true;
+}
+
+void keyboard_irq(registers_t *r)
+{
+	key_event_t ev = read_key_event(); // читает scancode и собирает event
+	kbd_push(ev);
+}
+
+char keyboard_get_char()
+{
+	key_event_t ev;
+
+	while (!kbd_pop(&ev))
+	{
+	} // блокируем пока нет буфера
+
+	if (ev.released)
+		return 0; // пропускаем отпускание клавиш
+
+	return keymap_lookup_char(ev.id.scancode, ev.id.extended, ev.is_shift, ev.is_caps_lock);
+}
+
 void interrupts_init(void)
 {
 	pic_remap();
+
+	irq_clear_mask(1); // включаем IRQ1 (клавиатуру)
+	irq_install_handler(1, keyboard_irq);
+
 	asm volatile("sti");
+
+	char c = keyboard_get_char();
+	printk("Got char: %c\n", c);
 }

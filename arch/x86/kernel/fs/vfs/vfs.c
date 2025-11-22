@@ -41,7 +41,7 @@ static const char *vfs_get_relpath(const char *path, const char *mountpoint)
 
 bool vfs_mount(const char *mountpoint, gpt_partition_t *partition, FileSystemType type)
 {
-	VFS_FS *fs = kmalloc(sizeof(VFS_FS));
+	VFS_FS *fs = kmalloc(sizeof(VFS_FS), GFP_KERNEL);
 	memset(fs, 0, sizeof(VFS_FS));
 	fs->type = type;
 
@@ -77,7 +77,7 @@ bool vfs_mount(const char *mountpoint, gpt_partition_t *partition, FileSystemTyp
 	{
 		printk("VFS: failed to mount %d at %s\n", type, mountpoint);
 	}
-	VFS_Mount *mnt = kmalloc(sizeof(VFS_Mount));
+	VFS_Mount *mnt = kmalloc(sizeof(VFS_Mount), GFP_KERNEL);
 	strcpy(mnt->mountpoint, mountpoint);
 	mnt->fs = fs;
 	mnt->next = vfs_mounts;
@@ -124,7 +124,7 @@ VFS_File *vfs_open(const char *path, int flags)
 	if (!node)
 		return ERR_PTR(-ENOENT);
 
-	VFS_File *f = kmalloc(sizeof(VFS_File));
+	VFS_File *f = kmalloc(sizeof(VFS_File), GFP_KERNEL);
 	f->node = node;
 	f->flags = flags;
 	f->pos = 0;

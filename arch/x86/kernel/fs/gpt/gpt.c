@@ -54,7 +54,7 @@ int gpt_init(gpt_partition_t *partitions)
 	printk("GPT valid. Entries: %u\n", gpt_header->num_partition_entries);
 
 	uint32_t total_size = gpt_header->num_partition_entries * gpt_header->sizeof_partition_entry;
-	uint8_t *entry_buf = kmalloc(total_size);
+	uint8_t *entry_buf = kmalloc(total_size, GFP_KERNEL);
 	if (!entry_buf)
 	{
 		printk("Failed to allocate buffer\n");
