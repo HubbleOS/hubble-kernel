@@ -16,7 +16,7 @@ void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr)
 {
 	size_t namelen = strlen(name);
 	size_t need = namelen + 2; // prefix + '\n'
-	ctx_ptr->entries[ctx_ptr->count].name = kmalloc(need);
+	ctx_ptr->entries[ctx_ptr->count].name = kmalloc(need, GFP_KERNEL);
 	if (!ctx_ptr->entries[ctx_ptr->count].name)
 		return;
 	memset(ctx_ptr->entries[ctx_ptr->count].name, 0, need);
@@ -27,7 +27,7 @@ void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr)
 
 Directory fat32_list_files(FAT32_FS *fs, uint32_t cluster)
 {
-	Directory ctx = Directory_init((Directory){.entries = kmalloc(1024), .count = 0});
+	Directory ctx = Directory_init((Directory){.entries = kmalloc(1024, GFP_KERNEL), .count = 0});
 	if (!ctx.entries)
 	{
 		printk("Failed to allocate directory\n");
@@ -70,7 +70,7 @@ uint32_t get_fat_entry(FAT32_FS *fs, uint32_t cluster)
 	uint32_t fat_sector = fs->fat_start_lba + (fat_offset / fs->bytes_per_sector);
 	uint32_t offset = fat_offset % fs->bytes_per_sector;
 
-	uint8_t *sector = kmalloc(fs->bytes_per_sector);
+	uint8_t *sector = kmalloc(fs->bytes_per_sector, GFP_KERNEL);
 	if (!sector)
 		return 0x0FFFFFFF;
 

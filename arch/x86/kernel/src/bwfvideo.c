@@ -78,7 +78,7 @@ void play_bwvid(framebuffer_info_t *bi, const char *path, int x, int y)
 			break; // кінець файлу або помилка
 
 		// виділяємо буфер під кадр
-		uint8_t *frame_data = kmalloc(sizeof(hdr) + hdr.size);
+		uint8_t *frame_data = kmalloc(sizeof(hdr) + hdr.size, GFP_KERNEL);
 		if (!frame_data)
 			break;
 

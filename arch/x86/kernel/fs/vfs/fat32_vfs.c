@@ -15,7 +15,7 @@
 
 static bool fat32_mount_wrapper(VFS_FS *fs, VFS_Device *device, uint32_t start_lba)
 {
-	fs->fs = kmalloc(sizeof(FAT32_FS));
+	fs->fs = kmalloc(sizeof(FAT32_FS), GFP_KERNEL);
 	return fat32_mount(fs->fs, device, start_lba);
 }
 
@@ -44,7 +44,7 @@ static VFS_Node *fat32_open_wrapper(VFS_FS *fs, const char *path)
 		return NULL;
 	}
 
-	VFS_Node *node = kmalloc(sizeof(VFS_Node));
+	VFS_Node *node = kmalloc(sizeof(VFS_Node), GFP_KERNEL);
 	memset(node, 0, sizeof(VFS_Node));
 	strncpy(node->name, path, 255);
 	node->is_dir = file->entry->attr & 0x10;

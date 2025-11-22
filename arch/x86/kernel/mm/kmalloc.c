@@ -1,154 +1,174 @@
 /**
  * @file kmalloc.c
- * @brief Kernel Memory Allocator - FIXED VERSION
+ * @brief Kernel Memory Allocator Implementation
  */
 
-#include <mm/kmalloc.h>
-#include <mm/slab.h>
-#include <mm/vmm.h>
+#include "kmalloc.h"
+#include "slab.h"
 #include <string.h>
 #include "printk.h"
 
 // ============================================================================
-// Configuration
+// Global Statistics
 // ============================================================================
 
-#define PAGE_SIZE 4096
-#define ALLOC_MAGIC 0xC0FFEEAA
-#define SLAB_THRESHOLD 2048 // Використовуємо slab до 2KB, потім VMM
+static kmalloc_stats_t g_kmalloc_stats = {0};
 
-// Заголовок виділення
-typedef struct alloc_header
+// ============================================================================
+// Debug Tracking (optional)
+// ============================================================================
+
+#ifdef CONFIG_DEBUG_KMALLOC
+
+#define MAX_TRACKED_ALLOCS 1024
+
+typedef struct
 {
-	uint32_t magic;	   // Магічне число для валідації
-	uint32_t flags;	   // 0 = slab, 1 = vmm
-	size_t alloc_size; // Розмір, який було виділено (з заголовком)
-	size_t user_size;  // Розмір, який запросив користувач
-} alloc_header_t;
+	void *ptr;
+	size_t size;
+	const char *file;
+	int line;
+	const char *func;
+	uint64_t timestamp;
+} alloc_track_t;
 
-// Вирівнювання заголовка
-#define HEADER_SIZE sizeof(alloc_header_t)
-#define HEADER_ALIGN 16
-#define ALIGN_UP(x, a) (((x) + (a) - 1) & ~((a) - 1))
-#define ALIGN_DOWN(x, a) ((x) & ~((a) - 1))
+static alloc_track_t g_alloc_tracks[MAX_TRACKED_ALLOCS];
+static size_t g_track_count = 0;
+
+static void track_alloc(void *ptr, size_t size,
+			const char *file, int line, const char *func)
+{
+	if (!ptr || g_track_count >= MAX_TRACKED_ALLOCS)
+		return;
+
+	g_alloc_tracks[g_track_count].ptr = ptr;
+	g_alloc_tracks[g_track_count].size = size;
+	g_alloc_tracks[g_track_count].file = file;
+	g_alloc_tracks[g_track_count].line = line;
+	g_alloc_tracks[g_track_count].func = func;
+	g_alloc_tracks[g_track_count].timestamp = 0; // TODO: add timer
+	g_track_count++;
+}
+
+static void untrack_alloc(void *ptr)
+{
+	if (!ptr)
+		return;
+
+	for (size_t i = 0; i < g_track_count; i++)
+	{
+		if (g_alloc_tracks[i].ptr == ptr)
+		{
+			// Shift remaining entries
+			for (size_t j = i; j < g_track_count - 1; j++)
+			{
+				g_alloc_tracks[j] = g_alloc_tracks[j + 1];
+			}
+			g_track_count--;
+			return;
+		}
+	}
+
+	printk(KERN_WARNING "kfree: pointer %p not tracked!\n", ptr);
+}
+
+void kmalloc_dump_leaks(void)
+{
+	if (g_track_count == 0)
+	{
+		printk(KERN_INFO "No memory leaks detected!\n");
+		return;
+	}
+
+	printk(KERN_WARNING "=== Memory Leak Report ===\n");
+	printk(KERN_WARNING "Total leaks: %zu\n", g_track_count);
+
+	uint64_t total_leaked = 0;
+	for (size_t i = 0; i < g_track_count; i++)
+	{
+		alloc_track_t *track = &g_alloc_tracks[i];
+		printk(KERN_WARNING "  [%zu] %p (%zu bytes) at %s:%d (%s)\n",
+		       i, track->ptr, track->size,
+		       track->file, track->line, track->func);
+		total_leaked += track->size;
+	}
+
+	printk(KERN_WARNING "Total leaked memory: %lu bytes\n", total_leaked);
+}
+
+#endif // CONFIG_DEBUG_KMALLOC
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
 
-/**
- * @brief Знайти найближчий slab bucket для заданого розміру
- */
-static size_t get_slab_bucket(size_t size)
+static inline void update_stats_alloc(size_t size)
 {
-	// Slab buckets: 8, 16, 32, 64, 128, 256, 512, 1024, 2048
-	if (size <= 8)
-		return 8;
-	if (size <= 16)
-		return 16;
-	if (size <= 32)
-		return 32;
-	if (size <= 64)
-		return 64;
-	if (size <= 128)
-		return 128;
-	if (size <= 256)
-		return 256;
-	if (size <= 512)
-		return 512;
-	if (size <= 1024)
-		return 1024;
-	if (size <= 2048)
-		return 2048;
+	g_kmalloc_stats.total_allocated += size;
+	g_kmalloc_stats.current_allocated += size;
+	g_kmalloc_stats.alloc_count++;
 
-	return 0; // Too large for slab
+	if (g_kmalloc_stats.current_allocated > g_kmalloc_stats.peak_allocated)
+	{
+		g_kmalloc_stats.peak_allocated = g_kmalloc_stats.current_allocated;
+	}
 }
 
-/**
- * @brief Перевірка валідності заголовка
- */
-static inline bool validate_header(alloc_header_t *hdr)
+static inline void update_stats_free(size_t size)
 {
-	return hdr && hdr->magic == ALLOC_MAGIC;
+	g_kmalloc_stats.total_freed += size;
+	if (g_kmalloc_stats.current_allocated >= size)
+	{
+		g_kmalloc_stats.current_allocated -= size;
+	}
+	g_kmalloc_stats.free_count++;
+}
+
+static inline void update_stats_failed(void)
+{
+	g_kmalloc_stats.failed_allocs++;
 }
 
 // ============================================================================
-// Main API
+// Core API
 // ============================================================================
 
-void *kmalloc(size_t size)
+void *kmalloc(size_t size, kmalloc_flags_t flags)
 {
 	if (size == 0)
 		return NULL;
 
-	// Вирівнюємо заголовок
-	size_t header_size = ALIGN_UP(HEADER_SIZE, HEADER_ALIGN);
-
-	// Загальний розмір, який потрібно виділити
-	size_t total_needed = header_size + size;
-
-	alloc_header_t *hdr = NULL;
-	size_t allocated = 0;
-
-	// === ВИБІР СТРАТЕГІЇ ВИДІЛЕННЯ ===
-
-	if (total_needed <= SLAB_THRESHOLD)
+	if (size > KMALLOC_MAX_SIZE)
 	{
-		// ==========================================
-		// ВИКОРИСТОВУЄМО SLAB ALLOCATOR
-		// ==========================================
+		printk(KERN_WARNING "kmalloc: size %zu exceeds max %d\n",
+		       size, KMALLOC_MAX_SIZE);
+		update_stats_failed();
+		return NULL;
+	}
 
-		// Знаходимо найближчий slab bucket
-		size_t bucket = get_slab_bucket(total_needed);
+	void *ptr;
 
-		if (bucket == 0)
-		{
-			// Розмір занадто великий для slab, переходимо на VMM
-			goto use_vmm;
-		}
-
-		// Виділяємо з slab
-		hdr = (alloc_header_t *)slab_alloc(bucket);
-		if (!hdr)
-		{
-			printk(KERN_ERR "kmalloc: slab_alloc(%lu) failed\n", bucket);
-			return NULL;
-		}
-
-		allocated = bucket;
-		hdr->flags = 0; // slab
+	if (flags & KMALLOC_ZERO)
+	{
+		ptr = slab_calloc(size);
 	}
 	else
 	{
-	use_vmm:
-		// ==========================================
-		// ВИКОРИСТОВУЄМО VMM (великі об'єкти)
-		// ==========================================
-
-		// Обчислюємо кількість сторінок
-		size_t pages = (total_needed + PAGE_SIZE - 1) / PAGE_SIZE;
-
-		hdr = (alloc_header_t *)vmm_alloc_kernel_pages(pages);
-		if (!hdr)
-		{
-			printk(KERN_ERR "kmalloc: vmm_alloc_kernel_pages(%lu) failed\n", pages);
-			return NULL;
-		}
-
-		allocated = pages * PAGE_SIZE;
-		hdr->flags = 1; // vmm
+		ptr = slab_alloc(size);
 	}
 
-	// === ІНІЦІАЛІЗАЦІЯ ЗАГОЛОВКА ===
+	if (ptr)
+	{
+		// Get actual allocated size from slab
+		size_t actual_size = ksize(ptr);
+		update_stats_alloc(actual_size);
+	}
+	else
+	{
+		update_stats_failed();
+	}
 
-	hdr->magic = ALLOC_MAGIC;
-	hdr->alloc_size = allocated;
-	hdr->user_size = size;
-
-	// Повертаємо вказівник ПІСЛЯ заголовка
-	void *user_ptr = (void *)((uint8_t *)hdr + header_size);
-
-	return user_ptr;
+	return ptr;
 }
 
 void kfree(void *ptr)
@@ -156,207 +176,274 @@ void kfree(void *ptr)
 	if (!ptr)
 		return;
 
-	// Отримуємо заголовок
-	size_t header_size = ALIGN_UP(HEADER_SIZE, HEADER_ALIGN);
-	alloc_header_t *hdr = (alloc_header_t *)((uint8_t *)ptr - header_size);
+	// Get size before freeing
+	size_t size = ksize(ptr);
 
-	// Валідація
-	if (!validate_header(hdr))
-	{
-		printk(KERN_ERR "kfree: Invalid header at %p (magic=0x%x, expected=0x%x)\n",
-		       hdr, hdr->magic, ALLOC_MAGIC);
-		return;
-	}
+	slab_free(ptr);
 
-	// Звільняємо в залежності від типу
-	if (hdr->flags == 0)
+	if (size > 0)
 	{
-		// Slab allocation - потрібно звільнити весь bucket
-		slab_free(hdr);
-	}
-	else if (hdr->flags == 1)
-	{
-		// VMM allocation
-		size_t pages = (hdr->alloc_size + PAGE_SIZE - 1) / PAGE_SIZE;
-		vmm_free_kernel_pages(hdr, pages);
-	}
-	else
-	{
-		printk(KERN_ERR "kfree: Invalid flags %u at %p\n", hdr->flags, hdr);
+		update_stats_free(size);
 	}
 }
 
-void *kcalloc(size_t size)
+void *kzalloc(size_t size)
 {
-	void *ptr = kmalloc(size);
-	if (ptr)
-	{
-		memset(ptr, 0, size);
-	}
-	return ptr;
+	return kmalloc(size, GFP_ZERO);
 }
 
-void *krealloc(void *ptr, size_t new_size)
+void *kmalloc_array(size_t n, size_t size, kmalloc_flags_t flags)
 {
-	// Якщо ptr == NULL, просто виділяємо нову пам'ять
+	// Check for overflow
+	if (n != 0 && size > SIZE_MAX / n)
+	{
+		update_stats_failed();
+		return NULL;
+	}
+
+	return kmalloc(n * size, flags);
+}
+
+void *kcalloc(size_t n, size_t size)
+{
+	return kmalloc_array(n, size, GFP_ZERO);
+}
+
+void *krealloc(void *ptr, size_t new_size, kmalloc_flags_t flags)
+{
 	if (!ptr)
-		return kmalloc(new_size);
+		return kmalloc(new_size, flags);
 
-	// Якщо new_size == 0, звільняємо пам'ять
 	if (new_size == 0)
 	{
 		kfree(ptr);
 		return NULL;
 	}
 
-	// Отримуємо заголовок
-	size_t header_size = ALIGN_UP(HEADER_SIZE, HEADER_ALIGN);
-	alloc_header_t *hdr = (alloc_header_t *)((uint8_t *)ptr - header_size);
+	// Get old size
+	size_t old_size = ksize(ptr);
 
-	// Валідація
-	if (!validate_header(hdr))
-	{
-		printk(KERN_ERR "krealloc: Invalid header at %p\n", hdr);
-		return NULL;
-	}
-
-	size_t old_size = hdr->user_size;
-
-	// Оптимізація: якщо новий розмір менший і влізає в той самий bucket/pages
+	// If new size fits in old allocation, return same pointer
 	if (new_size <= old_size)
 	{
-		size_t total_needed = header_size + new_size;
-
-		// Перевіряємо, чи залишаємось в тому ж bucket/allocation
-		if (hdr->flags == 0) // slab
-		{
-			size_t old_bucket = get_slab_bucket(header_size + old_size);
-			size_t new_bucket = get_slab_bucket(total_needed);
-
-			if (new_bucket == old_bucket)
-			{
-				// Можемо просто оновити розмір
-				hdr->user_size = new_size;
-				return ptr;
-			}
-		}
-		else // vmm
-		{
-			size_t old_pages = (hdr->alloc_size + PAGE_SIZE - 1) / PAGE_SIZE;
-			size_t new_pages = (total_needed + PAGE_SIZE - 1) / PAGE_SIZE;
-
-			if (new_pages == old_pages)
-			{
-				// Можемо просто оновити розмір
-				hdr->user_size = new_size;
-				return ptr;
-			}
-		}
+		return ptr;
 	}
 
-	// Якщо не можемо оптимізувати, виділяємо новий блок
-	void *new_ptr = kmalloc(new_size);
+	// Allocate new memory
+	void *new_ptr = kmalloc(new_size, flags);
 	if (!new_ptr)
 		return NULL;
 
-	// Копіюємо дані (мінімум зі старого та нового розміру)
-	size_t copy_size = (old_size < new_size) ? old_size : new_size;
-	memcpy(new_ptr, ptr, copy_size);
+	// Copy old data
+	memcpy(new_ptr, ptr, old_size);
 
-	// Звільняємо старий блок
+	// Free old memory
 	kfree(ptr);
 
 	return new_ptr;
 }
 
-// ============================================================================
-// Debugging and Statistics
-// ============================================================================
-
-void kmalloc_stats(void)
+void *kmemdup(const void *src, size_t size, kmalloc_flags_t flags)
 {
-	printk(KERN_INFO "=== Kernel Memory Allocator Statistics ===\n");
+	if (!src || size == 0)
+		return NULL;
 
-	// Отримуємо статистику від slab
-	slab_info_t *slab_info = slab_get_info();
-	printk(KERN_INFO "Slab Allocator:\n");
-	printk(KERN_INFO "  Total memory: %lu KB\n", slab_info->total_memory / 1024);
-	printk(KERN_INFO "  Used memory:  %lu KB\n", slab_info->used_memory / 1024);
-	printk(KERN_INFO "  Allocations:  %lu\n", slab_info->total_allocations);
-	printk(KERN_INFO "  Frees:        %lu\n", slab_info->total_frees);
+	void *ptr = kmalloc(size, flags);
+	if (ptr)
+	{
+		memcpy(ptr, src, size);
+	}
 
-	// Отримуємо статистику від VMM
-	vmm_info_t *vmm_info = vmm_get_info();
-	printk(KERN_INFO "VMM Allocator:\n");
-	printk(KERN_INFO "  Kernel pages: %lu (%lu MB)\n",
-	       vmm_info->kernel_pages,
-	       (vmm_info->kernel_pages * PAGE_SIZE) / (1024 * 1024));
+	return ptr;
 }
 
-/**
- * @brief Тестування kmalloc
- */
-void kmalloc_test(void)
+char *kstrdup(const char *s, kmalloc_flags_t flags)
 {
-	printk(KERN_INFO "=== Testing kmalloc ===\n");
+	if (!s)
+		return NULL;
 
-	// Test 1: Малий об'єкт (slab)
-	char *str1 = (char *)kmalloc(32);
-	if (str1)
+	size_t len = strlen(s) + 1;
+	char *ptr = (char *)kmalloc(len, flags);
+
+	if (ptr)
 	{
-		memcpy(str1, "Hello from kmalloc!", 20);
-		printk(KERN_INFO "✓ Small allocation: %s\n", str1);
-		kfree(str1);
+		memcpy(ptr, s, len);
 	}
 
-	// Test 2: Середній об'єкт (slab)
-	int *arr = (int *)kmalloc(100 * sizeof(int));
-	if (arr)
-	{
-		for (int i = 0; i < 100; i++)
-			arr[i] = i;
-
-		printk(KERN_INFO "✓ Array allocation: arr[50] = %d\n", arr[50]);
-		kfree(arr);
-	}
-
-	// Test 3: Великий об'єкт (vmm)
-	void *big = kmalloc(8192);
-	if (big)
-	{
-		printk(KERN_INFO "✓ Large allocation: %lu bytes\n", 8192);
-		kfree(big);
-	}
-
-	// Test 4: kcalloc
-	int *zeros = (int *)kcalloc(50 * sizeof(int));
-	if (zeros)
-	{
-		bool all_zero = true;
-		for (int i = 0; i < 50; i++)
-		{
-			if (zeros[i] != 0)
-			{
-				all_zero = false;
-				break;
-			}
-		}
-		printk(KERN_INFO "✓ kcalloc test: %s\n", all_zero ? "passed" : "failed");
-		kfree(zeros);
-	}
-
-	// Test 5: krealloc
-	char *buf = (char *)kmalloc(64);
-	if (buf)
-	{
-		memcpy(buf, "Initial", 8);
-		buf = (char *)krealloc(buf, 128);
-		if (buf)
-		{
-			printk(KERN_INFO "✓ krealloc test: %s\n", buf);
-			kfree(buf);
-		}
-	}
-
-	printk(KERN_INFO "=== kmalloc tests complete ===\n");
+	return ptr;
 }
+
+char *kstrndup(const char *s, size_t max, kmalloc_flags_t flags)
+{
+	if (!s)
+		return NULL;
+
+	size_t len = 0;
+	while (len < max && s[len] != '\0')
+	{
+		len++;
+	}
+
+	char *ptr = (char *)kmalloc(len + 1, flags);
+	if (ptr)
+	{
+		memcpy(ptr, s, len);
+		ptr[len] = '\0';
+	}
+
+	return ptr;
+}
+
+// ============================================================================
+// Aligned Allocations
+// ============================================================================
+
+// Структура для хранения метаданных выровненной аллокации
+typedef struct
+{
+	void *original_ptr; // Исходный указатель от slab_alloc
+	size_t size;	    // Размер
+	size_t align;	    // Выравнивание
+} aligned_header_t;
+
+void *kmalloc_aligned(size_t size, size_t align, kmalloc_flags_t flags)
+{
+	if (size == 0 || align == 0)
+		return NULL;
+
+	// Check if align is power of 2
+	if ((align & (align - 1)) != 0)
+	{
+		printk(KERN_ERR "kmalloc_aligned: align must be power of 2\n");
+		return NULL;
+	}
+
+	// Allocate extra space for alignment and header
+	size_t total_size = size + align + sizeof(aligned_header_t);
+
+	void *ptr = kmalloc(total_size, flags & ~KMALLOC_ZERO);
+	if (!ptr)
+		return NULL;
+
+	// Calculate aligned address
+	uintptr_t addr = (uintptr_t)ptr;
+	uintptr_t header_addr = (addr + sizeof(aligned_header_t) + align - 1) & ~(align - 1);
+	uintptr_t aligned_addr = header_addr;
+
+	// Ensure space for header before aligned address
+	if (aligned_addr - addr < sizeof(aligned_header_t))
+	{
+		aligned_addr += align;
+	}
+
+	// Store header
+	aligned_header_t *header = (aligned_header_t *)(aligned_addr - sizeof(aligned_header_t));
+	header->original_ptr = ptr;
+	header->size = size;
+	header->align = align;
+
+	void *result = (void *)aligned_addr;
+
+	// Zero if requested
+	if (flags & KMALLOC_ZERO)
+	{
+		memset(result, 0, size);
+	}
+
+	return result;
+}
+
+void kfree_aligned(void *ptr)
+{
+	if (!ptr)
+		return;
+
+	// Get header
+	aligned_header_t *header = (aligned_header_t *)((uintptr_t)ptr - sizeof(aligned_header_t));
+
+	// Free original pointer
+	kfree(header->original_ptr);
+}
+
+// ============================================================================
+// Size Tracking
+// ============================================================================
+
+size_t ksize(void *ptr)
+{
+	if (!ptr)
+		return 0;
+
+	// Используем slab для определения размера
+	// Так как slab выделяет из фиксированных размеров,
+	// мы можем определить размер по кэшу
+
+	// Для простоты возвращаем 0, если не можем определить
+	// TODO: Улучшить, добавив mapping ptr -> size
+	return 0;
+}
+
+// ============================================================================
+// Statistics
+// ============================================================================
+
+kmalloc_stats_t *kmalloc_get_stats(void)
+{
+	return &g_kmalloc_stats;
+}
+
+void kmalloc_print_stats(void)
+{
+	kmalloc_stats_t *stats = &g_kmalloc_stats;
+
+	printk(KERN_INFO "=== Kmalloc Statistics ===\n");
+	printk(KERN_INFO "Total allocated:   %lu bytes\n", stats->total_allocated);
+	printk(KERN_INFO "Total freed:       %lu bytes\n", stats->total_freed);
+	printk(KERN_INFO "Current allocated: %lu bytes (%lu KB)\n",
+	       stats->current_allocated,
+	       stats->current_allocated / 1024);
+	printk(KERN_INFO "Peak allocated:    %lu bytes (%lu KB)\n",
+	       stats->peak_allocated,
+	       stats->peak_allocated / 1024);
+	printk(KERN_INFO "Allocation count:  %lu\n", stats->alloc_count);
+	printk(KERN_INFO "Free count:        %lu\n", stats->free_count);
+	printk(KERN_INFO "Failed allocs:     %lu\n", stats->failed_allocs);
+
+	if (stats->alloc_count > 0)
+	{
+		uint64_t avg_size = stats->total_allocated / stats->alloc_count;
+		printk(KERN_INFO "Average alloc:     %lu bytes\n", avg_size);
+	}
+}
+
+// ============================================================================
+// Debug Tracking Wrappers
+// ============================================================================
+
+#ifdef CONFIG_DEBUG_KMALLOC
+
+void *__kmalloc_track(size_t size, kmalloc_flags_t flags,
+		      const char *file, int line, const char *func)
+{
+	void *ptr = kmalloc(size, flags);
+	if (ptr)
+	{
+		track_alloc(ptr, size, file, line, func);
+	}
+	return ptr;
+}
+
+void __kfree_track(void *ptr, const char *file, int line, const char *func)
+{
+	(void)file;
+	(void)line;
+	(void)func;
+
+	if (ptr)
+	{
+		untrack_alloc(ptr);
+	}
+	kfree(ptr);
+}
+
+#endif // CONFIG_DEBUG_KMALLOC

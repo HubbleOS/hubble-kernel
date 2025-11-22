@@ -57,7 +57,7 @@ PathParts_ext format_folder_path_ext(const char *in)
 			char name[256] = {0};
 			strncpy(name, in, len);
 
-			result.parts[result.count].name = kmalloc(len + 1);
+			result.parts[result.count].name = kmalloc(len + 1, GFP_KERNEL);
 			memcpy(result.parts[result.count].name, name, len);
 			result.parts[result.count].name[len] = '\0';
 
@@ -83,7 +83,7 @@ int ext2_read_group_desc(EXT2_FS *fs)
 	uint32_t blocks_needed = (desc_size + fs->block_size - 1) / fs->block_size;
 
 	// читаємо всі блоки таблиці
-	uint8_t *buf = kmalloc(blocks_needed * fs->block_size);
+	uint8_t *buf = kmalloc(blocks_needed * fs->block_size, GFP_KERNEL);
 	if (!buf)
 	{
 		printk("EXT2: failed to alloc group desc buffer\n");
@@ -95,7 +95,7 @@ int ext2_read_group_desc(EXT2_FS *fs)
 		ext2_read_block(fs, desc_block + i, buf + i * fs->block_size);
 	}
 
-	fs->groups = kmalloc(sizeof(Ext2GroupDesc) * groups_count);
+	fs->groups = kmalloc(sizeof(Ext2GroupDesc) * groups_count, GFP_KERNEL);
 	if (!fs->groups)
 	{
 		kfree(buf);
@@ -177,7 +177,7 @@ int ext2_read_inode(EXT2_FS *fs, uint32_t inode_number, Ext2Inode *out_inode)
 	uint32_t block_offset = offset / fs->block_size;
 	uint32_t offset_in_block = offset % fs->block_size;
 
-	uint8_t *block_buf = kmalloc(fs->block_size);
+	uint8_t *block_buf = kmalloc(fs->block_size, GFP_KERNEL);
 	if (!block_buf)
 		return -1;
 	printk("inode_table_block=%u block_offset=%u offset_in_block=%u\n", inode_table_block, block_offset, offset_in_block);
@@ -197,11 +197,11 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode)
 		return Directory_init((Directory){.entries = NULL, .count = 0});
 	}
 
-	uint8_t *block_buf = kmalloc(fs->block_size);
+	uint8_t *block_buf = kmalloc(fs->block_size, GFP_KERNEL);
 
 	printk("Listing directory (size=%u bytes)\n", dir_inode->size);
 
-	Directory dir = Directory_init((Directory){.entries = kmalloc(1024), .count = 0});
+	Directory dir = Directory_init((Directory){.entries = kmalloc(1024, GFP_KERNEL), .count = 0});
 
 	for (int i = 0; i < 12 && dir_inode->block[i]; i++) // тільки прямі блоки для простої версії
 	{
@@ -215,7 +215,7 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode)
 
 			if (entry->inode == 0)
 				break;
-			dir.entries[dir.count].name = kmalloc(entry->name_len + 1);
+			dir.entries[dir.count].name = kmalloc(entry->name_len + 1, GFP_KERNEL);
 			if (!dir.entries[dir.count].name)
 			{
 				printk("failed");
@@ -244,7 +244,7 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode)
 }
 uint32_t ext2_allocate_inode(EXT2_FS *fs, uint32_t group)
 {
-	uint8_t *bitmap = kmalloc(fs->block_size);
+	uint8_t *bitmap = kmalloc(fs->block_size, GFP_KERNEL);
 	ext2_read_block(fs, fs->groups[group].inode_bitmap, bitmap);
 
 	for (uint32_t i = 0; i < fs->inodes_per_group; i++)
@@ -266,7 +266,7 @@ uint32_t ext2_allocate_inode(EXT2_FS *fs, uint32_t group)
 
 uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t group)
 {
-	uint8_t *bitmap = kmalloc(fs->block_size);
+	uint8_t *bitmap = kmalloc(fs->block_size, GFP_KERNEL);
 	ext2_read_block(fs, fs->groups[group].block_bitmap, bitmap);
 
 	for (uint32_t i = 0; i < fs->blocks_per_group; i++)
@@ -297,7 +297,7 @@ int ext2_write_inode(EXT2_FS *fs, uint32_t inode_num, Ext2Inode *inode)
 	uint32_t block_offset = index / inodes_per_block;
 	uint32_t offset = index % inodes_per_block;
 
-	uint8_t *buf = kmalloc(fs->block_size);
+	uint8_t *buf = kmalloc(fs->block_size, GFP_KERNEL);
 	ext2_read_block(fs, table_block + block_offset, buf);
 
 	memcpy(buf + offset * inode_size, inode, inode_size);
@@ -311,7 +311,7 @@ int ext2_add_dir_entry(EXT2_FS *fs, uint32_t dir_inode_num, const char *name, ui
 	Ext2Inode dir_inode;
 	ext2_read_inode(fs, dir_inode_num, &dir_inode);
 
-	uint8_t *block = kmalloc(fs->block_size);
+	uint8_t *block = kmalloc(fs->block_size, GFP_KERNEL);
 	ext2_read_block(fs, dir_inode.block[0], block);
 
 	uint32_t offset = 0;
@@ -383,7 +383,7 @@ uint32_t ext2_find_dir_entry(EXT2_FS *fs, uint32_t inode, const char *name)
 	Ext2Inode dir_inode;
 	ext2_read_inode(fs, inode, &dir_inode);
 
-	uint8_t *block_buf = kmalloc(fs->block_size);
+	uint8_t *block_buf = kmalloc(fs->block_size, GFP_KERNEL);
 	ext2_read_block(fs, dir_inode.block[0], block_buf);
 
 	uint32_t offset = 0;

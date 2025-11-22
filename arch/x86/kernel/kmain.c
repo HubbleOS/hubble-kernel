@@ -144,36 +144,6 @@ void memory_diagnostics(void)
 	printk(KERN_INFO "\n");
 }
 
-bool test_memory_allocation(void)
-{
-	printk(KERN_INFO "=== Testing Memory Allocation ===\n");
-
-	void *ptr1 = kmalloc(64);
-	if (!ptr1)
-	{
-		printk(KERN_ERR "✗ Failed to allocate 64 bytes\n");
-		return false;
-	}
-	printk(KERN_INFO "✓ Allocated 64 bytes at %p\n", ptr1);
-
-	void *ptr2 = kmalloc(512);
-	if (!ptr2)
-	{
-		printk(KERN_ERR "✗ Failed to allocate 512 bytes\n");
-		kfree(ptr1);
-		return false;
-	}
-	printk(KERN_INFO "✓ Allocated 512 bytes at %p\n", ptr2);
-
-	kfree(ptr1);
-	kfree(ptr2);
-
-	printk(KERN_INFO "✓ All allocations successful\n");
-	return true;
-}
-
-extern kmalloc_test(void);
-
 // ============================================================================
 // ENTRY POINT
 // ============================================================================
@@ -232,9 +202,6 @@ kernel_entry(BootInfo *bi)
 	vmm_init();
 	printk(KERN_INFO "VMM initialized\n");
 
-	// === CRITICAL: Run diagnostics BEFORE heavy tests ===
-	// kmalloc_test();
-
 	printk(KERN_INFO "Testing slab allocator...\n");
 
 	void *a = slab_alloc(8);
@@ -247,18 +214,7 @@ kernel_entry(BootInfo *bi)
 	slab_free(b);
 	slab_free(c);
 
-	// memory_diagnostics();
-
 	printk(KERN_INFO "Slab allocator basic test passed\n");
-
-	// Test basic allocation
-	// if (!test_memory_allocation())
-	// {
-	// 	printk(KERN_ERR "Memory allocation test FAILED!\n");
-	// 	printk(KERN_ERR "System cannot continue - halting.\n");
-	// 	while (1)
-	// 		asm("hlt");
-	// }
 
 	printk(KERN_DEBUG "GPT init...\n");
 	int gpt_result = gpt_init(partitions);
@@ -310,7 +266,7 @@ kernel_entry(BootInfo *bi)
 
 	// 10. Transfer control to OS main
 	printk(KERN_INFO "Starting OS main loop...\n");
-	// os_main(bi);
+	os_main(bi);
 
 	// Should never reach here
 	printk(KERN_WARNING "os_main() returned! Entering infinite loop...\n");
