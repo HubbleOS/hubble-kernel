@@ -11,9 +11,11 @@ typedef void (*directory_entry_callback_t)(const char *name, bool is_dir, Direct
 
 uint32_t resolve_path_to_cluster(FAT32_FS *fs, const char *path)
 {
+	printk("Resolving path to cluster: %s\n", path);
 	PathParts parts = format_folder_path(path);
 	int depth = parts.count;
 	printk("target %s depth %d", parts.parts[depth].sfn, depth);
+
 	uint32_t cluster = fs->root_cluster;
 	for (int i = 0; i < depth - 1; ++i)
 	{
@@ -23,6 +25,7 @@ uint32_t resolve_path_to_cluster(FAT32_FS *fs, const char *path)
 		if (cluster == 0 || cluster >= 0x0FFFFFF8)
 			return 0; // cluster not found
 	}
+
 	printk("cluster: %d\n", cluster);
 	free_folder_path(&parts);
 	return cluster;
@@ -98,6 +101,7 @@ void iterate_directory(FAT32_FS *fs, uint32_t cluster, directory_entry_callback_
 		fat32_read_cluster(fs, cluster, data);
 		printk("cluster: %d\n", cluster);
 		size_t entries = fs->cluster_size / sizeof(FAT32_DirectoryEntry);
+
 		for (size_t i = 0; i < entries; ++i)
 		{
 			FAT32_DirectoryEntry *entry = (FAT32_DirectoryEntry *)(data + i * sizeof(FAT32_DirectoryEntry));
@@ -108,10 +112,13 @@ void iterate_directory(FAT32_FS *fs, uint32_t cluster, directory_entry_callback_
 				callback(name, is_dir, ctx);
 			}
 		}
+
 		cluster = get_fat_entry(fs, cluster);
 	}
+
 	kfree(data);
 }
+
 // bool is_dir(FAT32_DirectoryEntry *entry)
 // {
 //     return (entry->attr & 0x10) == 0x10;

@@ -27,7 +27,6 @@ _Begin_C_Header;
 // Page Table Entry Flags (дублюємо з higher_half.h для зручності)
 // ============================================================================
 
-#ifndef PTE_PRESENT
 #define PTE_PRESENT (1ULL << 0)	     // Page is present
 #define PTE_WRITE (1ULL << 1)	     // Page is writable
 #define PTE_USER (1ULL << 2)	     // User mode access
@@ -38,7 +37,6 @@ _Begin_C_Header;
 #define PTE_HUGE (1ULL << 7)	     // Huge page (2MB/1GB)
 #define PTE_GLOBAL (1ULL << 8)	     // Global page
 #define PTE_NX (1ULL << 63)	     // No execute
-#endif
 
 // ============================================================================
 // Common flag combinations

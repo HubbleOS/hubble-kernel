@@ -18,6 +18,8 @@
 #include "apps/neofetch/neofetch.h"
 #include "utils/bwfvideo.h"
 
+#include <gdt/interrupt.h>
+
 Terminal::Terminal(Window &window, color_t color)
 	: win(window), cursor_X(0), cursor_Y(0), text_color(color),
 	  history_count(0), history_index(0), cursor_visible(true),
@@ -43,20 +45,12 @@ static size_t terminal_read_adapter(char *buffer, size_t len, void *user_data)
 	size_t i = 0;
 	while (i < len)
 	{
-		key_event_t evt = read_key_event();
-		if (evt.released)
-			continue;
-
-		char c = keymap_lookup_char(
-			evt.id.scancode,
-			evt.id.extended,
-			evt.is_shift,
-			evt.is_caps_lock);
+		char c = keyboard_get_char();
 
 		if (c == 0)
 			continue;
 
-		if (evt.id.scancode == KEY_BACKSPACE)
+		if (c == '\b')
 		{
 			if (i > 0)
 			{
@@ -69,7 +63,7 @@ static size_t terminal_read_adapter(char *buffer, size_t len, void *user_data)
 		buffer[i++] = c;
 		term->putChar(c);
 
-		if (evt.id.scancode == KEY_ENTER)
+		if (c == '\n')
 			break;
 	}
 
@@ -80,13 +74,11 @@ void Terminal::init()
 {
 	clear();
 
-	// Output
 	static output_device_t terminal_device;
 	terminal_device.write = terminal_write_adapter;
 	terminal_device.user_data = this;
 	register_stdout_device(&terminal_device);
 
-	// Input
 	static input_device_t terminal_input;
 	terminal_input.read = terminal_read_adapter;
 	terminal_input.user_data = this;
@@ -110,7 +102,6 @@ void Terminal::scrollUp()
 	int win_width = win.getWidth();
 	int win_height = win.getHeight();
 
-	// Copy all lines up one line
 	for (int y = win_y; y < win_y + win_height - char_height; y++)
 	{
 		for (int x = win_x; x < win_x + win_width; x++)
@@ -123,7 +114,6 @@ void Terminal::scrollUp()
 		}
 	}
 
-	// Clearing the last line
 	for (int y = win_y + win_height - char_height; y < win_y + win_height; y++)
 	{
 		for (int x = win_x; x < win_x + win_width; x++)
@@ -270,6 +260,228 @@ static bool isValidCommand(const char *buffer, size_t length)
 	return false;
 }
 
+// char *Terminal::readLine()
+// {
+
+// 	size_t capacity = 128;
+// 	size_t length = 0;
+// 	size_t cursor_pos = 0;
+
+// 	char *buffer = (char *)kmalloc(capacity, GFP_KERNEL);
+// 	if (!buffer)
+// 		return nullptr;
+
+// 	int line_start_x = cursor_X;
+// 	int line_start_y = cursor_Y;
+// 	size_t prev_length = 0;
+
+// 	auto clearLine = [&]()
+// 	{
+// 		int x = line_start_x;
+// 		int y = line_start_y;
+
+// 		for (size_t i = 0; i < prev_length; i++)
+// 		{
+// 			if (y + char_height > win.getHeight())
+// 				break;
+
+// 			drawChar(win, ' ', x, y, char_width, char_height, win.getBgColor());
+
+// 			x += char_width;
+// 			if (x + char_width > win.getWidth())
+// 			{
+// 				x = 0;
+// 				y += char_height;
+// 			}
+// 		}
+// 		if (y + char_height <= win.getHeight())
+// 			drawChar(win, ' ', x, y, char_width, char_height, win.getBgColor());
+// 	};
+
+// 	auto redrawLine = [&]()
+// 	{
+// 		clearLine();
+// 		prev_length = length;
+
+// 		bool is_valid = isValidCommand(buffer, length);
+// 		color_t cmd_color = is_valid ? COLOR_GREEN : COLOR_RED;
+
+// 		size_t start = 0;
+// 		while (start < length && (buffer[start] == ' ' || buffer[start] == '\t'))
+// 			start++;
+
+// 		size_t first_word_end = start;
+// 		while (first_word_end < length && buffer[first_word_end] != ' ' &&
+// 			   buffer[first_word_end] != '\n' && buffer[first_word_end] != '\t')
+// 			first_word_end++;
+
+// 		int x = line_start_x;
+// 		int y = line_start_y;
+
+// 		for (size_t i = 0; i < length; i++)
+// 		{
+// 			if (y + char_height > win.getHeight())
+// 				break;
+
+// 			color_t color = (i >= start && i < first_word_end) ? cmd_color : text_color;
+// 			drawChar(win, buffer[i], x, y, char_width, char_height, color);
+
+// 			x += char_width;
+// 			if (x + char_width > win.getWidth())
+// 			{
+// 				x = 0;
+// 				y += char_height;
+// 			}
+// 		}
+
+// 		cursor_X = line_start_x;
+// 		cursor_Y = line_start_y;
+// 		for (size_t i = 0; i < cursor_pos; i++)
+// 		{
+// 			cursor_X += char_width;
+// 			if (cursor_X + char_width > win.getWidth())
+// 			{
+// 				cursor_X = 0;
+// 				cursor_Y += char_height;
+// 			}
+// 		}
+// 	};
+
+// 	while (true)
+// 	{
+// 		drawCursor();
+// 		key_event_t evt = keyboard_get_event();
+// 		hideCursor();
+
+// 		if (evt.released)
+// 			continue;
+
+// 		// Ctrl + C
+// 		if (evt.is_ctrl && evt.id.scancode == KEY_C)
+// 		{
+// 			putChar('^');
+// 			putChar('C');
+// 			kfree(buffer);
+// 			return nullptr;
+// 		}
+
+// 		// ENTER
+// 		if (evt.id.scancode == KEY_ENTER && !evt.is_shift)
+// 		{
+// 			cursor_X = line_start_x;
+// 			cursor_Y = line_start_y;
+// 			for (size_t i = 0; i < length; i++)
+// 				putChar(buffer[i]);
+// 			putChar('\n');
+
+// 			buffer[length] = '\0';
+
+// 			if (length > 0)
+// 				addToHistory(buffer);
+
+// 			history_index = history_count;
+// 			return buffer;
+// 		}
+
+// 		// BACKSPACE
+// 		// if (evt.id.scancode == KEY_BACKSPACE)
+// 		// {
+// 		// 	if (cursor_pos > 0)
+// 		// 	{
+// 		// 		cursor_pos--;
+// 		// 		length--;
+// 		// 		for (size_t i = cursor_pos; i < length; i++)
+// 		// 			buffer[i] = buffer[i + 1];
+
+// 		// 		redrawLine();
+// 		// 	}
+// 		// 	continue;
+// 		// }
+
+// 		// // Arrow UP
+// 		// if (evt.id.scancode == KEY_UP)
+// 		// {
+// 		// 	const char *hist_line = getHistory(history_index, -1);
+// 		// 	if (!hist_line)
+// 		// 		continue;
+
+// 		// 	length = cursor_pos = strlen(hist_line);
+// 		// 	if (length >= capacity)
+// 		// 	{
+// 		// 		capacity = length + 1;
+// 		// 		char *new_buf = (char *)krealloc(buffer, capacity, GFP_KERNEL);
+// 		// 		if (!new_buf)
+// 		// 		{
+// 		// 			kfree(buffer);
+// 		// 			return nullptr;
+// 		// 		}
+// 		// 		buffer = new_buf;
+// 		// 	}
+// 		// 	memcpy(buffer, hist_line, length);
+
+// 		// 	redrawLine();
+// 		// 	continue;
+// 		// }
+
+// 		// // Arrow DOWN
+// 		// if (evt.id.scancode == KEY_DOWN)
+// 		// {
+// 		// 	const char *hist_line = getHistory(history_index, +1);
+// 		// 	if (!hist_line)
+// 		// 		continue;
+
+// 		// 	length = cursor_pos = strlen(hist_line);
+// 		// 	if (length >= capacity)
+// 		// 	{
+// 		// 		capacity = length + 1;
+// 		// 		char *new_buf = (char *)krealloc(buffer, capacity, GFP_KERNEL);
+// 		// 		if (!new_buf)
+// 		// 		{
+// 		// 			kfree(buffer);
+// 		// 			return nullptr;
+// 		// 		}
+// 		// 		buffer = new_buf;
+// 		// 	}
+// 		// 	memcpy(buffer, hist_line, length);
+
+// 		// 	redrawLine();
+// 		// 	continue;
+// 		// }
+
+// 		// Regular characters
+// 		char c = keymap_lookup_char(evt.id.scancode, evt.id.extended,
+// 									evt.is_shift, evt.is_caps_lock);
+// 		if (c == 0)
+// 			continue;
+
+// 		putChar(c);
+
+// 		if (length + 1 >= capacity)
+// 		{
+// 			capacity *= 2;
+// 			char *new_buf = (char *)krealloc(buffer, capacity, GFP_KERNEL);
+// 			if (!new_buf)
+// 			{
+// 				kfree(buffer);
+// 				return nullptr;
+// 			}
+// 			buffer = new_buf;
+// 		}
+
+// 		for (size_t i = length; i > cursor_pos; i--)
+// 			buffer[i] = buffer[i - 1];
+// 		buffer[cursor_pos] = c;
+// 		length++;
+// 		cursor_pos++;
+
+// 		// redrawLine();
+// 	}
+// }
+
+// ============================================================================
+// terminal.cpp - Updated readLine() with new input system
+// ============================================================================
+
 char *Terminal::readLine()
 {
 	size_t capacity = 128;
@@ -359,42 +571,158 @@ char *Terminal::readLine()
 	while (true)
 	{
 		drawCursor();
-		key_event_t evt = read_key_event();
+		input_event_t input = keyboard_get_input();
 		hideCursor();
 
-		if (evt.released)
-			continue;
+		// Debug: Print input event
+		// printk("Input Event: type=%d, char=%c, action=%d, shift=%d, ctrl=%d, alt=%d\n",
+		// 	   input.type, input.character, input.action,
+		// 	   input.shift, input.ctrl, input.alt);
 
-		// Ctrl + C
-		if (evt.is_ctrl && evt.id.scancode == KEY_C)
+		// Handle Ctrl+C
+		if (input.ctrl && input.type == KEY_TYPE_CHAR && input.character == 'c')
 		{
 			putChar('^');
 			putChar('C');
+			putChar('\n');
 			kfree(buffer);
 			return nullptr;
 		}
 
-		// ENTER
-		if (evt.id.scancode == KEY_ENTER && !evt.is_shift)
+		// Handle special keys
+		if (input.type == KEY_TYPE_SPECIAL)
 		{
-			cursor_X = line_start_x;
-			cursor_Y = line_start_y;
-			for (size_t i = 0; i < length; i++)
-				putChar(buffer[i]);
-			putChar('\n');
+			switch (input.action)
+			{
+			case KEY_ACTION_ENTER:
+				cursor_X = line_start_x;
+				cursor_Y = line_start_y;
+				for (size_t i = 0; i < length; i++)
+					putChar(buffer[i]);
+				putChar('\n');
 
-			buffer[length] = '\0';
+				buffer[length] = '\0';
 
-			if (length > 0)
-				addToHistory(buffer);
+				if (length > 0)
+					addToHistory(buffer);
 
-			history_index = history_count;
-			return buffer;
+				history_index = history_count;
+				return buffer;
+
+			case KEY_ACTION_BACKSPACE:
+				if (cursor_pos > 0)
+				{
+					cursor_pos--;
+					length--;
+					for (size_t i = cursor_pos; i < length; i++)
+						buffer[i] = buffer[i + 1];
+					redrawLine();
+				}
+				break;
+
+			case KEY_ACTION_DELETE:
+				if (cursor_pos < length)
+				{
+					length--;
+					for (size_t i = cursor_pos; i < length; i++)
+						buffer[i] = buffer[i + 1];
+					redrawLine();
+				}
+				break;
+
+			case KEY_ACTION_LEFT:
+				if (cursor_pos > 0)
+				{
+					cursor_pos--;
+					redrawLine();
+				}
+				break;
+
+			case KEY_ACTION_RIGHT:
+				if (cursor_pos < length)
+				{
+					cursor_pos++;
+					redrawLine();
+				}
+				break;
+
+			case KEY_ACTION_HOME:
+				cursor_pos = 0;
+				redrawLine();
+				break;
+
+			case KEY_ACTION_END:
+				cursor_pos = length;
+				redrawLine();
+				break;
+
+			case KEY_ACTION_UP:
+			{
+				const char *hist_line = getHistory(history_index, -1);
+				if (!hist_line)
+					break;
+
+				length = cursor_pos = strlen(hist_line);
+				if (length >= capacity)
+				{
+					capacity = length + 1;
+					char *new_buf = (char *)krealloc(buffer, capacity, GFP_KERNEL);
+					if (!new_buf)
+					{
+						kfree(buffer);
+						return nullptr;
+					}
+					buffer = new_buf;
+				}
+				memcpy(buffer, hist_line, length);
+				redrawLine();
+				break;
+			}
+
+			case KEY_ACTION_DOWN:
+			{
+				const char *hist_line = getHistory(history_index, +1);
+				if (!hist_line)
+					break;
+
+				length = cursor_pos = strlen(hist_line);
+				if (length >= capacity)
+				{
+					capacity = length + 1;
+					char *new_buf = (char *)krealloc(buffer, capacity, GFP_KERNEL);
+					if (!new_buf)
+					{
+						kfree(buffer);
+						return nullptr;
+					}
+					buffer = new_buf;
+				}
+				memcpy(buffer, hist_line, length);
+				redrawLine();
+				break;
+			}
+
+			case KEY_ACTION_TAB:
+				// TODO: Tab completion
+				break;
+
+			case KEY_ACTION_ESC:
+				// Clear line
+				length = cursor_pos = 0;
+				redrawLine();
+				break;
+
+			default:
+				break;
+			}
+			continue;
 		}
 
-		// Shift + ENTER
-		if (evt.id.scancode == KEY_ENTER && evt.is_shift)
+		// Handle regular characters
+		if (input.type == KEY_TYPE_CHAR)
 		{
+			char c = input.character;
+
 			if (length + 1 >= capacity)
 			{
 				capacity *= 2;
@@ -407,106 +735,20 @@ char *Terminal::readLine()
 				buffer = new_buf;
 			}
 
+			// Insert character at cursor position
 			for (size_t i = length; i > cursor_pos; i--)
 				buffer[i] = buffer[i - 1];
-			buffer[cursor_pos] = '\n';
+			buffer[cursor_pos] = c;
 			length++;
 			cursor_pos++;
 
-			redrawLine();
-			continue;
+			// redrawLine();
 		}
 
-		// BACKSPACE
-		if (evt.id.scancode == KEY_BACKSPACE)
-		{
-			if (cursor_pos > 0)
-			{
-				cursor_pos--;
-				length--;
-				for (size_t i = cursor_pos; i < length; i++)
-					buffer[i] = buffer[i + 1];
-
-				redrawLine();
-			}
-			continue;
-		}
-
-		// Arrow UP
-		if (evt.id.scancode == KEY_UP)
-		{
-			const char *hist_line = getHistory(history_index, -1);
-			if (!hist_line)
-				continue;
-
-			length = cursor_pos = strlen(hist_line);
-			if (length >= capacity)
-			{
-				capacity = length + 1;
-				char *new_buf = (char *)krealloc(buffer, capacity, GFP_KERNEL);
-				if (!new_buf)
-				{
-					kfree(buffer);
-					return nullptr;
-				}
-				buffer = new_buf;
-			}
-			memcpy(buffer, hist_line, length);
-
-			redrawLine();
-			continue;
-		}
-
-		// Arrow DOWN
-		if (evt.id.scancode == KEY_DOWN)
-		{
-			const char *hist_line = getHistory(history_index, +1);
-			if (!hist_line)
-				continue;
-
-			length = cursor_pos = strlen(hist_line);
-			if (length >= capacity)
-			{
-				capacity = length + 1;
-				char *new_buf = (char *)krealloc(buffer, capacity, GFP_KERNEL);
-				if (!new_buf)
-				{
-					kfree(buffer);
-					return nullptr;
-				}
-				buffer = new_buf;
-			}
-			memcpy(buffer, hist_line, length);
-
-			redrawLine();
-			continue;
-		}
-
-		// Regular characters
-		char c = keymap_lookup_char(evt.id.scancode, evt.id.extended,
-									evt.is_shift, evt.is_caps_lock);
-		if (c == 0)
-			continue;
-
-		if (length + 1 >= capacity)
-		{
-			capacity *= 2;
-			char *new_buf = (char *)krealloc(buffer, capacity, GFP_KERNEL);
-			if (!new_buf)
-			{
-				kfree(buffer);
-				return nullptr;
-			}
-			buffer = new_buf;
-		}
-
-		for (size_t i = length; i > cursor_pos; i--)
-			buffer[i] = buffer[i - 1];
-		buffer[cursor_pos] = c;
-		length++;
-		cursor_pos++;
-
-		redrawLine();
+		// Function keys can be handled here if needed
+		// if (input.type == KEY_TYPE_FUNCTION) {
+		//     // F1 = help, etc.
+		// }
 	}
 }
 
@@ -627,11 +869,14 @@ static void cmd_ls(Terminal *term, int argc, char **argv)
 
 void Terminal::run()
 {
-	init();
+	// init();
+
 	while (true)
 	{
 		print("> ");
+
 		char *input = readLine();
+
 		if (!input)
 		{
 			print("\n");
