@@ -212,36 +212,6 @@ kmalloc_stats_t *kmalloc_get_stats(void);
 void kmalloc_print_stats(void);
 
 // ============================================================================
-// Memory Leak Detection (Debug)
-// ============================================================================
-
-#ifdef CONFIG_DEBUG_KMALLOC
-
-/**
- * @brief Track allocation with file/line info
- */
-void *__kmalloc_track(size_t size, kmalloc_flags_t flags,
-		      const char *file, int line, const char *func);
-
-/**
- * @brief Track free with file/line info
- */
-void __kfree_track(void *ptr, const char *file, int line, const char *func);
-
-/**
- * @brief Print all active allocations
- */
-void kmalloc_dump_leaks(void);
-
-// Override kmalloc/kfree for tracking
-#define kmalloc(size, flags) \
-	__kmalloc_track(size, flags, __FILE__, __LINE__, __func__)
-#define kfree(ptr) \
-	__kfree_track(ptr, __FILE__, __LINE__, __func__)
-
-#endif // CONFIG_DEBUG_KMALLOC
-
-// ============================================================================
 // Convenience Macros
 // ============================================================================
 

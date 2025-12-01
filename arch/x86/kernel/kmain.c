@@ -1,5 +1,3 @@
-// kernel_main.c - Higher-Half Kernel Entry Point
-
 #include <bootinfo/bootinfo.h>
 #include <utils/font.h>
 #include <utils/bwfvideo.h>
@@ -56,6 +54,8 @@ extern void os_main(BootInfo *bi);
 extern VFS_FS *root_fs;
 extern void syscall_init(void);
 
+extern int load_elf_and_run(const char *path);
+
 // ============================================================================
 // Helper functions
 // ============================================================================
@@ -95,56 +95,6 @@ static void relocate_boot_info(BootInfo *bi)
 }
 
 // ============================================================================
-// Memory Diagnostics (from previous artifact)
-// ============================================================================
-
-void memory_diagnostics(void)
-{
-	printk(KERN_INFO "\n");
-	printk(KERN_INFO "╔════════════════════════════════════════════════╗\n");
-	printk(KERN_INFO "║        MEMORY SUBSYSTEM DIAGNOSTICS           ║\n");
-	printk(KERN_INFO "╚════════════════════════════════════════════════╝\n");
-	printk(KERN_INFO "\n");
-
-	// PMM Statistics
-	pmm_info_t *pmm_info = pmm_get_info();
-	printk(KERN_INFO "=== Physical Memory Manager ===\n");
-	printk(KERN_INFO "Total memory:   %lu MB\n", pmm_info->total_memory / (1024 * 1024));
-	printk(KERN_INFO "Used memory:    %lu MB\n", pmm_info->used_memory / (1024 * 1024));
-	printk(KERN_INFO "Free pages:     %lu\n", pmm_info->total_pages - pmm_info->used_pages);
-
-	uint64_t free_mb = ((pmm_info->total_pages - pmm_info->used_pages) * PAGE_SIZE) / (1024 * 1024);
-	printk(KERN_INFO "Free memory:    %lu MB\n", free_mb);
-
-	if (free_mb < 10)
-		printk(KERN_ERR "⚠️  CRITICAL: Less than 10 MB free!\n");
-	else
-		printk(KERN_INFO "✓ PMM has sufficient free memory\n");
-
-	printk(KERN_INFO "\n");
-
-	// Slab Statistics
-	slab_info_t *slab_info = slab_get_info();
-	printk(KERN_INFO "=== Slab Allocator ===\n");
-	printk(KERN_INFO "Total slabs:       %u\n", slab_info->total_slabs);
-	printk(KERN_INFO "Total memory:      %lu KB\n", slab_info->total_memory / 1024);
-	printk(KERN_INFO "Used memory:       %lu KB\n", slab_info->used_memory / 1024);
-	printk(KERN_INFO "Active allocs:     %lu\n",
-	       slab_info->total_allocations - slab_info->total_frees);
-
-	printk(KERN_INFO "\n");
-
-	// VMM Statistics
-	vmm_info_t *vmm_info = vmm_get_info();
-	printk(KERN_INFO "=== Virtual Memory Manager ===\n");
-	printk(KERN_INFO "Kernel pages:      %lu (%lu MB)\n",
-	       vmm_info->kernel_pages,
-	       (vmm_info->kernel_pages * PAGE_SIZE) / (1024 * 1024));
-
-	printk(KERN_INFO "\n");
-}
-
-// ============================================================================
 // ENTRY POINT
 // ============================================================================
 
@@ -169,8 +119,8 @@ kernel_entry(BootInfo *bi)
 	// 4. CPU initialization
 	printk(KERN_INFO "Initializing CPU subsystems...\n");
 	gdt_init();
-	tss_init();
 	idt_init();
+	tss_init();
 	interrupts_init();
 	syscall_init();
 	printk(KERN_INFO "CPU initialization complete\n");
@@ -193,26 +143,10 @@ kernel_entry(BootInfo *bi)
 	slab_init();
 	printk(KERN_INFO "Slab Allocator initialized\n");
 
-	void *slab_test = slab_alloc(128);
-	printk(KERN_DEBUG "Slab allocated 128 bytes at %p\n", slab_test);
-	slab_free(slab_test);
-
 	// VMM
 	printk(KERN_DEBUG "Initializing VMM...\n");
 	vmm_init();
 	printk(KERN_INFO "VMM initialized\n");
-
-	printk(KERN_INFO "Testing slab allocator...\n");
-
-	void *a = slab_alloc(8);
-	void *b = slab_alloc(32);
-	void *c = slab_alloc(64);
-
-	printk(KERN_DEBUG "Allocated: a=%p, b=%p, c=%p\n", a, b, c);
-
-	slab_free(a);
-	slab_free(b);
-	slab_free(c);
 
 	printk(KERN_INFO "Slab allocator basic test passed\n");
 
@@ -257,16 +191,16 @@ kernel_entry(BootInfo *bi)
 			asm("hlt");
 	}
 
-	// 8. Final diagnostics
-	printk(KERN_INFO "\n=== Final System State ===\n");
-	memory_diagnostics();
-
-	// 9. Kernel initialization complete
+	// 8. Kernel initialization complete
 	printk(KERN_INFO "\n=== Kernel Initialization Complete ===\n\n");
 
-	// 10. Transfer control to OS main
+	// 9. Transfer control to OS main
 	printk(KERN_INFO "Starting OS main loop...\n");
-	os_main(bi);
+
+	load_elf_and_run("/usr/bin/user.elf");
+	// char bi_char = keyboard_get_char();
+	// printk(KERN_INFO "Initial key press (if any): '%c' (0x%02x)\n", bi_char ? bi_char : ' ', bi_char);
+	// os_main(bi);
 
 	// Should never reach here
 	printk(KERN_WARNING "os_main() returned! Entering infinite loop...\n");

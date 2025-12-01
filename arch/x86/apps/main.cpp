@@ -13,6 +13,8 @@
 
 #include "mm/slab.h"
 
+#include <gdt/interrupt.h>
+
 extern "C" void os_main(BootInfo *bi)
 {
   Screen screen(bi->framebuffer);

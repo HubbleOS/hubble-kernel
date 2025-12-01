@@ -495,8 +495,8 @@ void *slab_alloc(size_t size)
 
 	if (ptr)
 	{
-		printk(KERN_DEBUG "slab_alloc(%zu) -> %p (cache=%p, obj_size=%zu)\n",
-		       size, ptr, cache, cache->object_size);
+		// printk(KERN_DEBUG "slab_alloc(%zu) -> %p (cache=%p, obj_size=%zu)\n",
+		//        size, ptr, cache, cache->object_size);
 	}
 
 	return ptr;

@@ -8,9 +8,6 @@
 
 typedef struct
 {
-	// Сегментные регистры
-	uint64_t ds;
-
 	// Регистры общего назначения (сохранены вручную)
 	uint64_t r15, r14, r13, r12, r11, r10, r9, r8;
 	uint64_t rbp, rdi, rsi, rdx, rcx, rbx, rax;

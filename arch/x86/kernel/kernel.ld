@@ -6,7 +6,7 @@ KERNEL_PHYS_BASE = 0x100000;
 MEMORY
 {
     /* Physical download addresses */
-    PHYS (rwx) : ORIGIN = 0x100000, LENGTH = 16M
+    PHYS (rwx) : ORIGIN = KERNEL_PHYS_BASE, LENGTH = 16M
 }
 
 ENTRY(kernel_entry)
@@ -41,9 +41,8 @@ SECTIONS
 
     /* 
         BSS 
-    In a linker, BSS (Block Started by Symbol) 
-    is the section that holds uninitialized global a
-    nd static variables. 
+    In a linker, BSS (Block Started by Symbol) is the section 
+    that holds uninitialized global and static variables. 
     */
     .bss ALIGN(4K) : AT(ADDR(.bss) - KERNEL_VIRT_BASE)
     {

@@ -2,21 +2,20 @@ ENTRY(_start)
 
 SECTIONS
 {
-    /* Начало программы в виртуальном адресе 0x400000 */
-    . = 0x400000;
+    . = 0x400000;   /* user-space base address */
 
-    /* Текст (код) */
     .text : {
         *(.text*)
-        *(.rodata*)   /* можно сюда включить константы */
     }
 
-    /* Данные */
+    .rodata : {
+        *(.rodata*)
+    }
+
     .data : {
         *(.data*)
     }
 
-    /* BSS */
     .bss : {
         *(.bss*)
         *(COMMON)

@@ -6,8 +6,6 @@ global user_enter
 ; rdi = entry_point
 ; rsi = user_stack_top
 
-; rdi = entry_point
-; rsi = user_stack_top
 ; Має правильно встановити DS/ES на user data segment
 user_enter:
     cli

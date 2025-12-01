@@ -104,11 +104,11 @@ isr128:
     jmp syscall_common_stub
 
 ; ============================================================================
-; Общий обработчик для ISR
+; Общий обработчик для ISR (CPU Exceptions)
 ; ============================================================================
 
 isr_common_stub:
-    ; Сохраняем все регистры
+    ; Зберігаємо всі регістри
     push rax
     push rbx
     push rcx
@@ -125,37 +125,25 @@ isr_common_stub:
     push r14
     push r15
     
-    ; Сохраняем сегментные регистры
-    mov ax, ds
-    push rax
-    
-    ; Загружаем kernel data segment
-    mov ax, 0x10
+    ; Встановлюємо правильні kernel сегменти (БЕЗ збереження)
+    mov ax, 0x10        ; GDT_KERNEL_DATA
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
     
-    ; Передаем указатель на стек (registers_t) в rdi
-    mov rdi, rsp
+    ; Вирівнюємо стек по 16 байт для ABI
+    mov rbp, rsp        ; Зберігаємо оригінальний RSP
+    and rsp, ~0xF       ; Вирівнюємо стек
     
-    ; Выравниваем стек для вызова C функции (System V ABI требует 16-byte alignment)
-    and rsp, ~0xF
-    
-    ; Вызываем C обработчик
+    ; Викликаємо C обробник
+    mov rdi, rbp        ; Передаємо вказівник на registers_t
     call isr_handler
     
-    ; Восстанавливаем стек
-    mov rsp, rdi
+    ; Відновлюємо оригінальний стек
+    mov rsp, rbp
     
-    ; Восстанавливаем сегментные регистры
-    pop rax
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    
-    ; Восстанавливаем все регистры
+    ; Відновлюємо всі регістри
     pop r15
     pop r14
     pop r13
@@ -172,18 +160,18 @@ isr_common_stub:
     pop rbx
     pop rax
     
-    ; Убираем номер прерывания и код ошибки
+    ; Очищуємо стек від int_no та err_code
     add rsp, 16
     
-    ; Возврат из прерывания
+    ; Повертаємося з переривання
     iretq
 
 ; ============================================================================
-; Общий обработчик для IRQ
+; Общий обработчик для IRQ (Hardware Interrupts)
 ; ============================================================================
 
 irq_common_stub:
-    ; Сохраняем все регистры
+    ; Зберігаємо всі регістри
     push rax
     push rbx
     push rcx
@@ -200,36 +188,25 @@ irq_common_stub:
     push r14
     push r15
     
-    ; Сохраняем сегментные регистры
-    mov ax, ds
-    push rax
-    
-    ; Загружаем kernel data segment
-    mov ax, 0x10
+    ; Встановлюємо правильні kernel сегменти (БЕЗ збереження)
+    mov ax, 0x10        ; GDT_KERNEL_DATA
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
     
-    ; Передаем указатель на стек в rdi
-    mov rdi, rsp
+    ; Вирівнюємо стек по 16 байт для ABI
+    mov rbp, rsp        ; Зберігаємо оригінальний RSP
+    and rsp, ~0xF       ; Вирівнюємо стек
     
-    ; Выравниваем стек
-    and rsp, ~0xF
-    
-    ; Вызываем C обработчик
+    ; Викликаємо C обробник
+    mov rdi, rbp        ; Передаємо вказівник на registers_t
     call irq_handler
     
-    ; Восстанавливаем стек
-    mov rsp, rdi
+    ; Відновлюємо оригінальний стек
+    mov rsp, rbp
     
-    ; Восстанавливаем регистры
-    pop rax
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    
+    ; Відновлюємо всі регістри
     pop r15
     pop r14
     pop r13
@@ -246,15 +223,18 @@ irq_common_stub:
     pop rbx
     pop rax
     
+    ; Очищуємо стек від int_no та err_code
     add rsp, 16
+    
+    ; Повертаємося з переривання
     iretq
 
 ; ============================================================================
-; Обработчик системных вызовов
+; Обработчик системных вызовов (System Calls)
 ; ============================================================================
 
 syscall_common_stub:
-    ; Сохраняем все регистры (как в isr_common_stub)
+    ; Зберігаємо всі регістри
     push rax
     push rbx
     push rcx
@@ -271,38 +251,25 @@ syscall_common_stub:
     push r14
     push r15
     
-    ; Сохраняем сегментные регистры
-    mov ax, ds
-    push rax
-    
-    ; Загружаем kernel data segment
-    mov ax, 0x10
+    ; Встановлюємо правильні kernel сегменти (БЕЗ збереження)
+    mov ax, 0x10        ; GDT_KERNEL_DATA
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
     
-    ; Передаем указатель на registers_t в rdi
-    mov rdi, rsp
+    ; Вирівнюємо стек по 16 байт для ABI
+    mov rbp, rsp        ; Зберігаємо оригінальний RSP
+    and rsp, ~0xF       ; Вирівнюємо стек
     
-    ; Выравниваем стек для вызова C функции
-    mov rbp, rsp
-    and rsp, ~0xF
-    
-    ; Вызываем wrapper, который извлечет параметры и вызовет syscall_handler
+    ; Викликаємо C wrapper
+    mov rdi, rbp        ; Передаємо вказівник на registers_t
     call syscall_handler_wrapper
     
-    ; Восстанавливаем стек
+    ; Відновлюємо оригінальний стек
     mov rsp, rbp
     
-    ; Восстанавливаем сегментные регистры
-    pop rbx
-    mov ds, bx
-    mov es, bx
-    mov fs, bx
-    mov gs, bx
-    
-    ; Восстанавливаем все регистры (КРОМЕ RAX - там результат!)
+    ; Відновлюємо всі регістри КРІМ RAX (там результат syscall)
     pop r15
     pop r14
     pop r13
@@ -317,10 +284,10 @@ syscall_common_stub:
     pop rdx
     pop rcx
     pop rbx
-    add rsp, 8      ; Пропускаем старый rax (результат уже записан wrapper'ом)
+    add rsp, 8          ; Пропускаємо старий RAX (результат уже в regs->rax)
     
-    ; Убираем номер прерывания и код ошибки
+    ; Очищуємо стек від int_no та err_code
     add rsp, 16
     
-    ; Возврат из прерывания
+    ; Повертаємося з переривання
     iretq

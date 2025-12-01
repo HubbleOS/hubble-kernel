@@ -1,11 +1,12 @@
 #include <stddef.h>
 #include <ctype.h>
-
 #include <sys/keyboard.h>
 #include <sys/keymap.h>
-
+#include <lib/misc.k.h>
 #include <utils/font.h>
+#include <io.h>
 
+// Existing keymap (keep as is)
 const keymap_entry_t keymap[] = {
     {.id = {KEY_A, false}, 'a', 'A'},
     {.id = {KEY_B, false}, 'b', 'B'},
@@ -67,18 +68,14 @@ const keymap_entry_t keymap[] = {
     {.id = {KEY_LEFT_SHIFT, false}, 0, 0},
     {.id = {KEY_RIGHT_SHIFT, false}, 0, 0},
     {.id = {KEY_LEFT_CTRL, false}, 0, 0},
-    {.id = {KEY_RIGHT_CTRL, false}, 0, 0},
+    {.id = {KEY_RIGHT_CTRL, true}, 0, 0},
     {.id = {KEY_LEFT_ALT, false}, 0, 0},
     {.id = {KEY_RIGHT_ALT, true}, 0, 0},
-
-    //     {.id = {KEY_LEFT, true}, '<', '<'},
-    //     {.id = {KEY_RIGHT, true}, '>', '>'},
-    //     {.id = {KEY_UP, true}, '^', '^'},
-    //     {.id = {KEY_DOWN, true}, 'v', 'v'},
 };
 
-const size_t keymap_size = sizeof(keymap) / sizeof(keymap[0]);
+const size_t keymap_size = SIZEOF_ARRAY(keymap);
 
+// Existing keymap_lookup_char (keep as is)
 char keymap_lookup_char(uint8_t scancode, bool extended, bool shift, bool caps)
 {
 	for (size_t i = 0; i < keymap_size; ++i)
@@ -94,7 +91,157 @@ char keymap_lookup_char(uint8_t scancode, bool extended, bool shift, bool caps)
 	return 0;
 }
 
-key_event_t read_key_event()
+input_event_t keyboard_get_input(void)
+{
+	while (true)
+	{
+		key_event_t evt = keyboard_get_event();
+
+		// input_event_t input = {0};
+
+		input_event_t input = {
+		    .type = KEY_TYPE_UNKNOWN,
+		    .shift = evt.is_shift,
+		    .ctrl = evt.is_ctrl,
+		    .alt = evt.is_alt,
+		    .character = 0,
+		    .action = KEY_ACTION_NONE};
+
+		// Skip modifier keys themselves
+		if (evt.id.scancode == KEY_LEFT_SHIFT ||
+		    evt.id.scancode == KEY_RIGHT_SHIFT ||
+		    evt.id.scancode == KEY_LEFT_CTRL ||
+		    (evt.id.scancode == KEY_RIGHT_CTRL && evt.id.extended) ||
+		    evt.id.scancode == KEY_LEFT_ALT ||
+		    (evt.id.scancode == KEY_RIGHT_ALT && evt.id.extended) ||
+		    evt.id.scancode == KEY_CAPS_LOCK)
+		{
+			input.type = KEY_TYPE_MODIFIER;
+			continue;
+		}
+
+		// Handle function keys
+		if (!evt.id.extended && evt.id.scancode >= KEY_F1 && evt.id.scancode <= KEY_F12)
+		{
+			input.type = KEY_TYPE_FUNCTION;
+			if (evt.id.scancode <= KEY_F10)
+				input.function_key = evt.id.scancode - KEY_F1 + 1;
+			else
+				input.function_key = evt.id.scancode - KEY_F11 + 11;
+			return input;
+		}
+
+		// Handle extended special keys (arrows, navigation)
+		if (evt.id.extended)
+		{
+			input.type = KEY_TYPE_SPECIAL;
+
+			switch (evt.id.scancode)
+			{
+			case KEY_UP:
+				input.action = KEY_ACTION_UP;
+				return input;
+			case KEY_DOWN:
+				input.action = KEY_ACTION_DOWN;
+				return input;
+			case KEY_LEFT:
+				input.action = KEY_ACTION_LEFT;
+				return input;
+			case KEY_RIGHT:
+				input.action = KEY_ACTION_RIGHT;
+				return input;
+			case KEY_HOME:
+				input.action = KEY_ACTION_HOME;
+				return input;
+			case KEY_END:
+				input.action = KEY_ACTION_END;
+				return input;
+			case KEY_INSERT:
+				input.action = KEY_ACTION_INSERT;
+				return input;
+			case KEY_DELETE:
+				input.action = KEY_ACTION_DELETE;
+				return input;
+			case KEY_PAGEUP:
+				input.action = KEY_ACTION_PAGE_UP;
+				return input;
+			case KEY_PAGEDOWN:
+				input.action = KEY_ACTION_PAGE_DOWN;
+				return input;
+			default:
+				// Unknown extended key
+				continue;
+			}
+		}
+
+		// Try to get a character from keymap
+		char c = keymap_lookup_char(evt.id.scancode, evt.id.extended,
+					    evt.is_shift, evt.is_caps_lock);
+
+		if (c != 0)
+		{
+			// Check if it's a special character that needs special handling
+			if (c == '\b')
+			{
+				input.type = KEY_TYPE_SPECIAL;
+				input.action = KEY_ACTION_BACKSPACE;
+				return input;
+			}
+			if (c == '\n')
+			{
+				input.type = KEY_TYPE_SPECIAL;
+				input.action = KEY_ACTION_ENTER;
+				return input;
+			}
+			if (c == '\t')
+			{
+				input.type = KEY_TYPE_SPECIAL;
+				input.action = KEY_ACTION_TAB;
+				return input;
+			}
+			if (c == 27)
+			{ // ESC
+				input.type = KEY_TYPE_SPECIAL;
+				input.action = KEY_ACTION_ESC;
+				return input;
+			}
+
+			// Regular printable character
+			input.type = KEY_TYPE_CHAR;
+			input.character = c;
+			return input;
+		}
+
+		// Unknown key, continue waiting
+	}
+}
+
+#define KBD_BUFFER_SIZE 128
+
+static key_event_t kbd_buffer[KBD_BUFFER_SIZE];
+static volatile size_t kbd_head = 0;
+static volatile size_t kbd_tail = 0;
+
+static void kbd_push(key_event_t e)
+{
+	size_t next = (kbd_head + 1) % KBD_BUFFER_SIZE;
+	if (next != kbd_tail)
+	{
+		kbd_buffer[kbd_head] = e;
+		kbd_head = next;
+	}
+}
+
+static bool kbd_pop(key_event_t *out)
+{
+	if (kbd_tail == kbd_head)
+		return false;
+	*out = kbd_buffer[kbd_tail];
+	kbd_tail = (kbd_tail + 1) % KBD_BUFFER_SIZE;
+	return true;
+}
+
+static bool process_scancode_once(uint8_t raw, key_event_t *out_evt)
 {
 	static bool extended = false;
 	static bool shift_pressed = false;
@@ -102,49 +249,113 @@ key_event_t read_key_event()
 	static bool alt_pressed = false;
 	static bool caps_lock_active = false;
 
-	while (1)
+	uint8_t scancode = GET_SCANCODE(raw);
+	bool released = IS_RELEASED(raw);
+
+	if (IS_EXTENDED(raw))
 	{
-		uint8_t sc = kbd_read_scancode();
-		uint8_t scancode = GET_SCANCODE(sc);
-		bool released = IS_RELEASED(sc);
+		// mark that next scancode is extended; don't emit event yet
+		extended = true;
+		return false;
+	}
 
-		if (IS_EXTENDED(sc))
+	// handle modifiers
+	if (scancode == KEY_LEFT_SHIFT || scancode == KEY_RIGHT_SHIFT)
+	{
+		shift_pressed = !released;
+	}
+	else if ((scancode == KEY_LEFT_CTRL && !extended) || (scancode == KEY_RIGHT_CTRL && extended))
+	{
+		ctrl_pressed = !released;
+	}
+	else if ((scancode == KEY_LEFT_ALT && !extended) || (scancode == KEY_RIGHT_ALT && extended))
+	{
+		alt_pressed = !released;
+	}
+	else if (scancode == KEY_CAPS_LOCK && !released)
+	{
+		caps_lock_active = !caps_lock_active;
+	}
+
+	// prepare event
+	out_evt->id.scancode = scancode;
+	out_evt->id.extended = extended;
+	out_evt->released = released;
+	out_evt->is_shift = shift_pressed;
+	out_evt->is_ctrl = ctrl_pressed;
+	out_evt->is_alt = alt_pressed;
+	out_evt->is_caps_lock = caps_lock_active;
+
+	// reset extended flag after consuming
+	extended = false;
+	return true;
+}
+
+#include <utils/font.h>
+
+// для IRQ — читаем без ожидания
+static inline uint8_t kbd_read_scancode_irq(void)
+{
+	// extern uint8_t inb(uint16_t port);
+	return inb(0x60);
+}
+
+void keyboard_irq(registers_t *r)
+{
+	(void)r;
+	uint8_t raw = kbd_read_scancode_irq();
+
+	// debug: печатаем scancode — поможет понять, приходят ли IRQ
+	// printk("[kbd irq] raw=0x%02x\n", raw);
+
+	key_event_t evt;
+	if (process_scancode_once(raw, &evt))
+	{
+		kbd_push(evt);
+	}
+	// не отправляем EOI здесь — это делает общий irq_handler после возврата
+}
+
+char keyboard_get_char(void)
+{
+	key_event_t ev;
+
+	while (true)
+	{
+		// Атомарно проверяем буфер
+		asm volatile("cli");
+		bool has_event = kbd_pop(&ev);
+		asm volatile("sti");
+
+		if (has_event)
 		{
-			extended = true;
-			continue;
+			if (ev.released)
+				continue;
+
+			return keymap_lookup_char(ev.id.scancode, ev.id.extended,
+						  ev.is_shift, ev.is_caps_lock);
 		}
 
-		// Shift (left or right)
-		if (scancode == KEY_LEFT_SHIFT || scancode == KEY_RIGHT_SHIFT)
-		{
-			shift_pressed = !released;
-		}
-		// Ctrl (left or right)
-		else if ((scancode == KEY_LEFT_CTRL && !extended) || (scancode == KEY_RIGHT_CTRL && extended))
-		{
-			ctrl_pressed = !released;
-		}
-		// Alt (left or right)
-		else if ((scancode == KEY_LEFT_ALT && !extended) || (scancode == KEY_RIGHT_ALT && extended))
-		{
-			alt_pressed = !released;
-		}
-		// Caps Lock toggle
-		else if (scancode == KEY_CAPS_LOCK && !released)
-		{
-			caps_lock_active = !caps_lock_active;
-		}
+		// Буфер пуст - ждём прерывания
+		asm volatile("hlt");
+	}
+}
 
-		key_event_t evt = {
-		    .id.scancode = scancode,
-		    .id.extended = extended,
-		    .released = released,
-		    .is_shift = shift_pressed,
-		    .is_ctrl = ctrl_pressed,
-		    .is_alt = alt_pressed,
-		    .is_caps_lock = caps_lock_active};
+key_event_t keyboard_get_event(void)
+{
+	key_event_t ev;
 
-		extended = false;
-		return evt;
+	while (true)
+	{
+		// Атомарно проверяем буфер
+		asm volatile("cli");
+		bool has_event = kbd_pop(&ev);
+		asm volatile("sti"); // ВСЕГДА включаем обратно!
+
+		if (has_event && !ev.released)
+			return ev;
+
+		// Ждём следующего прерывания
+		asm volatile("hlt");
 	}
 }

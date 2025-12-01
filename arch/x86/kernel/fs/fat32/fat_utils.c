@@ -11,6 +11,9 @@
 #include <string.h>
 #include <errno.h>
 
+#include <ctype.h>
+#include <string.h>
+
 void itos(int num, char *str);
 void stoi(char *str, int *num);
 void uint_to_str(uint32_t num, char *buf, size_t bufsize);
@@ -39,6 +42,7 @@ void itos(int num, char *str)
 	} while (num > 0);
 	str[i] = '\0';
 }
+
 void stoi(char *str, int *num)
 {
 	*num = 0;
@@ -84,12 +88,6 @@ void uint_to_str(uint32_t num, char *buf, size_t bufsize)
 	buf[j] = '\0';
 }
 
-int to_upper(char c)
-{
-	if (c >= 'a' && c <= 'z')
-		return c - 32;
-	return c;
-}
 bool fat32_mount(FAT32_FS *fs, VFS_Device *device, uint32_t start_lba)
 {
 	fs->device = device->device;
@@ -112,6 +110,7 @@ bool fat32_unmount(FAT32_FS *fs)
 	kfree(fs);
 	return true;
 }
+
 FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 {
 	if (!fs)
@@ -119,8 +118,10 @@ FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 		printk("fs is null\n");
 		return NULL;
 	}
-	printk("Opening file: %s\n", path);
+
+	printk("FAT32: opening file at path: %s\n", path);
 	uint32_t cluster = resolve_path_to_cluster(fs, path);
+
 	if (cluster == 0)
 		return NULL;
 
@@ -136,6 +137,7 @@ FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 		kfree(buf);
 		return NULL;
 	}
+
 	printk("Cluster data open: ");
 	for (int i = 0; i < fs->cluster_size / sizeof(FAT32_DirectoryEntry); i++)
 	{
@@ -325,6 +327,7 @@ int fat32_mkdir(FAT32_FS *fs, const char *path)
 {
 	fat32_create_directory(fs, path);
 }
+
 int fat32_delete(FAT32_FS *fs, const char *path)
 {
 	FAT32_File *entry = fat32_open(fs, path);
@@ -340,6 +343,7 @@ int fat32_delete(FAT32_FS *fs, const char *path)
 	}
 	return 0;
 }
+
 int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 {
 	printk("🔎 Mounting FAT32 at LBA %d\n", first_lba);
@@ -414,6 +418,7 @@ uint32_t cluster_to_lba(FAT32_FS *fs, uint32_t cluster)
 {
 	return fs->cluster_heap_lba + (cluster - 2) * fs->sectors_per_cluster;
 }
+
 int fat32_update_fat_entry(FAT32_FS *fs, FAT32_File *file)
 {
 	uint8_t *buf = kmalloc(fs->cluster_size, GFP_KERNEL);
@@ -512,23 +517,23 @@ void format_filename_fat(const char *in, char out11[12])
 			i++;
 			continue;
 		}
+
 		if (in[i] == ' ')
-		{
 			break;
-		}
-		temp_out[j++] = to_upper(in[i]);
+
+		temp_out[j++] = toupper(in[i]);
 		i++;
 	}
+
 	temp_out[12] = '\0';
 
 	for (i = 0; i < 12; i++)
-	{
 		out11[i] = temp_out[i];
-	}
 }
 
 PathParts format_folder_path(const char *in)
 {
+	printk("Formatting folder path: %s\n", in);
 	PathParts result = {0};
 
 	while (*in == '/')
@@ -537,24 +542,28 @@ PathParts format_folder_path(const char *in)
 	while (*in && result.count < MAX_PARTS && *in != '\0')
 	{
 		const char *end = in;
+
 		while (*end && *end != '/' && *end != '\0')
 			end++;
 
 		int len = end - in;
+
 		if (len > 0)
 		{
-			char name[256] = {0};
-			strncpy(name, in, len);
+			char *name = kmalloc(len + 1, GFP_KERNEL);
+			if (!name)
+				return result; // or panic
 
-			// SFN
+			memcpy(name, in, len);
+			name[len] = '\0';
+
 			format_filename_fat(name, result.parts[result.count].sfn);
-
-			// LFN (оригінальне ім’я)
 
 			result.parts[result.count].lfn = kmalloc(len + 1, GFP_KERNEL);
 			memcpy(result.parts[result.count].lfn, name, len);
 			result.parts[result.count].lfn[len] = '\0';
 
+			kfree(name);
 			result.count++;
 		}
 
@@ -562,17 +571,17 @@ PathParts format_folder_path(const char *in)
 		while (*in == '/' && *in != '\0')
 			in++;
 	}
+
 	return result;
 }
 
 void free_folder_path(PathParts *pp)
 {
 	for (int i = 0; i < pp->count; i++)
-	{
 		kfree(pp->parts[i].lfn);
-	}
 	pp->count = 0;
 }
+
 int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir)
 {
 	if (!fs)
@@ -640,6 +649,7 @@ int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir
 	kfree(buf);
 	return -ENOSPC; // нема місця в директорії
 }
+
 int fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name)
 {
 	if (cluster == 0)
