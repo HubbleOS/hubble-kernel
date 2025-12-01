@@ -3,9 +3,10 @@
 #include <sys/syscall.h>
 #include <stdint.h>
 #include "printk.h"
+#include <io.h>
 
 // ============================================================================
-// PIC функции (без изменений)
+// PIC функции
 // ============================================================================
 
 #define PIC1_COMMAND 0x20
@@ -13,18 +14,6 @@
 #define PIC2_COMMAND 0xA0
 #define PIC2_DATA 0xA1
 #define PIC_EOI 0x20
-
-static inline void outb(uint16_t port, uint8_t value)
-{
-	asm volatile("outb %0, %1" : : "a"(value), "Nd"(port));
-}
-
-static inline uint8_t inb(uint16_t port)
-{
-	uint8_t ret;
-	asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
-	return ret;
-}
 
 void pic_remap(void)
 {
@@ -122,14 +111,64 @@ static const char *exception_messages[] = {
 
 void isr_handler(registers_t *regs)
 {
+	printk("╔════════════════════════════════════════════════╗\n");
+	printk("║           EXCEPTION OCCURRED                   ║\n");
+	printk("╚════════════════════════════════════════════════╝\n");
+
 	printk("Exception: %s (%lu)\n",
 	       regs->int_no < 22 ? exception_messages[regs->int_no] : "Unknown",
 	       regs->int_no);
 	printk("Error code: 0x%lx\n", regs->err_code);
-	printk("RIP: 0x%lx, RSP: 0x%lx\n", regs->rip, regs->rsp);
+
+	printk("\n=== Registers ===\n");
+	printk("RIP: 0x%016lx    RSP: 0x%016lx\n", regs->rip, regs->rsp);
+	printk("RAX: 0x%016lx    RBX: 0x%016lx\n", regs->rax, regs->rbx);
+	printk("RCX: 0x%016lx    RDX: 0x%016lx\n", regs->rcx, regs->rdx);
+	printk("RSI: 0x%016lx    RDI: 0x%016lx\n", regs->rsi, regs->rdi);
+	printk("RBP: 0x%016lx    R8:  0x%016lx\n", regs->rbp, regs->r8);
+	printk("R9:  0x%016lx    R10: 0x%016lx\n", regs->r9, regs->r10);
+	printk("R11: 0x%016lx    R12: 0x%016lx\n", regs->r11, regs->r12);
+	printk("R13: 0x%016lx    R14: 0x%016lx\n", regs->r13, regs->r14);
+	printk("R15: 0x%016lx\n", regs->r15);
+
+	printk("\n=== Segments ===\n");
+	printk("SS:  0x%04lx\n", regs->ss);
+	printk("RFLAGS: 0x%016lx\n", regs->rflags);
+
+	// Спроба декодувати помилку GPF
+	if (regs->int_no == 13 && regs->err_code != 0)
+	{
+		printk("\n=== GPF Error Code Details ===\n");
+		if (regs->err_code & 1)
+			printk("External event (hardware interrupt)\n");
+		else
+			printk("Internal event (software exception)\n");
+
+		uint8_t tbl = (regs->err_code >> 1) & 0x3;
+		printk("Table: ");
+		switch (tbl)
+		{
+		case 0:
+			printk("GDT\n");
+			break;
+		case 1:
+			printk("IDT\n");
+			break;
+		case 2:
+			printk("LDT\n");
+			break;
+		case 3:
+			printk("IDT\n");
+			break;
+		}
+
+		uint16_t index = (regs->err_code >> 3);
+		printk("Selector Index: %u (0x%x)\n", index, index);
+	}
 
 	if (regs->int_no == 8 || regs->int_no == 13 || regs->int_no == 14)
 	{
+		printk("\nFATAL ERROR - System Halted\n");
 		while (1)
 		{
 			asm volatile("cli; hlt");
@@ -151,14 +190,8 @@ void irq_handler(registers_t *regs)
 // Syscall table
 // ============================================================================
 
-long sys_test(long a1, long a2, long a3, long a4, long a5, long a6)
+long sys_test()
 {
-	(void)a1;
-	(void)a2;
-	(void)a3;
-	(void)a4;
-	(void)a5;
-	(void)a6;
 	return 666;
 }
 
@@ -190,51 +223,6 @@ uint64_t syscall_handler_wrapper(registers_t *regs)
 
 #include <sys/keyboard.h>
 
-#define KBD_BUFFER_SIZE 128
-
-static key_event_t kbd_buffer[KBD_BUFFER_SIZE];
-static volatile size_t kbd_head = 0;
-static volatile size_t kbd_tail = 0;
-
-static void kbd_push(key_event_t e)
-{
-	size_t next = (kbd_head + 1) % KBD_BUFFER_SIZE;
-	if (next != kbd_tail)
-	{
-		kbd_buffer[kbd_head] = e;
-		kbd_head = next;
-	}
-}
-
-static bool kbd_pop(key_event_t *out)
-{
-	if (kbd_tail == kbd_head)
-		return false;
-	*out = kbd_buffer[kbd_tail];
-	kbd_tail = (kbd_tail + 1) % KBD_BUFFER_SIZE;
-	return true;
-}
-
-void keyboard_irq(registers_t *r)
-{
-	key_event_t ev = read_key_event(); // читает scancode и собирает event
-	kbd_push(ev);
-}
-
-char keyboard_get_char()
-{
-	key_event_t ev;
-
-	while (!kbd_pop(&ev))
-	{
-	} // блокируем пока нет буфера
-
-	if (ev.released)
-		return 0; // пропускаем отпускание клавиш
-
-	return keymap_lookup_char(ev.id.scancode, ev.id.extended, ev.is_shift, ev.is_caps_lock);
-}
-
 void interrupts_init(void)
 {
 	pic_remap();
@@ -243,7 +231,4 @@ void interrupts_init(void)
 	irq_install_handler(1, keyboard_irq);
 
 	asm volatile("sti");
-
-	char c = keyboard_get_char();
-	printk("Got char: %c\n", c);
 }

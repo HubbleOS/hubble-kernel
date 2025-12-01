@@ -6,10 +6,11 @@
 #include "mm/slab.h"
 #include "mm/pmm.h"
 #include "printk.h"
+#include "higher_half.h"
 
 extern void user_enter(uint64_t entry, uint64_t stack);
 
-#define ELF_MAGIC 0x464c457fUL
+#define ELF_MAGIC 0x464c457fUL // "\x7FELF" in little-endian
 #define PAGE_SIZE 4096
 #define USER_STACK_PAGES 8
 #define USER_STACK_TOP 0x70000000ULL
@@ -52,89 +53,105 @@ typedef struct
 // Load single ELF segment
 static int load_segment(VFS_File *f, Elf64_Phdr *phdr)
 {
-	printk("Loading segment:\n");
-	printk("  VAddr:  0x%lx\n", phdr->p_vaddr);
-	printk("  Filesz: 0x%lx\n", phdr->p_filesz);
-	printk("  Memsz:  0x%lx\n", phdr->p_memsz);
-	printk("  Flags:  0x%x (R:%d W:%d X:%d)\n",
-	       phdr->p_flags,
-	       !!(phdr->p_flags & PF_R),
-	       !!(phdr->p_flags & PF_W),
-	       !!(phdr->p_flags & PF_X));
+	printk("Loading segment: vaddr=0x%lx filesz=0x%lx memsz=0x%lx\n",
+	       phdr->p_vaddr, phdr->p_filesz, phdr->p_memsz);
 
-	// Calculate page-aligned range
 	uint64_t seg_start = phdr->p_vaddr & ~(PAGE_SIZE - 1);
 	uint64_t seg_end = (phdr->p_vaddr + phdr->p_memsz + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 	size_t num_pages = (seg_end - seg_start) / PAGE_SIZE;
 
-	printk("  Pages: %lu (0x%lx - 0x%lx)\n", num_pages, seg_start, seg_end);
-
-	// Determine page flags
-	uint64_t flags = PTE_PRESENT | PTE_USER;
+	uint64_t pte_flags = PTE_USER;
 	if (phdr->p_flags & PF_W)
-	{
-		flags |= PTE_WRITE;
-	}
+		pte_flags |= PTE_WRITE;
 	if (!(phdr->p_flags & PF_X))
-	{
-		flags |= PTE_NX;
-	}
+		pte_flags |= PTE_NX;
 
-	// Allocate and map pages
-	for (size_t pg = 0; pg < num_pages; pg++)
+	/* Запомним выделенные физ. страницы, чтобы при ошибке откатить */
+	uint64_t *allocated_phys = kmalloc(num_pages * sizeof(uint64_t), GFP_KERNEL);
+	if (!allocated_phys)
+	{
+		printk("ERROR: no memory for bookkeeping\n");
+		return -1;
+	}
+	size_t allocated = 0;
+
+	for (size_t pg = 0; pg < num_pages; ++pg)
 	{
 		uint64_t user_va = seg_start + pg * PAGE_SIZE;
 
-		// Allocate and map - returns kernel virtual address
-		void *kernel_page;
-
-		if (!kernel_page)
+		/* 1) выделяем физическую страницу */
+		uint64_t phys = pmm_alloc_page();
+		if (!phys)
 		{
-			printk("ERROR: Failed to allocate page at VA 0x%lx\n", user_va);
-			return -1;
+			printk("ERROR: pmm_alloc_page failed for VA 0x%lx\n", user_va);
+			goto fail;
 		}
 
-		// Zero the entire page first
+		/* 2) мапим в таблицы */
+		if (vmm_map_page(user_va, phys, pte_flags | PTE_PRESENT) != 0)
+		{
+			printk("ERROR: vmm_map_page failed for VA 0x%lx -> PA 0x%lx\n", user_va, phys);
+			pmm_free_page(phys);
+			goto fail;
+		}
+
+		/* 3) kernel-вид страницы */
+		void *kernel_page = (void *)PHYS_TO_VIRT(phys);
+		if (!kernel_page)
+		{
+			printk("ERROR: PHYS_TO_VIRT returned NULL for PA 0x%lx\n", phys);
+			vmm_unmap_page(user_va);
+			pmm_free_page(phys);
+			goto fail;
+		}
+
+		/* 4) обнуляем страницу */
 		memset(kernel_page, 0, PAGE_SIZE);
 
-		// Calculate what part of this page needs data from file
+		/* 5) читаем данные из ELF, если часть страницы покрыта file data */
 		uint64_t page_start = user_va;
 		uint64_t page_end = user_va + PAGE_SIZE;
 		uint64_t data_start = phdr->p_vaddr;
 		uint64_t data_end = phdr->p_vaddr + phdr->p_filesz;
 
-		// Check if this page overlaps with file data
 		if (page_end > data_start && page_start < data_end)
 		{
-			// Calculate overlap
 			uint64_t copy_start = (page_start > data_start) ? page_start : data_start;
 			uint64_t copy_end = (page_end < data_end) ? page_end : data_end;
-			size_t copy_size = copy_end - copy_start;
-
+			size_t copy_size = (size_t)(copy_end - copy_start);
 			uint64_t file_offset = phdr->p_offset + (copy_start - data_start);
 			uint64_t page_offset = copy_start - page_start;
 
-			// Read directly into kernel page
 			vfs_lseek(f, file_offset, SEEK_SET);
 			size_t read_bytes = vfs_read(f, (uint8_t *)kernel_page + page_offset, copy_size);
-
-			if (read_bytes != (size_t)copy_size)
+			if (read_bytes != copy_size)
 			{
-				printk("ERROR: Failed to read segment data (got %ld, expected %lu)\n",
-				       read_bytes, copy_size);
-				return -1;
+				printk("ERROR: read_bytes %ld != expected %lu\n", read_bytes, copy_size);
+				vmm_unmap_page(user_va);
+				pmm_free_page(phys);
+				goto fail;
 			}
+		}
 
-			printk("    Page 0x%lx: copied 0x%lx bytes at offset 0x%lx\n",
-			       user_va, copy_size, page_offset);
-		}
-		else
-		{
-			printk("    Page 0x%lx: zero-filled (BSS)\n", user_va);
-		}
+		/* Успешно: запомним phys для отката/освобождения позже (если понадобится) */
+		allocated_phys[allocated++] = phys;
 	}
 
+	/* Всё загружено успешно */
+	kfree(allocated_phys);
 	return 0;
+
+fail:
+	/* откат — unmap + free всех ранее выделенных */
+	for (size_t i = 0; i < allocated; ++i)
+	{
+		uint64_t phys = allocated_phys[i];
+		uint64_t virt = seg_start + i * PAGE_SIZE;
+		vmm_unmap_page(virt);
+		pmm_free_page(phys);
+	}
+	kfree(allocated_phys);
+	return -1;
 }
 
 int load_elf_and_run(const char *path)
@@ -148,6 +165,8 @@ int load_elf_and_run(const char *path)
 		printk("ERROR: Cannot open %s\n", path);
 		return -1;
 	}
+
+	printk("File %s opened successfully\n", path);
 
 	// Read ELF header
 	Elf64_Ehdr ehdr;

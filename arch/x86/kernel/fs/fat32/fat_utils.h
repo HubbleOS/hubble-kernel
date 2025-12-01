@@ -1,7 +1,9 @@
 #pragma once
+
 #include <stdbool.h>
 #include "fat_structs.h"
 #include <fs/gpt/gpt.h>
+
 typedef void (*directory_entry_callback_t)(const char *name, bool is_dir, Directory *context);
 
 void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr);

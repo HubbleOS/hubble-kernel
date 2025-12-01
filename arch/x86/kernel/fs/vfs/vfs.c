@@ -117,10 +117,14 @@ VFS_File *vfs_open(const char *path, int flags)
 	const char *relpath = vfs_get_relpath(path, mnt->mountpoint);
 	if (*relpath == '/')
 		relpath++;
+
 	printk("VFS: opening file %s\n", relpath);
 	VFS_Node *node = mnt->fs->open(mnt->fs, relpath);
+	printk("after open\n");
+
 	if (!node && (flags & VFS_O_CREAT))
 		node = mnt->fs->create_file(mnt->fs, relpath);
+
 	if (!node)
 		return ERR_PTR(-ENOENT);
 
