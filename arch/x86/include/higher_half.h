@@ -190,16 +190,16 @@
 // Page Table Entry Flags
 // ============================================================================
 
-#define PTE_PRESENT (1ULL << 0)	     // Page is present in memory
-#define PTE_WRITE (1ULL << 1)	     // Page is writable
-#define PTE_USER (1ULL << 2)	     // User mode access allowed
-#define PTE_WRITETHROUGH (1ULL << 3) // Write-through caching
-#define PTE_NOCACHE (1ULL << 4)	     // Disable caching
-#define PTE_ACCESSED (1ULL << 5)     // Page has been accessed
-#define PTE_DIRTY (1ULL << 6)	     // Page has been written to
-#define PTE_HUGE (1ULL << 7)	     // Huge page (2MB/1GB)
-#define PTE_GLOBAL (1ULL << 8)	     // Global page (not flushed on CR3 reload)
-#define PTE_NX (1ULL << 63)	     // No execute
+// #define PTE_PRESENT (1ULL << 0)	     // Page is present in memory
+// #define PTE_WRITE (1ULL << 1)	     // Page is writable
+// #define PTE_USER (1ULL << 2)	     // User mode access allowed
+// #define PTE_WRITETHROUGH (1ULL << 3) // Write-through caching
+// #define PTE_NOCACHE (1ULL << 4)	     // Disable caching
+// #define PTE_ACCESSED (1ULL << 5)     // Page has been accessed
+// #define PTE_DIRTY (1ULL << 6)	     // Page has been written to
+// #define PTE_HUGE (1ULL << 7)	     // Huge page (2MB/1GB)
+// #define PTE_GLOBAL (1ULL << 8)	     // Global page (not flushed on CR3 reload)
+// #define PTE_NX (1ULL << 63)	     // No execute
 
 /**
  * @brief Extract physical address from page table entry
