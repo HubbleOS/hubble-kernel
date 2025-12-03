@@ -11,21 +11,21 @@
 static slab_cache_t *g_cache_list = NULL;
 static slab_info_t g_slab_info = {0};
 
-static const size_t g_standard_sizes[] = {8, 16, 32, 64, 128, 256, 512, 1024, 2048};
+static const size_t g_standard_sizes[8] = {8, 16, 32, 64, 128, 256, 512, 1024};
 static const size_t g_standard_count = sizeof(g_standard_sizes) / sizeof(size_t);
-static slab_cache_t *g_standard_caches[12] = {NULL};
+static slab_cache_t *g_standard_caches[8] = {NULL};
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-static void *slab_alloc_page(void)
+void *slab_alloc_page(void)
 {
 	uint64_t phys = pmm_alloc_page();
 	return phys ? (void *)PHYS_TO_VIRT(phys) : NULL;
 }
 
-static void slab_free_page(void *addr)
+void slab_free_page(void *addr)
 {
 	if (addr)
 		pmm_free_page(VIRT_TO_PHYS(addr));

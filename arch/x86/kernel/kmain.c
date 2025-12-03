@@ -5,7 +5,6 @@
 
 // Forward declarations
 extern void os_main(BootInfo *bi);
-extern void syscall_init(void);
 extern int load_elf_and_run(const char *path);
 
 // -----------------------------------------------------------------------------

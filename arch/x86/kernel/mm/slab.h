@@ -19,7 +19,7 @@
 // ============================================================================
 
 #define SLAB_MIN_SIZE 8	   // Мінімальний розмір об'єкта
-#define SLAB_MAX_SIZE 4096 // Максимальний розмір об'єкта
+#define SLAB_MAX_SIZE 1024 // Максимальний розмір об'єкта
 
 // ============================================================================
 // Slab Structures
@@ -168,5 +168,8 @@ void *slab_cache_alloc(slab_cache_t *cache);
  * @param ptr Pointer to object
  */
 void slab_cache_free(slab_cache_t *cache, void *ptr);
+
+void *slab_alloc_page(void);
+void slab_free_page(void *addr);
 
 _End_C_Header;

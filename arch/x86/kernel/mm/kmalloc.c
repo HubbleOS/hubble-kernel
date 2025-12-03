@@ -1,23 +1,61 @@
 #include "kmalloc.h"
 #include "slab.h"
+#include "pmm.h"
+#include "higher_half.h"
 #include <string.h>
 #include "printk.h"
 
+typedef struct big_alloc_header
+{
+	size_t pages;
+} big_alloc_header_t;
+
 void *kmalloc(size_t size, kmalloc_flags_t flags)
 {
-	if (size == 0 || size > SLAB_MAX_SIZE)
+	if (size == 0)
 		return NULL;
 
-	void *ptr = (flags & KMALLOC_ZERO) ? slab_calloc(size) : slab_alloc(size);
+	if (size <= SLAB_MAX_SIZE)
+	{
+		return (flags & GFP_ZERO) ? slab_calloc(size) : slab_alloc(size);
+	}
 
-	return ptr;
+	size_t pages = (size + sizeof(big_alloc_header_t) + PAGE_SIZE - 1) / PAGE_SIZE;
+	uint64_t phys = pmm_alloc_pages(pages);
+	if (!phys)
+		return NULL;
+
+	big_alloc_header_t *hdr = (big_alloc_header_t *)PHYS_TO_VIRT(phys);
+	hdr->pages = pages;
+	void *user_ptr = (void *)(hdr + 1);
+
+	if (flags & GFP_ZERO)
+		memset(user_ptr, 0, pages * PAGE_SIZE - sizeof(big_alloc_header_t));
+
+	return user_ptr;
 }
 
 void kfree(void *ptr)
 {
 	if (!ptr)
 		return;
-	slab_free(ptr);
+
+	slab_cache_t *cache = find_cache_for_ptr(ptr);
+	if (cache)
+	{
+		slab_free(ptr);
+		return;
+	}
+
+	big_alloc_header_t *hdr = (big_alloc_header_t *)ptr - 1;
+	if (hdr->pages > 0)
+	{
+		pmm_free_pages(VIRT_TO_PHYS(hdr), hdr->pages);
+	}
+	else
+	{
+		printk(KERN_WARNING "kfree: pointer %p not recognized\n", ptr);
+	}
 }
 
 void *kzalloc(size_t size) { return kmalloc(size, GFP_ZERO); }
@@ -42,7 +80,7 @@ void *krealloc(void *ptr, size_t new_size, kmalloc_flags_t flags)
 	}
 
 	size_t old_size = ksize(ptr);
-	if (new_size <= old_size)
+	if (old_size >= new_size)
 		return ptr;
 
 	void *new_ptr = kmalloc(new_size, flags);
@@ -54,45 +92,15 @@ void *krealloc(void *ptr, size_t new_size, kmalloc_flags_t flags)
 	return new_ptr;
 }
 
-void *kmemdup(const void *src, size_t size, kmalloc_flags_t flags)
-{
-	if (!src || size == 0)
-		return NULL;
-	void *ptr = kmalloc(size, flags);
-	if (ptr)
-		memcpy(ptr, src, size);
-	return ptr;
-}
-
-char *kstrdup(const char *s, kmalloc_flags_t flags)
-{
-	if (!s)
-		return NULL;
-	size_t len = strlen(s) + 1;
-	char *ptr = kmalloc(len, flags);
-	if (ptr)
-		memcpy(ptr, s, len);
-	return ptr;
-}
-
-char *kstrndup(const char *s, size_t max, kmalloc_flags_t flags)
-{
-	if (!s)
-		return NULL;
-	size_t len = 0;
-	while (len < max && s[len])
-		len++;
-	char *ptr = kmalloc(len + 1, flags);
-	if (ptr)
-	{
-		memcpy(ptr, s, len);
-		ptr[len] = '\0';
-	}
-	return ptr;
-}
-
 size_t ksize(void *ptr)
 {
 	slab_cache_t *cache = find_cache_for_ptr(ptr);
-	return cache ? cache->object_size : 0;
+	if (cache)
+		return cache->object_size;
+
+	big_alloc_header_t *hdr = (big_alloc_header_t *)ptr - 1;
+	if (hdr->pages > 0)
+		return hdr->pages * PAGE_SIZE - sizeof(big_alloc_header_t);
+
+	return 0;
 }
