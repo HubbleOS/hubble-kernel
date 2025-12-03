@@ -134,7 +134,7 @@
 /**
  * @brief Align address up to page boundary
  */
-#define PAGE_ALIGN_UP(addr) ALIGN_UP(addr, PAGE_SIZE)
+// #define PAGE_ALIGN_UP(addr) ALIGN_UP(addr, PAGE_SIZE)
 
 /**
  * @brief Align address down to 2MB boundary (huge page)
@@ -212,70 +212,3 @@
  */
 #define PTE_FLAGS(entry) \
 	((entry) & 0xFFF0000000000FFFULL)
-
-// ============================================================================
-// Helper Functions (defined in kernel_entry.c or mm/vmm.c)
-// ============================================================================
-
-#ifndef __ASSEMBLER__
-
-/**
- * @brief Convert physical address to virtual address
- *
- * @param phys_addr Physical address
- * @return Virtual address in kernel space
- */
-void *phys_to_virt(uint64_t phys_addr);
-
-/**
- * @brief Convert virtual address to physical address
- *
- * @param virt_addr Virtual address
- * @return Physical address (0 if address is not in kernel space)
- */
-uint64_t virt_to_phys(void *virt_addr);
-
-/**
- * @brief Validate that address is properly in kernel space
- *
- * @param addr Address to validate
- * @return 1 if valid kernel address, 0 otherwise
- */
-static inline int is_kernel_address(void *addr)
-{
-	return IS_KERNEL_VIRT(addr);
-}
-
-/**
- * @brief Get current CR3 value (physical address of PML4)
- *
- * @return Physical address of current page table
- */
-static inline uint64_t get_cr3(void)
-{
-	uint64_t cr3;
-	asm volatile("mov %%cr3, %0" : "=r"(cr3));
-	return cr3;
-}
-
-/**
- * @brief Set CR3 value (switch page tables)
- *
- * @param pml4_phys Physical address of new PML4
- */
-static inline void set_cr3(uint64_t pml4_phys)
-{
-	asm volatile("mov %0, %%cr3" : : "r"(pml4_phys) : "memory");
-}
-
-/**
- * @brief Flush TLB entry for specific virtual address
- *
- * @param virt Virtual address to flush
- */
-static inline void invlpg(void *virt)
-{
-	asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
-}
-
-#endif /* __ASSEMBLER__ */

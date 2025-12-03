@@ -9,7 +9,6 @@
 #include <mm/kmalloc.h>
 
 #include <string.h>
-
 #include <stdbool.h>
 
 void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr)
@@ -36,6 +35,7 @@ Directory fat32_list_files(FAT32_FS *fs, uint32_t cluster)
 	printk("count: %d\n", ctx.count);
 	return ctx;
 }
+
 Directory fat32_list_files_from_path(FAT32_FS *fs, const char *path)
 {
 
@@ -85,6 +85,7 @@ uint32_t get_fat_entry(FAT32_FS *fs, uint32_t cluster)
 
 	return entry & 0x0FFFFFFF;
 }
+
 void set_fat_entry(FAT32_FS *fs, uint32_t cluster, uint32_t value)
 {
 	value &= 0x0FFFFFFF;
