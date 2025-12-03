@@ -46,7 +46,6 @@ int ata_wait_drq(ATA_Device *dev)
 }
 
 // Read sector
-
 int ata_read_sector(void *device, uint32_t lba, void *buffer)
 {
 	// printk("ata_read_sector %d\n", lba);
@@ -91,10 +90,13 @@ int ata_write_sector(void *device, uint32_t lba, const void *buffer)
 
 	for (int j = 0; j < 16; j++)
 		printk("%02X ", buf[j]);
+	printk("\n");
+
 	if (((FAT32_DirectoryEntry *)(buf))->name[0] == 0x00)
 	{
 		printk("ata_write_sector: buffer is empty\n");
 	}
+
 	ata_wait(dev);
 
 	outb(dev->io_base + 6, 0xE0 | ((lba >> 24) & 0x0F)); // Drive/Head

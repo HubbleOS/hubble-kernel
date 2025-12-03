@@ -8,8 +8,8 @@
 #define PAGE_SIZE 4096
 
 // Макроси для вирівнювання адрес
-#define PAGE_ALIGN_DOWN(addr) ((addr) & ~(PAGE_SIZE - 1))
 #define PAGE_ALIGN_UP(addr) (((addr) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
+#define PAGE_ALIGN_DOWN(addr) ((addr) & ~(PAGE_SIZE - 1))
 
 // Структура для інформації про PMM
 typedef struct
@@ -55,22 +55,3 @@ void pmm_free_page(uint64_t addr);
  * @param count Кількість сторінок
  */
 void pmm_free_pages(uint64_t addr, size_t count);
-
-/**
- * Позначає сторінку як зайняту (використовується при ініціалізації)
- * @param addr Фізична адреса сторінки
- */
-void pmm_mark_page_used(uint64_t addr);
-
-/**
- * Позначає діапазон сторінок як зайнятий
- * @param addr Початкова адреса
- * @param size Розмір в байтах
- */
-void pmm_mark_region_used(uint64_t addr, uint64_t size);
-
-/**
- * Отримує інформацію про стан PMM
- * @return Вказівник на структуру з інформацією
- */
-pmm_info_t *pmm_get_info(void);

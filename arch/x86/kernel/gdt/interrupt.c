@@ -111,9 +111,7 @@ static const char *exception_messages[] = {
 
 void isr_handler(registers_t *regs)
 {
-	printk("╔════════════════════════════════════════════════╗\n");
-	printk("║           EXCEPTION OCCURRED                   ║\n");
-	printk("╚════════════════════════════════════════════════╝\n");
+	printk("\n\tEXCEPTION OCCURRED\n");
 
 	printk("Exception: %s (%lu)\n",
 	       regs->int_no < 22 ? exception_messages[regs->int_no] : "Unknown",
@@ -212,8 +210,15 @@ uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
 
 uint64_t syscall_handler_wrapper(registers_t *regs)
 {
-	regs->rax = syscall_handler(regs->rax, regs->rdi, regs->rsi, regs->rdx,
-				    regs->r10, regs->r8, regs->r9);
+	regs->rax = syscall_handler(
+	    regs->rax,
+	    regs->rdi,
+	    regs->rsi,
+	    regs->rdx,
+	    regs->r10,
+	    regs->r8,
+	    regs->r9);
+
 	return regs->rax;
 }
 

@@ -205,12 +205,14 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 	{
 		cluster = get_fat_entry(fs, cluster);
 	}
+
 	printk("cluster: %d\n", cluster);
 	printk("in_cluster_offset: %d\n", in_cluster_offset);
 	printk("to_read: %d\n", to_read);
 
 	while (read < to_read && cluster < 0x0FFFFFF8)
 	{
+		printk("Reading cluster: %d\n", cluster);
 		uint8_t *cluster_buf = kmalloc(fs->cluster_size, GFP_KERNEL);
 		if (!cluster_buf)
 			return -1;
@@ -221,12 +223,14 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 		uint16_t *buf = (uint16_t *)cluster_buf;
 		for (int j = 0; j < 16; j++)
 			printk("%02X ", buf[j]);
+		printk("\n");
+
 		size_t available = fs->cluster_size - in_cluster_offset;
 		size_t chunk = (to_read - read < available) ? (to_read - read) : available;
 
 		memcpy(buffer + read, cluster_buf + in_cluster_offset, chunk);
+		printk("Read chunk: %d bytes, readed: %d\n", chunk, read + chunk);
 		read += chunk;
-
 		kfree(cluster_buf);
 		cluster = get_fat_entry(fs, cluster);
 
@@ -346,7 +350,7 @@ int fat32_delete(FAT32_FS *fs, const char *path)
 
 int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 {
-	printk("🔎 Mounting FAT32 at LBA %d\n", first_lba);
+	printk("Mounting FAT32 at LBA %d\n", first_lba);
 	uint8_t sector[512];
 	printk("Reading FAT32 signature\n");
 	fs->read_sector(fs->device, first_lba, sector);
