@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <lib/misc.k.h>
-
 #include <stdint.h>
 
 // ============================================================================
@@ -126,26 +124,6 @@
 #define PAGE_OFFSET(virt) \
 	((uint64_t)(virt) & 0xFFF)
 
-/**
- * @brief Align address down to page boundary
- */
-#define PAGE_ALIGN_DOWN(addr) ALIGN_DOWN(addr, PAGE_SIZE)
-
-/**
- * @brief Align address up to page boundary
- */
-// #define PAGE_ALIGN_UP(addr) ALIGN_UP(addr, PAGE_SIZE)
-
-/**
- * @brief Align address down to 2MB boundary (huge page)
- */
-#define HUGE_PAGE_ALIGN_DOWN(addr) ALIGN_DOWN(addr, 2 * 1024 * 1024)
-
-/**
- * @brief Align address up to 2MB boundary (huge page)
- */
-#define HUGE_PAGE_ALIGN_UP(addr) ALIGN_UP(addr, 2 * 1024 * 1024)
-
 // ============================================================================
 // Recursive Page Table Access
 // ============================================================================
@@ -185,21 +163,6 @@
  */
 #define RECURSIVE_PT(pml4_idx, pdpt_idx, pd_idx) \
 	((uint64_t *)(RECURSIVE_MAPPING | ((pml4_idx) << 30) | ((pdpt_idx) << 21) | ((pd_idx) << 12)))
-
-// ============================================================================
-// Page Table Entry Flags
-// ============================================================================
-
-// #define PTE_PRESENT (1ULL << 0)	     // Page is present in memory
-// #define PTE_WRITE (1ULL << 1)	     // Page is writable
-// #define PTE_USER (1ULL << 2)	     // User mode access allowed
-// #define PTE_WRITETHROUGH (1ULL << 3) // Write-through caching
-// #define PTE_NOCACHE (1ULL << 4)	     // Disable caching
-// #define PTE_ACCESSED (1ULL << 5)     // Page has been accessed
-// #define PTE_DIRTY (1ULL << 6)	     // Page has been written to
-// #define PTE_HUGE (1ULL << 7)	     // Huge page (2MB/1GB)
-// #define PTE_GLOBAL (1ULL << 8)	     // Global page (not flushed on CR3 reload)
-// #define PTE_NX (1ULL << 63)	     // No execute
 
 /**
  * @brief Extract physical address from page table entry
