@@ -47,11 +47,11 @@ uint64_t pmm_alloc_pages(size_t count);
  * Звільняє одну фізичну сторінку
  * @param addr Фізична адреса сторінки
  */
-void pmm_free_page(uint64_t addr);
+void pmm_free_page(uint64_t phys_addr);
 
 /**
  * Звільняє кілька послідовних фізичних сторінок
  * @param addr Фізична адреса першої сторінки
  * @param count Кількість сторінок
  */
-void pmm_free_pages(uint64_t addr, size_t count);
+void pmm_free_pages(uint64_t phys_addr, size_t count);
