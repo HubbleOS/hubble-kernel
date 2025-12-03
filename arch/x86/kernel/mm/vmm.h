@@ -16,15 +16,72 @@
 #define VMM_PAGE_SIZE 4096
 #define VMM_HUGE_PAGE_SIZE (2 * 1024 * 1024)
 
+// ============================================================================
+// Page Table Access via Recursive Mapping
+// ============================================================================
+
+/**
+ * Recursive mapping позволяет получить доступ к page tables через виртуальные адреса.
+ *
+ * Structure:
+ * PML4[510] -> PML4  (recursive entry)
+ *
+ * To access page tables:
+ * - PML4:  0xFFFFFF7FBFDFE000
+ * - PDPT:  0xFFFFFF7FBFC00000 + (PML4_idx << 12)
+ * - PD:    0xFFFFFF7F80000000 + (PML4_idx << 21) + (PDPT_idx << 12)
+ * - PT:    0xFFFFFF0000000000 + (PML4_idx << 30) + (PDPT_idx << 21) + (PD_idx << 12)
+ */
+
 // --- Index macros ---
-#define PML4_INDEX(va) (((va) >> 39) & 0x1FF)
-#define PDPT_INDEX(va) (((va) >> 30) & 0x1FF)
-#define PD_INDEX(va) (((va) >> 21) & 0x1FF)
-#define PT_INDEX(va) (((va) >> 12) & 0x1FF)
+#define PML4_INDEX(va) (((uint64_t)(va) >> 39) & 0x1FF)
+#define PDPT_INDEX(va) (((uint64_t)(va) >> 30) & 0x1FF)
+#define PD_INDEX(va) (((uint64_t)(va) >> 21) & 0x1FF)
+#define PT_INDEX(va) (((uint64_t)(va) >> 12) & 0x1FF)
 
 // --- Recursive mapping ---
 #define RECURSIVE_INDEX 510ULL
 #define HIGHER_HALF_BASE 0xFFFFFFFF80000000ULL
+
+/** Recursive page table mapping base (PML4[510]) */
+#define RECURSIVE_PML4_INDEX 510
+#define RECURSIVE_MAPPING (0xFFFFULL << 48 | (uint64_t)RECURSIVE_PML4_INDEX << 39)
+
+// ============================================================================
+// Helper macros for internal use (recursive page tables)
+// ============================================================================
+
+static inline uint64_t *pml4_table(void)
+{
+	return (uint64_t *)(RECURSIVE_MAPPING |
+			    ((uint64_t)RECURSIVE_PML4_INDEX << 30) |
+			    ((uint64_t)RECURSIVE_PML4_INDEX << 21) |
+			    ((uint64_t)RECURSIVE_PML4_INDEX << 12));
+}
+
+static inline uint64_t *pdpt_table(uint64_t va)
+{
+	return (uint64_t *)(RECURSIVE_MAPPING |
+			    ((uint64_t)RECURSIVE_PML4_INDEX << 30) |
+			    ((uint64_t)RECURSIVE_PML4_INDEX << 21) |
+			    (PML4_INDEX(va) << 12));
+}
+
+static inline uint64_t *pd_table(uint64_t va)
+{
+	return (uint64_t *)(RECURSIVE_MAPPING |
+			    ((uint64_t)RECURSIVE_PML4_INDEX << 30) |
+			    (PML4_INDEX(va) << 21) |
+			    (PDPT_INDEX(va) << 12));
+}
+
+static inline uint64_t *pt_table(uint64_t va)
+{
+	return (uint64_t *)(RECURSIVE_MAPPING |
+			    (PML4_INDEX(va) << 30) |
+			    (PDPT_INDEX(va) << 21) |
+			    (PD_INDEX(va) << 12));
+}
 
 // ============================================================================
 // Page Table Entry Flags
@@ -93,22 +150,10 @@ void vmm_unmap_page(uint64_t virt);
  */
 int vmm_set_flags(uint64_t virt, uint64_t flags);
 
-// ============================================================================
-// Helper macros for internal use (recursive page tables)
-// ============================================================================
-static inline uint64_t *pml4_table(void)
-{
-	return (uint64_t *)(RECURSIVE_INDEX << 39);
-}
-static inline uint64_t *pdpt_table(uint64_t va)
-{
-	return (uint64_t *)((RECURSIVE_INDEX << 39) | (PML4_INDEX(va) << 30));
-}
-static inline uint64_t *pd_table(uint64_t va)
-{
-	return (uint64_t *)((RECURSIVE_INDEX << 39) | (PML4_INDEX(va) << 30) | (PDPT_INDEX(va) << 21));
-}
-static inline uint64_t *pt_table(uint64_t va)
-{
-	return (uint64_t *)((RECURSIVE_INDEX << 39) | (PML4_INDEX(va) << 30) | (PDPT_INDEX(va) << 21) | (PD_INDEX(va) << 12));
-}
+/**
+ * @brief Get physical address mapped to virtual address
+ *
+ * @param virt Virtual address
+ * @return Physical address or 0 if not mapped
+ */
+uint64_t vmm_get_phys(uint64_t virt);

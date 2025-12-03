@@ -109,8 +109,129 @@ static const char *exception_messages[] = {
 // Handlers
 // ============================================================================
 
+#include "higher_half.h"
+
 void isr_handler(registers_t *regs)
 {
+	if (regs->int_no == 14)
+	{
+		// Page Fault - special handling
+		uint64_t cr2;
+		asm volatile("mov %%cr2, %0" : "=r"(cr2));
+
+		printk("\n\tPAGE FAULT\n");
+		printk("Faulting address: 0x%016llx\n", (unsigned long long)cr2);
+		printk("Error code: 0x%lx\n", regs->err_code);
+
+		// Decode error code
+		printk("\nError Code Details:\n");
+		printk("  [P] Page %s\n", (regs->err_code & 1) ? "present" : "not present");
+		printk("  [W/R] %s\n", (regs->err_code & 2) ? "write" : "read");
+		printk("  [U/S] %s mode\n", (regs->err_code & 4) ? "user" : "supervisor");
+		printk("  [RSVD] %s\n", (regs->err_code & 8) ? "reserved bit violation" : "OK");
+		printk("  [I/D] %s\n", (regs->err_code & 16) ? "instruction fetch" : "data access");
+
+		printk("\n=== Registers ===\n");
+		printk("RIP: 0x%016lx    RSP: 0x%016lx\n", regs->rip, regs->rsp);
+		printk("RAX: 0x%016lx    RBX: 0x%016lx\n", regs->rax, regs->rbx);
+		printk("RCX: 0x%016lx    RDX: 0x%016lx\n", regs->rcx, regs->rdx);
+		printk("RSI: 0x%016lx    RDI: 0x%016lx\n", regs->rsi, regs->rdi);
+		printk("RBP: 0x%016lx\n", regs->rbp);
+
+		printk("\n=== Segments ===\n");
+		printk("CS: 0x%04lx    SS: 0x%04lx\n", regs->cs, regs->ss);
+		printk("RFLAGS: 0x%016lx\n", regs->rflags);
+
+		// Check page table entries
+		printk("\n=== Page Table Walk ===\n");
+
+		uint64_t cr3;
+		asm volatile("mov %%cr3, %0" : "=r"(cr3));
+		printk("CR3 (PML4 physical): 0x%llx\n", (unsigned long long)cr3);
+
+		// Use higher-half mapping to access page tables
+		uint64_t *pml4 = (uint64_t *)PHYS_TO_VIRT(cr3 & ~0xFFFULL);
+		uint64_t pml4_idx = (cr2 >> 39) & 0x1FF;
+		printk("PML4[%llu] = 0x%016llx ",
+		       (unsigned long long)pml4_idx,
+		       (unsigned long long)pml4[pml4_idx]);
+		if (pml4[pml4_idx] & 1)
+		{
+			printk("[P=%d W=%d U=%d]\n",
+			       !!(pml4[pml4_idx] & 1),
+			       !!(pml4[pml4_idx] & 2),
+			       !!(pml4[pml4_idx] & 4));
+
+			uint64_t *pdpt = (uint64_t *)PHYS_TO_VIRT(pml4[pml4_idx] & ~0xFFFULL);
+			uint64_t pdpt_idx = (cr2 >> 30) & 0x1FF;
+			printk("PDPT[%llu] = 0x%016llx ",
+			       (unsigned long long)pdpt_idx,
+			       (unsigned long long)pdpt[pdpt_idx]);
+			if (pdpt[pdpt_idx] & 1)
+			{
+				printk("[P=%d W=%d U=%d]\n",
+				       !!(pdpt[pdpt_idx] & 1),
+				       !!(pdpt[pdpt_idx] & 2),
+				       !!(pdpt[pdpt_idx] & 4));
+
+				uint64_t *pd = (uint64_t *)PHYS_TO_VIRT(pdpt[pdpt_idx] & ~0xFFFULL);
+				uint64_t pd_idx = (cr2 >> 21) & 0x1FF;
+				printk("PD[%llu] = 0x%016llx ",
+				       (unsigned long long)pd_idx,
+				       (unsigned long long)pd[pd_idx]);
+				if (pd[pd_idx] & 1)
+				{
+					printk("[P=%d W=%d U=%d HUGE=%d]\n",
+					       !!(pd[pd_idx] & 1),
+					       !!(pd[pd_idx] & 2),
+					       !!(pd[pd_idx] & 4),
+					       !!(pd[pd_idx] & 0x80));
+
+					if (!(pd[pd_idx] & 0x80))
+					{ // Not huge page
+						uint64_t *pt = (uint64_t *)PHYS_TO_VIRT(pd[pd_idx] & ~0xFFFULL);
+						uint64_t pt_idx = (cr2 >> 12) & 0x1FF;
+						printk("PT[%llu] = 0x%016llx ",
+						       (unsigned long long)pt_idx,
+						       (unsigned long long)pt[pt_idx]);
+						if (pt[pt_idx] & 1)
+						{
+							printk("[P=%d W=%d U=%d NX=%d]\n",
+							       !!(pt[pt_idx] & 1),
+							       !!(pt[pt_idx] & 2),
+							       !!(pt[pt_idx] & 4),
+							       !!(pt[pt_idx] & (1ULL << 63)));
+							printk("Physical address: 0x%llx\n",
+							       (unsigned long long)(pt[pt_idx] & ~0xFFFULL));
+						}
+						else
+						{
+							printk("[NOT PRESENT]\n");
+						}
+					}
+				}
+				else
+				{
+					printk("[NOT PRESENT]\n");
+				}
+			}
+			else
+			{
+				printk("[NOT PRESENT]\n");
+			}
+		}
+		else
+		{
+			printk("[NOT PRESENT]\n");
+		}
+
+		printk("\nFATAL ERROR - System Halted\n");
+		while (1)
+		{
+			asm volatile("cli; hlt");
+		}
+	}
+
 	printk("\n\tEXCEPTION OCCURRED\n");
 
 	printk("Exception: %s (%lu)\n",
