@@ -1,9 +1,22 @@
+/**
+ * @file elf.h
+ * @brief ELF file format definitions
+ *
+ * This file contains definitions for the ELF (Executable and Linkable Format)
+ * file format used in the x86 architecture.
+ */
+
 #pragma once
 
 #include <stdint.h>
 
 #define ELF_MAGIC 0x464c457fUL
 #define PAGE_SIZE 4096
+
+#define PT_LOAD 1
+#define PF_X 0x1
+#define PF_W 0x2
+#define PF_R 0x4
 
 typedef struct
 {
@@ -31,8 +44,3 @@ typedef struct
 	uint64_t p_memsz;
 	uint64_t p_align;
 } __attribute__((packed)) Elf64_Phdr;
-
-#define PT_LOAD 1
-#define PF_X 0x1
-#define PF_W 0x2
-#define PF_R 0x4

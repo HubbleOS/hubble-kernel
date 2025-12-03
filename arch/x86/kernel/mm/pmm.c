@@ -11,23 +11,6 @@ static uint64_t g_heap_phys_start = 0;
 static uint64_t g_heap_phys_end = 0;
 static uint64_t g_last_search_index = 0;
 
-// ================= Helper =================
-
-// static inline void bitmap_set(uint8_t *bitmap, uint64_t bit)
-// {
-// 	bitmap[bit / 8] |= (1 << (bit % 8));
-// }
-
-// static inline void bitmap_clear(uint8_t *bitmap, uint64_t bit)
-// {
-// 	bitmap[bit / 8] &= ~(1 << (bit % 8));
-// }
-
-// static inline bool bitmap_test(uint8_t *bitmap, uint64_t bit)
-// {
-// 	return (bitmap[bit / 8] & (1 << (bit % 8))) != 0;
-// }
-
 // Converting page index to physical address
 static inline uint64_t page_index_to_phys(uint64_t index)
 {
