@@ -39,6 +39,6 @@ void _start(void)
 	// write(1, msg, sizeof(msg)-1)
 	// syscall3(SYS_write, 1, (long)msg, sizeof(msg) - 1);
 
-	// while (1)
-	// __asm__ volatile("hlt");
+	while (1)
+		;
 }
