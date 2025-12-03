@@ -6,8 +6,9 @@
  * Підтримує різні розміри кешів та зменшує фрагментацію пам'яті.
  */
 
-#ifndef SLAB_H
-#define SLAB_H
+#pragma once
+
+#include <_cheader.h>
 
 #include <stdint.h>
 #include <stddef.h>
@@ -17,9 +18,8 @@
 // Configuration
 // ============================================================================
 
-#define SLAB_MIN_SIZE 8	    // Мінімальний розмір об'єкта
-#define SLAB_MAX_SIZE 4096  // Максимальний розмір об'єкта
-#define SLAB_CACHE_COUNT 12 // Кількість стандартних кешів
+#define SLAB_MIN_SIZE 8	   // Мінімальний розмір об'єкта
+#define SLAB_MAX_SIZE 4096 // Максимальний розмір об'єкта
 
 // ============================================================================
 // Slab Structures
@@ -73,6 +73,20 @@ typedef struct
 	uint32_t cache_hits;	    // Влучання в кеш
 	uint32_t cache_misses;	    // Промахи кешу
 } slab_info_t;
+
+_Begin_C_Header;
+
+// ============================================================================
+// Function Declarations
+// ============================================================================
+
+/**
+ * @brief Find cache for given pointer
+ *
+ * @param ptr
+ * @return slab_cache_t*
+ */
+slab_cache_t *find_cache_for_ptr(void *ptr);
 
 // ============================================================================
 // Core Functions
@@ -155,71 +169,4 @@ void *slab_cache_alloc(slab_cache_t *cache);
  */
 void slab_cache_free(slab_cache_t *cache, void *ptr);
 
-/**
- * @brief Destroy cache
- *
- * @param cache Cache to destroy
- */
-void slab_cache_destroy(slab_cache_t *cache);
-
-/**
- * @brief Shrink cache (free empty slabs)
- *
- * @param cache Cache to shrink
- * @return Number of freed slabs
- */
-uint32_t slab_cache_shrink(slab_cache_t *cache);
-
-// ============================================================================
-// Statistics and Debugging
-// ============================================================================
-
-/**
- * @brief Get slab allocator statistics
- *
- * @return Pointer to statistics structure
- */
-slab_info_t *slab_get_info(void);
-
-/**
- * @brief Print cache information
- *
- * @param cache Cache to print info about
- */
-void slab_cache_info(slab_cache_t *cache);
-
-/**
- * @brief Print all caches
- */
-void slab_print_caches(void);
-
-/**
- * @brief Validate slab consistency
- *
- * @return true if consistent, false otherwise
- */
-bool slab_validate(void);
-
-// ============================================================================
-// Convenience Macros
-// ============================================================================
-
-/**
- * @brief Allocate typed object
- */
-#define slab_alloc_type(type) \
-	((type *)slab_alloc(sizeof(type)))
-
-/**
- * @brief Allocate typed array
- */
-#define slab_alloc_array(type, count) \
-	((type *)slab_alloc(sizeof(type) * (count)))
-
-/**
- * @brief Allocate zeroed typed object
- */
-#define slab_calloc_type(type) \
-	((type *)slab_calloc(sizeof(type)))
-
-#endif /* SLAB_H */
+_End_C_Header;

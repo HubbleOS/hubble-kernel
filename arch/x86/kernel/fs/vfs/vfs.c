@@ -183,6 +183,7 @@ bool vfs_mkdir(const char *path)
 		return false;
 	return mnt->fs->mkdir(mnt->fs, relpath);
 }
+
 Directory vfs_readdir(const char *path)
 {
 
@@ -210,6 +211,7 @@ bool vfs_unlink(const char *path)
 		return false;
 	return mnt->fs->unlink(mnt->fs, relpath);
 }
+
 int vfs_lseek(VFS_File *file, int offset, int whence)
 {
 	if (!file || !file->node->fs)
@@ -232,17 +234,28 @@ int vfs_lseek(VFS_File *file, int offset, int whence)
 
 	return 0;
 }
-int vfs_close(VFS_File **pfile)
+
+// int vfs_close(VFS_File **pfile)
+// {
+// 	VFS_File *file = *pfile;
+// 	if (!file || !file->node->fs || !file->node->fs->close)
+// 		return -EIO;
+// 	file->node->fs->close(file);
+// 	// *pfile = NULL;
+// 	if (file)
+// 	{
+// 		// printk("%s\n", file->node->name);
+// 		printk("VFS: file was not closed in vfs %s\n", file->node->name);
+// 	}
+// 	return 0;
+// }
+
+int vfs_close(VFS_File *file)
 {
-	VFS_File *file = *pfile;
-	if (!file || !file->node->fs || !file->node->fs->close)
+	if (!file || !file->node || !file->node->fs || !file->node->fs->close)
 		return -EIO;
+
 	file->node->fs->close(file);
-	// *pfile = NULL;
-	if (file)
-	{
-		// printk("%s\n", file->node->name);
-		printk("VFS: file was not closed in vfs %s\n", file->node->name);
-	}
+
 	return 0;
 }

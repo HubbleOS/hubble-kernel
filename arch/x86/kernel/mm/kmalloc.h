@@ -6,8 +6,7 @@
  * Supports allocation flags, aligned allocations, and memory tracking.
  */
 
-#ifndef KMALLOC_H
-#define KMALLOC_H
+#pragma once
 
 #include <_cheader.h>
 
@@ -144,30 +143,6 @@ char *kstrdup(const char *s, kmalloc_flags_t flags);
 char *kstrndup(const char *s, size_t max, kmalloc_flags_t flags);
 
 // ============================================================================
-// Aligned Allocations
-// ============================================================================
-
-/**
- * @brief Allocate aligned memory
- *
- * @param size Size in bytes
- * @param align Alignment (must be power of 2)
- * @param flags Allocation flags
- * @return Aligned pointer or NULL
- *
- * Example:
- *   void *ptr = kmalloc_aligned(1024, 64, GFP_KERNEL); // 64-byte aligned
- */
-void *kmalloc_aligned(size_t size, size_t align, kmalloc_flags_t flags);
-
-/**
- * @brief Free aligned memory
- *
- * @param ptr Pointer allocated with kmalloc_aligned
- */
-void kfree_aligned(void *ptr);
-
-// ============================================================================
 // Size Tracking
 // ============================================================================
 
@@ -181,83 +156,4 @@ void kfree_aligned(void *ptr);
  */
 size_t ksize(void *ptr);
 
-// ============================================================================
-// Statistics
-// ============================================================================
-
-/**
- * @brief Kernel memory statistics
- */
-typedef struct
-{
-	uint64_t total_allocated;   // Total bytes ever allocated
-	uint64_t total_freed;	    // Total bytes ever freed
-	uint64_t current_allocated; // Currently allocated bytes
-	uint64_t peak_allocated;    // Peak memory usage
-	uint64_t alloc_count;	    // Number of allocations
-	uint64_t free_count;	    // Number of frees
-	uint64_t failed_allocs;	    // Failed allocations
-} kmalloc_stats_t;
-
-/**
- * @brief Get kmalloc statistics
- *
- * @return Pointer to statistics structure
- */
-kmalloc_stats_t *kmalloc_get_stats(void);
-
-/**
- * @brief Print kmalloc statistics
- */
-void kmalloc_print_stats(void);
-
-// ============================================================================
-// Convenience Macros
-// ============================================================================
-
-/**
- * @brief Allocate typed object
- */
-#define kmalloc_type(type, flags) \
-	((type *)kmalloc(sizeof(type), flags))
-
-/**
- * @brief Allocate zeroed typed object
- */
-#define kzalloc_type(type) \
-	((type *)kzalloc(sizeof(type)))
-
-/**
- * @brief Allocate typed array
- */
-#define kmalloc_array_type(type, count, flags) \
-	((type *)kmalloc_array(count, sizeof(type), flags))
-
-/**
- * @brief Allocate zeroed typed array
- */
-#define kcalloc_type(type, count) \
-	((type *)kcalloc(count, sizeof(type)))
-
-// ============================================================================
-// Size Classes (for documentation)
-// ============================================================================
-
-/**
- * Standard kmalloc size classes:
- *   8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096 bytes
- *
- * For larger allocations, use:
- *   - vmalloc() for non-contiguous memory (future)
- *   - kmalloc_large() for multi-page allocations (future)
- */
-
-// Maximum kmalloc size (same as SLAB_MAX_SIZE)
-#define KMALLOC_MAX_SIZE 4096
-
-// Minimum kmalloc size
-#define KMALLOC_MIN_SIZE 8
-
 _End_C_Header;
-
-#endif /* KMALLOC_H */

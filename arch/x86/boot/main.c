@@ -5,6 +5,7 @@
 #include "globals.h"
 #include "console.h"
 
+#include "asm.h"
 #include "higher_half.h"
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
@@ -437,12 +438,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	PrintInfo(L"Jump to kernel\n");
 	ClearConsole();
 
-	// PrintInfo(L"Press any key to jump to kernel...\n");
-	// // Wait for key
-	// EFI_INPUT_KEY key;
-	// while (uefi_call_wrapper(systab->ConIn->ReadKeyStroke, 2, systab->ConIn, &key) != EFI_SUCCESS)
-	// 	;
-
 	// === [10] ExitBootServices ===
 	mem_map = NULL;
 	mem_map_size = 0;
@@ -473,23 +468,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	// === POINT OF NO RETURN ===
 
 	// === [11] Switch to new page tables and TEST ===
-	asm volatile("mov %0, %%cr3" : : "r"(pml4_addr) : "memory");
-
-	// TEST: Try to write to framebuffer through virtual address
-	// Framebuffer physical is 0x80000000, so virtual should be 0xFFFFFFFF80000000 + 0x80000000
-	// But wait, that's wrong! Framebuffer is at 0x80000000 which is already in lower 4GB
-	// So identity mapping gives us 0x80000000, and we DON'T want higher-half for it
-	uint32_t *fb_test = (uint32_t *)gop->Mode->FrameBufferBase;
-
-	// Draw RED line at top (test that paging works)
-	for (int i = 0; i < 100; i++)
-	{
-		fb_test[i] = 0x00FF0000;
-	}
-
-	// Small delay to see the red line
-	for (volatile int i = 0; i < 10000000; i++)
-		;
+	set_cr3(pml4_addr);
 
 	// === [12] Setup stack and jump ===
 	asm volatile(

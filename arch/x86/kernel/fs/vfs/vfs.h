@@ -72,5 +72,6 @@ Directory vfs_readdir(const char *path);
 extern VFS_FS *root_fs;
 VFS_Node *vfs_create_file(const char *path);
 int vfs_lseek(VFS_File *node, int offset, int whence);
-int vfs_close(VFS_File **pfile);
+// int vfs_close(VFS_File **pfile);
+int vfs_close(VFS_File *file);
 _End_C_Header

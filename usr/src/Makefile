@@ -8,19 +8,22 @@ BUILD_DIR := ../../build/usr
 OUT_DIR   := ../bin
 
 SRC := user_main.c
+OBJ := $(BUILD_DIR)/user_main.o
 OUT := $(OUT_DIR)/user.elf
+LDSCRIPT := user.ld
 
-# include и libc
-CFLAGS   := -ffreestanding -fno-pic -m64 -O2 -nostartfiles -static -I../include
-LDFLAGS  := -Tuser.ld
-LIBS     := -L../lib -lc
+CFLAGS   := -ffreestanding -O2 -m64 -nostdlib -fno-pic -Wall -Wextra -nostartfiles -I../include
+LDFLAGS  := -T $(LDSCRIPT)
 
 all: $(OUT)
 
-$(OUT): $(SRC) user.ld
+$(OBJ): $(SRC)
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OUT): $(OBJ) $(LDSCRIPT)
 	@mkdir -p $(OUT_DIR)
-	@echo "Compiling user ELF: $@"
-	$(CC) $(CFLAGS) -o $(OUT) $(SRC) $(LIBS) $(LDFLAGS)
+	$(LD) $(LDFLAGS) -o $@ $<
 
 clean:
 	rm -rf $(OUT_DIR) $(BUILD_DIR)
