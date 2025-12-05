@@ -183,9 +183,9 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 	FAT32_DirectoryEntry *entry = fat_file->entry;
 	FAT32_FS *fs = (FAT32_FS *)file->node->fs->fs;
 
-	printk("cluster: %d\n", fat_file->cluster);
-	printk("index: %d\n", fat_file->index);
-	printk("pos: %d\n", file->pos);
+	// printk("cluster: %d\n", fat_file->cluster);
+	// printk("index: %d\n", fat_file->index);
+	// printk("pos: %d\n", file->pos);
 
 	size_t file_size = entry->file_size;
 	if (file->pos >= file_size)
@@ -206,20 +206,20 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 		cluster = get_fat_entry(fs, cluster);
 	}
 
-	printk("cluster: %d\n", cluster);
-	printk("in_cluster_offset: %d\n", in_cluster_offset);
-	printk("to_read: %d\n", to_read);
+	// printk("cluster: %d\n", cluster);
+	// printk("in_cluster_offset: %d\n", in_cluster_offset);
+	// printk("to_read: %d\n", to_read);
 
 	while (read < to_read && cluster < 0x0FFFFFF8)
 	{
-		printk("Reading cluster: %d\n", cluster);
+		printk("Reading cluster: %d ", cluster);
 		uint8_t *cluster_buf = kmalloc(fs->cluster_size, GFP_KERNEL);
 		if (!cluster_buf)
 			return -1;
 
 		fat32_read_cluster(fs, cluster, cluster_buf);
 		// display raw data
-		printk("Cluster readed: %d\n", cluster);
+		printk("Cluster readed: %d ", cluster);
 		uint16_t *buf = (uint16_t *)cluster_buf;
 		for (int j = 0; j < 16; j++)
 			printk("%02X ", buf[j]);
