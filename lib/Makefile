@@ -1,3 +1,5 @@
+# libs/Makefile
+
 subdirs += libc
 
 .PHONY: build
