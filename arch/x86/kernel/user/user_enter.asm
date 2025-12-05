@@ -4,39 +4,27 @@
 ;   rdi - entry point (VA) of user program
 ;   rsi - user stack top (VA)
 
-[BITS 64]
 global user_enter
 
 user_enter:
-    cli                         ; disable interrupts during setup
-
-    ; CRITICAL: DO NOT load user segments here!
-    ; Loading DS/ES/FS/GS/SS with RPL=3 selectors in ring 0 causes GPF.
-    ; Let IRETQ do all the segment loading.
-
-    ; Build IRETQ stack frame
-    ; Stack layout (from bottom to top):
-    ; [SS] [RSP] [RFLAGS] [CS] [RIP]
+    cli
     
-    ; Push SS (user data segment with RPL=3)
-    push qword 0x23             ; SS = 0x20 | 3
+    ; Ensure stack is 16-byte aligned before building IRETQ frame
+    and rsp, ~0xF               ; Align RSP to 16 bytes
     
-    ; Push user stack pointer
+    ; Build IRETQ frame
+    push qword 0x23             ; SS
     push rsi                    ; RSP
     
-    ; Setup RFLAGS with interrupts enabled
-    pushfq                      ; Get current RFLAGS
+    pushfq
     pop rax
-    or rax, 0x200               ; Set IF (bit 9)
+    or rax, 0x202               ; IF + reserved bit 1
     push rax                    ; RFLAGS
     
-    ; Push CS (user code segment with RPL=3)
-    push qword 0x1B             ; CS = 0x18 | 3
-    
-    ; Push entry point
+    push qword 0x1B             ; CS  
     push rdi                    ; RIP
     
-    ; Zero out all general-purpose registers for security
+    ; Now zero registers
     xor rax, rax
     xor rbx, rbx
     xor rcx, rcx
@@ -52,16 +40,7 @@ user_enter:
     xor r13, r13
     xor r14, r14
     xor r15, r15
-
-    ; Execute IRETQ to switch to userspace
-    ; This will:
-    ; 1. Pop RIP, CS, RFLAGS, RSP, SS from stack
-    ; 2. Check CS.RPL (should be 3)
-    ; 3. Switch privilege level to ring 3
-    ; 4. Load new SS and RSP
-    ; 5. Load segment registers with user selectors
-    ; 6. Jump to user code
+    
     iretq
-
-    ; Should never reach here
-    hlt
+    
+    ud2

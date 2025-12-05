@@ -35,7 +35,7 @@ static inline long syscall3(long num, long arg1, long arg2, long arg3)
 void _start(void)
 {
 
-	syscall3(SYS_write, 1, "Hello\n", 5);
+	syscall3(SYS_write, 1, (long)"Hello\n", 5);
 
 	while (1)
 		asm volatile("hlt");
