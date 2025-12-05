@@ -80,13 +80,13 @@ void gdt_init(void)
 			 GDT_ACCESS_RW,
 		     GDT_GRAN_4K | GDT_GRAN_64BIT);
 
-	// User Code Segment (0x18) - Ring 3
+	// User Code Segment (0x18)
 	gdt_set_gate(3, 0, 0xFFFFF,
 		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
 			 GDT_ACCESS_EXECUTABLE | GDT_ACCESS_RW,
 		     GDT_GRAN_4K | GDT_GRAN_64BIT);
 
-	// User Data Segment (0x20) - Ring 3
+	// User Data Segment (0x20)
 	gdt_set_gate(4, 0, 0xFFFFF,
 		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
 			 GDT_ACCESS_RW,

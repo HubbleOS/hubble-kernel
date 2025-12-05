@@ -51,7 +51,8 @@ build: $(OBJ_FILES)
 $(BUILD_DIR)/%.o: %.c
 	@echo "Compiling C: $< -> $@"
 	@mkdir -p $(dir $@)
-	$(CC) -g $(CFLAGS) $(INCLUDES) $< -o $@
+	$(CC) -g $(CFLAGS) $(INCLUDES) -c $< -o $@
+
 
 $(BUILD_DIR)/%.o: %.cpp
 	@echo "Compiling C++: $< -> $@"

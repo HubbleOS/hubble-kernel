@@ -28,8 +28,10 @@
 // Address Conversion Macros
 // ============================================================================
 
-#define PHYS_TO_VIRT(addr) ((typeof(addr))((uint64_t)(addr) + KERNEL_VIRT_BASE))
-#define VIRT_TO_PHYS(addr) ((typeof(addr))((uint64_t)(addr) - KERNEL_VIRT_BASE))
+#define VIRT_TO_PHYS(addr) ((uint64_t)((uintptr_t)(addr) - KERNEL_VIRT_BASE))
+
+#define PHYS_TO_VIRT(addr) (uint64_t)((void *)((uint64_t)(addr) + KERNEL_VIRT_BASE))  // для чисел
+#define PHYS_TO_VIRT_PTR(type, addr) ((type *)((uintptr_t)(addr) + KERNEL_VIRT_BASE)) // для pointer
 
 #define IS_KERNEL_VIRT(addr) ((uint64_t)(addr) >= KERNEL_VIRT_BASE)
 #define IS_PHYSICAL(addr) ((uint64_t)(addr) < KERNEL_VIRT_BASE)

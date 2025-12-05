@@ -13,3 +13,5 @@ typedef struct
 	ram_info_t *memory_map;		     // Указатель для совместимости
 } BootInfo;
 extern BootInfo *g_boot_info;
+void clear_bss(void);
+void relocate_boot_info(BootInfo *bi);
