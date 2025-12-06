@@ -20,7 +20,7 @@ void qemu_build_command(const QemuOptions *opts, char *cmd, size_t len)
 
 	pos += snprintf(cmd + pos, len - pos, "qemu-system-%s ", opts->arch);
 
-	pos += snprintf(cmd + pos, len - pos, "-s -S -M pc ");
+	pos += snprintf(cmd + pos, len - pos, "-M pc ");
 	// pos += snprintf(cmd + pos, len - pos, "-M q35 ");
 	pos += snprintf(cmd + pos, len - pos, "-cpu Haswell ");
 	pos += snprintf(cmd + pos, len - pos, "-m %d ", opts->mem);
@@ -40,7 +40,7 @@ void qemu_build_command(const QemuOptions *opts, char *cmd, size_t len)
 	pos += snprintf(cmd + pos, len - pos, "-drive if=pflash,format=raw,readonly=on,file=%s ", ovmf_path);
 
 	// Serial
-	pos += snprintf(cmd + pos, len - pos, "-serial stdio ");
+	pos += snprintf(cmd + pos, len - pos, "-monitor stdio ");
 
 	// Debug
 	// pos += snprintf(cmd + pos, len - pos, "-S -s ");

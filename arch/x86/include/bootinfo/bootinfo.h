@@ -2,6 +2,7 @@
 
 #include <bootinfo/framebuffer.h>
 #include <bootinfo/raminfo.h>
+#include <bootinfo/rsdp.h>
 
 #include <stdint.h>
 
@@ -11,6 +12,8 @@ typedef struct
 	ram_info_t memory_data;		     // Встроенная структура
 	framebuffer_info_t *framebuffer;     // Указатель для совместимости
 	ram_info_t *memory_map;		     // Указатель для совместимости
+	void *rsdp;			     // Указатель для совместимости
+
 } BootInfo;
 extern BootInfo *g_boot_info;
 void clear_bss(void);
