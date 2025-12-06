@@ -4,9 +4,10 @@
 #include <stdint.h>
 #include "printk.h"
 #include <io.h>
+#include <apic/apic.h>
 
 // ============================================================================
-// PIC функции
+// Legacy PIC functions (kept for fallback/compatibility)
 // ============================================================================
 
 #define PIC1_COMMAND 0x20
@@ -14,6 +15,16 @@
 #define PIC2_COMMAND 0xA0
 #define PIC2_DATA 0xA1
 #define PIC_EOI 0x20
+
+static bool using_apic = false;
+
+void pic_disable(void)
+{
+	// Mask all interrupts on both PICs
+	outb(PIC1_DATA, 0xFF);
+	outb(PIC2_DATA, 0xFF);
+	printk("Legacy PIC disabled\n");
+}
 
 void pic_remap(void)
 {
@@ -59,20 +70,20 @@ void irq_clear_mask(uint8_t irq)
 }
 
 // ============================================================================
-// IRQ handlers
+// IRQ handlers (supports both PIC and APIC)
 // ============================================================================
 
-static irq_handler_t irq_handlers[16] = {0};
+static irq_handler_t irq_handlers[256] = {0}; // Extended for APIC vectors
 
 void irq_install_handler(uint8_t irq, irq_handler_t handler)
 {
-	if (irq < 16)
+	if (irq < 256)
 		irq_handlers[irq] = handler;
 }
 
 void irq_uninstall_handler(uint8_t irq)
 {
-	if (irq < 16)
+	if (irq < 256)
 		irq_handlers[irq] = 0;
 }
 
@@ -254,7 +265,7 @@ void isr_handler(registers_t *regs)
 	printk("SS:  0x%04lx\n", regs->ss);
 	printk("RFLAGS: 0x%016lx\n", regs->rflags);
 
-	// Спроба декодувати помилку GPF
+	// GPF error code decode
 	if (regs->int_no == 13 && regs->err_code != 0)
 	{
 		printk("\n=== GPF Error Code Details ===\n");
@@ -297,12 +308,22 @@ void isr_handler(registers_t *regs)
 
 void irq_handler(registers_t *regs)
 {
+	// IRQs start at vector 32
 	uint8_t irq = regs->int_no - 32;
 
-	if (irq < 16 && irq_handlers[irq])
+	// Call registered handler if exists
+	if (irq < 256 && irq_handlers[irq])
 		irq_handlers[irq](regs);
 
-	pic_send_eoi(irq);
+	// Send EOI (End of Interrupt)
+	if (using_apic && apic_is_initialized())
+	{
+		lapic_eoi();
+	}
+	else
+	{
+		pic_send_eoi(irq);
+	}
 }
 
 // ============================================================================
@@ -323,9 +344,6 @@ syscall_fn_t syscall_table[SYSCALL_COUNT] = {
 uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
 			 uint64_t a4, uint64_t a5, uint64_t a6)
 {
-	printk("%d\n", num);
-	// num = 1;
-
 	if (num >= SYSCALL_COUNT || !syscall_table[num])
 		return -1;
 
@@ -351,13 +369,43 @@ uint64_t syscall_handler_wrapper(registers_t *regs)
 // ============================================================================
 
 #include <sys/keyboard.h>
+#include <acpi/acpi.h>
 
 void interrupts_init(void)
 {
-	pic_remap();
+	printk("Initializing interrupt system...\n");
 
-	irq_clear_mask(1); // включаем IRQ1 (клавиатуру)
-	irq_install_handler(1, keyboard_irq);
+	// Try to initialize APIC
+	if (acpi_is_initialized() && apic_init() == 0)
+	{
+		printk("Using APIC for interrupt handling\n");
+		using_apic = true;
 
+		// Enable Local APIC on BSP
+		lapic_enable();
+
+		// Register keyboard handler on IRQ 1 (vector 33)
+		irq_install_handler(1, keyboard_irq);
+
+		// Unmask keyboard interrupt in I/O APIC
+		ioapic_unmask_irq(1);
+
+		// Optional: Setup LAPIC timer for preemptive multitasking
+		// lapic_timer_init(100);  // 100 Hz timer
+		// irq_install_handler(0, timer_handler);  // Timer on vector 32
+	}
+	else
+	{
+		printk("APIC not available, falling back to PIC\n");
+		using_apic = false;
+
+		// Use legacy PIC
+		pic_remap();
+		irq_clear_mask(1); // Enable keyboard IRQ
+		irq_install_handler(1, keyboard_irq);
+	}
+
+	// Enable interrupts
 	asm volatile("sti");
+	printk("Interrupts enabled\n");
 }
