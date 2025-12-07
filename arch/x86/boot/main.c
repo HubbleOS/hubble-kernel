@@ -8,6 +8,91 @@
 #include "asm.h"
 #include "higher_half.h"
 
+// ACPI 2.0 (XSDT)
+static EFI_GUID Acpi20Guid = {
+    0x8868e871,
+    0xe4f1,
+    0x11d3,
+    {0xbc, 0x22, 0x00, 0x80, 0xc7, 0x3c, 0x88, 0x81}};
+
+// ACPI 1.0 (RSDT)
+static EFI_GUID Acpi10Guid = {
+    0xeb9d2d30,
+    0x2d88,
+    0x11d3,
+    {0x9a, 0x16, 0x00, 0x90, 0x27, 0x3f, 0xc1, 0x4d}};
+
+static void *find_rsdp(EFI_SYSTEM_TABLE *SystemTable)
+{
+	Print(L"=== Searching for RSDP ===\n");
+	Print(L"Configuration table entries: %u\n", SystemTable->NumberOfTableEntries);
+
+	for (UINTN i = 0; i < SystemTable->NumberOfTableEntries; i++)
+	{
+		EFI_CONFIGURATION_TABLE *tbl = &SystemTable->ConfigurationTable[i];
+
+		// Print GUID for debugging
+		Print(L"Entry %u: GUID = %08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x\n",
+		      i,
+		      tbl->VendorGuid.Data1,
+		      tbl->VendorGuid.Data2,
+		      tbl->VendorGuid.Data3,
+		      tbl->VendorGuid.Data4[0],
+		      tbl->VendorGuid.Data4[1],
+		      tbl->VendorGuid.Data4[2],
+		      tbl->VendorGuid.Data4[3],
+		      tbl->VendorGuid.Data4[4],
+		      tbl->VendorGuid.Data4[5],
+		      tbl->VendorGuid.Data4[6],
+		      tbl->VendorGuid.Data4[7]);
+
+		if (CompareGuid(&tbl->VendorGuid, &Acpi20Guid))
+		{
+			Print(L"Found ACPI 2.0 RSDP at %p\n", tbl->VendorTable);
+
+			// VERIFY THE SIGNATURE HERE
+			char *sig = (char *)tbl->VendorTable;
+			Print(L"Signature bytes: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+			      sig[0], sig[1], sig[2], sig[3], sig[4], sig[5], sig[6], sig[7]);
+			Print(L"As string: %.8s\n", sig);
+
+			if (sig[0] == 'R' && sig[1] == 'S' && sig[2] == 'D')
+			{
+				Print(L"Signature VALID!\n");
+				return tbl->VendorTable;
+			}
+			else
+			{
+				Print(L"Signature INVALID! Continuing search...\n");
+			}
+		}
+
+		if (CompareGuid(&tbl->VendorGuid, &Acpi10Guid))
+		{
+			Print(L"Found ACPI 1.0 RSDP at %p\n", tbl->VendorTable);
+
+			// VERIFY THE SIGNATURE HERE
+			char *sig = (char *)tbl->VendorTable;
+			Print(L"Signature bytes: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+			      sig[0], sig[1], sig[2], sig[3], sig[4], sig[5], sig[6], sig[7]);
+			Print(L"As string: %.8s\n", sig);
+
+			if (sig[0] == 'R' && sig[1] == 'S' && sig[2] == 'D')
+			{
+				Print(L"Signature VALID!\n");
+				return tbl->VendorTable;
+			}
+			else
+			{
+				Print(L"Signature INVALID! Continuing search...\n");
+			}
+		}
+	}
+
+	Print(L"ACPI RSDP not found in any configuration table\n");
+	return NULL;
+}
+
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 {
 	g_image = image;
@@ -391,9 +476,42 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		return status;
 	}
 
+	// === [10] allocate and fill rsdp ===
+	// === [10] Find RSDP ===
+	void *rsdp = find_rsdp(systab);
+	if (!rsdp)
+	{
+		PrintFail(L"RSDP not found\n");
+		return EFI_NOT_FOUND;
+	}
+	PrintOk(L"RSDP at physical: 0x%lx\n", rsdp);
+
+	char *sig = (char *)rsdp;
+	Print(L"RSDP signature bytes: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+	      sig[0], sig[1], sig[2], sig[3], sig[4], sig[5], sig[6], sig[7]);
+
+	// Check for "RSD PTR "
+	if (sig[0] != 'R' || sig[1] != 'S' || sig[2] != 'D' || sig[3] != ' ' ||
+	    sig[4] != 'P' || sig[5] != 'T' || sig[6] != 'R' || sig[7] != ' ')
+	{
+		PrintFail(L"RSDP signature invalid IN BOOTLOADER!\n");
+		Print(L"Expected: 'RSD PTR ', Got: '");
+		for (int i = 0; i < 8; i++)
+			Print(L"%c", sig[i]);
+		Print(L"'\n");
+		return EFI_INVALID_PARAMETER;
+	}
+
+	PrintOk(L"RSDP signature verified in bootloader\n");
+
+	// === [11] fill boot info ===
+
 	BootInfo *boot_info = (BootInfo *)boot_info_addr;
 	framebuffer_info_t *fb_info = &boot_info->framebuffer_data;
 	ram_info_t *ram_info = &boot_info->memory_data;
+
+	boot_info->rsdp = rsdp;
+	PrintOk(L"RSDP at physical: 0x%lx\n", rsdp);
 
 	fb_info->base = (void *)gop->Mode->FrameBufferBase;
 	fb_info->width = gop->Mode->Info->HorizontalResolution;
