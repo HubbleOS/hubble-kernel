@@ -323,9 +323,6 @@ syscall_fn_t syscall_table[SYSCALL_COUNT] = {
 uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
 			 uint64_t a4, uint64_t a5, uint64_t a6)
 {
-	printk("%d\n", num);
-	// num = 1;
-
 	if (num >= SYSCALL_COUNT || !syscall_table[num])
 		return -1;
 

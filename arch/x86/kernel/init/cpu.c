@@ -42,5 +42,6 @@ void init_cpu(void)
 	tss_init();
 	interrupts_init();
 	syscall_init();
+
 	printk(KERN_INFO "CPU initialization complete\n");
 }
