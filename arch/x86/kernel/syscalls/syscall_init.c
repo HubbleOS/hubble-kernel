@@ -45,20 +45,20 @@ void syscall_init(void)
 	// 2. Настраиваем STAR - ИЗМЕНЕНО!
 	uint64_t star = 0;
 	star |= ((uint64_t)0x08 << 32); // SYSCALL CS = 0x08 (Kernel Code)
-	star |= ((uint64_t)0x10 << 48); // SYSRET base = 0x10 (ИЗМЕНЕНО с 0x08!)
+	star |= ((uint64_t)0x10 << 48); // SYSRET base = 0x10 (Kernel Data)
 	wrmsr(MSR_STAR, star);
 	printk("  STAR = 0x%016llx\n", star);
 
 	// Теперь при SYSRET:
-	// CS = (0x10 + 16) | 3 = 0x20 | 3 = 0x23 (User Code) ✓
-	// SS = (0x10 + 8) | 3 = 0x18 | 3 = 0x1B (User Data) ✓
+	// CS = (0x10 + 16) | 3 = 0x20 | 3 = 0x23 (User Code)
+	// SS = (0x10 + 8) | 3 = 0x18 | 3 = 0x1B (User Data)
 
 	// 3. Устанавливаем обработчик
 	wrmsr(MSR_LSTAR, (uint64_t)syscall_entry);
 	printk("  LSTAR = 0x%016llx\n", (uint64_t)syscall_entry);
 
 	// 4. SFMASK
-	wrmsr(MSR_SFMASK, 0x700); // IF | DF | TF
+	wrmsr(MSR_SFMASK, 0x100 | 0x200 | 0x400); // IF | DF | TF
 	printk("  SFMASK = 0x%llx\n", 0x700ULL);
 
 	printk("SYSCALL/SYSRET initialized successfully\n");
