@@ -1,4 +1,5 @@
 #include <bootinfo/bootinfo.h>
+#include <acpi/acpi.h>
 #include "init/init.h"
 #include <printk.h>
 #include "higher_half.h"
@@ -22,6 +23,7 @@ kernel_entry(BootInfo *bi)
 
 	printk(KERN_INFO "=== Higher-Half Kernel Starting ===\n");
 
+	acpi_init(bi->rsdp);
 	init.cpu();
 	init.memory(bi);
 	init.filesystems();
@@ -31,9 +33,12 @@ kernel_entry(BootInfo *bi)
 	// printk(KERN_INFO "Starting OS main loop...\n");
 	// os_main(bi);
 
+	// acpi_reboot();
+	// acpi_shutdown();
+
 	load_elf_and_run("/usr/bin/user.elf");
 
-	printk(KERN_WARNING "os_main() returned! Entering infinite loop...\n");
+	// printk(KERN_WARNING "os_main() returned! Entering infinite loop...\n");
 	while (1)
 		asm volatile("hlt");
 }
