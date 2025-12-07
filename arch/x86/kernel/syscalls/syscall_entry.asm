@@ -1,68 +1,61 @@
 [BITS 64]
 global syscall_entry
-extern syscall_handler
+extern syscall_handler_wrapper
 extern syscall_rsp0
 
 section .text
 
 syscall_entry:
-    ; Сохраняем user RSP во временной переменной
-    mov qword [rel user_rsp_temp], rsp
-    
-    ; Загружаем kernel stack
-    mov rsp, [rel syscall_rsp0]
-    
-    ; Создаем iretq-совместимый фрейм
-    push qword 0x1B         ; SS (User Data)
-    push qword [rel user_rsp_temp]  ; User RSP
-    push r11                ; RFLAGS (сохраненные процессором в R11)
-    push qword 0x23         ; CS (User Code)
-    push rcx                ; RIP (сохранен процессором в RCX)
-    
-    ; Сохраняем все регистры (КРОМЕ R11 и RCX - они уже в стековом фрейме!)
-    push rax
+    swapgs
+    mov [gs:0], rsp
+    mov rsp, [syscall_rsp0]
+
+    ; === Эмулировать автоматическое сохранение процессором ===
+    push qword 0x1b         ; SS
+    push qword [gs:0]       ; user RSP
+    push r11                ; RFLAGS
+    push qword 0x23         ; CS
+    push rcx                ; RIP
+
+    ; === err_code и int_no ===
+    push qword 0            ; err_code
+    push qword 0x80         ; int_no
+
+    ; === Регистры в ОБРАТНОМ порядке (соответствует структуре) ===
+    push rax    ; последний в структуре
     push rbx
-    push rdx                ; НЕ push rcx - он уже сохранен!
+    push rcx
+    push rdx
     push rsi
     push rdi
     push rbp
     push r8
     push r9
     push r10
-    ; НЕ push r11 - он уже сохранен как RFLAGS!
+    push r11
     push r12
     push r13
     push r14
-    push r15
-    
-    ; Устанавливаем kernel сегменты
+    push r15    ; первый в структуре
+
     mov ax, 0x10
     mov ds, ax
     mov es, ax
-    
-    ; Вызываем обработчик: syscall_handler(num, a1, a2, a3, a4, a5, a6)
-    mov rdi, rax            ; num (было в RAX)
-    ; rsi = a1 (уже на месте)
-    ; rdx = a2 (уже на месте)
-    mov rcx, r10            ; a3 (было в R10)
-    ; r8 = a4 (уже на месте)
-    ; r9 = a5 (уже на месте)
-    
-    ; Выравниваем стек
+
     mov rbp, rsp
     and rsp, ~0xF
-    call syscall_handler
+
+    mov rdi, rbp
+    call syscall_handler_wrapper
+
     mov rsp, rbp
-    
-    ; Сохраняем результат
-    mov [rsp], rax          ; Перезаписываем сохраненный RAX результатом
-    
-    ; Восстанавливаем регистры
+
+    ; === Восстановить в том же порядке ===
     pop r15
     pop r14
     pop r13
     pop r12
-    ; Пропускаем R11 - восстановим из RFLAGS позже
+    pop r11
     pop r10
     pop r9
     pop r8
@@ -70,25 +63,18 @@ syscall_entry:
     pop rdi
     pop rsi
     pop rdx
+    pop rcx
     pop rbx
-    pop rax                 ; Результат syscall
-    
-    ; Подготавливаем возврат для SYSRET
-    pop rcx                 ; RIP
-    add rsp, 8              ; Пропускаем CS
-    pop r11                 ; RFLAGS
-    or r11, 0x200           ; Устанавливаем IF (Interrupt Flag)
-    
-    pop rsp                 ; User RSP
-    
-    ; Устанавливаем User Data сегменты
-    mov dx, 0x1B
-    mov ds, dx
-    mov es, dx
-    
-    ; Возврат в userspace
-    sysret
+    pop rax     ; результат syscall (ИЗМЕНЕН wrapper'ом)
 
-section .data
-align 8
-user_rsp_temp: dq 0
+    add rsp, 16 ; int_no и err_code
+
+    pop rcx     ; RIP
+    add rsp, 8  ; CS
+    pop r11     ; RFLAGS
+    add rsp, 16 ; RSP + SS
+
+    mov rsp, [gs:0]
+    swapgs
+    
+    o64 sysret
