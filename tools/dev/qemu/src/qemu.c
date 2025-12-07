@@ -20,7 +20,7 @@ void qemu_build_command(const QemuOptions *opts, char *cmd, size_t len)
 
 	pos += snprintf(cmd + pos, len - pos, "qemu-system-%s ", opts->arch);
 
-	pos += snprintf(cmd + pos, len - pos, "-s -S -M pc ");
+	pos += snprintf(cmd + pos, len - pos, "-M pc ");
 	// pos += snprintf(cmd + pos, len - pos, "-M q35 ");
 	pos += snprintf(cmd + pos, len - pos, "-cpu Haswell ");
 	pos += snprintf(cmd + pos, len - pos, "-m %d ", opts->mem);

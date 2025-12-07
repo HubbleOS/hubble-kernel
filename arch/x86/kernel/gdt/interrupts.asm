@@ -251,12 +251,10 @@ syscall_common_stub:
     push r14
     push r15
     
-    ; Встановлюємо правильні kernel сегменти (БЕЗ збереження)
+    ; Встановлюємо правильні kernel сегменти
     mov ax, 0x10        ; GDT_KERNEL_DATA
     mov ds, ax
     mov es, ax
-    mov fs, ax
-    mov gs, ax
     
     ; Вирівнюємо стек по 16 байт для ABI
     mov rbp, rsp        ; Зберігаємо оригінальний RSP
@@ -269,7 +267,7 @@ syscall_common_stub:
     ; Відновлюємо оригінальний стек
     mov rsp, rbp
     
-    ; Відновлюємо всі регістри КРІМ RAX (там результат syscall)
+    ; Відновлюємо всі регістри
     pop r15
     pop r14
     pop r13
@@ -284,7 +282,7 @@ syscall_common_stub:
     pop rdx
     pop rcx
     pop rbx
-    add rsp, 8          ; Пропускаємо старий RAX (результат уже в regs->rax)
+    pop rax ; res
     
     ; Очищуємо стек від int_no та err_code
     add rsp, 16

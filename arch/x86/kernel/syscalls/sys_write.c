@@ -13,10 +13,10 @@ long sys_write(int fd, const char *buffer, size_t len)
 
 	printk("write: %s\n", buffer);
 
-	output_device_t *dev = get_stdout_device();
-	if (!dev || !dev->write)
-		return -1;
+	// output_device_t *dev = get_stdout_device();
+	// if (!dev || !dev->write)
+	// 	return -1;
 
-	dev->write(buffer, len, dev->user_data);
+	// dev->write(buffer, len, dev->user_data);
 	return len;
 }

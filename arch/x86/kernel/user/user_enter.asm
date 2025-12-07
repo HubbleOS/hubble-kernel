@@ -1,27 +1,24 @@
 ; user_enter.asm
 ; Jump from kernel (ring 0) to user mode (ring 3)
-; Arguments:
-;   rdi - entry point (VA) of user program
-;   rsi - user stack top (VA)
+[BITS 64]
 
 global user_enter
 
+; Arguments:
+;   rdi - entry point (VA) of user program
+;   rsi - user stack top (VA)
 user_enter:
     cli
-    
     ; Ensure stack is 16-byte aligned before building IRETQ frame
     and rsp, ~0xF               ; Align RSP to 16 bytes
-    
     ; Build IRETQ frame
-    push qword 0x23             ; SS
+    push qword 0x1B             ; SS 0x1B (User Data)
     push rsi                    ; RSP
-    
     pushfq
     pop rax
     or rax, 0x202               ; IF + reserved bit 1
     push rax                    ; RFLAGS
-    
-    push qword 0x1B             ; CS  
+    push qword 0x23             ; CS 0x23 (User Code)
     push rdi                    ; RIP
     
     ; Now zero registers

@@ -1,15 +1,18 @@
 #include "syscall.h"
-#include <stdint.h>
 #include "printk.h"
+#include <stdint.h>
 
 #define MSR_EFER 0xC0000080
 #define MSR_STAR 0xC0000081
 #define MSR_LSTAR 0xC0000082
 #define MSR_SFMASK 0xC0000084
-
 #define EFER_SCE (1 << 0)
 
 extern void syscall_entry(void);
+
+// Отдельный стек для syscall (16 KB)
+uint8_t syscall_kernel_stack[16384] __attribute__((aligned(16)));
+uint64_t syscall_rsp0 = 0;
 
 static inline void wrmsr(uint32_t msr, uint64_t value)
 {
@@ -29,32 +32,34 @@ void syscall_init(void)
 {
 	printk("Initializing SYSCALL/SYSRET...\n");
 
-	// 1. Включаем SCE (System Call Extensions)
+	// Инициализируем указатель на вершину стека
+	syscall_rsp0 = (uint64_t)(syscall_kernel_stack + sizeof(syscall_kernel_stack));
+	printk("  Syscall stack at 0x%016llx\n", syscall_rsp0);
+
+	// 1. Включаем SYSCALL Extension
 	uint64_t efer = rdmsr(MSR_EFER);
 	efer |= EFER_SCE;
 	wrmsr(MSR_EFER, efer);
+	printk("  EFER.SCE enabled\n");
 
-	// 2. STAR: задаём селекторы сегментов
-	// Биты 32-47: Kernel CS selector для SYSCALL (0x08)
-	// Биты 48-63: User CS base для SYSRET
-	//   При SYSRET: CS = (STAR[63:48] + 16) | 3
-	//               SS = (STAR[63:48] + 8) | 3
-	//   Если User CS = 0x18 (24) и User SS = 0x20 (32):
-	//   То STAR[63:48] должен быть 0x08 (потому что 0x08 + 16 = 0x18)
-
-	uint64_t star = ((uint64_t)0x08 << 48) | ((uint64_t)0x08 << 32);
+	// 2. Настраиваем STAR - ИЗМЕНЕНО!
+	uint64_t star = 0;
+	star |= ((uint64_t)0x08 << 32); // SYSCALL CS = 0x08 (Kernel Code)
+	star |= ((uint64_t)0x10 << 48); // SYSRET base = 0x10 (ИЗМЕНЕНО с 0x08!)
 	wrmsr(MSR_STAR, star);
-	printk("  STAR = 0x%016lx\n", star);
+	printk("  STAR = 0x%016llx\n", star);
 
-	// 3. LSTAR: адрес обработчика syscall
+	// Теперь при SYSRET:
+	// CS = (0x10 + 16) | 3 = 0x20 | 3 = 0x23 (User Code) ✓
+	// SS = (0x10 + 8) | 3 = 0x18 | 3 = 0x1B (User Data) ✓
+
+	// 3. Устанавливаем обработчик
 	wrmsr(MSR_LSTAR, (uint64_t)syscall_entry);
-	printk("  LSTAR = 0x%016lx\n", (uint64_t)syscall_entry);
+	printk("  LSTAR = 0x%016llx\n", (uint64_t)syscall_entry);
 
-	// 4. SFMASK: маска флагов, которые нужно сбросить при SYSCALL
-	// 0x200 = IF (Interrupt Flag) - отключаем прерывания
-	// 0x002 = Reserved (всегда 1 в RFLAGS)
-	// 0x100 = TF (Trap Flag)
-	wrmsr(MSR_SFMASK, 0x200);
+	// 4. SFMASK
+	wrmsr(MSR_SFMASK, 0x700); // IF | DF | TF
+	printk("  SFMASK = 0x%llx\n", 0x700ULL);
 
-	printk("SYSCALL/SYSRET initialized\n");
+	printk("SYSCALL/SYSRET initialized successfully\n");
 }
