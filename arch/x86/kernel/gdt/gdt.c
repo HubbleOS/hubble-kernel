@@ -65,7 +65,7 @@ void gdt_init(void)
 	// Очищаємо таблицю
 	memset(&gdt_table, 0, sizeof(gdt_table));
 
-	// NULL дескриптор
+	// NULL дескриптор (0x00)
 	gdt_set_gate(0, 0, 0, 0, 0);
 
 	// Kernel Code Segment (0x08)
@@ -80,19 +80,19 @@ void gdt_init(void)
 			 GDT_ACCESS_RW,
 		     GDT_GRAN_4K | GDT_GRAN_64BIT);
 
-	// User Code Segment (0x18)
+	// User Data Segment (0x18) - ИЗМЕНЕНО: теперь на позиции 3
 	gdt_set_gate(3, 0, 0xFFFFF,
-		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
-			 GDT_ACCESS_EXECUTABLE | GDT_ACCESS_RW,
-		     GDT_GRAN_4K | GDT_GRAN_64BIT);
-
-	// User Data Segment (0x20)
-	gdt_set_gate(4, 0, 0xFFFFF,
 		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
 			 GDT_ACCESS_RW,
 		     GDT_GRAN_4K | GDT_GRAN_64BIT);
 
-	// TSS Descriptor (0x28) - 16 байт
+	// User Code Segment (0x20) - ИЗМЕНЕНО: теперь на позиции 4
+	gdt_set_gate(4, 0, 0xFFFFF,
+		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
+			 GDT_ACCESS_EXECUTABLE | GDT_ACCESS_RW,
+		     GDT_GRAN_4K | GDT_GRAN_64BIT);
+
+	// TSS Descriptor (0x28) - без изменений
 	tss_set_descriptor((uint64_t)&tss, sizeof(tss) - 1);
 
 	// Загружаем GDT
