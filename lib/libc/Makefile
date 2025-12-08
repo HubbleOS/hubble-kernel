@@ -23,5 +23,5 @@ $(LIBC_OUT): $(BUILD_TOOL)
 		--ar $(AR) \
 		--output $@ \
 		--type archive \
-		--log-dir $(LOG_DIR) \
+		--log-file $(LOG_FILE) \
 		-v

@@ -126,9 +126,11 @@ INCLUDES += -I$(ARCH_DIR)/kernel
 
 export INCLUDES
 
-LOG_DIR ?= $(OUT_DIR)/logs
+LOG_DIR := $(OUT_DIR)/logs/$(shell date +%Y-%m-%d)
+LOG_FILE := $(LOG_DIR)/$(shell date +%H-%M-%S).log
 
 export LOG_DIR
+export LOG_FILE
 
 PHONY += all
 all:

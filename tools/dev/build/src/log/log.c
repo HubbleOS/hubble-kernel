@@ -8,7 +8,7 @@
 
 #define MAX_PATH 4096
 
-static FILE *log_file = NULL;
+FILE *log_file = NULL;
 
 void log_init(const char *log_dir)
 {
@@ -40,6 +40,30 @@ void log_init(const char *log_dir)
 		t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
 		t->tm_hour, t->tm_min, t->tm_sec);
 	fprintf(log_file, "========================================\n");
+	fflush(log_file);
+}
+
+void log_init_file(const char *log_file_path)
+{
+	if (!log_file_path || strlen(log_file_path) == 0)
+		return;
+
+	// Создаём директорию для файла
+	char dir[MAX_PATH];
+	strncpy(dir, log_file_path, sizeof(dir));
+	char *last_slash = strrchr(dir, '/');
+	if (last_slash)
+		*last_slash = 0;
+	mkdir_p(dir);
+
+	log_file = fopen(log_file_path, "a"); // append, чтобы не перезаписывать
+	if (!log_file)
+	{
+		fprintf(stderr, "Warning: Cannot open log file: %s\n", log_file_path);
+		return;
+	}
+
+	fprintf(log_file, "\n===== Build session started =====\n");
 	fflush(log_file);
 }
 

@@ -42,7 +42,7 @@ kernel: $(BUILD_TOOL)
 		--cflags "$(CFLAGS) $(CFLAGS_EXTRA)" \
 		--asmflags "$(ASMFLAGS)" \
 		--includes "$(INCLUDES)" \
-		--log-dir $(LOG_DIR) \
+		--log-file $(LOG_FILE) \
 		-v
 
 # ===========================================================
@@ -57,7 +57,7 @@ apps: $(BUILD_TOOL)
 		--cxx $(CXX) \
 		--cflags "$(CXXFLAGS) $(CXXFLAGS_EXTRA)" \
 		--includes "$(INCLUDES)" \
-		--log-dir $(LOG_DIR) \
+		--log-file $(LOG_FILE) \
 		-v; 
 
 # ===========================================================
@@ -72,7 +72,7 @@ boot-objs: $(BUILD_TOOL)
 		--cc $(CC) \
 		--cflags "$(BOOT_CFLAGS)" \
 		--includes "$(INCLUDES)" \
-		--log-dir $(LOG_DIR) \
+		--log-file $(LOG_FILE) \
 		-v
 
 # ===========================================================
