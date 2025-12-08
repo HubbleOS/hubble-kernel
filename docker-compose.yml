@@ -13,7 +13,7 @@ services:
   base-builder:
     build:
       context: .
-      dockerfile: ./docker/base.Dockerfile
+      dockerfile: ./tools/docker/base.Dockerfile
     image: base-builder:latest
 
   x86-builder:
@@ -21,7 +21,7 @@ services:
     platform: linux/amd64
     build:
       context: .
-      dockerfile: ./docker/x86.Dockerfile
+      dockerfile: ./tools/docker/x86.Dockerfile
     environment:
       - TARGET=${TARGET_X86:-x86_64-elf}
     container_name: ${X86_CONTAINER_NAME:-x86-cross}

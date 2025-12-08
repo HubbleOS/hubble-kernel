@@ -1,3 +1,4 @@
+# Main Makefile
 Q = @
 export Q
 
@@ -12,7 +13,9 @@ LIB_DIR := $(abspath lib)
 CONFIG_MK := $(abspath tools/config/config.mk)
 
 TOOLS_DIR := tools
-SCRIPT_DIR := $(abspath $(TOOLS_DIR)/scripts)
+DEV_TOOLS_DIR := $(TOOLS_DIR)/dev
+SCRIPT_DIR := $(TOOLS_DIR)/scripts
+BUILD_TOOL := $(OUT_DIR)/tools/dev/build/build_main
 
 UNAME_S := $(shell uname -s)
 
@@ -29,7 +32,7 @@ endif
 IS_WSL := $(findstring Microsoft,$(UNAME_S))
 
 ifeq ($(IS_WSL),Microsoft)
-  $(warning ⚠️  You are running inside WSL. Please ensure Docker Desktop's WSL 2 integration is enabled:
+  $(warning ⚠️  You are running inside WSL. Please ensure Docker Desktop's WSL 2 integration is enabled:)
   $(warning https://docs.docker.com/docker-for-windows/wsl/)
 endif
 
@@ -63,33 +66,48 @@ HOST_AS = as
 HOST_AR = ar
 HOST_OBJCOPY = objcopy
 
+MINGW_PREFIX = x86_64-w64-mingw32-
+MINGW_OBJCOPY = $(MINGW_PREFIX)objcopy
+MINGW_OBJDUMP = $(MINGW_PREFIX)objdump
+MINGW_LD = $(MINGW_PREFIX)ld
+
 CFLAGS = -MMD -MP -ffreestanding -m64 -O2 -Wall -Wextra -c
 CXXFLAGS = -MMD -MP -ffreestanding -fno-exceptions -fno-rtti -m64 -O2 -Wall -Wextra -c
 LDFLAGS_NOSTDLIB = -nostdlib -T
 OBJCPYFLAGS = binary
 
-BOOT_CFLAGS = -Iinclude -Ikernel\
-			-Ignu-efi -Ignu-efi/inc \
-			-fpic -ffreestanding -fno-stack-protector \
-			-fno-stack-check -fshort-wchar -mno-red-zone \
-			-maccumulate-outgoing-args -c
+GNU_EFI_DIR := $(ARCH_DIR)/gnu-efi
 
-BOOT_LDFLAGS = -shared -Bsymbolic -Lgnu-efi/x86_64/lib \
-		 -Lgnu-efi/x86_64/gnuefi -Tgnu-efi/gnuefi/elf_x86_64_efi.lds
+BOOT_CFLAGS = -Iinclude -Ikernel \
+	-I$(GNU_EFI_DIR) -I$(GNU_EFI_DIR)/inc \
+	-fpic -ffreestanding -fno-stack-protector \
+	-fno-stack-check -fshort-wchar -mno-red-zone \
+	-maccumulate-outgoing-args -c
 
-BOOT_LIBS = -lgnuefi -lefi
+BOOT_LDFLAGS = -shared -Bsymbolic \
+	-L$(GNU_EFI_DIR)/x86_64/lib \
+	-L$(GNU_EFI_DIR)/x86_64/gnuefi \
+	-T$(GNU_EFI_DIR)/gnuefi/elf_x86_64_efi.lds
+
+# Правильные пути к библиотекам
+BOOT_LIBS = $(GNU_EFI_DIR)/x86_64/gnuefi/libgnuefi.a \
+            $(GNU_EFI_DIR)/x86_64/lib/libefi.a
 
 EFI_SECTIONS = -j .text -j .sdata -j .data -j .rodata \
-		-j .dynamic -j .dynsym -j .rel -j .rela \
-		-j .rel.* -j .rela.* -j .reloc
+	-j .dynamic -j .dynsym -j .rel -j .rela \
+	-j .rel.* -j .rela.* -j .reloc
+
+export GNU_EFI_DIR
 
 export LD CC CXX AS AR OBJCOPY
 export HOST_LD HOST_CC HOST_CXX HOST_AS HOST_AR HOST_OBJCOPY
 
+export MINGW_PREFIX MINGW_OBJCOPY MINGW_OBJDUMP MINGW_LD
+
 export CFLAGS CXXFLAGS LDFLAGS_NOSTDLIB OBJCPYFLAGS
 export BOOT_CFLAGS BOOT_LDFLAGS BOOT_LIBS EFI_SECTIONS
 
-# export ARCH
+export ARCH
 export OUT_DIR
 export BUILD_DIR
 export ISO_DIR
@@ -98,6 +116,7 @@ export LIB_DIR
 export CONFIG_MK
 export TOOLS_DIR
 export SCRIPT_DIR
+export BUILD_TOOL
 
 INCLUDES += -I$(abspath include)
 INCLUDES += -I$(LIB_DIR)/libc/include
@@ -106,6 +125,10 @@ INCLUDES += -I$(ARCH_DIR)/include
 INCLUDES += -I$(ARCH_DIR)/kernel
 
 export INCLUDES
+
+LOG_DIR ?= $(OUT_DIR)/logs
+
+export LOG_DIR
 
 PHONY += all
 all:
@@ -119,44 +142,21 @@ subdirs += $(ARCH_DIR)
 USR_DIR := $(abspath usr)
 subdirs += $(USR_DIR)/src
 
-GNU_EFI_BUILD_DIR := $(OUT_DIR)/$(ARCH)/gnu-efi
-GNU_EFI_BUILT_MARK := $(GNU_EFI_BUILD_DIR)/.built
-
-gnu-efi: $(GNU_EFI_BUILT_MARK)
-
-$(GNU_EFI_BUILT_MARK):
-	$(MAKE) -C $(ARCH_DIR)/gnu-efi
-	@mkdir -p $(dir $@)
-	@touch $@
-
-
-# LOG_DIR := $(OUT_DIR)/logs
-# 
-# prepare-log-dir:
-# 	@mkdir -p $(LOG_DIR)
-# 
-# PHONY += build
-# build: gnu-efi | prepare-log-dir
-# 	@timestamp=$$(date +%Y%m%d-%H%M%S); \
-# 	logfile="$(LOG_DIR)/build $$timestamp.log"; \
-# 	echo "📦 Logging build to $$logfile"; \
-# 	{ \
-# 		echo "== Build started at $$(date) =="; \
-# 		set -e; \
-# 		for dir in $(subdirs); do \
-# 			$(MAKE) -C $$dir; \
-# 		done; \
-# 		echo "== Build finished at $$(date) =="; \
-# 	} 2>&1 | tee "$$logfile"
-# 	@echo "✅ Build complete for $(ARCH)"
+# Собираем BUILD_TOOL перед началом сборки
+PHONY += build-tool
+build-tool:
+	@echo "🔨 Building BUILD_TOOL..."
+	@$(MAKE) -C $(DEV_TOOLS_DIR)/build build
 
 PHONY += build
-build: gnu-efi
+build: build-tool
+	@echo "🚀 Starting build with BUILD_TOOL for $(ARCH)..."
 	$(Q)set -e; \
 	for dir in $(subdirs); do \
-        	$(MAKE) -C $$dir; \
-    	done
+		$(MAKE) -C $$dir BUILD_TOOL=$(BUILD_TOOL); \
+	done
 	@echo "✅ Build complete for $(ARCH)"
+
 ###########################################################################
 
 PHONY += run
@@ -177,21 +177,32 @@ clean:
 	@rm -rf $(OUT_DIR)
 	@echo "✅ Clean complete"
 
+PHONY += clean-all
+clean-all: clean
+	@echo "🧹 Cleaning BUILD_TOOL..."
+	@$(MAKE) -C $(DEV_TOOLS_DIR)/build clean
+	@echo "✅ Full clean complete"
+
+PHONY += rebuild
+rebuild: clean build
+
 PHONY += help
 help:
-	@echo "🧰 Kernel Build System"
+	@echo "🧰 Kernel Build System with BUILD_TOOL"
 	@echo ""
 	@echo "📦 Usage:"
 	@echo "  make [TARGET] [ARCH=<arch>] [VARIABLE=value]"
 	@echo ""
 	@echo "🎯 Targets:"
 	@echo "  all            - Build the kernel (default)"
-	@echo "  build          - Build the kernel"
+	@echo "  build          - Build the kernel with BUILD_TOOL"
+	@echo "  rebuild        - Clean and build from scratch"
 	@echo "  run            - Run the built kernel via QEMU (on host)"
 	@echo "  qemu           - Run QEMU using current build "
 	@echo "  img            - Build the kernel image (if implemented)"
 	@echo "  flash          - Flash the kernel image to a USB device (if implemented)"
 	@echo "  clean          - Remove all build output"
+	@echo "  clean-all      - Remove build output and BUILD_TOOL"
 	@echo "  mkvars         - Print key build variables (debug info)"
 	@echo "  help           - Show this help message"
 	@echo ""
@@ -220,10 +231,11 @@ mkvars:
 	@echo "  BUILD_DIR    = $(BUILD_DIR)"
 	@echo "  ISO_DIR      = $(ISO_DIR)"
 	@echo "  ARCH_DIR     = $(ARCH_DIR)"
-	@echo "  LIB_DIR     = $(LIB_DIR)"
+	@echo "  LIB_DIR      = $(LIB_DIR)"
 	@echo "  CONFIG_MK    = $(CONFIG_MK)"
 	@echo "  TOOLS_DIR    = $(TOOLS_DIR)"
 	@echo "  SCRIPT_DIR   = $(SCRIPT_DIR)"
+	@echo "  BUILD_TOOL   = $(BUILD_TOOL)"
 	@echo "  INCLUDES     = $(INCLUDES)"
 	@echo "  DOCKER_RUN   = $(DOCKER_RUN)"
 	@echo "  subdirs      = $(subdirs)"
@@ -232,7 +244,7 @@ include $(SCRIPT_DIR)/scripts.mk
 include $(SCRIPT_DIR)/docker/docker.mk
 
 # DEP_FILES := $(OBJ_FILES:.o=.d)
-DEP_FILES = $(shell find $(BUILD_DIR) -name '*.d')
+DEP_FILES = $(shell find $(BUILD_DIR) -name '*.d' 2>/dev/null)
 
 -include $(DEP_FILES)
 

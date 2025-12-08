@@ -1,22 +1,27 @@
 # libs/libc/Makefile
+
 LIBC_DIR := $(abspath src)
-LIBC_SRC := $(shell find $(LIBC_DIR) -type f -name "*.c")
-LIBC_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(LIBC_SRC))
 LIBC_OUT := $(BUILD_DIR)/libc.a
 
+BUILD_TOOL ?= $(abspath ../../tools/dev/build/build/build_main)
+LOG_DIR ?= $(OUT_DIR)/logs
+
 INCLUDES ?= -Iinclude
+CFLAGS_EXTRA := -mcmodel=kernel -ffreestanding
 
-CFLAGS += -mcmodel=kernel
-CXXFLAGS += -mcmodel=kernel
-
+.PHONY: all
 all: $(LIBC_OUT)
 
-$(BUILD_DIR)/%.o: %.c
-	@echo "Compiling: $<"
-	@mkdir -p $(dir $@)
-	$(CC) -ffreestanding -c $(CFLAGS) $(INCLUDES) $< -o $@
-
-$(LIBC_OUT): $(LIBC_OBJ)
-	@echo "Archiving libc.a..."
-	@mkdir -p $(dir $@)
-	$(AR) rcs $@ $^
+$(LIBC_OUT): $(BUILD_TOOL)
+	@echo "📦 Building libc with BUILD_TOOL..."
+	$(BUILD_TOOL) \
+		--src-dir $(LIBC_DIR) \
+		--build-dir $(BUILD_DIR)/libc \
+		--cc $(CC) \
+		--cflags "$(CFLAGS) $(CFLAGS_EXTRA)" \
+		--includes "$(INCLUDES)" \
+		--ar $(AR) \
+		--output $@ \
+		--type archive \
+		--log-dir $(LOG_DIR) \
+		-v

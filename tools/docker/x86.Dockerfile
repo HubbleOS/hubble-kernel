@@ -1,6 +1,10 @@
 # x86 Dockerfile
-FROM ubuntu:22.04
-FROM base-builder:latest
+FROM f1ash007/base-builder:latest
+
+RUN apt-get update && apt-get install -y \
+    nasm \
+    binutils-mingw-w64-x86-64 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Preparation
 ENV TARGET=x86_64-elf
@@ -11,13 +15,11 @@ WORKDIR /src
 
 # Download
 RUN curl -LO https://ftp.gnu.org/gnu/binutils/binutils-2.41.tar.xz && \
-	curl -LO https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.xz && \
-	curl -LO https://ftp.gnu.org/gnu/gdb/gdb-13.2.tar.xz
+	curl -LO https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.xz
 
 # Extract
 RUN	tar -xf binutils-2.41.tar.xz && \
-	tar -xf gcc-13.2.0.tar.xz && \
-	tar -xf gdb-13.2.tar.xz
+	tar -xf gcc-13.2.0.tar.xz
 
 # Binutils
 RUN mkdir build-binutils && \
@@ -35,11 +37,3 @@ RUN mkdir build-gcc && \
 	make install-gcc && \
 	make install-target-libgcc && \
 	make install-target-libstdc++-v3
-
-# GDB
-# RUN cd /src && \
-# 	mkdir build-gdb && \
-# 	cd build-gdb && \
-# 	../gdb-13.2/configure --target=$TARGET --prefix=$PREFIX --disable-werror && \
-# 	make all-gdb -j$(nproc) && \
-# 	make install-gdb

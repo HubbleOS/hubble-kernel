@@ -21,5 +21,4 @@ RUN apt-get update && apt-get install -y \
 	ca-certificates \
 	xz-utils \
 	mtools \
-	nasm \
 	&& rm -rf /var/lib/apt/lists/*

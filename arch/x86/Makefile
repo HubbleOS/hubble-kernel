@@ -1,98 +1,131 @@
 # arch/x86/Makefile
+
 SRC_DIR := kernel
-BUILD_DIR ?= build
+APPS_DIR := apps
+BOOT_SRC := boot
 
-CFLAGS += -mcmodel=kernel
-CXXFLAGS += -mcmodel=kernel
+BUILD_TOOL ?= $(abspath ../../tools/dev/build/build/build_main)
+LOG_DIR ?= $(OUT_DIR)/logs
 
-ASM := nasm
+CFLAGS_EXTRA := -mcmodel=kernel -g
+CXXFLAGS_EXTRA := -mcmodel=kernel -g
 ASMFLAGS := -f elf64 -g -F dwarf
 
+# Output paths
+KERNEL_BUILD_DIR := $(BUILD_DIR)/kernel
+APPS_BUILD_DIR := $(BUILD_DIR)/apps
+BOOT_BUILD_DIR := $(BUILD_DIR)/boot
 
-# Output ELF and ISO
 OUTPUT := $(BUILD_DIR)/kernel.elf
 ISO := $(ISO_DIR)/kernel.bin
 
-# Kernel object files
-SRC_FILES := $(shell find $(SRC_DIR) -type f -name "*.c")
-OBJ_FILES := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRC_FILES))
-
-ASM_SRC_FILES := $(shell find $(SRC_DIR) -type f -name "*.asm")
-ASM_OBJ_FILES := $(patsubst %.asm,$(BUILD_DIR)/%.o,$(ASM_SRC_FILES))
-
-OBJ_FILES += $(ASM_OBJ_FILES)
-
-CPP_SRC_FILES := $(shell find apps -type f -name "*.cpp")
-CPP_OBJ_FILES := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SRC_FILES))
-
-OBJ_FILES += $(CPP_OBJ_FILES)
-
-KERNEL_OBJ := $(BUILD_DIR)/$(SRC_DIR)/kmain.o
-LINK_OBJS := $(KERNEL_OBJ) $(filter-out $(KERNEL_OBJ),$(OBJ_FILES))
-
-# UEFI bootloader
-BOOT_SRC := boot
-BOOT_SRCS := $(shell find $(BOOT_SRC) -type f -name "*.c")
-BOOT_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(BOOT_SRCS))
-BOOT_SO  := $(BUILD_DIR)/boot/boot.so
-EFI_OUT  := $(ISO_DIR)/EFI/BOOT/BOOTx64.EFI
+BOOT_SO := $(BOOT_BUILD_DIR)/boot.so
+EFI_OUT := $(ISO_DIR)/EFI/BOOT/BOOTx64.EFI
 EFI_OUT_DIR := $(ISO_DIR)/EFI/BOOT
 
-# INCLUDES += -Iinclude
-
-.PHONY: all bootloader build iso
+.PHONY: all bootloader build iso kernel apps boot-objs
 
 # Default target
 all: build iso bootloader
 
-# Kernel object files
-build: $(OBJ_FILES)
+# ===========================================================
+# Сборка kernel (C)
+# ===========================================================
+.PHONY: kernel
+kernel: $(BUILD_TOOL)
+	@echo "🔨 Building kernel sources with BUILD_TOOL..."
+	$(BUILD_TOOL) \
+		--src-dir $(SRC_DIR) \
+		--build-dir $(KERNEL_BUILD_DIR) \
+		--cc $(CC) \
+		--asm nasm \
+		--cflags "$(CFLAGS) $(CFLAGS_EXTRA)" \
+		--asmflags "$(ASMFLAGS)" \
+		--includes "$(INCLUDES)" \
+		--log-dir $(LOG_DIR) \
+		-v
 
-$(BUILD_DIR)/%.o: %.c
-	@echo "Compiling C: $< -> $@"
+# ===========================================================
+# Сборка apps (C++)
+# ===========================================================
+.PHONY: apps
+apps: $(BUILD_TOOL)
+	@echo "🔨 Building C++ apps with BUILD_TOOL..."
+	$(BUILD_TOOL) \
+		--src-dir $(APPS_DIR) \
+		--build-dir $(APPS_BUILD_DIR) \
+		--cxx $(CXX) \
+		--cflags "$(CXXFLAGS) $(CXXFLAGS_EXTRA)" \
+		--includes "$(INCLUDES)" \
+		--log-dir $(LOG_DIR) \
+		-v; 
+
+# ===========================================================
+# Сборка bootloader объектных файлов с помощью BUILD_TOOL
+# ===========================================================
+.PHONY: boot-objs
+boot-objs: $(BUILD_TOOL)
+	@echo "🔨 Building bootloader objects with BUILD_TOOL..."
+	$(BUILD_TOOL) \
+		--src-dir $(BOOT_SRC) \
+		--build-dir $(BOOT_BUILD_DIR) \
+		--cc $(CC) \
+		--cflags "$(BOOT_CFLAGS)" \
+		--includes "$(INCLUDES)" \
+		--log-dir $(LOG_DIR) \
+		-v
+
+# ===========================================================
+# Общая сборка всех компонентов
+# ===========================================================
+build: kernel apps boot-objs
+
+# ===========================================================
+# Линковка kernel.elf
+# ===========================================================
+$(OUTPUT): build
+	@echo "🔗 Linking kernel ELF: $@"
 	@mkdir -p $(dir $@)
-	$(CC) -g $(CFLAGS) $(INCLUDES) -c $< -o $@
+	@OBJS="$$(find $(KERNEL_BUILD_DIR) $(APPS_BUILD_DIR) -type f -name '*.o' 2>/dev/null)"; \
+	KERNEL_MAIN="$(KERNEL_BUILD_DIR)/kmain.o"; \
+	LINK_OBJS="$$KERNEL_MAIN $$(echo $$OBJS | tr ' ' '\n' | grep -v kmain.o | tr '\n' ' ')"; \
+	echo "LINK_OBJS: $$LINK_OBJS"; \
+	$(CXX) $(LDFLAGS_NOSTDLIB)$(SRC_DIR)/kernel.ld -o $@ $$LINK_OBJS $(BUILD_DIR)/libc.a
 
-
-$(BUILD_DIR)/%.o: %.cpp
-	@echo "Compiling C++: $< -> $@"
-	@mkdir -p $(dir $@)
-	$(CXX) -g $(CXXFLAGS) $(INCLUDES) -c $< -o $@
-
-$(BUILD_DIR)/%.o: %.asm
-	@echo "Assembling: $< -> $@"
-	@mkdir -p $(dir $@)
-	$(ASM) $(ASMFLAGS) $< -o $@
-
-# Kernel linking
-$(OUTPUT): $(OBJ_FILES)
-	@echo "LINK_OBJS: $(LINK_OBJS)"
-	@echo "Linking kernel ELF (via g++): $@"
-	$(CXX) $(LDFLAGS_NOSTDLIB)$(SRC_DIR)/kernel.ld -o $@ $(LINK_OBJS) $(BUILD_DIR)/libc.a
-
-# Kernel binary
+# ===========================================================
+# Создание kernel.bin для ISO
+# ===========================================================
 iso: $(ISO)
 
 $(ISO): $(OUTPUT)
+	@echo "📀 Creating kernel binary: $@"
 	@mkdir -p $(dir $@)
-	$(OBJCOPY) -O $(OBJCPYFLAGS) $< $@
+	$(MINGW_OBJCOPY) -O $(OBJCPYFLAGS) $< $@
 
-# Bootloader
+# ===========================================================
+# Линковка bootloader
+# ===========================================================
+$(BOOT_SO): boot-objs
+	@echo "🔗 Linking bootloader SO: $@"
+	@mkdir -p $(dir $@)
+	@BOOT_OBJS="$$(find $(BOOT_BUILD_DIR) -type f -name '*.o' 2>/dev/null | tr '\n' ' ')"; \
+	$(LD) $(BOOT_LDFLAGS) gnu-efi/x86_64/gnuefi/crt0-efi-x86_64.o $$BOOT_OBJS -o $@ $(BOOT_LIBS)
+
+# ===========================================================
+# Создание EFI binary
+# ===========================================================
 bootloader: $(EFI_OUT)
 
-# Compile all boot .c -> .o
-$(BUILD_DIR)/boot/%.o: boot/%.c
-	@echo "Compiling bootloader: $< -> $@"
-	@mkdir -p $(dir $@)
-	$(CC) $(BOOT_CFLAGS) $< -o $@
-
-# Link bootloader SO from all boot .o files
-$(BOOT_SO): $(BOOT_OBJ)
-	@echo "Linking bootloader SO: $@"
-	@mkdir -p $(dir $@)
-	$(LD) $(BOOT_LDFLAGS) gnu-efi/x86_64/gnuefi/crt0-efi-x86_64.o $^ -o $@ $(BOOT_LIBS)
-
-# Create EFI binary
 $(EFI_OUT): $(BOOT_SO)
+	@echo "💾 Creating EFI binary: $@"
 	@mkdir -p $(EFI_OUT_DIR)
-	$(HOST_OBJCOPY) $(EFI_SECTIONS) --target=efi-app-x86_64 --subsystem=10 $< $@
+	$(MINGW_OBJCOPY) $(EFI_SECTIONS) --target=efi-app-x86_64 --subsystem=10 $< $@
+# 	$(HOST_OBJCOPY) $(EFI_SECTIONS) --target=efi-app-x86_64 --subsystem=10 $< $@
+
+# ===========================================================
+# Вспомогательные targets
+# ===========================================================
+.PHONY: clean
+clean:
+	@echo "🧹 Cleaning build artifacts..."
+	@rm -rf $(BUILD_DIR)
