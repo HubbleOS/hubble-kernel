@@ -14,7 +14,7 @@ all: $(LIBC_OUT)
 
 $(LIBC_OUT): $(BUILD_TOOL)
 	@echo "📦 Building libc with BUILD_TOOL..."
-	$(BUILD_TOOL) \
+	$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
 		--src-dir $(LIBC_DIR) \
 		--build-dir $(BUILD_DIR)/libc \
 		--cc $(CC) \
@@ -23,5 +23,4 @@ $(LIBC_OUT): $(BUILD_TOOL)
 		--ar $(AR) \
 		--output $@ \
 		--type archive \
-		--log-file $(LOG_FILE) \
 		-v

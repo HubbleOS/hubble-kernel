@@ -183,12 +183,14 @@ qemu: qemu-tool
 	@echo "🖥  Running QEMU_TOOL..."
 	@$(QEMU_TOOL)
 
+BUILD_TOOL_FLAGS := --log-file $(LOG_FILE)
+
 PHONY += build
 build: build-tool
 	@echo "🚀 Starting build with BUILD_TOOL for $(ARCH)..."
 	$(Q)set -e; \
 	for dir in $(subdirs); do \
-		$(MAKE) -C $$dir BUILD_TOOL=$(BUILD_TOOL); \
+		$(MAKE) -C $$dir BUILD_TOOL=$(BUILD_TOOL) BUILD_TOOL_FLAGS=""; \
 	done
 	@echo "✅ Build complete for $(ARCH)"
 

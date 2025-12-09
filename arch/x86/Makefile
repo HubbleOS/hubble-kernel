@@ -34,7 +34,7 @@ all: build iso bootloader
 .PHONY: kernel
 kernel: $(BUILD_TOOL)
 	@echo "🔨 Building kernel sources with BUILD_TOOL..."
-	$(BUILD_TOOL) \
+	$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
 		--src-dir $(SRC_DIR) \
 		--build-dir $(KERNEL_BUILD_DIR) \
 		--cc $(CC) \
@@ -51,7 +51,7 @@ kernel: $(BUILD_TOOL)
 .PHONY: apps
 apps: $(BUILD_TOOL)
 	@echo "🔨 Building C++ apps with BUILD_TOOL..."
-	$(BUILD_TOOL) \
+	$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
 		--src-dir $(APPS_DIR) \
 		--build-dir $(APPS_BUILD_DIR) \
 		--cxx $(CXX) \
@@ -66,7 +66,7 @@ apps: $(BUILD_TOOL)
 .PHONY: boot-objs
 boot-objs: $(BUILD_TOOL)
 	@echo "🔨 Building bootloader objects with BUILD_TOOL..."
-	$(BUILD_TOOL) \
+	$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
 		--src-dir $(BOOT_SRC) \
 		--build-dir $(BOOT_BUILD_DIR) \
 		--cc $(CC) \
