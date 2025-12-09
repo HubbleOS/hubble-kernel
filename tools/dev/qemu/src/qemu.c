@@ -43,7 +43,7 @@ void qemu_build_command(const QemuOptions *opts, char *cmd, size_t len)
 	pos += snprintf(cmd + pos, len - pos, "-monitor stdio ");
 
 	// Debug
-	// pos += snprintf(cmd + pos, len - pos, "-S -s ");
+	pos += snprintf(cmd + pos, len - pos, "-S -s ");
 }
 
 int qemu_run(const QemuOptions *opts)

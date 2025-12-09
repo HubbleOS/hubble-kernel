@@ -4,7 +4,7 @@ CC := gcc
 CCFLAGS := 
 INCLUDES := -Iinclude -I$(SRC_DIR)
 
-LDFLAGS := 
+LDFLAGS := -lncurses
 
 override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/dev/debug,build)
 

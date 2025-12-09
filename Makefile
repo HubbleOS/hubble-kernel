@@ -157,15 +157,19 @@ stats-tool:
 	@echo "🔨 Building STATS_TOOL..."
 	@$(MAKE) -C $(DEV_TOOLS_DIR)/stats build
 
+PHONY += stats
+stats: stats-tool
+	@echo "📊 Running STATS_TOOL..."
+	@$(STATS_TOOL)
+
 PHONY += debug-tool
 debug-tool:
 	@echo "🔨 Building DEBUG_TOOL..."
 	@$(MAKE) -C $(DEV_TOOLS_DIR)/debug build
 
-PHONY += stats
-stats: stats-tool
-	@echo "📊 Running STATS_TOOL..."
-	@$(STATS_TOOL)
+debug: debug-tool
+	@echo "🐞 Running DEBUG_TOOL..."
+	@$(DEBUG_TOOL)
 
 PHONY += build
 build: build-tool
