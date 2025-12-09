@@ -3,9 +3,9 @@
 
 #include "sys/syscall.h"
 
-FILE *__stdoutp;
-FILE *__stdinp;
-FILE *__stderrp;
+FILE *__stdoutp = NULL;
+FILE *__stdinp = NULL;
+FILE *__stderrp = NULL;
 
 int syscall_write(struct FILE *stream, const char *buffer, int len)
 {

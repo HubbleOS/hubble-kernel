@@ -3,8 +3,6 @@
 #include "screen/screen.h"
 #include "window/window.h"
 #include "terminal/terminal.h"
-#include <stdio.h>
-#include <stdlib.h>
 #include <fs/vfs/vfs.h>
 #include "printk.h"
 

@@ -1,13 +1,21 @@
 # libs/libc/Makefile
 
 LIBC_DIR := $(abspath src)
-LIBC_OUT := $(BUILD_DIR)/libc.a
+LIBC_OUT := $(OUT_DIR)/lib/libc.a
 
 BUILD_TOOL ?= $(abspath ../../tools/dev/build/build/build_main)
 LOG_DIR ?= $(OUT_DIR)/logs
 
 INCLUDES ?= -Iinclude
-CFLAGS_EXTRA := -mcmodel=kernel -ffreestanding
+INCLUDES += -Iinclude
+
+CFLAGS_EXTRA := \
+    -ffreestanding \
+    -fno-pic -fno-pie \
+    -mno-red-zone \
+    -mcmodel=small \
+    -O2 -Wall -Wextra -static
+
 
 .PHONY: all
 all: $(LIBC_OUT)

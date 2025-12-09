@@ -90,7 +90,7 @@ $(OUTPUT): build
 	KERNEL_MAIN="$(KERNEL_BUILD_DIR)/kmain.o"; \
 	LINK_OBJS="$$KERNEL_MAIN $$(echo $$OBJS | tr ' ' '\n' | grep -v kmain.o | tr '\n' ' ')"; \
 	echo "LINK_OBJS: $$LINK_OBJS"; \
-	$(CXX) $(LDFLAGS_NOSTDLIB)$(SRC_DIR)/kernel.ld -o $@ $$LINK_OBJS $(BUILD_DIR)/libc.a
+	$(CXX) $(LDFLAGS_NOSTDLIB)$(SRC_DIR)/kernel.ld -o $@ $$LINK_OBJS
 
 # ===========================================================
 # Создание kernel.bin для ISO

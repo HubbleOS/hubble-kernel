@@ -6,7 +6,6 @@
 #define SYS_read 2
 #define SYSCALL_COUNT 3
 
-// Используем SYSCALL instruction (быстрее)
 static inline long do_syscall_fast(long num, long arg1, long arg2, long arg3,
 				   long arg4, long arg5, long arg6)
 {
@@ -24,11 +23,11 @@ static inline long do_syscall_fast(long num, long arg1, long arg2, long arg3,
 	    : "=r"(ret)
 	    : "r"(num), "r"(arg1), "r"(arg2),
 	      "r"(arg3), "r"(arg4), "r"(arg5), "r"(arg6)
-	    : "rax", "rcx", "r11", "rdi", "rsi", "rdx", "r10", "r8", "r9", "memory");
+	    : "rax", "rdi", "rsi", "rdx", "r10", "r8", "r9",
+	      "rcx", "r11", "memory");
 	return ret;
 }
 
-// Используем INT 0x80 (совместимость)
 static inline long do_syscall_int(long num, long arg1, long arg2, long arg3,
 				  long arg4, long arg5, long arg6)
 {
@@ -46,12 +45,12 @@ static inline long do_syscall_int(long num, long arg1, long arg2, long arg3,
 	    : "=r"(ret)
 	    : "r"(num), "r"(arg1), "r"(arg2),
 	      "r"(arg3), "r"(arg4), "r"(arg5), "r"(arg6)
-	    : "rax", "rdi", "rsi", "rdx", "r10", "r8", "r9", "memory");
+	    : "rax", "rdi", "rsi", "rdx", "r10", "r8", "r9",
+	      "rcx", "r11", "memory");
 	return ret;
 }
 
-// #define do_syscall do_syscall_fast
-#define do_syscall do_syscall_int
+#define do_syscall do_syscall_fast
 
 #define syscall1(n, a1) do_syscall(n, a1, 0, 0, 0, 0, 0)
 #define syscall2(n, a1, a2) do_syscall(n, a1, a2, 0, 0, 0, 0)

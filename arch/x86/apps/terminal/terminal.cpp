@@ -15,7 +15,6 @@
 #include <fs/vfs/vfs.h>
 #include <fs/vfs/vfs_standart_struct.h>
 
-#include "apps/neofetch/neofetch.h"
 #include "utils/bwfvideo.h"
 
 #include <gdt/interrupt.h>
@@ -902,7 +901,7 @@ void Terminal::run()
 
 		if (strcmp(argv[0], "neofetch") == 0)
 		{
-			neofetch();
+			// neofetch();
 		}
 		else if (strcmp(argv[0], "clear") == 0)
 		{
