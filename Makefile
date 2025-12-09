@@ -16,6 +16,7 @@ TOOLS_DIR := tools
 DEV_TOOLS_DIR := $(TOOLS_DIR)/dev
 SCRIPT_DIR := $(TOOLS_DIR)/scripts
 BUILD_TOOL := $(OUT_DIR)/tools/dev/build/build_main
+STATS_TOOL := $(OUT_DIR)/tools/dev/stats/stats
 
 UNAME_S := $(shell uname -s)
 
@@ -149,6 +150,16 @@ PHONY += build-tool
 build-tool:
 	@echo "🔨 Building BUILD_TOOL..."
 	@$(MAKE) -C $(DEV_TOOLS_DIR)/build build
+
+PHONY += stats-tool
+stats-tool:
+	@echo "🔨 Building STATS_TOOL..."
+	@$(MAKE) -C $(DEV_TOOLS_DIR)/stats build
+
+PHONY += stats
+stats: stats-tool
+	@echo "📊 Running STATS_TOOL..."
+	@$(STATS_TOOL)
 
 PHONY += build
 build: build-tool
