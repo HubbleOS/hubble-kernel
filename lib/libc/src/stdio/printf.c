@@ -9,7 +9,7 @@
 // 	return ret;
 // }
 
-int printf(const char *fmt, ...)
+int printf(const char *fmt, ...) // temporary simple implementation
 {
 	va_list ap;
 	va_start(ap, fmt);
