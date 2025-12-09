@@ -1,8 +1,8 @@
 #include "builder.h"
 #include "buildconfig.h"
-#include "fs/fs.h"
-#include "log/log.h"
-#include "exec/exec.h"
+#include "fs.h"
+#include "log.h"
+#include "exec.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -31,14 +31,14 @@ int build_file(const char *src, const char *obj, SourceLang lang, const BuildCon
 	case LANG_C:
 		printf("Compiling: %s\n", src);
 		LOG_INFO("Compiling: %s -> %s", src, obj);
-		snprintf(cmd, sizeof(cmd), "%s %s %s -c %s -o %s",
+		snprintf(cmd, sizeof(cmd), "%s -fdiagnostics-color=always %s %s -c %s -o %s",
 			 cfg->compiler, cfg->cflags, cfg->includes, src, obj);
 		ret = run_command(cmd, cfg->verbose);
 		break;
 	case LANG_CPP:
 		printf("Compiling C++: %s\n", src);
 		LOG_INFO("Compiling C++: %s -> %s", src, obj);
-		snprintf(cmd, sizeof(cmd), "%s %s %s -c %s -o %s",
+		snprintf(cmd, sizeof(cmd), "%s -fdiagnostics-color=always %s %s -c %s -o %s",
 			 cxx_compiler, cfg->cflags, cfg->includes, src, obj);
 		ret = run_command(cmd, cfg->verbose);
 		break;

@@ -1,5 +1,5 @@
 #include "fs.h"
-#include "log/log.h"
+#include "log.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,8 +1,8 @@
-#include "fs/fs.h"
-#include "log/log.h"
-#include "exec/exec.h"
-#include "builder/builder.h"
-#include "parser/argparser.h"
+#include "fs.h"
+#include "log.h"
+#include "exec.h"
+#include "builder.h"
+#include "argparser.h"
 #include "buildconfig.h"
 
 static SourceFile c_files[MAX_FILES];
