@@ -12,7 +12,7 @@ OBJ := $(BUILD_DIR)/user_main.o
 OUT := $(OUT_DIR)/user.elf
 LDSCRIPT := user.ld
 
-CFLAGS   := -ffreestanding -O2 -m64 -nostdlib -fno-pic -Wall -Wextra -nostartfiles -static -fno-pie -mno-red-zone
+CFLAGS   := -ffreestanding -O2 -m64 -nostdlib -fno-pic -Wall -Wextra -nostartfiles -static -fno-pie -mno-red-zone -mcmodel=large
 # CFLAGS := -ffreestanding -O2 -m64 -mno-red-zone \
 #           -Wall -Wextra -static \
 #           -fno-pic -fno-pie

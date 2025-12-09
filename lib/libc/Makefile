@@ -13,7 +13,7 @@ CFLAGS_EXTRA := \
     -ffreestanding \
     -fno-pic -fno-pie \
     -mno-red-zone \
-    -mcmodel=small \
+    -mcmodel=large \
     -O2 -Wall -Wextra -static
 
 
