@@ -4,20 +4,43 @@
 #include <string.h>
 #include <limits.h>
 #include <unistd.h>
+#include <libgen.h>
+
+// helper: получить папку бинарника
+void get_exe_dir(char *buf, size_t len)
+{
+	char path[PATH_MAX];
+	ssize_t n = readlink("/proc/self/exe", path, sizeof(path) - 1);
+#ifdef __APPLE__
+	uint32_t size = sizeof(path);
+	_NSGetExecutablePath(path, &size);
+	n = strlen(path);
+#endif
+	if (n < 0)
+	{
+		perror("readlink");
+		exit(1);
+	}
+	path[n] = '\0';
+	strncpy(buf, dirname(path), len - 1);
+	buf[len - 1] = '\0';
+}
 
 void qemu_build_command(const QemuOptions *opts, char *cmd, size_t len)
 {
+	char exe_dir[PATH_MAX];
+	get_exe_dir(exe_dir, sizeof(exe_dir));
+
 	char ovmf_path[PATH_MAX];
+	snprintf(ovmf_path, sizeof(ovmf_path), "%s/ovmf/OVMF_CODE.fd", exe_dir);
 
-	if (!realpath("ovmf/OVMF_CODE.fd", ovmf_path))
+	if (access(ovmf_path, F_OK) != 0)
 	{
-
-		fprintf(stderr, "OVMF_CODE.fd not found in ./ovmf/\n");
+		fprintf(stderr, "OVMF_CODE.fd not found in %s\n", ovmf_path);
 		exit(1);
 	}
 
 	int pos = 0;
-
 	pos += snprintf(cmd + pos, len - pos, "qemu-system-%s ", opts->arch);
 
 	pos += snprintf(cmd + pos, len - pos, "-M pc ");
@@ -27,7 +50,7 @@ void qemu_build_command(const QemuOptions *opts, char *cmd, size_t len)
 	pos += snprintf(cmd + pos, len - pos, "-smp %d ", opts->smp);
 
 	// // Main disk
-	pos += snprintf(cmd + pos, len - pos, "-drive file=%s,format=raw,index=0,media=disk,cache=none ", "../../../out/x86/disk.img");
+	pos += snprintf(cmd + pos, len - pos, "-drive file=%s,format=raw,index=0,media=disk,cache=none ", "out/x86/disk.img");
 
 	// FAT ISO-disk
 	// pos += snprintf(cmd + pos, len - pos,
@@ -43,7 +66,7 @@ void qemu_build_command(const QemuOptions *opts, char *cmd, size_t len)
 	pos += snprintf(cmd + pos, len - pos, "-monitor stdio ");
 
 	// Debug
-	pos += snprintf(cmd + pos, len - pos, "-S -s ");
+	// pos += snprintf(cmd + pos, len - pos, "-S -s ");
 }
 
 int qemu_run(const QemuOptions *opts)

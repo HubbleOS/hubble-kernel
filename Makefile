@@ -18,6 +18,7 @@ SCRIPT_DIR := $(TOOLS_DIR)/scripts
 BUILD_TOOL := $(OUT_DIR)/tools/dev/build/build_main
 STATS_TOOL := $(OUT_DIR)/tools/dev/stats/stats
 DEBUG_TOOL := $(OUT_DIR)/tools/dev/debug/debug_tool
+QEMU_TOOL := $(OUT_DIR)/tools/dev/qemu/qemu
 
 UNAME_S := $(shell uname -s)
 
@@ -167,9 +168,20 @@ debug-tool:
 	@echo "🔨 Building DEBUG_TOOL..."
 	@$(MAKE) -C $(DEV_TOOLS_DIR)/debug build
 
+PHONY += debug
 debug: debug-tool
 	@echo "🐞 Running DEBUG_TOOL..."
-	@$(DEBUG_TOOL)
+	@$(DEBUG_TOOL) 
+
+PHONY += qemu-tool
+qemu-tool:
+	@echo "🔨 Building QEMU_TOOL..."
+	@$(MAKE) -C $(DEV_TOOLS_DIR)/qemu build
+
+PHONY += qemu
+qemu: qemu-tool
+	@echo "🖥  Running QEMU_TOOL..."
+	@$(QEMU_TOOL)
 
 PHONY += build
 build: build-tool
@@ -188,9 +200,9 @@ run: build
 	$(MAKE) host-run
 
 PHONY += host-run
-host-run:
+host-run: qemu-tool
 	@echo "🖥  Launching QEMU from host..."
-	$(MAKE) -C tools/dev/qemu run ISO=$(ISO_DIR) ARCH=x86_64 MEM=256;
+	$(QEMU_TOOL)
 
 ###########################################################################
 

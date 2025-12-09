@@ -1,24 +1,28 @@
+SRC_DIR := src
+
 CC := gcc
 CCFLAGS := 
-INCLUDES := -Iinclude -Isrc
+INCLUDES := -Iinclude -I$(SRC_DIR)
 
 LDFLAGS := -lncurses
 
-# BUILD_DIR ?= build
-# BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/qemu,build)
-override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/qemu,build)
+override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/dev/qemu,build)
 
-SRC_DIR := src
-TARGET := $(BUILD_DIR)/main
+TARGET := $(BUILD_DIR)/qemu
 
 SRCS := $(shell find $(SRC_DIR) -name "*.c")
 OBJS := $(SRCS:%.c=$(BUILD_DIR)/%.o)
+
+OVMF_SRC := ovmf
+OVMF_DST := $(BUILD_DIR)/ovmf
 
 .PHONY: all build run clean
 
 all: build run
 
 build: $(TARGET)
+	@mkdir -p $(OVMF_DST)
+	@cp -r $(OVMF_SRC)/* $(OVMF_DST)/
 
 $(TARGET): $(OBJS)
 	@mkdir -p $(BUILD_DIR)
@@ -29,7 +33,7 @@ $(BUILD_DIR)/%.o: %.c
 	$(CC) $(CCFLAGS) $(INCLUDES) -c $< -o $@
 
 run: build
-	@$(TARGET) --iso $(ISO) --arch $(ARCH) --mem $(MEM)
+	@$(TARGET)
 
 clean:
 	@rm -rf $(BUILD_DIR)
