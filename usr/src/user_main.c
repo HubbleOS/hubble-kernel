@@ -9,6 +9,9 @@ void _start(void)
 {
 	libc_init();
 
+	putchar('X');
+	putchar('\n');
+
 	printf("Hello from user space!\n");
 
 	while (1)

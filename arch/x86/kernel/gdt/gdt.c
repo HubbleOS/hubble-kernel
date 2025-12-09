@@ -80,22 +80,21 @@ void gdt_init(void)
 			 GDT_ACCESS_RW,
 		     GDT_GRAN_4K | GDT_GRAN_64BIT);
 
-	// User Data Segment (0x18) - ИЗМЕНЕНО: теперь на позиции 3
+	// User Code Segment (0x18) - СТАНДАРТНЫЙ ПОРЯДОК
 	gdt_set_gate(3, 0, 0xFFFFF,
-		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
-			 GDT_ACCESS_RW,
-		     GDT_GRAN_4K | GDT_GRAN_64BIT);
-
-	// User Code Segment (0x20) - ИЗМЕНЕНО: теперь на позиции 4
-	gdt_set_gate(4, 0, 0xFFFFF,
 		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
 			 GDT_ACCESS_EXECUTABLE | GDT_ACCESS_RW,
 		     GDT_GRAN_4K | GDT_GRAN_64BIT);
 
-	// TSS Descriptor (0x28) - без изменений
+	// User Data Segment (0x20) - СТАНДАРТНЫЙ ПОРЯДОК
+	gdt_set_gate(4, 0, 0xFFFFF,
+		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
+			 GDT_ACCESS_RW,
+		     GDT_GRAN_4K | GDT_GRAN_64BIT);
+
+	// TSS Descriptor (0x28)
 	tss_set_descriptor((uint64_t)&tss, sizeof(tss) - 1);
 
-	// Загружаем GDT
 	gdt_flush((uint64_t)&gdt_ptr);
 }
 

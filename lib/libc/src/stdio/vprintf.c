@@ -249,17 +249,10 @@ static void pop_arg(union arg *arg, int type, va_list *ap)
 	}
 }
 
-// static void out(FILE *f, const char *s, size_t l)
-// {
-// 	if (!(f->flags & F_ERR))
-// 		__fwritex((void *)s, l, f);
-// 	f->write(f, s, l);
-// }
-
 static void out(FILE *f, const char *s, size_t l)
 {
-	if (!f || !f->write)
-		return;
+	// if (!(f->flags & F_ERR))
+	// __fwritex((void *)s, l, f);
 	f->write(f, s, l);
 }
 

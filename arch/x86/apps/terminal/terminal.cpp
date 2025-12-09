@@ -17,7 +17,7 @@
 
 #include "utils/bwfvideo.h"
 
-#include <gdt/interrupt.h>
+#include <interrupt/interrupt.h>
 
 Terminal::Terminal(Window &window, color_t color)
 	: win(window), cursor_X(0), cursor_Y(0), text_color(color),

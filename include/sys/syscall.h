@@ -52,6 +52,7 @@ static inline long do_syscall_int(long num, long arg1, long arg2, long arg3,
 
 #define do_syscall do_syscall_fast
 
+#define syscall0(n) do_syscall(n, 0, 0, 0, 0, 0, 0)
 #define syscall1(n, a1) do_syscall(n, a1, 0, 0, 0, 0, 0)
 #define syscall2(n, a1, a2) do_syscall(n, a1, a2, 0, 0, 0, 0)
 #define syscall3(n, a1, a2, a3) do_syscall(n, a1, a2, a3, 0, 0, 0)

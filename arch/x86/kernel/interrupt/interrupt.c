@@ -1,4 +1,4 @@
-#include "gdt/interrupt.h"
+#include "interrupt/interrupt.h"
 #include <syscalls/syscall.h>
 #include <sys/syscall.h>
 #include <stdint.h>
@@ -180,13 +180,7 @@ void irq_handler(registers_t *regs)
 // Syscall table
 // ============================================================================
 
-long sys_test()
-{
-	return 666;
-}
-
 syscall_fn_t syscall_table[SYSCALL_COUNT] = {
-    [0] = (syscall_fn_t)sys_test,
     [SYS_write] = (syscall_fn_t)sys_write,
     [SYS_read] = (syscall_fn_t)sys_read,
 };

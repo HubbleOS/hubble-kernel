@@ -2,7 +2,7 @@
 #include <printk.h>
 
 #include <gdt/gdt.h>
-#include <gdt/interrupt.h>
+#include <interrupt/interrupt.h>
 #include <syscalls/syscall.h>
 
 static inline void check_nx_support(void)
