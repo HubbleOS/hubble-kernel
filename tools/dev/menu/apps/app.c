@@ -109,15 +109,10 @@ static void run_app()
 
 	DESTROY_WINDOWS(windows);
 }
-#include <docker/docker.h>
 
 static void app_init()
 {
 	config.load("../../.config");
-
-	const char *val = config.get("DOCKER");
-	docker.enabled = (val && strcmp(val, "1") == 0);
-
 	screen.init();
 }
 

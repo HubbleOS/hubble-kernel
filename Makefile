@@ -17,7 +17,7 @@ DEV_TOOLS_DIR := $(TOOLS_DIR)/dev
 SCRIPT_DIR := $(TOOLS_DIR)/scripts
 BUILD_TOOL := $(OUT_DIR)/tools/dev/build/build_main
 STATS_TOOL := $(OUT_DIR)/tools/dev/stats/stats
-DEBUG_TOOL := $(OUT_DIR)/tools/dev/debug/debug_tool
+DEBUG_TOOL := $(OUT_DIR)/tools/dev/debug/debug
 QEMU_TOOL := $(OUT_DIR)/tools/dev/qemu/qemu
 
 SUPPORTED_ARCHES := x86 x86_64 arm64
@@ -51,17 +51,6 @@ AS = $(CROSS)as
 AR = $(CROSS)ar
 OBJCOPY = $(CROSS)objcopy
 
-HOST_LD = ld
-HOST_CC = gcc
-HOST_AS = as
-HOST_AR = ar
-HOST_OBJCOPY = objcopy
-
-MINGW_PREFIX = x86_64-w64-mingw32-
-MINGW_OBJCOPY = $(MINGW_PREFIX)objcopy
-MINGW_OBJDUMP = $(MINGW_PREFIX)objdump
-MINGW_LD = $(MINGW_PREFIX)ld
-
 OBJCPYFLAGS = binary
 
 GNU_EFI_DIR := $(ARCH_DIR)/gnu-efi
@@ -88,10 +77,6 @@ EFI_SECTIONS = -j .text -j .sdata -j .data -j .rodata \
 export GNU_EFI_DIR
 
 export LD CC AS AR OBJCOPY ASM
-export HOST_LD HOST_CC HOST_AS HOST_AR HOST_OBJCOPY
-
-export MINGW_PREFIX MINGW_OBJCOPY MINGW_OBJDUMP MINGW_LD
-
 export CFLAGS OBJCPYFLAGS ASMFLAGS
 export BOOT_CFLAGS BOOT_LDFLAGS BOOT_LIBS EFI_SECTIONS
 
@@ -120,40 +105,19 @@ export LOG_FILE
 
 PHONY += all
 all:
-	@$(MAKE) -C $(TOOLS_DIR)/dev
+	@$(MAKE) -C $(TOOLS_DIR)/dev run
 
 ###########################################################################
 
 subdirs += $(LIB_DIR)
 subdirs += $(ARCH_DIR) 
 subdirs += usr
+subdirs +=  $(TOOLS_DIR)/dev
 
 # Собираем BUILD_TOOL перед началом сборки
 PHONY += build-tool
 build-tool:
 	@$(MAKE) -C $(DEV_TOOLS_DIR)/build build
-
-PHONY += stats-tool
-stats-tool:
-	@$(MAKE) -C $(DEV_TOOLS_DIR)/stats build
-
-PHONY += stats
-stats: stats-tool
-	@$(STATS_TOOL)
-
-PHONY += debug-tool
-debug-tool:
-	@$(MAKE) -C $(DEV_TOOLS_DIR)/debug build
-
-PHONY += debug
-debug: debug-tool
-	@$(DEBUG_TOOL) 
-
-PHONY += qemu-tool
-qemu-tool:
-	@$(MAKE) -C $(DEV_TOOLS_DIR)/qemu build
-
-BUILD_TOOL_FLAGS := --log-file $(LOG_FILE)
 
 PHONY += build
 build: build-tool
@@ -162,6 +126,16 @@ build: build-tool
 		$(MAKE) -C $$dir BUILD_TOOL_FLAGS="$(BUILD_TOOL_FLAGS)"; \
 	done
 
+PHONY += stats
+stats:
+	@$(STATS_TOOL)
+
+PHONY += debug
+debug:
+	@$(DEBUG_TOOL) 
+
+BUILD_TOOL_FLAGS := --log-file $(LOG_FILE)
+
 ###########################################################################
 
 PHONY += run
@@ -169,7 +143,7 @@ run: build
 	$(MAKE) host-run
 
 PHONY += host-run
-host-run: qemu-tool
+host-run:
 	$(QEMU_TOOL)
 
 ###########################################################################
@@ -201,21 +175,14 @@ help:
 	@echo "  mkvars         - Print key build variables (debug info)"
 	@echo "  help           - Show this help message"
 	@echo ""
-	@echo "Docker Targets:"
-	@echo "  docker-build   - Build the kernel inside Docker container"
-	@echo "  docker-run     - Build in Docker, run kernel on host QEMU"
-	@echo "  docker-clean   - Clean build output via Docker"
-	@echo "  docker-<target>- Run any target inside Docker, e.g., 'make docker-img'"
-	@echo ""
 	@echo "Host-only Targets:"
 	@echo "  host-run       - Run QEMU from host using current build output"
 	@echo ""
 	@echo "Variables:"
 	@echo "  ARCH           - Target architecture (e.g. x86, arm64). Default: x86"
-	@echo "  DOCKER_RUN     - Override Docker run command if needed"
 	@echo ""
 	@echo "Available ARCH values:"
-	@echo "  x86, arm64 (extendable in config/config.mk and docker-compose.yml)"
+	@echo "  x86, arm64"
 	@echo ""
 
 PHONY += mkvars
@@ -232,10 +199,8 @@ mkvars:
 	@echo "  SCRIPT_DIR   = $(SCRIPT_DIR)"
 	@echo "  BUILD_TOOL   = $(BUILD_TOOL)"
 	@echo "  INCLUDES     = $(INCLUDES)"
-	@echo "  DOCKER_RUN   = $(DOCKER_RUN)"
 	@echo "  subdirs      = $(subdirs)"
 
 include $(SCRIPT_DIR)/scripts.mk
-include $(SCRIPT_DIR)/docker/docker.mk
 
 .PHONY: $(PHONY)

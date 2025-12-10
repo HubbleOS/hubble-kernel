@@ -9,14 +9,9 @@
 #include <games/game.h>
 #include <config/config.h>
 
-#include <docker/docker.h>
-
 static void save_config()
 {
 	config.save("../../.config");
-
-	const char *val = config.get("DOCKER");
-	docker.enabled = (val && strcmp(val, "1") == 0);
 }
 
 void show_save_modal()
@@ -100,7 +95,6 @@ Menu main_menu = {
 };
 
 static ChecklistItem checklist_items[] = {
-    {"DOCKER", false},
     {"item1", true},
     {"item2", true},
     {"item3", true},

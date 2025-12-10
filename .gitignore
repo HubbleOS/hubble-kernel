@@ -47,9 +47,6 @@ coverage/
 *.gcno
 *.gcov
 
-# Docker-related files
-docker-compose.override.yml
-
 # Other temp files
 *.bak
 

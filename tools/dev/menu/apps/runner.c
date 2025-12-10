@@ -54,16 +54,14 @@ void run_qemu_default(void)
 	run_qemu(qemu_config.iso, qemu_config.arch, qemu_config.mem);
 }
 
-#include <docker/docker.h>
-
 void run_build(void)
 {
-	run_cmdf("make -C ../../ %s", docker.enabled ? "docker-build" : "build");
+	run_cmdf("make -C ../../ build");
 }
 
 void run_run(void)
 {
-	run_cmdf("make -C ../../ %s", docker.enabled ? "docker-run" : "run");
+	run_cmdf("make -C ../../ run");
 }
 
 void run_clean(void)

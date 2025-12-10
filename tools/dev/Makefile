@@ -7,9 +7,9 @@ override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/menu,build)
 SRC_DIR    := menu
 TARGET     := $(BUILD_DIR)/main
 
-.PHONY: all build run clean
+.PHONY: all build run
 
-all: build run
+all: build-tools build
 
 build: $(BUILD_TOOL)
 	@echo "🔨 Building menu with BUILD_TOOL..."
@@ -25,5 +25,18 @@ build: $(BUILD_TOOL)
 		--log-file $(LOG_FILE) \
 		-v
 
-run: build
+subdirs += debug
+subdirs += stats
+subdirs += img
+subdirs += qemu
+
+.PHONY: build-tools
+build-tools:
+	$(Q)set -e; \
+	for dir in $(subdirs); do \
+		$(MAKE) -C $$dir; \
+	done
+
+.PHONY: run
+run:
 	@$(TARGET)

@@ -4,9 +4,6 @@
 
 Kernel HubbleOS is a customizable operating system kernel with support for multiple architectures (x86 and ARM64). This repository contains the kernel source code, build tools, and instructions for running in the QEMU emulator.
 
-> **Recommended**: Use Docker to build and run HubbleOS without installing toolchains manually.  
-> For manual builds (Linux only), see [Required Technologies](#required-technologies--tools-without-docker).
-
 
 ## Quick Start
 
@@ -36,16 +33,6 @@ make flash          # Flash the kernel image to a USB device (e.g., /dev/sdX)
 | `make mkvars` | Print key build variables (debug info)         |
 | `make help`   | Show the help message with available commands. |
 
-### Docker-powered commands
-
-| Command                | Description                                                 |
-| ---------------------- | ----------------------------------------------------------- |
-| `make docker-build`    | Build the kernel inside a Docker container.                 |
-| `make docker-run`      | Build inside Docker, then run QEMU on the host.             |
-| `make docker-clean`    | Clean build output inside Docker.                           |
-| `make docker-<target>` | Run any Makefile target inside Docker (e.g., `docker-img`). |
-| `make host-run`        | Run QEMU directly on host using the previously built image. |
-
 
 ## Usage
 
@@ -56,46 +43,8 @@ make [TARGET] ARCH=x86       # Build for x86 architecture (default)
 make [TARGET] ARCH=arm64     # Build for ARM64 architecture
 ```
 
-## Docker Build and Run
+## Required Technologies & Tools
 
-### 1. Choose your environment
-
-Copy one of the example configs:
-
-```bash
-cp config/dev.env .env  # For Linux/macOS
-```
-
-### 2. Build the Docker images
-
-```bash
-docker-compose --env-file .env build
-```
-
-### 3. Run a container (interactive shell)
-
-```bash
-# With env file:
-docker-compose --env-file .env build x86-builder
-docker-compose --env-file .env build arm64-builder
-
-# Or without:
-docker-compose build x86-builder
-docker-compose build arm64-builder
-
-docker-compose run --rm x86-builder bash
-
-```
-
-### Run container with default command:
-
-```bash
-docker-compose run x86-builder
-```
-
-## Required Technologies & Tools (without Docker)
-
-If you want to build and run the kernel **without using Docker**, make sure the following tools and dependencies are installed on your system.
 
 ### Build dependencies
 

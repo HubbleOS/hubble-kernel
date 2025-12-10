@@ -71,7 +71,7 @@ iso: $(ISO)
 
 $(ISO): $(OUTPUT)
 	@mkdir -p $(dir $@)
-	$(MINGW_OBJCOPY) -O $(OBJCPYFLAGS) $< $@
+	$(OBJCOPY) -O $(OBJCPYFLAGS) $< $@
 
 # ===========================================================
 # Линковка bootloader
@@ -88,5 +88,4 @@ bootloader: $(EFI_OUT)
 
 $(EFI_OUT): $(BOOT_SO)
 	@mkdir -p $(EFI_OUT_DIR)
-	$(MINGW_OBJCOPY) $(EFI_SECTIONS) --target=efi-app-x86_64 --subsystem=10 $< $@
-# 	$(HOST_OBJCOPY) $(EFI_SECTIONS) --target=efi-app-x86_64 --subsystem=10 $< $@
+	$(OBJCOPY) $(EFI_SECTIONS) --target=efi-app-x86_64 --subsystem=10 $< $@

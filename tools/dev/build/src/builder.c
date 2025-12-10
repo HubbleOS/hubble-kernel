@@ -67,6 +67,8 @@ int create_archive(const char *output, char obj_files[][MAX_PATH], int obj_count
 {
 	char cmd[MAX_CMD];
 	int cmd_len;
+	int use_response_file = 0;
+	char response_file[MAX_PATH];
 
 	printf("Creating archive: %s\n", output);
 	LOG_INFO("Creating archive: %s (%d object files)", output, obj_count);
@@ -78,20 +80,62 @@ int create_archive(const char *output, char obj_files[][MAX_PATH], int obj_count
 		*last_slash = 0;
 	mkdir_p(output_dir);
 
-	cmd_len = snprintf(cmd, sizeof(cmd), "%s rcs %s", cfg->archiver, output);
-
-	for (int i = 0; i < obj_count; i++)
+	// Проверяем, нужен ли response file (если много объектных файлов)
+	if (obj_count > 50)
 	{
-		cmd_len += snprintf(cmd + cmd_len, sizeof(cmd) - cmd_len, " %s", obj_files[i]);
-		if (cmd_len >= sizeof(cmd) - 4096)
+		use_response_file = 1;
+		snprintf(response_file, sizeof(response_file), "%s.rsp", output);
+
+		FILE *rsp = fopen(response_file, "w");
+		if (!rsp)
 		{
-			fprintf(stderr, "Error: command too long\n");
-			LOG_ERROR("Archive command too long");
+			fprintf(stderr, "Error: cannot create response file %s\n", response_file);
+			LOG_ERROR("Cannot create response file: %s", response_file);
 			return 1;
+		}
+
+		// Записываем все объектные файлы в response file
+		for (int i = 0; i < obj_count; i++)
+		{
+			fprintf(rsp, "%s\n", obj_files[i]);
+		}
+
+		fclose(rsp);
+		LOG_INFO("Created response file: %s", response_file);
+	}
+
+	// Формируем команду создания архива
+	if (use_response_file)
+	{
+		// Используем response file
+		snprintf(cmd, sizeof(cmd), "%s rcs %s @%s", cfg->archiver, output, response_file);
+	}
+	else
+	{
+		// Обычная команда без response file
+		cmd_len = snprintf(cmd, sizeof(cmd), "%s rcs %s", cfg->archiver, output);
+
+		for (int i = 0; i < obj_count; i++)
+		{
+			int written = snprintf(cmd + cmd_len, sizeof(cmd) - cmd_len, " %s", obj_files[i]);
+			if (written < 0 || cmd_len + written >= sizeof(cmd) - 4096)
+			{
+				fprintf(stderr, "Error: archive command too long, use fewer files or increase MAX_CMD\n");
+				LOG_ERROR("Archive command too long");
+				return 1;
+			}
+			cmd_len += written;
 		}
 	}
 
 	int ret = run_command(cmd, cfg->verbose);
+
+	// Удаляем response file после использования
+	if (use_response_file)
+	{
+		remove(response_file);
+	}
+
 	if (ret == 0)
 	{
 		LOG_SUCCESS("Successfully created archive: %s", output);
@@ -108,6 +152,8 @@ int link_executable(const char *output, char obj_files[][MAX_PATH], int obj_coun
 {
 	char cmd[MAX_CMD];
 	int cmd_len;
+	int use_response_file = 0;
+	char response_file[MAX_PATH];
 
 	printf("Linking executable: %s\n", output);
 	LOG_INFO("Linking executable: %s (%d object files)", output, obj_count);
@@ -123,46 +169,105 @@ int link_executable(const char *output, char obj_files[][MAX_PATH], int obj_coun
 	// Выбираем линкер (если есть C++, используем g++/clang++, иначе gcc/clang)
 	const char *linker = (strlen(cfg->linker) > 0) ? cfg->linker : cxx_compiler;
 
-	// Начинаем команду линковки
-	if (strlen(cfg->ldscript) > 0)
+	// Проверяем, нужен ли response file (если много объектных файлов)
+	if (obj_count > 50)
 	{
-		// Если указан linker script, используем ld напрямую и добавляем -T
-		cmd_len = snprintf(cmd, sizeof(cmd), "%s -T%s -o %s",
-				   (strlen(cfg->linker) > 0) ? cfg->linker : "ld",
-				   cfg->ldscript, output);
+		use_response_file = 1;
+		snprintf(response_file, sizeof(response_file), "%s.rsp", output);
+
+		FILE *rsp = fopen(response_file, "w");
+		if (!rsp)
+		{
+			fprintf(stderr, "Error: cannot create response file %s\n", response_file);
+			LOG_ERROR("Cannot create response file: %s", response_file);
+			return 1;
+		}
+
+		// Записываем все объектные файлы в response file
+		for (int i = 0; i < obj_count; i++)
+		{
+			fprintf(rsp, "%s\n", obj_files[i]);
+		}
+
+		// Добавляем ldflags и libs
+		if (strlen(cfg->ldflags) > 0)
+		{
+			fprintf(rsp, "%s\n", cfg->ldflags);
+		}
+		if (strlen(cfg->libs) > 0)
+		{
+			fprintf(rsp, "%s\n", cfg->libs);
+		}
+
+		fclose(rsp);
+		LOG_INFO("Created response file: %s", response_file);
+	}
+
+	// Формируем команду линковки
+	if (use_response_file)
+	{
+		// Используем response file
+		if (strlen(cfg->ldscript) > 0)
+		{
+			snprintf(cmd, sizeof(cmd), "%s -T%s -o %s @%s",
+				 (strlen(cfg->linker) > 0) ? cfg->linker : "ld",
+				 cfg->ldscript, output, response_file);
+		}
+		else
+		{
+			snprintf(cmd, sizeof(cmd), "%s -o %s @%s",
+				 linker, output, response_file);
+		}
 	}
 	else
 	{
-		// Используем компилятор как линкер
-		cmd_len = snprintf(cmd, sizeof(cmd), "%s -o %s",
-				   linker, output);
-	}
-
-	// Добавляем все объектные файлы
-	for (int i = 0; i < obj_count; i++)
-	{
-		cmd_len += snprintf(cmd + cmd_len, sizeof(cmd) - cmd_len, " %s", obj_files[i]);
-		if (cmd_len >= sizeof(cmd) - 4096)
+		// Обычная команда без response file
+		if (strlen(cfg->ldscript) > 0)
 		{
-			fprintf(stderr, "Error: link command too long\n");
-			LOG_ERROR("Link command too long");
-			return 1;
+			cmd_len = snprintf(cmd, sizeof(cmd), "%s -T%s -o %s",
+					   (strlen(cfg->linker) > 0) ? cfg->linker : "ld",
+					   cfg->ldscript, output);
+		}
+		else
+		{
+			cmd_len = snprintf(cmd, sizeof(cmd), "%s -o %s",
+					   linker, output);
+		}
+
+		// Добавляем все объектные файлы
+		for (int i = 0; i < obj_count; i++)
+		{
+			int written = snprintf(cmd + cmd_len, sizeof(cmd) - cmd_len, " %s", obj_files[i]);
+			if (written < 0 || cmd_len + written >= sizeof(cmd) - 4096)
+			{
+				fprintf(stderr, "Error: link command too long, use fewer files or increase MAX_CMD\n");
+				LOG_ERROR("Link command too long");
+				return 1;
+			}
+			cmd_len += written;
+		}
+
+		// Добавляем ldflags
+		if (strlen(cfg->ldflags) > 0)
+		{
+			cmd_len += snprintf(cmd + cmd_len, sizeof(cmd) - cmd_len, " %s", cfg->ldflags);
+		}
+
+		// Добавляем библиотеки В КОНЦЕ
+		if (strlen(cfg->libs) > 0)
+		{
+			cmd_len += snprintf(cmd + cmd_len, sizeof(cmd) - cmd_len, " %s", cfg->libs);
 		}
 	}
 
-	// Добавляем ldflags (могут содержать -L пути к библиотекам)
-	if (strlen(cfg->ldflags) > 0)
-	{
-		cmd_len += snprintf(cmd + cmd_len, sizeof(cmd) - cmd_len, " %s", cfg->ldflags);
-	}
-
-	// Добавляем библиотеки В КОНЦЕ (важно для линкера!)
-	if (strlen(cfg->libs) > 0)
-	{
-		cmd_len += snprintf(cmd + cmd_len, sizeof(cmd) - cmd_len, " %s", cfg->libs);
-	}
-
 	int ret = run_command(cmd, cfg->verbose);
+
+	// Удаляем response file после использования
+	if (use_response_file)
+	{
+		remove(response_file);
+	}
+
 	if (ret == 0)
 	{
 		LOG_SUCCESS("Successfully linked executable: %s", output);

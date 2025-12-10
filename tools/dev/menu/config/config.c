@@ -9,8 +9,6 @@
 #include <qemu/qemu.h>
 #include <apps/menus.h>
 
-#include <docker/docker.h>
-
 static void config_save(const char *path);
 static void config_init(const char *path);
 static void config_load(const char *path);
