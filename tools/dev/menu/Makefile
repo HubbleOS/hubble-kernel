@@ -5,8 +5,8 @@ CCFLAGS    :=
 INCLUDES   := -Iinclude -I$(SRC_DIR)
 LDFLAGS    := -lncurses
 
-override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/dev/img,build)
-TARGET     := $(BUILD_DIR)/img
+override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/menu,build)
+TARGET     := $(BUILD_DIR)/main
 
 .PHONY: all build run
 
@@ -23,5 +23,6 @@ build: $(BUILD_TOOL)
 		--type exe \
 		--ldflags "$(LDFLAGS)"
 
-run: build
+.PHONY: run
+run:
 	@$(TARGET)

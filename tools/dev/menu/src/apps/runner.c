@@ -1,5 +1,5 @@
 #include "runner.h"
-#include <apps/screen.h>
+#include "screen.h"
 #include <qemu/qemu.h>
 #include <stdarg.h>
 #include <stdio.h>

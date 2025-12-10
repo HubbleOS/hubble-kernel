@@ -28,9 +28,7 @@ $(OUTPUT): $(BUILD_TOOL)
 		--type exe \
 		--ld $(LD) \
 		--ldflags "$(LDFLAGS)" \
-		--libs "$(LIBC)" \
-		--log-file $(LOG_FILE) \
-		-v
+		--libs "$(LIBC)"
 
 clean:
 	rm -rf $(BIN_DIR) $(BUILD_DIR)

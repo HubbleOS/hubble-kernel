@@ -1,4 +1,4 @@
-#include <config/config.h>
+#include "config.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -91,7 +91,7 @@ static void config_write(const char *path, bool defaults)
 	if (defaults)
 	{
 		QemuConfig default_config = {
-		    .iso = "../../../out/x86/iso/",
+		    .iso = "../../../../out/build/x86/iso/",
 		    .arch = "x86_64",
 		    .mem = 1024,
 		    .smp = 2,

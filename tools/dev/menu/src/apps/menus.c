@@ -1,8 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "menus.h"
-#include <apps/runner.h>
-#include <apps/screen.h>
+#include "runner.h"
+#include "screen.h"
 #include <ui/modal.h>
 #include <ui/window.h>
 #include <ui/main.h>
@@ -11,7 +11,7 @@
 
 static void save_config()
 {
-	config.save("../../.config");
+	config.save("../../../.config");
 }
 
 void show_save_modal()

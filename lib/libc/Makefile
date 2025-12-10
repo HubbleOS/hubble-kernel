@@ -13,9 +13,8 @@ $(LIBC_OUT): $(BUILD_TOOL)
 		--src-dir $(LIBC_DIR) \
 		--build-dir $(BUILD_DIR)/libc \
 		--cc $(CC) \
-		--cflags "$(CFLAGS) $(CFLAGS_EXTRA)" \
+		--cflags "$(CFLAGS)" \
 		--includes "$(INCLUDES)" \
 		--ar $(AR) \
 		--output $@ \
-		--type archive \
-		-v
+		--type archive

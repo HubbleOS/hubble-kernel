@@ -1,8 +1,8 @@
 #include <string.h>
 #include <stdlib.h>
-#include <apps/app.h>
-#include <apps/menus.h>
-#include <apps/warnings.h>
+#include "app.h"
+#include "menus.h"
+#include "warnings.h"
 #include <ui/main.h>
 #include <ui/text.h>
 #include <ui/button.h>
@@ -71,7 +71,7 @@ static void handle_app_keypress(int ch, UIWindow **focused, UIWindow **windows)
 #define DRAW_WINDOWS(windows) draw_windows(windows, COUNT(windows))
 #define DESTROY_WINDOWS(windows) destroy_windows(windows, COUNT(windows))
 
-#include <apps/screen.h>
+#include "screen.h"
 
 static void run_app()
 {
@@ -105,14 +105,14 @@ static void run_app()
 		DRAW_WINDOWS(windows);
 	}
 
-	config.save("../../.config");
+	config.save("../../../.config");
 
 	DESTROY_WINDOWS(windows);
 }
 
 static void app_init()
 {
-	config.load("../../.config");
+	config.load("../../../.config");
 	screen.init();
 }
 

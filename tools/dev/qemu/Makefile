@@ -16,7 +16,6 @@ OVMF_DST := $(BUILD_DIR)/ovmf
 all: build
 
 build: $(BUILD_TOOL)
-	@echo "🔨 Building menu with BUILD_TOOL..."
 	$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
 		--src-dir $(SRC_DIR) \
 		--build-dir $(BUILD_DIR) \
@@ -25,9 +24,7 @@ build: $(BUILD_TOOL)
 		--includes "$(INCLUDES)" \
 		--output $(TARGET) \
 		--type exe \
-		--ldflags "$(LDFLAGS)" \
-		--log-file $(LOG_FILE) \
-		-v
+		--ldflags "$(LDFLAGS)" 
 	@mkdir -p $(OVMF_DST)
 	@cp -r $(OVMF_SRC)/* $(OVMF_DST)/
 

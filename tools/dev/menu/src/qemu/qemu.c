@@ -1,7 +1,7 @@
-#include <qemu/qemu.h>
+#include "qemu.h"
 
 QemuConfig qemu_config = {
-    .iso = "../../../out/x86/iso/",
+    .iso = "../../../../out/build/x86/iso/",
     .arch = "x86_64",
     .mem = 512,
     .smp = 2,

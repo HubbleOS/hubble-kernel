@@ -1,6 +1,6 @@
 #pragma once
 #include <ui/menu.h>
-#include <apps/app.h>
+#include "app.h"
 
 extern MenuItem main_items[];
 
