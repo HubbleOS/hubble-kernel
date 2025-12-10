@@ -50,4 +50,4 @@ echo "[+] Unmounting..."
 sudo umount "$MOUNT_DIR"
 rmdir "$MOUNT_DIR"
 
-echo "✅ FAT32 UEFI image created: $IMG_SOURCE"
+echo "[+] FAT32 UEFI image created: $IMG_SOURCE"

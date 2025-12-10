@@ -1,7 +1,7 @@
 SRC_DIR := src
 
 CC := gcc
-CCFLAGS := 
+CCFLAGS := -MMD -MP
 INCLUDES := -Iinclude -I$(SRC_DIR)
 
 LDFLAGS := 

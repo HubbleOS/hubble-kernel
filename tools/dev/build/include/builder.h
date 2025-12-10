@@ -10,4 +10,5 @@ typedef enum
 } SourceLang;
 
 int build_file(const char *src, const char *obj, SourceLang lang, const BuildConfig *cfg, const char *cxx_compiler);
-int create_archive(const char *output, char obj_files[][4096], int obj_count, const BuildConfig *cfg);
+int create_archive(const char *output, char obj_files[][MAX_PATH], int obj_count, const BuildConfig *cfg);
+int link_executable(const char *output, char obj_files[][MAX_PATH], int obj_count, const BuildConfig *cfg, const char *cxx_compiler);

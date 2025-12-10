@@ -13,12 +13,17 @@ void print_usage(const char *prog)
 	printf("  --cxx <compiler>     C++ compiler (default: g++)\n");
 	printf("  --asm <assembler>    Assembler (default: nasm)\n");
 	printf("  --ar <archiver>      Archiver (default: ar)\n");
+	printf("  --ld <linker>        Linker (default: ld or g++)\n");
 	printf("  --cflags <flags>     C/C++ compiler flags\n");
 	printf("  --asmflags <flags>   Assembler flags\n");
+	printf("  --ldflags <flags>    Linker flags\n");
 	printf("  --includes <paths>   Include paths\n");
+	printf("  --libs <libraries>   Libraries to link (e.g., -lm -lpthread)\n");
+	printf("  --ldscript <file>    Linker script file\n");
 	printf("  --output <file>      Output file (archive or executable)\n");
 	printf("  --type <type>        Output type: archive, exe (default: archive)\n");
 	printf("  --log-dir <dir>      Directory for log files (creates YYYY-MM-DD.log)\n");
+	printf("  --log-file <file>    Specific log file path\n");
 	printf("  -v, --verbose        Verbose output\n");
 	printf("  -f, --force          Force rebuild all files\n");
 	printf("  -h, --help           Show this help\n");
@@ -52,6 +57,10 @@ int parse_arguments(int argc, char **argv, BuildConfig *cfg, char *cxx_compiler,
 		{
 			strncpy(cfg->archiver, argv[++i], sizeof(cfg->archiver) - 1);
 		}
+		else if (strcmp(argv[i], "--ld") == 0 && i + 1 < argc)
+		{
+			strncpy(cfg->linker, argv[++i], sizeof(cfg->linker) - 1);
+		}
 		else if (strcmp(argv[i], "--cflags") == 0 && i + 1 < argc)
 		{
 			strncpy(cfg->cflags, argv[++i], sizeof(cfg->cflags) - 1);
@@ -60,9 +69,21 @@ int parse_arguments(int argc, char **argv, BuildConfig *cfg, char *cxx_compiler,
 		{
 			strncpy(cfg->asmflags, argv[++i], sizeof(cfg->asmflags) - 1);
 		}
+		else if (strcmp(argv[i], "--ldflags") == 0 && i + 1 < argc)
+		{
+			strncpy(cfg->ldflags, argv[++i], sizeof(cfg->ldflags) - 1);
+		}
 		else if (strcmp(argv[i], "--includes") == 0 && i + 1 < argc)
 		{
 			strncpy(cfg->includes, argv[++i], sizeof(cfg->includes) - 1);
+		}
+		else if (strcmp(argv[i], "--libs") == 0 && i + 1 < argc)
+		{
+			strncpy(cfg->libs, argv[++i], sizeof(cfg->libs) - 1);
+		}
+		else if (strcmp(argv[i], "--ldscript") == 0 && i + 1 < argc)
+		{
+			strncpy(cfg->ldscript, argv[++i], sizeof(cfg->ldscript) - 1);
 		}
 		else if (strcmp(argv[i], "--output") == 0 && i + 1 < argc)
 		{

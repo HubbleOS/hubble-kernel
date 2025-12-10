@@ -5,6 +5,7 @@
 #include <stdarg.h>
 
 #include "log.h"
+#include "fs.h"
 
 #define MAX_PATH 4096
 

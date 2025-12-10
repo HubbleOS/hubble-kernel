@@ -23,7 +23,7 @@ gdt_flush:
     mov ss, ax
     
     ; Оновлюємо CS через far return
-    pop rax                 ; ✅ Витягуємо return address
+    pop rax                ; Витягуємо return address
     mov rcx, 0x08          ; Kernel Code Segment
     push rcx               ; Push новий CS
     push rax               ; Push return address

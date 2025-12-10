@@ -5,6 +5,8 @@
 #include "argparser.h"
 #include "buildconfig.h"
 
+#include <string.h>
+
 static SourceFile c_files[MAX_FILES];
 static SourceFile cpp_files[MAX_FILES];
 static SourceFile asm_files[MAX_FILES];
@@ -16,7 +18,7 @@ int main(int argc, char **argv)
 {
 	BuildConfig cfg = {0};
 	char cxx_compiler[256] = "g++";
-	char output_type[32] = "archive";
+	char output_type[32] = "executable";
 
 	if (parse_arguments(argc, argv, &cfg, cxx_compiler, output_type) != 0)
 	{
@@ -104,9 +106,25 @@ int main(int argc, char **argv)
 				return 1;
 			}
 		}
+		else if (strcmp(output_type, "exe") == 0 || strcmp(output_type, "executable") == 0)
+		{
+			// Линковка исполняемого файла
+			if (link_executable(cfg.output, obj_files, obj_count, &cfg, cxx_compiler) != 0)
+			{
+				log_close();
+				return 1;
+			}
+		}
+		else
+		{
+			fprintf(stderr, "Error: Unknown output type '%s'. Use 'archive' or 'exe'\n", output_type);
+			LOG_ERROR("Unknown output type: %s", output_type);
+			log_close();
+			return 1;
+		}
 	}
 
-	printf("✅ Build completed successfully\n");
+	printf("Build completed successfully\n");
 	LOG_SUCCESS("Build completed successfully");
 	LOG_INFO("Total object files created: %d", obj_count);
 

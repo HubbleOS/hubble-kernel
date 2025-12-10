@@ -7,17 +7,21 @@
 #define MAX_ARGS 128
 #define MAX_CMD 8192
 
-typedef struct BuildConfig
+typedef struct
 {
 	char src_dir[MAX_PATH];
 	char build_dir[MAX_PATH];
 	char compiler[MAX_NAME];
 	char assembler[MAX_NAME];
 	char archiver[MAX_NAME];
-	char cflags[1024];
-	char asmflags[1024];
+	char linker[MAX_NAME];
+	char cflags[2048];
+	char asmflags[2048];
+	char ldflags[2048];
 	char includes[2048];
+	char libs[2048];
 	char output[MAX_PATH];
+	char ldscript[MAX_PATH];
 	char log_dir[MAX_PATH];
 	char log_file[MAX_PATH];
 	int verbose;
