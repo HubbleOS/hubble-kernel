@@ -8,6 +8,9 @@
 #include <dirent.h>
 #include <errno.h>
 
+/**
+ * @brief Recursively creates a directory and all intermediate directories
+ */
 int mkdir_p(const char *path)
 {
 	char tmp[MAX_PATH];
@@ -38,6 +41,9 @@ int mkdir_p(const char *path)
 	return 0;
 }
 
+/**
+ * @brief Returns the last modification time of a file
+ */
 time_t get_mtime(const char *path)
 {
 	struct stat st;
@@ -48,16 +54,22 @@ time_t get_mtime(const char *path)
 	return 0;
 }
 
+/**
+ * @brief Determines if a target file needs to be rebuilt based on modification times
+ */
 int needs_rebuild(const char *src, const char *obj)
 {
 	time_t src_time = get_mtime(src);
 	time_t obj_time = get_mtime(obj);
 
 	if (obj_time == 0)
-		return 1; // объектный файл не существует
+		return 1; // object file does not exist
 	return src_time > obj_time;
 }
 
+/**
+ * @brief Recursively scans a directory for files with a given extension
+ */
 void scan_directory(const char *dir, const char *ext, SourceFile *files, int *count, int max)
 {
 	DIR *d;
@@ -101,11 +113,16 @@ void scan_directory(const char *dir, const char *ext, SourceFile *files, int *co
 	closedir(d);
 }
 
+/**
+ * @brief Computes the object file path for a given source file
+ *
+ * Changes extension to ".o" and preserves relative path inside build_dir
+ */
 void get_obj_path(const char *src, const char *src_dir, const char *build_dir, char *obj, size_t obj_size)
 {
 	const char *rel = src;
 
-	// Убираем src_dir из начала пути
+	// Remove src_dir prefix
 	if (strncmp(src, src_dir, strlen(src_dir)) == 0)
 	{
 		rel = src + strlen(src_dir);
@@ -115,7 +132,7 @@ void get_obj_path(const char *src, const char *src_dir, const char *build_dir, c
 
 	snprintf(obj, obj_size, "%s/%s", build_dir, rel);
 
-	// Меняем расширение на .o
+	// Replace extension with ".o"
 	char *dot = strrchr(obj, '.');
 	if (dot)
 	{

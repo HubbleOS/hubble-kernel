@@ -8,9 +8,9 @@ LDSCRIPT := $(SRC_DIR)/user.ld
 
 CFLAGS   := -ffreestanding -O2 -m64 -nostdlib -fno-pic -Wall -Wextra -nostartfiles -static -fno-pie -mno-red-zone -mcmodel=large
 
-INCLUDES := -I../include
+INCLUDES := -Iinclude
+INCLUDES += -I../include
 INCLUDES += -I../lib/libc/include
-INCLUDES += -I../arch/$(ARCH)/include
 
 LIBC := ../out/lib/libc.a
 LDFLAGS  := -T$(LDSCRIPT) -Ttext-segment=0x400000

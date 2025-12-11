@@ -1,7 +1,10 @@
+#include <libc.h>
+
 #include <stdio.h>
 #include <stddef.h>
 
-#include "sys/syscall.h"
+#include <sys/syscall.h>
+#include "../usr/include/syscall.h"
 
 FILE *__stdoutp = NULL;
 FILE *__stdinp = NULL;

@@ -1,5 +1,5 @@
 #include "interrupt/interrupt.h"
-#include <syscalls/syscall.h>
+#include <syscalls/syscall_entry.h>
 #include <sys/syscall.h>
 #include <stdint.h>
 #include "printk.h"
@@ -179,6 +179,10 @@ void irq_handler(registers_t *regs)
 // ============================================================================
 // Syscall table
 // ============================================================================
+
+typedef long (*syscall_fn_t)(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6);
+
+#define SYSCALL_COUNT 256
 
 syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_write] = (syscall_fn_t)sys_write,

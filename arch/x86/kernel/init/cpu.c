@@ -3,7 +3,7 @@
 
 #include <gdt/gdt.h>
 #include <interrupt/interrupt.h>
-#include <syscalls/syscall.h>
+#include <syscalls/syscall_entry.h>
 
 static inline void check_nx_support(void)
 {

@@ -6,7 +6,8 @@ typedef enum
 {
 	LANG_C,
 	LANG_CPP,
-	LANG_ASM
+	LANG_ASM,
+	LANG_TBL
 } SourceLang;
 
 int build_file(const char *src, const char *obj, SourceLang lang, const BuildConfig *cfg, const char *cxx_compiler);

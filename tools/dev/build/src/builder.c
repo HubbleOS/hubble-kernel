@@ -5,6 +5,7 @@
 #include "exec.h"
 #include <stdio.h>
 #include <string.h>
+#include "tblgen.h"
 
 int build_file(const char *src, const char *obj, SourceLang lang, const BuildConfig *cfg, const char *cxx_compiler)
 {
@@ -49,6 +50,34 @@ int build_file(const char *src, const char *obj, SourceLang lang, const BuildCon
 			 cfg->assembler, cfg->asmflags, src, obj);
 		ret = run_command(cmd, cfg->verbose);
 		break;
+	case LANG_TBL:
+	{
+		printf("Generating header from TBL: %s\n", src);
+		LOG_INFO("Generating header from TBL: %s", src);
+
+		// формируем путь к .h
+		char header_path[MAX_PATH];
+		strncpy(header_path, src, sizeof(header_path) - 1);
+		header_path[sizeof(header_path) - 1] = '\0';
+
+		char *dot = strrchr(header_path, '.');
+		if (dot)
+		{
+			strcpy(dot, ".h"); // заменяем расширение на .h
+		}
+		else
+		{
+			// если нет точки, просто добавляем .h
+			strncat(header_path, ".h", sizeof(header_path) - strlen(header_path) - 1);
+		}
+
+		ret = generate_tbl2header(src, header_path, TBL_SYSCALL);
+		break;
+	}
+	default:
+		fprintf(stderr, "Error: Unknown source language for %s\n", src);
+		LOG_ERROR("Unknown source language for %s", src);
+		return 1;
 	}
 
 	if (ret == 0)

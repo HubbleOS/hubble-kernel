@@ -2,7 +2,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <sys/syscall.h>
+#include <syscall.h>
+#include "libc.h"
 #include <stdio.h>
 
 void _start(void)

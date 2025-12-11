@@ -1,4 +1,4 @@
-#include <sys/syscall.h>
+#include "syscall_entry.h"
 #include <sys/output_device.h>
 
 #include "printk.h"

@@ -6,9 +6,6 @@
 #include <fs/vfs/vfs.h>
 #include "printk.h"
 
-#include <sys/syscall.h>
-#include <syscalls/syscall.h>
-
 #include "mm/slab.h"
 
 #include <gdt/interrupt.h>

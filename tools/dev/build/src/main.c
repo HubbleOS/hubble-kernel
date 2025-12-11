@@ -10,9 +10,12 @@
 static SourceFile c_files[MAX_FILES];
 static SourceFile cpp_files[MAX_FILES];
 static SourceFile asm_files[MAX_FILES];
+static SourceFile tbl_files[MAX_FILES];
+
 static int c_count = 0;
 static int cpp_count = 0;
 static int asm_count = 0;
+static int tbl_count = 0;
 
 int main(int argc, char **argv)
 {
@@ -61,9 +64,12 @@ int main(int argc, char **argv)
 	scan_directory(cfg.src_dir, ".c", c_files, &c_count, MAX_FILES);
 	scan_directory(cfg.src_dir, ".cpp", cpp_files, &cpp_count, MAX_FILES);
 	scan_directory(cfg.src_dir, ".asm", asm_files, &asm_count, MAX_FILES);
+	scan_directory(cfg.src_dir, ".tbl", tbl_files, &tbl_count, MAX_FILES);
 
-	printf("Found: %d C files, %d C++ files, %d ASM files\n", c_count, cpp_count, asm_count);
-	LOG_INFO("Found: %d C files, %d C++ files, %d ASM files", c_count, cpp_count, asm_count);
+	printf("Found: %d C files, %d C++ files, %d ASM files, %d TBL files\n",
+	       c_count, cpp_count, asm_count, tbl_count);
+	LOG_INFO("Found: %d C files, %d C++ files, %d ASM files, %d TBL files",
+		 c_count, cpp_count, asm_count, tbl_count);
 
 	if (c_count == 0 && cpp_count == 0 && asm_count == 0)
 	{
@@ -73,19 +79,48 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	SourceFile *all_files[] = {c_files, cpp_files, asm_files};
-	int counts[] = {c_count, cpp_count, asm_count};
-	SourceLang langs[] = {LANG_C, LANG_CPP, LANG_ASM};
+	SourceFile *all_files[] = {tbl_files, c_files, cpp_files, asm_files};
+	int counts[] = {tbl_count, c_count, cpp_count, asm_count};
+	SourceLang langs[] = {LANG_TBL, LANG_C, LANG_CPP, LANG_ASM};
+
+	int file_groups = 4;
 
 	int obj_count = 0;
 	static char obj_files[MAX_FILES][MAX_PATH];
 
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < file_groups; i++)
 	{
 		for (int j = 0; j < counts[i]; j++)
 		{
-			get_obj_path(all_files[i][j].path, cfg.src_dir, cfg.build_dir, obj_files[obj_count], MAX_PATH);
-			if (build_file(all_files[i][j].path, obj_files[obj_count], langs[i], &cfg, cxx_compiler) != 0)
+			if (langs[i] == LANG_TBL)
+			{
+				// для tbl генерируем только .h
+				char header_path[MAX_PATH];
+				get_obj_path(all_files[i][j].path, cfg.src_dir, cfg.build_dir,
+					     header_path, MAX_PATH);
+
+				// меняем расширение на .h
+				char *dot = strrchr(header_path, '.');
+				if (dot)
+					strcpy(dot, ".h");
+				else
+					strncat(header_path, ".h", MAX_PATH - strlen(header_path) - 1);
+
+				if (build_file(all_files[i][j].path, header_path, LANG_TBL, &cfg, cxx_compiler) != 0)
+				{
+					fprintf(stderr, "Error generating header from %s\n", all_files[i][j].path);
+					log_close();
+					return 1;
+				}
+				continue; // не добавляем в obj_files
+			}
+
+			// для остальных языков — обычная обработка
+			get_obj_path(all_files[i][j].path, cfg.src_dir, cfg.build_dir,
+				     obj_files[obj_count], MAX_PATH);
+
+			if (build_file(all_files[i][j].path, obj_files[obj_count],
+				       langs[i], &cfg, cxx_compiler) != 0)
 			{
 				fprintf(stderr, "Error building %s\n", all_files[i][j].path);
 				log_close();
