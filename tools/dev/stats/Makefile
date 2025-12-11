@@ -13,7 +13,7 @@ TARGET     := $(BUILD_DIR)/stats
 all: build
 
 build: $(BUILD_TOOL)
-	$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
+	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
 		--src-dir $(SRC_DIR) \
 		--build-dir $(BUILD_DIR) \
 		--cc $(CC) \

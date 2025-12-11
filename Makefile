@@ -20,7 +20,8 @@ endif
 
 CFLAGS = -ffreestanding -O2 -Wall -Wextra -mcmodel=kernel
 CFLAGS += -g
-ASMFLAGS := -f elf64 -g -F dwarf
+ASMFLAGS := -f elf64 -F dwarf
+ASMFLAGS += -g
 
 # Cross compiler
 ifeq ($(ARCH),x86)

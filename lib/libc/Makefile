@@ -9,9 +9,9 @@ INCLUDES += -Iinclude
 all: $(LIBC_OUT)
 
 $(LIBC_OUT): $(BUILD_TOOL)
-	$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
+	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
 		--src-dir $(LIBC_DIR) \
-		--build-dir $(BUILD_DIR)/libc \
+		--build-dir $(OUT_DIR)/build/lib/libc \
 		--cc $(CC) \
 		--cflags "$(CFLAGS)" \
 		--includes "$(INCLUDES)" \

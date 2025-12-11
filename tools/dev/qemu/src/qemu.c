@@ -50,7 +50,7 @@ void qemu_build_command(const QemuOptions *opts, char *cmd, size_t len)
 	pos += snprintf(cmd + pos, len - pos, "-smp %d ", opts->smp);
 
 	// // Main disk
-	pos += snprintf(cmd + pos, len - pos, "-drive file=%s,format=raw,index=0,media=disk,cache=none ", "out/build/x86/disk.img");
+	pos += snprintf(cmd + pos, len - pos, "-drive file=%s,format=raw,index=0,media=disk,cache=none ", "out/disks/disk.img");
 
 	// FAT ISO-disk
 	// pos += snprintf(cmd + pos, len - pos,

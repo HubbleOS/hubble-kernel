@@ -32,7 +32,7 @@ all: boot-objs bootloader
 
 .PHONY: boot-objs
 boot-objs: $(BUILD_TOOL)
-	$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
+	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
 		--src-dir $(BOOT_SRC) \
 		--build-dir $(BOOT_BUILD_DIR) \
 		--cc $(CC) \

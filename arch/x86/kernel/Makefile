@@ -13,7 +13,7 @@ ISO := $(ISO_DIR)/kernel.bin
 all: build iso
 
 build: $(BUILD_TOOL)
-	$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
+	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
 		--src-dir $(KERNEL_DIR) \
 		--build-dir $(KERNEL_BUILD_DIR) \
 		--cc $(CC) \
