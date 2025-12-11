@@ -5,7 +5,7 @@ BOOT_SO := $(BOOT_BUILD_DIR)/boot.so
 EFI_OUT := $(ISO_DIR)/EFI/BOOT/BOOTx64.EFI
 EFI_OUT_DIR := $(ISO_DIR)/EFI/BOOT
 
-GNU_EFI_DIR := ../gnu-efi
+GNU_EFI_DIR := $(LIB_DIR)/gnu-efi
 
 BOOT_CFLAGS = -Iinclude -Ikernel \
 	-I$(GNU_EFI_DIR) -I$(GNU_EFI_DIR)/inc \

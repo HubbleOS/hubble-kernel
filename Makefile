@@ -54,6 +54,9 @@ INCLUDES += -I$(ARCH_DIR)/include
 INCLUDES += -I$(ARCH_DIR)/kernel
 export INCLUDES
 
+LIB_DIR := $(abspath lib)
+export LIB_DIR
+
 LOG_DIR := $(OUT_DIR)/logs/$(shell date +%Y-%m-%d)
 LOG_FILE := $(LOG_DIR)/$(shell date +%H-%M-%S).log
 export LOG_DIR LOG_FILE
@@ -78,6 +81,8 @@ $(eval $(call kbuild-subdir,tools/dev))
 
 # User space
 subdirs += usr
+USR_DIR := $(abspath usr)
+export USR_DIR
 
 # Tools Makefiles
 include tools/dev/Makefile

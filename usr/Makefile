@@ -12,7 +12,7 @@ INCLUDES := -Iinclude
 INCLUDES += -I../include
 INCLUDES += -I../lib/libc/include
 
-LIBC := ../out/lib/libc.a
+LIBC := lib/libc.a
 LDFLAGS  := -T$(LDSCRIPT) -Ttext-segment=0x400000
 
 all: $(OUTPUT)

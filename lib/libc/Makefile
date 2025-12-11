@@ -1,7 +1,7 @@
 # libs/libc/Makefile
 
 LIBC_DIR := src
-LIBC_OUT := $(OUT_DIR)/lib/libc.a
+LIBC_OUT := $(USR_DIR)/lib/libc.a
 
 INCLUDES += -Iinclude
 
@@ -18,3 +18,4 @@ $(LIBC_OUT): $(BUILD_TOOL)
 		--ar $(AR) \
 		--output $@ \
 		--type archive
+	@cp include/*.h $(USR_DIR)/include/
