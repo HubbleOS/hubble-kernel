@@ -22,7 +22,3 @@ build: $(BUILD_TOOL)
 		--output $(TARGET) \
 		--type exe \
 		--ldflags "$(LDFLAGS)"
-
-.PHONY: run
-run:
-	@$(TARGET)

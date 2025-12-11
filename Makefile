@@ -117,6 +117,11 @@ PHONY += debug
 debug:
 	out/tools/dev/debug/debug
 
+PHONY += disk
+disk:
+	@mkdir -p out/disks
+	out/tools/dev/disk/disk out/disks/disk.img 64 out/usr
+
 PHONY += run
 run: build
 	out/tools/dev/qemu/qemu

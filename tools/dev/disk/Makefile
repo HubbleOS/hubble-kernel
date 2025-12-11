@@ -5,8 +5,8 @@ CCFLAGS    :=
 INCLUDES   := -Iinclude -I$(SRC_DIR)
 LDFLAGS    := -lncurses
 
-override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/dev/stats,build)
-TARGET     := $(BUILD_DIR)/stats
+override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/dev/disk,build)
+TARGET     := $(BUILD_DIR)/disk
 
 .PHONY: all build run
 
@@ -22,4 +22,3 @@ build: $(BUILD_TOOL)
 		--output $(TARGET) \
 		--type exe \
 		--ldflags "$(LDFLAGS)"
-

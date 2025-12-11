@@ -27,8 +27,3 @@ $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CCFLAGS) $(INCLUDES) -c $< -o $@
 
-run: build
-	@$(TARGET)
-
-clean:
-	@rm -rf $(BUILD_DIR)

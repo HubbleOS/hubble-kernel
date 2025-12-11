@@ -27,6 +27,3 @@ build: $(BUILD_TOOL)
 		--ldflags "$(LDFLAGS)" 
 	@mkdir -p $(OVMF_DST)
 	@cp -r $(OVMF_SRC)/* $(OVMF_DST)/
-
-run: build
-	@$(TARGET)

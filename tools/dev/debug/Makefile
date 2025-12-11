@@ -22,6 +22,3 @@ build: $(BUILD_TOOL)
 		--output $(TARGET) \
 		--type exe \
 		--ldflags "$(LDFLAGS)"
-
-run: build
-	@$(TARGET)
