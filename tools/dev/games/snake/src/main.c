@@ -1,11 +1,8 @@
-#include "game.h"
 #include <ncurses.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-
-#include <apps/screen.h>
 
 #define SIZE 15
 #define PADDING 1
@@ -221,8 +218,6 @@ void move_snake()
 
 		game_over = true;
 		return;
-
-		screen.end();
 	}
 
 	for (int i = snake_length; i > 0; i--)
@@ -237,18 +232,14 @@ void move_snake()
 	}
 }
 
-void snake_run()
+int main()
 {
-	screen.end();
-
 	srand(time(NULL));
 	initscr();
 	noecho();
 	curs_set(FALSE);
 	keypad(stdscr, TRUE);
 	nodelay(stdscr, TRUE);
-
-	screen.flush();
 
 	start_color();
 	use_default_colors();
@@ -305,5 +296,5 @@ void snake_run()
 
 end:
 	delwin(game_win);
-	screen.init();
+	return 0;
 }

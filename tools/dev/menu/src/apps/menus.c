@@ -6,7 +6,6 @@
 #include <ui/modal.h>
 #include <ui/window.h>
 #include <ui/main.h>
-#include <games/game.h>
 #include <config/config.h>
 
 static void save_config()
@@ -35,57 +34,13 @@ void show_save_modal2()
 	show_modal_with_buttons("bla bla bla?", buttons, COUNT(buttons));
 }
 
-// ────────────────────────────── Games ──────────────────────────────
-
-static MenuItem games_items[16];
-static int games_items_count = 0;
-
-static void games_items_init(void)
-{
-	for (int i = 0; i < games_count; i++)
-	{
-		games_items[i].label = games[i].name;
-		games_items[i].action = games[i].run;
-	}
-	games_items_count = games_count;
-}
-
-void show_games_menu()
-{
-	UIWindow *win = CREATE_WIN(LINES, COLS, 0, 0, "Games");
-
-	games_items_init();
-	UIElement *games_el = MAKE_MENU(ACTION_MENU, "Games", games_items, games_items_count);
-	ADD_ELEMENT(win, games_el);
-
-	screen.flush();
-	SET_FOCUS(win);
-	DRAW_WIN(win);
-
-	int ch;
-	while ((ch = getch()) != 27)
-	{
-		if (ch == 'q')
-		{
-			break;
-		}
-
-		WIN_HANDLE_KEY(win, ch);
-		DRAW_WIN(win);
-	}
-
-	DESTROY_WIN(win);
-}
-
 // ────────────────────────────── Main menu ──────────────────────────────
 
 MenuItem main_items[] = {
     {"make build", run_build},
-    {"make host-run", run_qemu_default},
     {"make clean", run_clean},
     {"make run", run_run},
     {"Config", show_save_modal},
-    {"Games", show_games_menu},
     {"Option 1", show_save_modal2},
 };
 

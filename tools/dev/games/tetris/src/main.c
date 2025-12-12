@@ -1,4 +1,3 @@
-#include "game.h"
 #include <ncurses.h>
 #include <stdlib.h>
 #include <time.h>
@@ -145,7 +144,7 @@ void new_piece()
 	}
 }
 
-void tetris_run(void)
+int main()
 {
 	srand(time(NULL));
 	initscr();
@@ -183,8 +182,7 @@ void tetris_run(void)
 				rotation = (rotation + 1) % 4;
 			break;
 		case 'q':
-			endwin();
-			return;
+			goto end;
 		}
 
 		if (++tick >= DELAY / 10)
@@ -204,4 +202,8 @@ void tetris_run(void)
 
 		napms(50);
 	}
+
+end:
+	endwin();
+	return 0;
 }

@@ -6,7 +6,6 @@
 
 #include <ui/main.h>
 #include <apps/app.h>
-#include <qemu/qemu.h>
 #include <apps/menus.h>
 
 static void config_save(const char *path);
@@ -17,25 +16,12 @@ static const char *config_get(const char *label);
 
 static void config_apply_kv(const char *key, const char *value)
 {
-	if (strcmp(key, "ISO") == 0)
-		strncpy(qemu_config.iso, value, sizeof(qemu_config.iso) - 1);
-	else if (strcmp(key, "ARCH") == 0)
-		strncpy(qemu_config.arch, value, sizeof(qemu_config.arch) - 1);
-	else if (strcmp(key, "MEM") == 0)
-		qemu_config.mem = atoi(value);
-	else if (strcmp(key, "SMP") == 0)
-		qemu_config.smp = atoi(value);
-	else if (strcmp(key, "DEBUG_PORT") == 0)
-		qemu_config.debug_port = atoi(value);
-	else
+	for (size_t i = 0; i < checklists.count; i++)
 	{
-		for (size_t i = 0; i < checklists.count; i++)
+		if (strcmp(checklists.items[i].label, key) == 0)
 		{
-			if (strcmp(checklists.items[i].label, key) == 0)
-			{
-				checklists.items[i].checked = atoi(value);
-				break;
-			}
+			checklists.items[i].checked = atoi(value);
+			break;
 		}
 	}
 }
@@ -49,36 +35,15 @@ static const char *config_get(const char *label)
 {
 	static char buffer[128];
 
-	if (strcmp(label, "ISO") == 0)
-		return qemu_config.iso;
-	else if (strcmp(label, "ARCH") == 0)
-		return qemu_config.arch;
-	else if (strcmp(label, "MEM") == 0)
+	for (size_t i = 0; i < checklists.count; i++)
 	{
-		snprintf(buffer, sizeof(buffer), "%d", qemu_config.mem);
-		return buffer;
-	}
-	else if (strcmp(label, "SMP") == 0)
-	{
-		snprintf(buffer, sizeof(buffer), "%d", qemu_config.smp);
-		return buffer;
-	}
-	else if (strcmp(label, "DEBUG_PORT") == 0)
-	{
-		snprintf(buffer, sizeof(buffer), "%d", qemu_config.debug_port);
-		return buffer;
-	}
-	else
-	{
-		for (size_t i = 0; i < checklists.count; i++)
+		if (strcmp(checklists.items[i].label, label) == 0)
 		{
-			if (strcmp(checklists.items[i].label, label) == 0)
-			{
-				snprintf(buffer, sizeof(buffer), "%d", checklists.items[i].checked);
-				return buffer;
-			}
+			snprintf(buffer, sizeof(buffer), "%d", checklists.items[i].checked);
+			return buffer;
 		}
 	}
+
 	return NULL;
 }
 
@@ -87,24 +52,6 @@ static void config_write(const char *path, bool defaults)
 	FILE *file = fopen(path, "w");
 	if (!file)
 		return;
-
-	if (defaults)
-	{
-		QemuConfig default_config = {
-		    .iso = "../../../../out/build/x86/iso/",
-		    .arch = "x86_64",
-		    .mem = 1024,
-		    .smp = 2,
-		    .debug_port = 1000,
-		};
-	}
-
-	// QEMU config
-	fprintf(file, "ISO=%s\n", qemu_config.iso);
-	fprintf(file, "ARCH=%s\n", qemu_config.arch);
-	fprintf(file, "MEM=%d\n", qemu_config.mem);
-	fprintf(file, "SMP=%d\n", qemu_config.smp);
-	fprintf(file, "DEBUG_PORT=%d\n", qemu_config.debug_port);
 
 	// Checklist items
 	for (size_t i = 0; i < checklists.count; i++)

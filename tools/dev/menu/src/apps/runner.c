@@ -1,6 +1,5 @@
 #include "runner.h"
 #include "screen.h"
-#include <qemu/qemu.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,17 +40,6 @@ void run_cmdf(const char *fmt, ...)
 	va_end(args);
 
 	system_command(cmd);
-}
-
-void run_qemu(const char *iso, const char *arch, int mem)
-{
-	run_cmdf("make -C qemu run ISO=%s ARCH=%s MEM=%d", iso, arch, mem);
-}
-
-void run_qemu_default(void)
-{
-	extern QemuConfig qemu_config;
-	run_qemu(qemu_config.iso, qemu_config.arch, qemu_config.mem);
 }
 
 void run_build(void)
