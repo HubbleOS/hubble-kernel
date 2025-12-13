@@ -1,5 +1,7 @@
 #include <bootinfo/bootinfo.h>
 #include <acpi/acpi.h>
+#include <apic/apic.h>
+#include <hpet/hpet.h>
 #include "init/init.h"
 #include <printk.h>
 #include "higher_half.h"
@@ -24,6 +26,8 @@ kernel_entry(BootInfo *bi)
 	printk(KERN_INFO "=== Higher-Half Kernel Starting ===\n");
 
 	acpi_init(bi->rsdp);
+	apic_init();
+	hpet_init();
 	init.cpu();
 	init.memory(bi);
 	init.filesystems();

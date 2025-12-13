@@ -31,6 +31,12 @@ SECTIONS
     .rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_VIRT_BASE)
     {
         *(.rodata*)
+        
+        /* AP Trampoline blob - place at end of rodata */
+        . = ALIGN(16);
+        ap_trampoline_start = .;
+        KEEP(*(.rodata.ap_trampoline))
+        ap_trampoline_end = .;
     }
 
     /* Initialized data */
