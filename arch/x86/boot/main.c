@@ -385,33 +385,37 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	pml4[511] = hh_pdpt_addr | 0x3;
 
 	// Теперь заполняем маппинг для 0xFFFFFFFF80000000 -> 0x0
+
 	for (UINT64 offset = 0; offset < 0x100000000ULL; offset += 0x200000)
 	{
 		UINT64 virt = PHYS_TO_VIRT(offset);
 		UINT64 phys = offset;
-
 		UINT64 pml4_idx = (virt >> 39) & 0x1FF; // Будет 511
 		UINT64 pdpt_idx = (virt >> 30) & 0x1FF; // 510 для 0x80000000
-		UINT64 pd_idx = (virt >> 21) & 0x1FF;
-
-		// pml4[511] уже установлен выше
+		UINT64 pd_idx = (virt >> 21) & 0x1FF;	// pml4[511] уже установлен выше
 		UINT64 *pdpt = hh_pdpt;
-
 		if (!(pdpt[pdpt_idx] & 0x1))
 		{
 			EFI_PHYSICAL_ADDRESS pd_addr = 0;
-			status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages,
-						   EfiLoaderData, 1, &pd_addr);
+			status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAnyPages, EfiLoaderData, 1, &pd_addr);
 			if (EFI_ERROR(status))
 				return status;
-
 			UINT64 *pd = (UINT64 *)pd_addr;
 			for (int i = 0; i < 512; i++)
 				pd[i] = 0;
-
 			pdpt[pdpt_idx] = pd_addr | 0x3;
 		}
-
+		UINT64 *pd = (UINT64 *)(pdpt[pdpt_idx] & ~0xFFFULL);
+		pd[pd_idx] = phys | 0x83;
+	}
+	PrintInfo(L"Mapping MMIO region (0xF0000000-0xFFFFFFFF)...\n");
+	for (UINT64 phys = 0xF0000000ULL; phys < 0x100000000ULL; phys += 0x200000)
+	{
+		UINT64 virt = PHYS_TO_VIRT(phys);
+		UINT64 pml4_idx = (virt >> 39) & 0x1FF;
+		UINT64 pdpt_idx = (virt >> 30) & 0x1FF;
+		UINT64 pd_idx = (virt >> 21) & 0x1FF;
+		UINT64 *pdpt = (UINT64 *)(pml4[pml4_idx] & ~0xFFFULL);
 		UINT64 *pd = (UINT64 *)(pdpt[pdpt_idx] & ~0xFFFULL);
 		pd[pd_idx] = phys | 0x83;
 	}
