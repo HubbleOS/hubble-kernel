@@ -136,7 +136,7 @@ int gpt_init(gpt_partition_t *partitions)
 		printk("lba: %llu\n", first_usable_lba);
 
 		// SAFE: Initialize name buffer
-		char name[73] = {0}; // 36 UTF-16 chars = 72 bytes max + null
+		char *name = kmalloc(37, GFP_KERNEL); // Allocate space for name
 
 		printk("Raw UTF-16 name bytes:\n");
 		for (int j = 0; j < 36; j++)

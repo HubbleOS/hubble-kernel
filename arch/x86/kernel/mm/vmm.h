@@ -89,13 +89,15 @@ static inline uint64_t *pt_table(uint64_t va)
 #define PTE_PRESENT (1ULL << 0)
 #define PTE_WRITE (1ULL << 1)
 #define PTE_USER (1ULL << 2)
-#define PTE_WRITETHROUGH (1ULL << 3)
-#define PTE_NOCACHE (1ULL << 4)
+#define PTE_PWT (1ULL << 3)
+#define PTE_PCD (1ULL << 4)
 #define PTE_ACCESSED (1ULL << 5)
 #define PTE_DIRTY (1ULL << 6)
 #define PTE_HUGE (1ULL << 7)
 #define PTE_GLOBAL (1ULL << 8)
 #define PTE_NX (1ULL << 63)
+
+#define PTE_NOCACHE (PTE_PWT | PTE_PCD)
 
 // --- Common flag sets ---
 #define VMM_FLAGS_KERNEL (PTE_PRESENT | PTE_WRITE)
@@ -103,6 +105,13 @@ static inline uint64_t *pt_table(uint64_t va)
 #define VMM_FLAGS_USER_RO (PTE_PRESENT | PTE_USER)
 #define VMM_FLAGS_STACK (PTE_PRESENT | PTE_WRITE | PTE_NX)
 #define VMM_FLAGS_HEAP (PTE_PRESENT | PTE_WRITE | PTE_NX)
+#define VMM_FLAGS_NO_CACHE (PTE_PRESENT | PTE_WRITE | PTE_NOCACHE)
+#define VMM_FLAGS_GLOBAL (PTE_PRESENT | PTE_WRITE | PTE_GLOBAL)
+
+// API flags
+#define VMM_MAP_NO_CACHE (1ULL << 0)
+#define VMM_MAP_GLOBAL (1ULL << 1)
+#define VMM_MAP_USER (1ULL << 2)
 
 // ============================================================================
 // VMM State

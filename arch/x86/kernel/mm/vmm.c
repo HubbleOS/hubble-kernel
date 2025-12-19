@@ -23,20 +23,19 @@ static inline bool pte_present(uint64_t entry)
 	return entry & PTE_PRESENT;
 }
 
-static inline uint64_t pte_make(uint64_t phys, uint64_t flags)
+static inline uint64_t pte_make(uint64_t pa, uint64_t flags)
 {
-	uint64_t e = phys & 0x000FFFFFFFFFF000ULL;
-	e |= (flags & 0xFFF); // Apply all lower 12 bits
-	if (flags & PTE_NX)
-		e |= (1ULL << 63);
-	return e;
+	return (pa & 0x000FFFFFFFFFF000ULL) | flags;
 }
 
 static uint64_t *vmm_alloc_table(void)
 {
 	uint64_t phys = pmm_alloc_page();
 	if (!phys)
+	{
+		printk("Failed to allocate page for VMM table\n");
 		return NULL;
+	}
 	uint64_t *virt = PHYS_TO_VIRT_PTR(uint64_t, phys);
 
 	memset(virt, 0, VMM_PAGE_SIZE);
@@ -57,6 +56,11 @@ void vmm_init(void)
 	g_vmm.pml4_phys = get_cr3();
 	g_vmm.pml4_virt = pml4_table();
 	g_vmm.total_mapped_pages = 0;
+}
+
+bool is_mmio(uint64_t pa)
+{
+	return pa >= 0xFEC00000; // або конкретно 0xFEE00000
 }
 
 // --- Map a virtual page to a physical page ---
@@ -113,13 +117,14 @@ int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags)
 	uint64_t *pd = pd_table(va);
 
 	// Use huge pages ONLY for kernel mappings (not userspace)
-	if ((flags & PTE_USER) == 0 &&
+	if ((flags & PTE_USER) == 0 && !is_mmio(pa) &&
 	    (pa % VMM_HUGE_PAGE_SIZE == 0) &&
 	    (va % VMM_HUGE_PAGE_SIZE == 0))
 	{
 		pd[PD_INDEX(va)] = pte_make(pa, flags | PTE_HUGE);
 		g_vmm.total_mapped_pages += VMM_HUGE_PAGE_SIZE / VMM_PAGE_SIZE;
 		invlpg((void *)va);
+		printk("[VMM] Mapping huge page 0x%llx to 0x%llx\n", va, pa);
 		return 0;
 	}
 
@@ -150,9 +155,20 @@ int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags)
 		}
 	}
 
-	// Map normal 4KB page
+	uint64_t pte_flags = PTE_PRESENT | PTE_WRITE;
+
+	if (flags & VMM_MAP_NO_CACHE)
+		pte_flags |= PTE_PCD | PTE_PWT;
+
+	if ((flags & VMM_MAP_GLOBAL) && !is_mmio(pa))
+		pte_flags |= PTE_GLOBAL;
+
+	if (flags & VMM_MAP_USER)
+		pte_flags |= PTE_USER;
+
 	uint64_t *pt = pt_table(va);
-	pt[PT_INDEX(va)] = pte_make(pa, flags);
+	pt[PT_INDEX(va)] = pte_make(pa, pte_flags);
+
 	g_vmm.total_mapped_pages++;
 	invlpg((void *)va);
 	return 0;

@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include <apic/apic.h>
+
 #define MAX_CPUS 256
 
 typedef struct
@@ -47,7 +49,6 @@ static inline uint8_t cpu_id(void)
 {
 	// TODO: Store in gs:0 for fast access
 	// For now, use LAPIC ID
-	extern uint8_t lapic_get_id(void);
 	return lapic_get_id();
 }
 
