@@ -99,6 +99,13 @@ void gdt_init(void)
 	gdt_flush((uint64_t)&gdt_ptr);
 }
 
+uint64_t get_gdt_base(void)
+{
+	return gdt_ptr.base;
+}
+
+uint16_t get_gdt_limit(void) { return gdt_ptr.limit; }
+
 // ============================================================================
 // TSS Initialization
 // ============================================================================

@@ -54,7 +54,7 @@ void percpu_init_ap(uint8_t apic_id)
 
 	if (cpu_id >= MAX_CPUS)
 	{
-		printk("ERROR: Too many CPUs (max %d)\n", MAX_CPUS);
+		// printk("ERROR: Too many CPUs (max %d)\n", MAX_CPUS);
 		return;
 	}
 
@@ -65,5 +65,5 @@ void percpu_init_ap(uint8_t apic_id)
 
 	__sync_fetch_and_add(&num_cpus_online, 1);
 
-	printk("AP initialized: CPU %u (APIC ID %u)\n", cpu_id, apic_id);
+	// printk("AP initialized: CPU %u (APIC ID %u)\n", cpu_id, apic_id);
 }

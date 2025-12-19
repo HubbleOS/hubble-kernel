@@ -7,8 +7,6 @@ CXXFLAGS += -mcmodel=kernel
 
 ASM := nasm
 ASMFLAGS := -f elf64 -g -F dwarf
-SFLAGS := -f bin
-
 
 # Output ELF and ISO
 OUTPUT := $(BUILD_DIR)/kernel.elf
@@ -27,7 +25,6 @@ CPP_SRC_FILES := $(shell find apps -type f -name "*.cpp")
 CPP_OBJ_FILES := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SRC_FILES))
 
 OBJ_FILES += $(CPP_OBJ_FILES)
-OBJ_FILES += $(BUILD_DIR)/ap_trampoline_blob.o
 
 
 KERNEL_OBJ := $(BUILD_DIR)/$(SRC_DIR)/kmain.o
@@ -67,21 +64,6 @@ $(BUILD_DIR)/%.o: %.asm
 	@echo "Assembling: $< -> $@"
 	@mkdir -p $(dir $@)
 	$(ASM) $(ASMFLAGS) $< -o $@
-
-
-$(BUILD_DIR)/ap_trampoline.bin: kernel/smp/ap_trampoline.S
-	@echo "Assembling AP trampoline (bin): $< -> $@"
-	@mkdir -p $(dir $@)
-	$(ASM) -f bin $< -o $@
-
-$(BUILD_DIR)/ap_trampoline_blob.o: $(BUILD_DIR)/ap_trampoline.bin
-	@echo "Creating trampoline blob object: $@"
-	@mkdir -p $(dir $@)
-	$(OBJCOPY) -I binary -O elf64-x86-64 -B i386:x86-64 \
-		--rename-section .data=.rodata.ap_trampoline \
-		$< $@
-	@echo "Verifying symbols in blob:"
-	@$(NM) $@ || true
 
 
 # Kernel linking

@@ -9,6 +9,7 @@
 
 #include <apic/apic.h>
 #include <acpi/acpi.h>
+#include <gdt/gdt.h>
 
 #include "percpu.h"
 #include "higher_half.h"
@@ -16,27 +17,35 @@
 #include <string.h>
 
 #include "smp.h"
+#include "msr.h"
 
-// #include "percpu.h"
-// #include "higher_half.h"
-// #include <printk.h>
-// #include <string.h>
-// #include <mm/vmm.h>
-// #include <mm/pmm.h>
+static size_t g_trampoline_size = 0;
+static volatile uint64_t *g_trampoline_cr3 = NULL;
+static volatile uint64_t *g_trampoline_stack = NULL;
+static volatile uint64_t *g_trampoline_entry = NULL;
 
 #define AP_TRAMPOLINE_ADDR 0x8000
 #define AP_STACK_SIZE (64 * 1024)			  // 64KB per CPU
 #define AP_STACK_PAGES ((AP_STACK_SIZE + 0xFFF) / 0x1000) // 16 pages
 
-extern uint8_t _binary__home_underrated_projects_kernel_out_x86_build_ap_trampoline_bin_end[];
-extern uint8_t _binary__home_underrated_projects_kernel_out_x86_build_ap_trampoline_bin_start[];
-
+extern uint8_t ap_trampoline_start[];
+extern uint8_t ap_trampoline_end[];
 // AP entry point in kernel
 void ap_entry(void);
 
 // Global AP synchronization
 static volatile bool ap_ready = false;
 static spinlock_t smp_lock = SPINLOCK_INIT("smp");
+
+struct ap_startup_data
+{
+	uint64_t pml4_phys;	    // Offset 0
+	uint16_t gdt_limit;	    // Offset 8
+	uint64_t gdt_base;	    // Offset 10 (note: misaligned, but packed)
+	uint64_t stack_top;	    // Offset 18
+	uint64_t entry_point;	    // Offset 26
+	volatile uint32_t ap_ready; // Offset 34
+} __attribute__((packed));
 
 // Allocate stack for AP using VMM/PMM
 static void *allocate_ap_stack(void)
@@ -58,9 +67,7 @@ static void *allocate_ap_stack(void)
 	{
 		printk("  Physical address below 4GB, using higher-half mapping\n");
 		virt = HIGHER_HALF_BASE + phys;
-
-		// Bootloader should have already mapped this with huge pages
-		// Just verify and use it
+		vmm_map_page(virt, phys, VMM_FLAGS_STACK);
 		printk("  Virtual address: 0x%lx (using bootloader mapping)\n", virt);
 	}
 	else
@@ -104,11 +111,10 @@ static void *allocate_ap_stack(void)
 // AP kernel entry point (called by trampoline in long mode)
 void ap_entry(void)
 {
-	// Get APIC ID
-	uint8_t apic_id = lapic_get_id();
 
-	// Enable Local APIC
-	lapic_enable();
+	apic_init_ap();
+
+	uint8_t apic_id = lapic_get_id();
 
 	// Initialize per-CPU data
 	percpu_init_ap(apic_id);
@@ -132,104 +138,135 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx)
 	if (apic_id == bsp_id)
 		return;
 
-	printk("Starting AP: APIC ID %u, Processor ID %u\n", apic_id, processor_id);
+	printk("\n=== Starting AP %u ===\n", apic_id);
 
+	// Allocate stack for this AP
 	void *stack_top = allocate_ap_stack();
 	if (!stack_top)
 	{
 		printk("ERROR: Failed to allocate stack for AP %u\n", apic_id);
 		return;
 	}
+	printk("AP %u stack top: %p\n", apic_id, stack_top);
 
-	size_t trampoline_size =
-	    _binary__home_underrated_projects_kernel_out_x86_build_ap_trampoline_bin_end -
-	    _binary__home_underrated_projects_kernel_out_x86_build_ap_trampoline_bin_start;
+	// Get pointer to data structure at end of trampoline
+	volatile struct ap_startup_data *data =
+	    (volatile struct ap_startup_data *)(AP_TRAMPOLINE_ADDR + 512);
 
-	volatile uint64_t *trampoline_stack = (uint64_t *)(PHYS_TO_VIRT(AP_TRAMPOLINE_ADDR + trampoline_size - 16));
-	volatile uint64_t *trampoline_entry = (uint64_t *)(PHYS_TO_VIRT(AP_TRAMPOLINE_ADDR + trampoline_size - 8));
+	uint64_t cr3;
+	asm volatile("mov %%cr3, %0" : "=r"(cr3));
 
-	// Write values FIRST
-	*trampoline_stack = (uint64_t)stack_top;
-	*trampoline_entry = (uint64_t)ap_entry;
+	// Fill in the data structure
+	data->pml4_phys = cr3;
 
-	// Ensure writes complete
+	data->gdt_limit = get_gdt_limit();
+	data->gdt_base = (uint64_t)VIRT_TO_PHYS(get_gdt_base());
+
+	data->stack_top = VIRT_TO_PHYS((uint64_t)stack_top) + 0x1000;
+	data->entry_point = (uint64_t)ap_entry;
+
+	data->ap_ready = 0;
+
+	// Ensure writes are visible
 	asm volatile("mfence" ::: "memory");
 
-	ap_ready = false;
+	printk("Data structure setup:\n");
+	printk("  pml4_phys: 0x%lx\n", data->pml4_phys);
+	printk("  gdt_limit: 0x%x\n", data->gdt_limit);
+	printk("  gdt_base: 0x%lx\n", data->gdt_base);
+	printk("  stack_top: 0x%lx\n", data->stack_top);
+	printk("  entry_point: 0x%lx\n", data->entry_point);
 
-	// NOW start the AP - pass PHYSICAL address (0x8000, not virtual!)
+	printk("Starting AP %u...\n", apic_id);
 	apic_start_ap(apic_id, AP_TRAMPOLINE_ADDR);
 
 	// Wait with timeout
-	uint32_t timeout = 10000000; // Longer timeout
-	while (!ap_ready && timeout > 0)
+	printk("Waiting for AP %u to signal ready...\n", apic_id);
+	uint64_t timeout = 1000000000; // Use uint64_t to avoid overflow
+
+	while (data->ap_ready == 0 && timeout > 0) // ✅ Check data->ap_ready, not global
 	{
 		timeout--;
-		asm volatile("pause");
+
+		if (timeout % 100000000 == 0) // Print every 100M iterations
+		{
+			printk("  Still waiting... (ap_ready=%u)\n", data->ap_ready);
+		}
+
+		asm volatile("pause" ::: "memory"); // Add memory clobber
 	}
 
-	if (ap_ready)
+	if (data->ap_ready)
 	{
-		printk("  AP %u started successfully\n", apic_id);
+		printk("✓ AP %u started successfully!\n", apic_id);
 	}
 	else
 	{
-		printk("  ERROR: AP %u failed to start\n", apic_id);
+		printk("✗ ERROR: AP %u failed to start (timeout)\n", apic_id);
+		// Debug: Check if AP modified anything
+		printk("  Final ap_ready value: %u\n", data->ap_ready);
 	}
 
-	// Delay before next AP
-	for (volatile int i = 0; i < 5000000; i++)
+	// Small delay before next AP
+	for (volatile int i = 0; i < 10000000; i++)
 		;
 }
+
+// Initialize SMP
 int smp_init(void)
 {
 	printk("=== SMP Initialization ===\n");
 
-	// Initialize per-CPU data for BSP
 	percpu_init_bsp();
 
-	// Copy AP trampoline to low memory
-	printk("Copying AP trampoline to 0x%x\n", AP_TRAMPOLINE_ADDR);
+	// CRITICAL: The trampoline must be accessible at BOTH:
+	// 1. Physical 0x8000 (for AP in real mode)
+	// 2. Virtual address for kernel to write to it
 
-	void *trampoline_dest = (void *)PHYS_TO_VIRT(AP_TRAMPOLINE_ADDR);
-	size_t trampoline_size =
-	    _binary__home_underrated_projects_kernel_out_x86_build_ap_trampoline_bin_end -
-	    _binary__home_underrated_projects_kernel_out_x86_build_ap_trampoline_bin_start;
+	printk("Setting up AP trampoline at 0x%x\n", AP_TRAMPOLINE_ADDR);
 
-	printk("  Trampoline size: %u bytes\n", trampoline_size);
+	// Method 1: Use identity mapping (0x8000 -> 0x8000)
+	// This ensures the AP can access it in real mode
+	void *trampoline_dest = (void *)AP_TRAMPOLINE_ADDR;
 
-	if (trampoline_size > 4096)
+	printk("  Using identity mapping: virt 0x%lx = phys 0x%x\n",
+	       (uint64_t)trampoline_dest, AP_TRAMPOLINE_ADDR);
+
+	// Ensure identity mapping exists
+	printk("  Creating identity mapping for trampoline...\n");
+
+	g_trampoline_size =
+	    ap_trampoline_end - ap_trampoline_start;
+
+	printk("  Trampoline size: %u bytes (0x%x)\n", g_trampoline_size, g_trampoline_size);
+
+	if (g_trampoline_size > 4096)
 	{
-		printk("ERROR: Trampoline too large (%u bytes)\n", trampoline_size);
+		printk("ERROR: Trampoline too large (%u bytes)\n", g_trampoline_size);
 		return -1;
 	}
 
-	memcpy(trampoline_dest, _binary__home_underrated_projects_kernel_out_x86_build_ap_trampoline_bin_start, trampoline_size);
+	// Copy trampoline to identity-mapped location
+	printk("  Copying trampoline code...\n");
+	memcpy(trampoline_dest,
+	       ap_trampoline_start,
+	       g_trampoline_size);
 
-	// Write PML4 address to trampoline (at offset for ap_cr3)
-	uint64_t cr3;
-	asm volatile("mov %%cr3, %0" : "=r"(cr3));
+	// Verify the copy worked
+	uint8_t *verify = (uint8_t *)trampoline_dest;
+	printk("  First bytes at 0x%lx: %02x %02x %02x %02x\n",
+	       (uint64_t)verify, verify[0], verify[1], verify[2], verify[3]);
 
-	// Find offset of ap_cr3, ap_stack, ap_entry in trampoline
-	// These are at the end of the trampoline code
-	volatile uint64_t *trampoline_cr3 = (uint64_t *)(PHYS_TO_VIRT(AP_TRAMPOLINE_ADDR + trampoline_size - 24));
-	volatile uint64_t *trampoline_stack = (uint64_t *)(PHYS_TO_VIRT(AP_TRAMPOLINE_ADDR + trampoline_size - 16));
-	volatile uint64_t *trampoline_entry = (uint64_t *)(PHYS_TO_VIRT(AP_TRAMPOLINE_ADDR + trampoline_size - 8));
-
-	*trampoline_cr3 = cr3;
-
-	printk("  CR3: 0x%lx\n", cr3);
-	printk("  Trampoline data offsets: CR3=%p, Stack=%p, Entry=%p\n",
-	       trampoline_cr3, trampoline_stack, trampoline_entry);
+	printk("  ✓ Trampoline initialized\n");
 
 	// Enumerate and start all APs
 	printk("\nStarting Application Processors:\n");
 	acpi_enum_lapics(start_ap_callback, NULL);
 
-	printk("\nSMP initialized: %u CPUs online\n", num_cpus_online);
+	printk("\n=== SMP Initialization Complete ===\n");
+	printk("Total CPUs online: %u\n", num_cpus_online);
 	return 0;
 }
-
 uint32_t smp_get_cpu_count(void)
 {
 	return num_cpus_online;

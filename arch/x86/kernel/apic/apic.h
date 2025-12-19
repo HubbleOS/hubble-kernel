@@ -6,6 +6,12 @@
 
 // === Core APIC Functions ===
 
+#define VMM_FLAGS_PRESENT (1 << 0)
+#define VMM_FLAGS_WRITE (1 << 1)
+#define VMM_FLAGS_USER (1 << 2)
+#define VMM_FLAGS_GLOBAL (1 << 8)
+#define VMM_FLAGS_NO_CACHE ((1 << 4) | (1 << 3)) // PCD | PWT bits
+
 // Initialize APIC (must call after acpi_init)
 int apic_init(void);
 
@@ -18,7 +24,7 @@ bool apic_is_initialized(void);
 void lapic_eoi(void);
 
 // Get current CPU's Local APIC ID
-uint8_t lapic_get_id(void);
+uint32_t lapic_get_id(void);
 
 // Enable Local APIC on current CPU
 void lapic_enable(void);
@@ -28,7 +34,7 @@ void lapic_enable(void);
 void lapic_timer_init(uint32_t frequency_hz);
 
 // Send Inter-Processor Interrupt
-void lapic_send_ipi(uint8_t dest_apic_id, uint8_t vector);
+void lapic_send_ipi(uint32_t dest, uint8_t vector);
 
 // Send INIT IPI (used for SMP startup)
 void lapic_send_init_ipi(uint8_t dest_apic_id);
@@ -57,5 +63,9 @@ void ioapic_unmask_irq(uint8_t irq);
 // apic_id: APIC ID of the CPU to start
 // trampoline_addr: physical address of 16-bit startup code (must be < 1MB)
 void apic_start_ap(uint8_t apic_id, uint32_t trampoline_addr);
+
+void apic_debug_check(void);
+
+void apic_init_ap(void);
 
 #endif // APIC_H

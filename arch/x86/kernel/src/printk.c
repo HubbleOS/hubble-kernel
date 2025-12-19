@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <limits.h>
+#include "io.h"
+#include <hpet/hpet.h>
+#include <smp/spinlock.h>
 
 // Ring buffer for logs
 static char log_buffer[PRINTK_BUFFER_SIZE];
@@ -23,6 +26,9 @@ static bool early_mode = false;
 // Console callback
 static void (*console_write)(const char *buf, size_t len, void *data) = NULL;
 static void *console_user_data = NULL;
+
+// lock
+static spinlock_t printk_lock = SPINLOCK_INIT("printk");
 
 // Add to ring buffer
 static void log_buffer_append(const char *buf, size_t len)
@@ -50,6 +56,9 @@ static void early_putchar(char c)
 {
 	if (!early_fb)
 		return;
+
+	// out to serial
+	outb(0x3f8, c);
 
 	if (c == '\n')
 	{
@@ -476,10 +485,12 @@ void vprintk(const char *fmt, va_list args)
 	// Skiping the level prefix
 	if (fmt[0] == '<' && fmt[1] >= '0' && fmt[1] <= '7' && fmt[2] == '>')
 		fmt += 3;
-
+	outb(0x3f8, 'I');
 	char buf[128];
 	va_list args_copy;
 	va_copy(args_copy, args);
+
+	// out to serial
 
 	while (*fmt)
 	{
@@ -685,6 +696,8 @@ void printk(const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
+	spinlock_acquire(&printk_lock);
 	vprintk(fmt, args);
+	spinlock_release(&printk_lock);
 	va_end(args);
 }
