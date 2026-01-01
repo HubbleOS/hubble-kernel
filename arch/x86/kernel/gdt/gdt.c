@@ -1,5 +1,6 @@
 #include "gdt.h"
 #include <string.h>
+#include <printk.h>
 
 // ============================================================================
 // GDT + TSS Tables
@@ -62,6 +63,8 @@ void gdt_init(void)
 	gdt_ptr.limit = sizeof(gdt_table) - 1;
 	gdt_ptr.base = (uint64_t)&gdt_table;
 
+	printk("GDT Pointer: %p\n", gdt_ptr.base);
+
 	// Очищаємо таблицю
 	memset(&gdt_table, 0, sizeof(gdt_table));
 
@@ -101,6 +104,7 @@ void gdt_init(void)
 
 uint64_t get_gdt_base(void)
 {
+	printk("GDT Base: %p\n", gdt_ptr.base);
 	return gdt_ptr.base;
 }
 
@@ -248,5 +252,9 @@ void idt_init(void)
 	idt_set_gate(128, (uint64_t)isr128, GDT_KERNEL_CODE, IDT_TYPE_USER);
 
 	// Загружаем IDT
+	idt_flush((uint64_t)&idt_ptr);
+}
+void idt_load()
+{
 	idt_flush((uint64_t)&idt_ptr);
 }

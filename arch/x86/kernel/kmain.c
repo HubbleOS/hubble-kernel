@@ -2,6 +2,7 @@
 #include <acpi/acpi.h>
 #include <apic/apic.h>
 #include <hpet/hpet.h>
+#include <smp/scheduler.h>
 #include <smp/smp.h>
 #include "init/init.h"
 #include <printk.h>
@@ -29,10 +30,9 @@ kernel_entry(BootInfo *bi)
 
 	acpi_init(bi->rsdp);
 
-	init.cpu();
 	init.memory(bi);
+	init.cpu();
 
-	apic_init();
 	hpet_init();
 
 	init.filesystems();
@@ -40,8 +40,10 @@ kernel_entry(BootInfo *bi)
 	printk(KERN_INFO "\n=== Kernel Initialization Complete ===\n\n");
 	outb(0x3F8, 'A');
 	hpet_delay_ms(3000);
+
 	apic_debug_check();
 	smp_init();
+	scheduler_init();
 
 	// printk(KERN_INFO "Starting OS main loop...\n");
 	// os_main(bi);

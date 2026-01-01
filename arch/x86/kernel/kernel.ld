@@ -21,41 +21,39 @@ SECTIONS
     _kernel_phys_start = . - KERNEL_VIRT_BASE;
 
     /* Code */
-    .text ALIGN(4K) : AT(ADDR(.text) - KERNEL_VIRT_BASE)
+    .text : ALIGN(4K)
     {
         *(.text.boot)     /* Entry point должен быть первым */
         *(.text*)
-    }
-
-    .ap_trampoline ALIGN(16) : AT(ADDR(.ap_trampoline)) {
-        KEEP(*(.text.ap_trampoline))
-    }
-
+        *(.text.ap_trampoline)  
+    } AT > PHYS
 
     /* Read-only data */
-    .rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_VIRT_BASE)
+    .rodata : ALIGN(4K)
     {
         *(.rodata*)
-    }
+    } AT > PHYS
+
+
 
     /* Initialized data */
-    .data ALIGN(4K) : AT(ADDR(.data) - KERNEL_VIRT_BASE)
+    .data : ALIGN(4K)
     {
         *(.data*)
-    }
+    } AT > PHYS
 
     /* 
         BSS 
     In a linker, BSS (Block Started by Symbol) is the section 
     that holds uninitialized global and static variables. 
     */
-    .bss ALIGN(4K) : AT(ADDR(.bss) - KERNEL_VIRT_BASE)
+    .bss : ALIGN(4K)
     {
         _bss_start = .;
         *(.bss*)
         *(COMMON)
         _bss_end = .;
-    }
+    } AT > PHYS
 
     /* End of the kernel */
     . = ALIGN(4K);

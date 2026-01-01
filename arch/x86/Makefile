@@ -2,7 +2,7 @@
 SRC_DIR := kernel
 BUILD_DIR ?= build
 
-CFLAGS += -mcmodel=kernel
+CFLAGS += -mcmodel=kernel -fno-pic -fno-pie 
 CXXFLAGS += -mcmodel=kernel
 
 ASM := nasm
@@ -71,7 +71,6 @@ $(OUTPUT): $(OBJ_FILES)
 	@echo "LINK_OBJS: $(LINK_OBJS)"
 	@echo "Linking kernel ELF (via g++): $@"
 	$(CXX) $(LDFLAGS_NOSTDLIB)$(SRC_DIR)/kernel.ld -o $@ $(LINK_OBJS) $(BUILD_DIR)/libc.a
-		$< $@
 
 # Kernel binary
 iso: $(ISO)

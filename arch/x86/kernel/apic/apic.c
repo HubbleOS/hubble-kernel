@@ -99,6 +99,7 @@ static inline void lapic_write(uint32_t reg, uint32_t val)
 
 void lapic_eoi(void)
 {
+	// printk("lapic_eoi\n");
 	if (apic_mode == APIC_INIT_X2APIC)
 	{
 		wrmsr(0x80B, 0);
@@ -150,26 +151,38 @@ void lapic_timer_init(uint32_t frequency_hz)
 	// Set divide value to 16
 	lapic_write(LAPIC_TIMER_DCR, 0x3);
 
-	// Set initial count for calibration
+	// Start calibration with max count
 	lapic_write(LAPIC_TIMER_ICR, 0xFFFFFFFF);
 
-	// Wait 10ms using PIT or other timer
-	// TODO: Implement proper timing
-	for (volatile int i = 0; i < 1000000; i++)
-		;
+	// Wait 10ms
+	hpet_delay_ms(10);
 
-	// Read current count
+	// Stop timer and read elapsed ticks
+	lapic_write(LAPIC_TIMER_ICR, 0);
 	uint32_t elapsed = 0xFFFFFFFF - lapic_read(LAPIC_TIMER_CCR);
 
-	// Calculate ticks per desired frequency
-	uint32_t ticks_per_interrupt = elapsed / (frequency_hz / 100);
+	if (elapsed == 0)
+	{
+		printk("ERROR: LAPIC timer calibration failed\n");
+		return;
+	}
 
-	// Setup timer in periodic mode (vector 32, periodic mode)
-	lapic_write(LAPIC_TIMER, 0x20020); // Vector 32, Periodic
-	lapic_write(LAPIC_TIMER_DCR, 0x3); // Divide by 16
+	// elapsed ticks in 10ms -> ticks per second = elapsed * 100
+	uint32_t ticks_per_interrupt = (elapsed * 100) / frequency_hz;
+
+	if (ticks_per_interrupt == 0)
+	{
+		printk("ERROR: Frequency too high for LAPIC timer\n");
+		return;
+	}
+
+	// Setup timer in periodic mode (vector 32, unmasked)
+	lapic_write(LAPIC_TIMER, 0x20 | (1 << 17)); // Vector 32, Periodic
+	lapic_write(LAPIC_TIMER_DCR, 0x3);	    // Divide by 16
 	lapic_write(LAPIC_TIMER_ICR, ticks_per_interrupt);
 
-	printk("LAPIC timer initialized (%u Hz)\n", frequency_hz);
+	printk("LAPIC timer initialized (%u Hz, %u ticks/int)\n",
+	       frequency_hz, ticks_per_interrupt);
 }
 
 void lapic_send_ipi(uint32_t dest, uint8_t vector)
@@ -538,7 +551,7 @@ static void disable_pic(void)
 static void setup_iso_callback(uint8_t irq_source, uint32_t gsi, uint16_t flags, void *ctx)
 {
 	// Map IRQ to interrupt vector (32 + IRQ)
-	uint8_t vector = 32 + irq_source;
+	uint8_t vector = 34 + irq_source;
 
 	// Determine polarity and trigger mode from flags
 	bool active_low = flags & 0x2;
@@ -658,11 +671,9 @@ int apic_init(void)
 	apic_state.bsp_id = lapic_get_id();
 	printk("BSP APIC ID: %u\n", apic_state.bsp_id);
 
-	// Disable legacy PIC
-	disable_pic();
-
-	// Enable Local APIC
 	lapic_enable();
+
+	disable_pic();
 
 	// Find I/O APIC
 	struct

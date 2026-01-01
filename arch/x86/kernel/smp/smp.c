@@ -10,6 +10,7 @@
 #include <apic/apic.h>
 #include <acpi/acpi.h>
 #include <gdt/gdt.h>
+#include <hpet/hpet.h>
 
 #include "percpu.h"
 #include "higher_half.h"
@@ -111,7 +112,6 @@ static void *allocate_ap_stack(void)
 // AP kernel entry point (called by trampoline in long mode)
 void ap_entry(void)
 {
-
 	apic_init_ap();
 
 	uint8_t apic_id = lapic_get_id();
@@ -121,10 +121,16 @@ void ap_entry(void)
 
 	// Signal that we're ready
 	ap_ready = true;
+	hpet_init();
+	lapic_timer_init(100);
+	idt_load();
+	uint64_t rflags;
+	asm volatile("pushfq; pop %0" : "=r"(rflags));
+	printk("AP %u: RFLAGS=0x%lx, IF=%d\n",
+	       lapic_get_id(), rflags, (rflags >> 9) & 1);
+	asm volatile("sti");
+	printk("\nAP %u online!\nHello from AP %u \n\n", apic_id, apic_id);
 
-	printk("AP %u online!\n", apic_id);
-
-	// TODO: Enter scheduler or idle loop
 	while (1)
 	{
 		asm volatile("hlt");
@@ -160,7 +166,7 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx)
 	data->pml4_phys = cr3;
 
 	data->gdt_limit = get_gdt_limit();
-	data->gdt_base = (uint64_t)VIRT_TO_PHYS(get_gdt_base());
+	data->gdt_base = (uint64_t)get_gdt_base();
 
 	data->stack_top = VIRT_TO_PHYS((uint64_t)stack_top) + 0x1000;
 	data->entry_point = (uint64_t)ap_entry;

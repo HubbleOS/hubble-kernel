@@ -33,37 +33,33 @@ ap_trampoline_start:
 
 [BITS 32]
 protected_mode_32:
-    ; Setup 32-bit segments (0x10 = data segment)
+    ; сегменти
     mov ax, 0x10
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
     mov ss, ax
-
-
-    
-    ; Setup temporary 32-bit stack
     mov esp, 0x7C00
-    
-    ; Enable PAE (Physical Address Extension)
+
+    ; 1. PAE
     mov eax, cr4
-    or eax, 0x20                ; Set PAE bit (bit 5)
+    or eax, (1 << 5)
     mov cr4, eax
-    
-    ; Load PML4 physical address into CR3
-    mov eax, [0x8200]           ; pml4_phys at offset 512
+
+    ; 2. CR3
+    mov eax, [0x8200]      ; pml4 phys
     mov cr3, eax
-    
-    ; Enable Long Mode in EFER MSR
-    mov ecx, 0xC0000080         ; EFER MSR
+
+    ; 3. LME
+    mov ecx, 0xC0000080
     rdmsr
-    or eax, 0x100               ; Set LME bit (bit 8)
+    or eax, (1 << 8)
     wrmsr
-    
-    ; Enable Paging (this activates long mode)
+
+    ; 4. PG 
     mov eax, cr0
-    or eax, 0x80000000          ; Set PG bit (bit 31)
+    or eax, (1 << 31)
     mov cr0, eax
     
     ; Now we're in compatibility mode, jump to 64-bit code
@@ -71,12 +67,12 @@ protected_mode_32:
 
 [BITS 64]
 long_mode_64:
-    ; Now in true 64-bit long mode
-    ; Clear segments (not used in 64-bit mode except FS/GS)
-    xor ax, ax
+
+    xor eax, eax
     mov ds, ax
     mov es, ax
-    ; mov ss, ax
+
+        ; mov ss, ax
     
     ; mov rax, [0x8000+(ap_data_gdt_desc + 2 - ap_trampoline_start)]
     ; ; Now load the REAL kernel GDT
@@ -94,32 +90,32 @@ long_mode_64:
     retfq
     
 .reload_cs:
-    ; Load stack pointer
-    mov rsp, [0x8000 + (ap_data_stack - ap_trampoline_start)]
-    add rsp, 0xFFFFFFFF80000000
-    ; Verify stack is loaded correctly
-    test rsp, rsp
-    jz .error_no_stack
+
+
     
-    and rsp, -16  ; Clear bottom 4 bits    
-    xor rbp, rbp
+    ; Set up base pointer to trampoline data area
+    mov rbx, 0x8000
 
     call enable_sse
     
-    ; Signal that we're ready (set to 1)
-    mov dword [0x8000 + (ap_data_ready - ap_trampoline_start)], 1
-    
-    ; Load entry point and jump to kernel
+    ; Load entry point using register-indirect addressing
     mov rax, [0x8000 + (ap_data_entry - ap_trampoline_start)]
     test rax, rax
     jz .error_no_entry
     
-    ; Jump to kernel entry point
-    call rax
+    ; Load stack pointer
+    mov rsp, [0x8000 + (ap_data_stack - ap_trampoline_start)]
+    test rsp, rsp
+    jz .error_no_stack
     
-    ; Should never return
-    jmp .hang
-
+    and rsp, -16
+    xor rbp, rbp
+    
+    ; Signal ready
+    mov dword [rbx + (ap_data_ready - ap_trampoline_start)], 1
+    
+    ; Jump to kernel entry point
+    jmp rax
 .error_no_stack:
     ; Stack pointer was zero
     mov dword [0x8000 + (ap_data_ready - ap_trampoline_start)], 0xDEAD0001
@@ -141,16 +137,27 @@ align 16
 
 enable_sse:
     mov rax, cr0
-    and rax, ~(1 << 2)      ; CR0.EM = 0
-    or  rax,  (1 << 1)      ; CR0.MP = 1
+
+    ; --- явно чистимо ---
+    btr rax, 2      ; EM = 0
+    btr rax, 3      ; TS = 0
+    btr rax, 29     ; NW = 0
+    btr rax, 30     ; CD = 0
+
+    ; --- явно ставимо ---
+    bts rax, 1      ; MP = 1
+    bts rax, 5      ; NE = 1
+
     mov cr0, rax
+    clts            ; ОБОВʼЯЗКОВО
 
     mov rax, cr4
-    or  rax, (1 << 9) | (1 << 10) ; OSFXSR | OSXMMEXCPT
+    or  rax, (1 << 9) | (1 << 10)   ; OSFXSR | OSXMMEXCPT
     mov cr4, rax
 
-    fninit
+    fninit                   ; тепер БЕЗ падіння
     ret
+
 temp_gdt_start:
     dq 0x0000000000000000       ; Null descriptor
     dq 0x00CF9A000000FFFF       ; Code segment (32-bit)
