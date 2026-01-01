@@ -298,6 +298,7 @@ void acpi_reboot(void)
 
 bool acpi_is_initialized(void)
 {
+	printk("ACPI initialized: %d\n", acpi_state.initialized);
 	return acpi_state.initialized;
 }
 

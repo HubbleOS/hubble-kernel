@@ -485,12 +485,10 @@ void vprintk(const char *fmt, va_list args)
 	// Skiping the level prefix
 	if (fmt[0] == '<' && fmt[1] >= '0' && fmt[1] <= '7' && fmt[2] == '>')
 		fmt += 3;
-	outb(0x3f8, 'I');
+
 	char buf[128];
 	va_list args_copy;
 	va_copy(args_copy, args);
-
-	// out to serial
 
 	while (*fmt)
 	{

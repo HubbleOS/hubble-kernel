@@ -5,6 +5,7 @@
 #include "printk.h"
 #include <io.h>
 #include <apic/apic.h>
+#include <smp/scheduler.h>
 
 // ============================================================================
 // Legacy PIC functions (kept for fallback/compatibility)
@@ -164,7 +165,6 @@ void irq_handler(registers_t *regs)
 	// Call registered handler if exists
 	if (irq < 256 && irq_handlers[irq])
 		irq_handlers[irq](regs);
-
 	// Send EOI (End of Interrupt)
 	if (using_apic && apic_is_initialized())
 	{
@@ -225,24 +225,24 @@ void interrupts_init(void)
 {
 	printk("Initializing interrupt system...\n");
 
+	printk("acpi_is_initialized: %d\n", acpi_is_initialized());
 	// Try to initialize APIC
-	if (acpi_is_initialized() && apic_init() == 0)
+	if (acpi_is_initialized() && (apic_init() == 0))
 	{
 		printk("Using APIC for interrupt handling\n");
 		using_apic = true;
 
-		// Enable Local APIC on BSP
-		lapic_enable();
-
 		// Register keyboard handler on IRQ 1 (vector 33)
 		irq_install_handler(1, keyboard_irq);
+		irq_install_handler(0, lapic_timer_handler);
 
 		// Unmask keyboard interrupt in I/O APIC
 		ioapic_unmask_irq(1);
+		ioapic_unmask_irq(0);
 
 		// Optional: Setup LAPIC timer for preemptive multitasking
-		// lapic_timer_init(100);  // 100 Hz timer
-		// irq_install_handler(0, timer_handler);  // Timer on vector 32
+		lapic_timer_init(100); // 100 Hz timer
+				       // irq_install_handler(0, timer_handler);  // Timer on vector 32
 	}
 	else
 	{
