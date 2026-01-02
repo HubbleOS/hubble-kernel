@@ -8,8 +8,6 @@
 #define PADDING 1
 #define CELL_W 2
 
-#define INPUT_BUFFER_SIZE 4
-
 typedef enum
 {
 	UP,
@@ -19,8 +17,7 @@ typedef enum
 	NONE
 } Direction;
 
-Direction input_buffer[INPUT_BUFFER_SIZE];
-int input_buffer_len = 0;
+Direction buffered_dir = NONE;
 
 const char *EMPTY = ". ";
 const char *APPLE = "@ ";
@@ -119,10 +116,11 @@ void draw_snake_and_apple()
 	}
 }
 
-void enqueue_direction(Direction dir)
+bool is_opposite(Direction a, Direction b)
 {
-	if (input_buffer_len < INPUT_BUFFER_SIZE)
-		input_buffer[input_buffer_len++] = dir;
+	Point da = dir_offset[a];
+	Point db = dir_offset[b];
+	return da.x == -db.x && da.y == -db.y;
 }
 
 void handle_input()
@@ -130,58 +128,52 @@ void handle_input()
 	int ch;
 	while ((ch = getch()) != ERR)
 	{
+		Direction d = NONE;
+
 		switch (ch)
 		{
 		case KEY_UP:
 		case 'w':
 		case 'W':
-			enqueue_direction(UP);
+			d = UP;
 			break;
 		case KEY_DOWN:
 		case 's':
 		case 'S':
-			enqueue_direction(DOWN);
+			d = DOWN;
 			break;
 		case KEY_LEFT:
 		case 'a':
 		case 'A':
-			enqueue_direction(LEFT);
+			d = LEFT;
 			break;
 		case KEY_RIGHT:
 		case 'd':
 		case 'D':
-			enqueue_direction(RIGHT);
+			d = RIGHT;
 			break;
 		case 'q':
 		case 'Q':
 			endwin();
 			exit(0);
 		}
-	}
-}
 
-void apply_buffered_input()
-{
-	for (int i = 0; i < input_buffer_len; i++)
-	{
-		Direction dir = input_buffer[i];
-		Point offset = dir_offset[dir];
-		Point current = dir_offset[current_dir];
+		if (d == NONE)
+			continue;
 
-		if ((offset.x != -current.x || offset.y != -current.y) && dir != NONE)
+		/* 1️⃣ применяем сразу, если можно */
+		if (!is_opposite(d, current_dir))
 		{
-			current_dir = dir;
-
-			int remaining = input_buffer_len - i - 1;
-			if (remaining > 0)
-				memmove(&input_buffer[0], &input_buffer[i + 1], remaining * sizeof(Direction));
-			input_buffer_len = remaining;
-
+			current_dir = d;
 			return;
 		}
-	}
 
-	input_buffer_len = 0;
+		/* 2️⃣ иначе кладём в буфер (1 слот) */
+		if (buffered_dir == NONE && !is_opposite(d, current_dir))
+		{
+			buffered_dir = d;
+		}
+	}
 }
 
 static bool check_collision(Point head, bool grow)
@@ -232,6 +224,16 @@ void move_snake()
 	}
 }
 
+void apply_buffered_input()
+{
+	if (buffered_dir != NONE &&
+	    !is_opposite(buffered_dir, current_dir))
+	{
+		current_dir = buffered_dir;
+	}
+	buffered_dir = NONE;
+}
+
 int main()
 {
 	srand(time(NULL));
@@ -270,6 +272,30 @@ int main()
 
 	game_over = false;
 
+	// while (!game_over)
+	// {
+	// 	handle_input();
+	// 	apply_buffered_input();
+	// 	move_snake();
+	// 	if (game_over)
+	// 		goto end;
+	// 	werase(game_win);
+	// 	draw_border_and_score();
+	// 	draw_snake_and_apple();
+	// 	wrefresh(game_win);
+
+	// 	if (score != prev_score && delay_ms > min_delay)
+	// 	{
+	// 		delay_ms = base_delay - (score / 10) * 5;
+	// 		if (delay_ms < min_delay)
+	// 			delay_ms = min_delay;
+
+	// 		prev_score = score;
+	// 	}
+
+	// 	napms(delay_ms);
+	// }
+
 	while (!game_over)
 	{
 		handle_input();
@@ -277,20 +303,13 @@ int main()
 		move_snake();
 		if (game_over)
 			goto end;
-		// werase(game_win);
+
+		werase(game_win);
 		draw_border_and_score();
 		draw_snake_and_apple();
 		wrefresh(game_win);
 
-		if (score != prev_score && delay_ms > min_delay)
-		{
-			delay_ms = base_delay - (score / 10) * 5;
-			if (delay_ms < min_delay)
-				delay_ms = min_delay;
-
-			prev_score = score;
-		}
-
+		/* speed logic */
 		napms(delay_ms);
 	}
 
