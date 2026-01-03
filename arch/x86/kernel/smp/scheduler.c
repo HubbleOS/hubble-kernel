@@ -18,6 +18,7 @@ task_t *get_next_task(uint8_t cpu_id);
 void scheduler_add_task(task_t *task);
 void task_wrapper(void);
 void schedule(void);
+void save_context(task_t *current, registers_t *regs);
 
 task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority);
 task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority);
@@ -129,29 +130,56 @@ task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority)
 
 void task_exit(int exit_code)
 {
-	task_t *task = current_task[lapic_get_id()];
+	uint8_t cpu_id = lapic_get_id();
+	task_t *task = current_task[cpu_id];
+
+	if (!task)
+		return;
+
 	task->exit_code = exit_code;
 	task->state = TASK_ZOMBIE;
 
-	spinlock_acquire(&runqueues[task->cpu].lock);
-	runqueues[task->cpu].queue[task->cpu] = NULL;
-	runqueues[task->cpu].count--;
-	spinlock_release(&runqueues[task->cpu].lock);
+	// Remove task from runqueue
+	spinlock_acquire(&runqueues[cpu_id].lock);
 
-	current_task[task->cpu] = NULL;
+	// Find task in queue
+	size_t task_index = 0;
+	for (size_t i = 0; i < runqueues[cpu_id].count; i++)
+	{
+		if (runqueues[cpu_id].queue[i] == task)
+		{
+			task_index = i;
+			break;
+		}
+	}
 
-	// Switch to idle task
+	// Shift remaining tasks down
+	for (size_t i = task_index; i < runqueues[cpu_id].count - 1; i++)
+	{
+		runqueues[cpu_id].queue[i] = runqueues[cpu_id].queue[i + 1];
+	}
+
+	runqueues[cpu_id].count--;
+	spinlock_release(&runqueues[cpu_id].lock);
+
+	current_task[cpu_id] = NULL;
+
+	// Force immediate reschedule to idle or another task
 	schedule();
+
+	// Should never reach here
+	while (1)
+		asm volatile("hlt");
 }
 
-void task_wrapper(void)
+__attribute__((noreturn)) void task_wrapper(void)
 {
-	task_t *current;
-	asm volatile("mov %%rdi, %0" : "=r"(current));
+	register task_t *current asm("rdi");
 
 	current->entry_point(current->entry_arg);
 
 	task_exit(0);
+	__builtin_unreachable();
 }
 
 // Schedule next task on current CPU
@@ -165,7 +193,7 @@ void schedule(void)
 
 	if (!new_task || new_task == old_task)
 	{
-		return; // Nothing to do
+		new_task = runqueues[cpu_id].idle_task;
 	}
 
 	// Update states
@@ -185,51 +213,80 @@ void schedule(void)
 	{
 		asm volatile("mov %0, %%cr3" ::"r"(new_task->page_table));
 	}
-
+	// print rax
+	printk("RAX: %p\n", new_task->context.rax);
+	// print rdi
+	printk("enter point from rdi: %p\n", new_task->context.rdi);
 	// Perform context switch
 	extern void switch_to_task(cpu_context_t * old, cpu_context_t * new);
 	switch_to_task(old_task ? &old_task->context : NULL, &new_task->context);
 }
 
-// Called from timer interrupt
 void lapic_timer_handler(registers_t *regs)
 {
-	if (initialized == false)
-		return;
-	uint8_t cpu_id = lapic_get_id();
-	outb(0x3f8, 't');
-	outw(0x3f8, cpu_id + '0');
-
-	task_t *current = current_task[cpu_id];
-
-	if (!current)
+	if (!initialized)
 	{
-		outb(0x3f8, 'i');
-		current_task[cpu_id] = runqueues[cpu_id].idle_task;
-		extern void switch_to_task(cpu_context_t * old, cpu_context_t * new);
-		switch_to_task(NULL, &runqueues[cpu_id].idle_task->context);
-
-		current_task[cpu_id] = runqueues[cpu_id].idle_task;
+		return;
 	}
+
+	uint8_t cpu_id = lapic_get_id();
+	task_t *current = current_task[cpu_id];
 
 	if (current)
 	{
-
-		outw(0x3f8, current->time_slice + '\n');
+		save_context(current, regs);
 		current->time_slice--;
+	}
 
-		if (current->time_slice == 0)
-		{
-			outb(0x3f8, 's');
-			current->time_slice = 10; // Reset
-			schedule();		  // Switch task
-		}
+	if (!current || current->time_slice == 0)
+	{
+		if (current)
+			current->time_slice = 10;
+
+		schedule();
+
+		__builtin_unreachable();
 	}
 
 	lapic_eoi();
 }
 
-// Get next task from runqueue (implement your scheduling policy)
+void save_context(task_t *current, registers_t *regs)
+{
+	if (!current)
+	{
+		return;
+	}
+
+	current->context.r15 = regs->r15;
+	current->context.r14 = regs->r14;
+	current->context.r13 = regs->r13;
+	current->context.r12 = regs->r12;
+	current->context.r11 = regs->r11;
+	current->context.r10 = regs->r10;
+	current->context.r9 = regs->r9;
+	current->context.r8 = regs->r8;
+	current->context.rbp = regs->rbp;
+	current->context.rdi = regs->rdi;
+	current->context.rsi = regs->rsi;
+	current->context.rdx = regs->rdx;
+	current->context.rcx = regs->rcx;
+	current->context.rbx = regs->rbx;
+	current->context.rax = regs->rax;
+
+	current->context.rip = regs->rip;
+	current->context.rsp = regs->rsp;
+	current->context.rflags = regs->rflags;
+	current->context.cs = regs->cs;
+	current->context.ss = regs->ss;
+
+	// Save FPU state
+	if (current->context.fpu_state)
+	{
+		asm volatile("fxsave (%0)" ::"r"(current->context.fpu_state) : "memory");
+	}
+}
+
 task_t *get_next_task(uint8_t cpu_id)
 {
 	cpu_runqueue_t *rq = &runqueues[cpu_id];
@@ -239,18 +296,26 @@ task_t *get_next_task(uint8_t cpu_id)
 	if (rq->count == 0)
 	{
 		spinlock_release(&rq->lock);
-		return NULL;
+		return rq->idle_task;
 	}
 
-	// Simple round-robin
-	static __thread size_t next_index = 0;
-	next_index = (next_index + 1) % rq->count;
-	task_t *next = rq->queue[next_index];
+	// Find next READY task using runqueue's index
+	for (size_t i = 0; i < rq->count; i++)
+	{
+		size_t index = (rq->next_index + i) % rq->count;
+		if (rq->queue[index]->state == TASK_READY)
+		{
+			rq->next_index = (index + 1) % rq->count;
+			task_t *next = rq->queue[index];
+			spinlock_release(&rq->lock);
+			return next;
+		}
+	}
 
 	spinlock_release(&rq->lock);
-
-	return next;
+	return rq->idle_task;
 }
+
 task_t *get_current_task(void)
 {
 	uint8_t cpu_id = lapic_get_id();
@@ -277,11 +342,13 @@ void idle_task(void)
 
 void counter_task(void)
 {
+	outb(0x3f8, 'c');
 	uint16_t count = 0;
 	while (1)
 	{
-		printk("CPU %d counter, time: %d\n", lapic_get_id(), count++);
+		printk("CPU %d counter, time: %d ", lapic_get_id(), count++);
 		hpet_delay_ms(1000);
+		printk("%dend\n", lapic_get_id());
 		if (count == 10)
 		{
 			break;
@@ -297,12 +364,13 @@ void scheduler_init(void)
 	for (int i = 0; i < 2; i++)
 	{
 		printk("Initializing runqueue for CPU %d\n", i);
+		runqueues[i].count = 0;
+		runqueues[i].next_index = 0; // Initialize
 		// Create idle task for each CPU
-		task_t *idle = task_create(idle_task, 255); // Lowest priority
+		task_t *idle = task_create(idle_task, 255);
 		runqueues[i].idle_task = idle;
 		current_task[i] = NULL;
 	}
-
 	initialized = true;
 }
 

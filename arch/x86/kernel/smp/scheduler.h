@@ -17,6 +17,7 @@ typedef struct
 	task_t *current;
 	uint64_t idle_time;
 	task_t *idle_task;
+	uint32_t next_index;
 } cpu_runqueue_t;
 
 void lapic_timer_handler(registers_t *regs);
