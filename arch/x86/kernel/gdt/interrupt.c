@@ -125,12 +125,15 @@ static const char *exception_messages[] = {
 
 void isr_handler(registers_t *regs)
 {
+	size_t cpu_id = lapic_get_id();
+
 	printk("\n\tEXCEPTION OCCURRED\n");
 
 	printk("Exception: %s (%lu)\n",
 	       regs->int_no < 22 ? exception_messages[regs->int_no] : "Unknown",
 	       regs->int_no);
 	printk("Error code: 0x%lx\n", regs->err_code);
+	printk("CPU: %lu\n", cpu_id);
 
 	printk("\n=== Registers ===\n");
 	printk("RIP: 0x%016lx    RSP: 0x%016lx\n", regs->rip, regs->rsp);
