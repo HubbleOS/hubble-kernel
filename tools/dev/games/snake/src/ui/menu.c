@@ -1,49 +1,67 @@
 #include "menu.h"
 #include <string.h>
+#include <ncurses.h>
 
-static void draw_menu(WINDOW *w, int sel, int width)
+#include <core/action_list.h>
+
+#include "core/menu_stack.h"
+
+static void draw_menu(App *app, Menu *menu, int sel)
 {
-	werase(w);
-	box(w, 0, 0);
+	werase(app->menu_win);
+	box(app->menu_win, 0, 0);
 
-	const char *items[] = {"Classic Snake", "Exit"};
+	mvwprintw(app->menu_win, 2,
+		  (app->win_w - strlen(menu->title)) / 2,
+		  "%s", menu->title);
 
-	mvwprintw(w, 2, (width - 11) / 2, "S N A K E");
-
-	for (int i = 0; i < 2; i++)
+	for (int i = 0; i < menu->count; i++)
 	{
 		if (i == sel)
-			wattron(w, A_REVERSE);
-		mvwprintw(w, 5 + i * 2, (width - strlen(items[i])) / 2, "%s", items[i]);
+			wattron(app->menu_win, A_REVERSE);
+		mvwprintw(app->menu_win, 5 + i * 2,
+			  (app->win_w - strlen(menu->items[i].label)) / 2,
+			  "%s",
+			  menu->items[i].label);
 		if (i == sel)
-			wattroff(w, A_REVERSE);
+			wattroff(app->menu_win, A_REVERSE);
 	}
 
-	wrefresh(w);
+	wrefresh(app->menu_win);
 }
 
 AppState menu_run(App *app)
 {
+	Menu *menu = menu_current(app);
 	int sel = 0;
+
 	nodelay(stdscr, FALSE);
 
 	while (1)
 	{
-		draw_menu(app->menu_win, sel, app->win_w);
-		int ch = wgetch(app->menu_win);
+		draw_menu(app, menu, sel);
 
+		int ch = wgetch(app->menu_win);
 		switch (ch)
 		{
 		case KEY_UP:
-			sel = (sel + 1) % 2;
+			sel = (sel - 1 + menu->count) % menu->count;
 			break;
+
 		case KEY_DOWN:
-			sel = (sel + 1) % 2;
+			sel = (sel + 1) % menu->count;
 			break;
+
 		case '\n':
-			return sel == 0 ? STATE_GAME : STATE_EXIT;
-		case 27:
-			return STATE_EXIT;
+			return menu->items[sel].action(app);
+
+		case KEY_BACKSPACE:
+		case 127:
+		case 8:
+			return back(app);
+
+		case 27: // ESC
+			return exit_app(app);
 		}
 	}
 }
