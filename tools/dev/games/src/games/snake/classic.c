@@ -1,8 +1,16 @@
 #include "snake.h"
-#include "../app.h"
+#include <app.h>
+
 #include <ncurses.h>
 
-#include <snake/common.h>
+#include "common.h"
+
+#include "core/window.h"
+
+#include <games/game.h>
+
+#include "ui/menu.h"
+#include "menu.h"
 
 AppState snake_classic_run(App *app)
 {
@@ -20,13 +28,19 @@ AppState snake_classic_run(App *app)
 	while (1)
 	{
 		if (snake_handle_input())
+		{
+			window_destroy(win);
 			return STATE_MENU;
+		}
 
 		snake_apply_buffered_input();
 		snake_move();
 
 		if (snake_is_game_over())
+		{
+			window_destroy(win);
 			return STATE_MENU;
+		}
 
 		werase(win);
 		box(win, 0, 0);
@@ -53,4 +67,33 @@ AppState snake_classic_run(App *app)
 
 		napms(delay_ms);
 	}
+}
+
+AppState snake_hardcore_run(App *app)
+{
+	(void)app;
+	return STATE_MENU;
+}
+
+Game snake = {
+    .name = "Snake",
+    .mode = GAME_MODE_CLASSIC,
+    .win_w = 15,
+    .win_h = 15,
+    .win_x = 0,
+    .win_y = 0,
+    .run = NULL,
+    .draw = NULL,
+    .reset = NULL,
+};
+
+Menu snake_menu;
+
+void snake_init(void)
+{
+	snake.run = snake_classic_run;
+	snake.draw = snake_draw;
+	snake.reset = snake_reset;
+
+	snake_menu = create_snake_menu();
 }

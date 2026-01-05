@@ -1,6 +1,6 @@
 // tetris/common.c
 #include "tetris.h"
-#include "../app.h"
+#include <app.h>
 #include <ncurses.h>
 #include <stdlib.h>
 #include <string.h>
@@ -132,10 +132,27 @@ int tetris_handle_input()
 			if (!check_collision(pos_x, pos_y + 1, rotation))
 				pos_y++;
 			break;
-		case ' ':
+		case KEY_UP:
 			if (!check_collision(pos_x, pos_y, (rotation + 1) % 4))
 				rotation = (rotation + 1) % 4;
 			break;
+
+		case ' ': // ПРОБЕЛ → мгновенное падение
+			while (!check_collision(pos_x, pos_y + 1, rotation))
+			{
+				pos_y++;
+			}
+			// сразу закрепляем фигуру и генерируем новую
+			place_piece();
+			clear_lines();
+			cur_piece = rand() % 7;
+			rotation = 0;
+			pos_x = WIDTH / 2 - 2;
+			pos_y = -2;
+			if (check_collision(pos_x, pos_y, rotation))
+				game_over = true;
+			break;
+
 		case 27:
 		case 'q':
 			return 1;

@@ -1,9 +1,15 @@
 #include "tetris.h"
-#include "../app.h"
+#include <app.h>
 #include <ncurses.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include "core/window.h"
+
+#include "ui/menu.h"
+#include "games/game.h"
+
+#include "menu.h"
 
 AppState tetris_classic_run(App *app)
 {
@@ -22,7 +28,7 @@ AppState tetris_classic_run(App *app)
 	{
 		if (tetris_handle_input())
 		{
-			delwin(win);
+			window_destroy(win);
 			return STATE_MENU;
 		}
 
@@ -30,7 +36,7 @@ AppState tetris_classic_run(App *app)
 
 		if (tetris_is_game_over())
 		{
-			delwin(win);
+			window_destroy(win);
 			return STATE_MENU;
 		}
 
@@ -47,4 +53,27 @@ AppState tetris_classic_run(App *app)
 		wrefresh(win);
 		napms(delay_ms);
 	}
+}
+
+Game tetris = {
+    .name = "Tetris",
+    .mode = GAME_MODE_CLASSIC,
+    .win_w = 10,
+    .win_h = 20,
+    .win_x = 0,
+    .win_y = 0,
+    .run = NULL,
+    .draw = NULL,
+    .reset = NULL,
+};
+
+Menu tetris_menu;
+
+void tetris_init(void)
+{
+	tetris.run = tetris_classic_run;
+	tetris.draw = tetris_draw;
+	tetris.reset = tetris_reset;
+
+	tetris_menu = create_tetris_menu();
 }

@@ -1,4 +1,5 @@
-#include "../app.h"
+#include <app.h>
+
 #include <ncurses.h>
 
 AppState tetris_classic_run(App *app);

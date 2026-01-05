@@ -7,11 +7,6 @@ typedef enum
 	STATE_EXIT
 } AppState;
 
-typedef enum
-{
-	MODE_CLASSIC,
-} GameMode;
-
 #define MENU_STACK_MAX 8
 
 typedef struct Menu Menu;

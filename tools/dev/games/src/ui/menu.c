@@ -2,8 +2,7 @@
 #include <string.h>
 #include <ncurses.h>
 
-#include <core/action_list.h>
-
+#include "core/action.h"
 #include "core/menu_stack.h"
 
 static void draw_menu(App *app, Menu *menu, int sel)
@@ -53,6 +52,7 @@ AppState menu_run(App *app)
 			break;
 
 		case '\n':
+		case ' ':
 			return menu->items[sel].action(app);
 
 		case KEY_BACKSPACE:

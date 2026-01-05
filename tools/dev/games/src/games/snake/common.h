@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include "../app.h"
+#include <app.h>
 
 /* ----------------- Input ----------------- */
 int snake_handle_input();

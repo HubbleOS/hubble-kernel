@@ -35,3 +35,12 @@ void window_init(App *app)
 
 	keypad(app->menu_win, TRUE);
 }
+
+void window_destroy(WINDOW *win)
+{
+	werase(win);
+	wrefresh(win);
+	delwin(win);
+	touchwin(stdscr);
+	wrefresh(stdscr);
+}
