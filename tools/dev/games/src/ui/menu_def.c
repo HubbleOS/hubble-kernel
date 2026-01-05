@@ -9,15 +9,11 @@
 
 #include <misc.h>
 
-MenuItem games_items[] = {
-    {"Snake", open_snake_menu},
-    {"Tetris", open_tetris_menu},
-    {"Back", back}};
+Menu games_menu;
 
 AppState open_games_menu(App *app)
 {
 	(void)app;
-	Menu games_menu = creaate_menu("GAMES", games_items);
 	menu_push(app, &games_menu);
 	return STATE_MENU;
 }
@@ -44,3 +40,13 @@ Menu main_menu = {
     "MAIN MENU",
     main_items,
     2};
+
+MenuItem games_items[] = {
+    {"Snake", open_snake_menu},
+    {"Tetris", open_tetris_menu},
+    {"Back", back}};
+
+Menu games_menu = {
+    "GAMES",
+    games_items,
+    SIZE_OF_ARRAY(games_items)};

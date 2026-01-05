@@ -9,7 +9,12 @@ static MenuItem items[] = {
     {"Hardcore", snake_hardcore_run},
     {"Back", back}};
 
+static Menu menu = {
+    "SNAKE",
+    items,
+    SIZE_OF_ARRAY(items)};
+
 Menu create_snake_menu(void)
 {
-	return creaate_menu("SNAKE", items);
+	return menu;
 }

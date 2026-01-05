@@ -31,6 +31,24 @@ static void draw_menu(App *app, Menu *menu, int sel)
 	wrefresh(app->menu_win);
 }
 
+MenuItem help_items[] = {
+    {"Back", back},
+    {"Help", NULL},
+    {"Exit", exit_app},
+};
+
+Menu help_menu = {
+    "HELP",
+    help_items,
+    SIZE_OF_ARRAY(help_items)};
+
+AppState open_help_menu(App *app)
+{
+	(void)app;
+	menu_push(app, &help_menu);
+	return STATE_MENU;
+}
+
 AppState menu_run(App *app)
 {
 	Menu *menu = menu_current(app);
@@ -53,9 +71,11 @@ AppState menu_run(App *app)
 			sel = (sel + 1) % menu->count;
 			break;
 
+		case KEY_ENTER:
 		case '\n':
 		case ' ':
-			return menu->items[sel].action(app);
+			if (menu->items[sel].action)
+				return menu->items[sel].action(app);
 
 		case KEY_BACKSPACE:
 		case 127:
@@ -63,16 +83,10 @@ AppState menu_run(App *app)
 			return back(app);
 
 		case 27: // ESC
+			return open_help_menu(app);
+
+		case 'q':
 			return exit_app(app);
 		}
 	}
-}
-
-Menu create_menu(const char *title, MenuItem *items)
-{
-	Menu menu;
-	menu.title = title;
-	menu.items = items;
-	menu.count = SIZE_OF_ARRAY(items);
-	return menu;
 }

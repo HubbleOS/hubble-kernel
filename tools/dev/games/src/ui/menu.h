@@ -12,9 +12,7 @@ typedef struct Menu
 {
 	const char *title;
 	MenuItem *items;
-	int count;
+	size_t count;
 } Menu;
 
 AppState menu_run(App *app);
-
-Menu creaate_menu(const char *title, MenuItem *items);

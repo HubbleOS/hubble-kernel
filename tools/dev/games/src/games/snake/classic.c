@@ -14,7 +14,15 @@
 
 AppState snake_classic_run(App *app)
 {
+	werase(app->menu_win);
+	wrefresh(app->menu_win);
+
 	snake_reset();
+
+	start_color();
+	use_default_colors();
+	init_pair(1, COLOR_RED, -1);
+	init_pair(2, COLOR_GREEN, -1);
 
 	int base_delay = 250;
 	int min_delay = 150;

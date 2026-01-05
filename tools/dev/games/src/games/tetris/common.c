@@ -12,6 +12,7 @@
 
 static int field[HEIGHT][WIDTH];
 static int cur_piece, rotation;
+static int next_piece;
 static int pos_x, pos_y;
 static bool game_over;
 static int score;
@@ -105,6 +106,7 @@ void tetris_reset()
 	score = 0;
 	game_over = false;
 	cur_piece = rand() % 7;
+	next_piece = rand() % 7;
 	rotation = 0;
 	pos_x = WIDTH / 2 - 2;
 	pos_y = -2;
@@ -112,6 +114,19 @@ void tetris_reset()
 
 bool tetris_is_game_over() { return game_over; }
 int tetris_get_score() { return score; }
+
+void spawn_piece()
+{
+	place_piece();
+	clear_lines();
+	cur_piece = next_piece;
+	next_piece = rand() % 7;
+	rotation = 0;
+	pos_x = WIDTH / 2 - 2;
+	pos_y = -2;
+	if (check_collision(pos_x, pos_y, rotation))
+		game_over = true;
+}
 
 int tetris_handle_input()
 {
@@ -142,15 +157,7 @@ int tetris_handle_input()
 			{
 				pos_y++;
 			}
-			// сразу закрепляем фигуру и генерируем новую
-			place_piece();
-			clear_lines();
-			cur_piece = rand() % 7;
-			rotation = 0;
-			pos_x = WIDTH / 2 - 2;
-			pos_y = -2;
-			if (check_collision(pos_x, pos_y, rotation))
-				game_over = true;
+			spawn_piece();
 			break;
 
 		case 27:
@@ -172,35 +179,66 @@ void tetris_move()
 			pos_y++;
 		else
 		{
-			place_piece();
-			clear_lines();
-			cur_piece = rand() % 7;
-			rotation = 0;
-			pos_x = WIDTH / 2 - 2;
-			pos_y = -2;
-			if (check_collision(pos_x, pos_y, rotation))
-				game_over = true;
+			spawn_piece();
 		}
 	}
 }
 
 void tetris_draw(WINDOW *win)
 {
+	// Сначала рисуем закреплённые блоки
 	for (int y = 0; y < HEIGHT; y++)
 	{
 		for (int x = 0; x < WIDTH; x++)
 		{
-			mvwprintw(win, y + 1, x * 2 + 1, field[y][x] ? "[]" : " .");
+			if (field[y][x])
+			{
+				wattron(win, COLOR_PAIR(field[y][x]));
+				mvwprintw(win, y + 1, x * 2 + 1, "[]");
+				wattroff(win, COLOR_PAIR(field[y][x]));
+			}
+			else
+			{
+				mvwprintw(win, y + 1, x * 2 + 1, " .");
+			}
 		}
 	}
 
+	// Рисуем текущую падающую фигуру поверх поля
 	for (int y = 0; y < BLOCK_SIZE; y++)
 	{
 		for (int x = 0; x < BLOCK_SIZE; x++)
 		{
-			if (tetrominoes[cur_piece][rotation][y][x] && pos_y + y >= 0)
+			if (tetrominoes[cur_piece][rotation][y][x])
 			{
-				mvwprintw(win, pos_y + y + 1, (pos_x + x) * 2 + 1, "[]");
+				int draw_x = pos_x + x;
+				int draw_y = pos_y + y;
+				if (draw_y >= 0 && draw_y < HEIGHT) // чтобы не выйти за пределы окна
+				{
+					wattron(win, COLOR_PAIR(cur_piece + 1));
+					mvwprintw(win, draw_y + 1, draw_x * 2 + 1, "[]");
+					wattroff(win, COLOR_PAIR(cur_piece + 1));
+				}
+			}
+		}
+	}
+
+	// Next piece справа
+	int offset_x = WIDTH * 2 + 4;
+	mvwprintw(win, 1, offset_x, "Next:");
+	for (int y = 0; y < BLOCK_SIZE; y++)
+	{
+		for (int x = 0; x < BLOCK_SIZE; x++)
+		{
+			if (tetrominoes[next_piece][0][y][x])
+			{
+				wattron(win, COLOR_PAIR(next_piece + 1));
+				mvwprintw(win, y + 2, offset_x + x * 2, "[]");
+				wattroff(win, COLOR_PAIR(next_piece + 1));
+			}
+			else
+			{
+				mvwprintw(win, y + 2, offset_x + x * 2, "  ");
 			}
 		}
 	}

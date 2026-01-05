@@ -13,9 +13,22 @@
 
 AppState tetris_classic_run(App *app)
 {
+	werase(app->menu_win);
+	wrefresh(app->menu_win);
+
 	tetris_reset();
 
-	int base_delay = 150;
+	start_color();
+	use_default_colors();
+	init_pair(1, COLOR_CYAN, -1);	 // для I
+	init_pair(2, COLOR_YELLOW, -1);	 // для O
+	init_pair(3, COLOR_MAGENTA, -1); // для T
+	init_pair(4, COLOR_GREEN, -1);	 // для S
+	init_pair(5, COLOR_RED, -1);	 // для Z
+	init_pair(6, COLOR_BLUE, -1);	 // для J
+	init_pair(7, COLOR_WHITE, -1);	 // для L
+
+	int base_delay = 100;
 	int min_delay = 100;
 	int delay_ms = base_delay;
 	int prev_score = -1;
