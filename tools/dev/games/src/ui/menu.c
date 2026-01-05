@@ -5,6 +5,8 @@
 #include "core/action.h"
 #include "core/menu_stack.h"
 
+#include "misc.h"
+
 static void draw_menu(App *app, Menu *menu, int sel)
 {
 	werase(app->menu_win);
@@ -64,4 +66,13 @@ AppState menu_run(App *app)
 			return exit_app(app);
 		}
 	}
+}
+
+Menu create_menu(const char *title, MenuItem *items)
+{
+	Menu menu;
+	menu.title = title;
+	menu.items = items;
+	menu.count = SIZE_OF_ARRAY(items);
+	return menu;
 }

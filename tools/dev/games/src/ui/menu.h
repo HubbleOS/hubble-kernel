@@ -16,3 +16,5 @@ typedef struct Menu
 } Menu;
 
 AppState menu_run(App *app);
+
+Menu creaate_menu(const char *title, MenuItem *items);
