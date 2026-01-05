@@ -1,67 +1,64 @@
+// tetris/common.c
+#include "tetris.h"
+#include "../app.h"
 #include <ncurses.h>
 #include <stdlib.h>
-#include <time.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define WIDTH 10
 #define HEIGHT 20
 #define BLOCK_SIZE 4
-#define DELAY 300
 
-int field[HEIGHT][WIDTH];
+static int field[HEIGHT][WIDTH];
+static int cur_piece, rotation;
+static int pos_x, pos_y;
+static bool game_over;
+static int score;
 
-const int tetrominoes[7][4][4][4] = {
+/* Tetrominoes definitions */
+static const int tetrominoes[7][4][4][4] = {
     // I
     {{{0, 0, 0, 0}, {1, 1, 1, 1}, {0, 0, 0, 0}, {0, 0, 0, 0}},
      {{0, 1, 0, 0}, {0, 1, 0, 0}, {0, 1, 0, 0}, {0, 1, 0, 0}},
      {{0, 0, 0, 0}, {1, 1, 1, 1}, {0, 0, 0, 0}, {0, 0, 0, 0}},
      {{0, 1, 0, 0}, {0, 1, 0, 0}, {0, 1, 0, 0}, {0, 1, 0, 0}}},
-
     // O
     {{{0, 0, 0, 0}, {0, 1, 1, 0}, {0, 1, 1, 0}, {0, 0, 0, 0}},
      {{0, 0, 0, 0}, {0, 1, 1, 0}, {0, 1, 1, 0}, {0, 0, 0, 0}},
      {{0, 0, 0, 0}, {0, 1, 1, 0}, {0, 1, 1, 0}, {0, 0, 0, 0}},
      {{0, 0, 0, 0}, {0, 1, 1, 0}, {0, 1, 1, 0}, {0, 0, 0, 0}}},
-
     // T
     {{{0, 0, 0, 0}, {1, 1, 1, 0}, {0, 1, 0, 0}, {0, 0, 0, 0}},
      {{0, 1, 0, 0}, {1, 1, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, 0}},
      {{0, 1, 0, 0}, {1, 1, 1, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
      {{0, 1, 0, 0}, {0, 1, 1, 0}, {0, 1, 0, 0}, {0, 0, 0, 0}}},
-
     // S
     {{{0, 0, 0, 0}, {0, 1, 1, 0}, {1, 1, 0, 0}, {0, 0, 0, 0}},
      {{1, 0, 0, 0}, {1, 1, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, 0}},
      {{0, 0, 0, 0}, {0, 1, 1, 0}, {1, 1, 0, 0}, {0, 0, 0, 0}},
      {{1, 0, 0, 0}, {1, 1, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, 0}}},
-
     // Z
     {{{0, 0, 0, 0}, {1, 1, 0, 0}, {0, 1, 1, 0}, {0, 0, 0, 0}},
      {{0, 1, 0, 0}, {1, 1, 0, 0}, {1, 0, 0, 0}, {0, 0, 0, 0}},
      {{0, 0, 0, 0}, {1, 1, 0, 0}, {0, 1, 1, 0}, {0, 0, 0, 0}},
      {{0, 1, 0, 0}, {1, 1, 0, 0}, {1, 0, 0, 0}, {0, 0, 0, 0}}},
-
     // J
     {{{0, 0, 0, 0}, {1, 1, 1, 0}, {0, 0, 1, 0}, {0, 0, 0, 0}},
      {{0, 1, 0, 0}, {0, 1, 0, 0}, {1, 1, 0, 0}, {0, 0, 0, 0}},
      {{1, 0, 0, 0}, {1, 1, 1, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
      {{0, 1, 1, 0}, {0, 1, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, 0}}},
-
     // L
     {{{0, 0, 0, 0}, {1, 1, 1, 0}, {1, 0, 0, 0}, {0, 0, 0, 0}},
      {{1, 1, 0, 0}, {0, 1, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, 0}},
      {{0, 0, 1, 0}, {1, 1, 1, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
      {{0, 1, 0, 0}, {0, 1, 0, 0}, {0, 1, 1, 0}, {0, 0, 0, 0}}}};
 
-int cur_piece, rotation = 0;
-int pos_x = WIDTH / 2 - 2, pos_y = 0;
-
+/* ----------------- Helpers ----------------- */
 static bool check_collision(int nx, int ny, int r)
 {
 	for (int y = 0; y < BLOCK_SIZE; y++)
-	{
 		for (int x = 0; x < BLOCK_SIZE; x++)
-		{
 			if (tetrominoes[cur_piece][r][y][x])
 			{
 				int fx = nx + x;
@@ -69,100 +66,58 @@ static bool check_collision(int nx, int ny, int r)
 				if (fx < 0 || fx >= WIDTH || fy >= HEIGHT || (fy >= 0 && field[fy][fx]))
 					return true;
 			}
-		}
-	}
 	return false;
 }
 
-void place_piece()
+static void place_piece()
 {
 	for (int y = 0; y < BLOCK_SIZE; y++)
-	{
 		for (int x = 0; x < BLOCK_SIZE; x++)
-		{
 			if (tetrominoes[cur_piece][rotation][y][x])
 			{
 				field[pos_y + y][pos_x + x] = cur_piece + 1;
 			}
-		}
-	}
 }
 
-void clear_lines()
+static void clear_lines()
 {
 	for (int y = HEIGHT - 1; y >= 0; y--)
 	{
 		int filled = 1;
 		for (int x = 0; x < WIDTH; x++)
-		{
 			if (!field[y][x])
 				filled = 0;
-		}
 		if (filled)
 		{
 			for (int row = y; row > 0; row--)
-			{
 				memcpy(field[row], field[row - 1], sizeof(field[0]));
-			}
 			memset(field[0], 0, sizeof(field[0]));
-			y++; // recheck same row
+			y++;
+			score += 10;
 		}
 	}
 }
 
-void draw_field()
+/* ----------------- API ----------------- */
+void tetris_reset()
 {
-	for (int y = 0; y < HEIGHT; y++)
-	{
-		for (int x = 0; x < WIDTH; x++)
-		{
-			mvprintw(y + 1, x * 2 + 1, field[y][x] ? "[]" : " .");
-		}
-	}
-	for (int y = 0; y < BLOCK_SIZE; y++)
-	{
-		for (int x = 0; x < BLOCK_SIZE; x++)
-		{
-			if (tetrominoes[cur_piece][rotation][y][x] && pos_y + y >= 0)
-				mvprintw(pos_y + y + 1, (pos_x + x) * 2 + 1, "[]");
-		}
-	}
-	box(stdscr, 0, 0);
-}
-
-void new_piece()
-{
+	memset(field, 0, sizeof(field));
+	score = 0;
+	game_over = false;
 	cur_piece = rand() % 7;
 	rotation = 0;
 	pos_x = WIDTH / 2 - 2;
 	pos_y = -2;
-	if (check_collision(pos_x, pos_y, rotation))
-	{
-		endwin();
-		printf("Game Over\n");
-		exit(0);
-	}
 }
 
-int main()
+bool tetris_is_game_over() { return game_over; }
+int tetris_get_score() { return score; }
+
+int tetris_handle_input()
 {
-	srand(time(NULL));
-	initscr();
-	noecho();
-	curs_set(FALSE);
-	keypad(stdscr, TRUE);
-	nodelay(stdscr, TRUE);
-
-	new_piece();
-
-	int tick = 0;
-	while (1)
+	int ch;
+	while ((ch = getch()) != ERR)
 	{
-		clear();
-		draw_field();
-		refresh();
-
-		int ch = getch();
 		switch (ch)
 		{
 		case KEY_LEFT:
@@ -181,29 +136,57 @@ int main()
 			if (!check_collision(pos_x, pos_y, (rotation + 1) % 4))
 				rotation = (rotation + 1) % 4;
 			break;
+		case 27:
 		case 'q':
-			goto end;
+			return 1;
 		}
+	}
+	return 0;
+}
 
-		if (++tick >= DELAY / 10)
+void tetris_move()
+{
+	static int tick = 0;
+	tick++;
+	if (tick >= 5) // can parameterize as speed
+	{
+		tick = 0;
+		if (!check_collision(pos_x, pos_y + 1, rotation))
+			pos_y++;
+		else
 		{
-			tick = 0;
-			if (!check_collision(pos_x, pos_y + 1, rotation))
-			{
-				pos_y++;
-			}
-			else
-			{
-				place_piece();
-				clear_lines();
-				new_piece();
-			}
+			place_piece();
+			clear_lines();
+			cur_piece = rand() % 7;
+			rotation = 0;
+			pos_x = WIDTH / 2 - 2;
+			pos_y = -2;
+			if (check_collision(pos_x, pos_y, rotation))
+				game_over = true;
 		}
+	}
+}
 
-		napms(50);
+void tetris_draw(WINDOW *win)
+{
+	for (int y = 0; y < HEIGHT; y++)
+	{
+		for (int x = 0; x < WIDTH; x++)
+		{
+			mvwprintw(win, y + 1, x * 2 + 1, field[y][x] ? "[]" : " .");
+		}
 	}
 
-end:
-	endwin();
-	return 0;
+	for (int y = 0; y < BLOCK_SIZE; y++)
+	{
+		for (int x = 0; x < BLOCK_SIZE; x++)
+		{
+			if (tetrominoes[cur_piece][rotation][y][x] && pos_y + y >= 0)
+			{
+				mvwprintw(win, pos_y + y + 1, (pos_x + x) * 2 + 1, "[]");
+			}
+		}
+	}
+
+	box(win, 0, 0);
 }

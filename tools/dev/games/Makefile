@@ -12,7 +12,7 @@ TARGET     := $(BUILD_DIR)/main
 
 all: build
 
-BUILD_TOOL := ../../../../out/tools/dev/build/build_main
+BUILD_TOOL := ../../../out/tools/dev/build/build_main
 
 build: $(BUILD_TOOL)
 	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \

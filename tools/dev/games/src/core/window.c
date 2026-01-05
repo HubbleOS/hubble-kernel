@@ -28,8 +28,10 @@ void window_init(App *app)
 	int y = (th - app->win_h) / 2;
 	int x = (tw - app->win_w) / 2;
 
-	app->game_win = newwin(app->win_h, app->win_w, y, x);
-	app->menu_win = newwin(app->win_h, app->win_w, y, x);
+	app->win_x = x;
+	app->win_y = y;
+
+	app->menu_win = newwin(app->win_h, app->win_w, app->win_y, app->win_x);
 
 	keypad(app->menu_win, TRUE);
 }

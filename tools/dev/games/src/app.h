@@ -23,8 +23,8 @@ typedef struct
 
 	AppState state;
 	WINDOW *menu_win;
-	WINDOW *game_win;
 	int win_w, win_h;
+	int win_x, win_y;
 } App;
 
 void app_init(App *app);

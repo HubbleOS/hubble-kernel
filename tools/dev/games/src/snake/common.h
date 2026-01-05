@@ -5,24 +5,6 @@
 #include <string.h>
 #include "../app.h"
 
-// #define SIZE 15
-// #define CELL_W 2
-// #define PADDING 1
-
-// typedef enum
-// {
-// 	UP,
-// 	DOWN,
-// 	LEFT,
-// 	RIGHT,
-// 	NONE
-// } Direction;
-
-// typedef struct
-// {
-// 	int x, y;
-// } Point;
-
 /* ----------------- Input ----------------- */
 int snake_handle_input();
 

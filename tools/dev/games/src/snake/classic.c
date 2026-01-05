@@ -15,6 +15,8 @@ AppState snake_classic_run(App *app)
 
 	nodelay(stdscr, TRUE);
 
+	WINDOW *win = newwin(app->win_h, app->win_w, app->win_y, app->win_x);
+
 	while (1)
 	{
 		if (snake_handle_input())
@@ -26,18 +28,18 @@ AppState snake_classic_run(App *app)
 		if (snake_is_game_over())
 			return STATE_MENU;
 
-		werase(app->game_win);
-		box(app->game_win, 0, 0);
+		werase(win);
+		box(win, 0, 0);
 
-		snake_draw(app->game_win);
+		snake_draw(win);
 
 		// Score
 		int score = snake_get_score();
 		char score_str[32];
 		snprintf(score_str, sizeof(score_str), " Score: %d ", score);
-		mvwprintw(app->game_win, 0, (app->win_w - (int)strlen(score_str)) / 2, "%s", score_str);
+		mvwprintw(win, 0, (app->win_w - (int)strlen(score_str)) / 2, "%s", score_str);
 
-		wrefresh(app->game_win);
+		wrefresh(win);
 
 		/* speed logic */
 		if (score != prev_score && delay_ms > min_delay)

@@ -9,7 +9,6 @@ void app_init(App *app)
 
 void app_shutdown(App *app)
 {
-	delwin(app->game_win);
 	delwin(app->menu_win);
 	endwin();
 }
