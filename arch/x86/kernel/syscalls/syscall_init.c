@@ -1,4 +1,4 @@
-#include "syscall.h"
+#include "syscall_entry.h"
 #include "printk.h"
 #include <stdint.h>
 

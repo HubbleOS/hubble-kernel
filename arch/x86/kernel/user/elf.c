@@ -17,7 +17,7 @@
 #define PF_W 0x2
 #define PF_R 0x4
 
-#define USER_STACK_PAGES 16
+#define USER_STACK_PAGES 32
 #define USER_STACK_TOP 0x70000000ULL
 
 /**
@@ -293,11 +293,6 @@ int elf_run(uint64_t entry)
 
 	printk("[ELF] Entering userspace at 0x%llx with stack 0x%llx\n",
 	       (unsigned long long)entry, (unsigned long long)USER_STACK_TOP);
-
-	// while (1)
-	// {
-	// 	/* code */
-	// };
 
 	printk("address of user_enter: %x\n", VIRT_TO_PHYS(entry));
 
