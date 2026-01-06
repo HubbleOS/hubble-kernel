@@ -18,14 +18,18 @@ static void draw_menu(App *app, Menu *menu, int sel)
 
 	for (int i = 0; i < menu->count; i++)
 	{
-		if (i == sel)
-			wattron(app->menu_win, A_REVERSE);
-		mvwprintw(app->menu_win, 5 + i * 2,
-			  (app->win_w - strlen(menu->items[i].label)) / 2,
+		int y = 5 + i;
+
+		mvwprintw(app->menu_win, y,
+			  //   (app->win_w - strlen(menu->items[i].label)) / 2,
+			  (2),
 			  "%s",
 			  menu->items[i].label);
+
 		if (i == sel)
-			wattroff(app->menu_win, A_REVERSE);
+		{
+			mvwchgat(app->menu_win, y, 2, app->win_w - 4, A_REVERSE, 0, NULL);
+		}
 	}
 
 	wrefresh(app->menu_win);
@@ -44,8 +48,7 @@ Menu help_menu = {
 
 AppState open_help_menu(App *app)
 {
-	(void)app;
-	menu_push(app, &help_menu);
+	menu_push_unique(app, &help_menu);
 	return STATE_MENU;
 }
 
