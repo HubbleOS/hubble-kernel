@@ -301,6 +301,7 @@ int make_pd_entry_user(uint64_t va)
 	invlpg((void *)va);
 	return 0;
 }
+
 void flush_tlb(void)
 {
 	asm volatile("invlpg (%0)" : : "r"(0) : "memory");

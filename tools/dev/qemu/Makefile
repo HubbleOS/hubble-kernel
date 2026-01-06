@@ -1,35 +1,29 @@
-CC := gcc
-CCFLAGS := 
-INCLUDES := -Iinclude -Isrc
+SRC_DIR    := src
 
-LDFLAGS := -lncurses
+CC         := gcc
+CCFLAGS    :=
+INCLUDES   := -Iinclude -I$(SRC_DIR)
+LDFLAGS    := -lncurses
 
-# BUILD_DIR ?= build
-# BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/qemu,build)
-override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/qemu,build)
+override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/dev/qemu,build)
+TARGET     := $(BUILD_DIR)/qemu
 
-SRC_DIR := src
-TARGET := $(BUILD_DIR)/main
+OVMF_SRC := ovmf
+OVMF_DST := $(BUILD_DIR)/ovmf
 
-SRCS := $(shell find $(SRC_DIR) -name "*.c")
-OBJS := $(SRCS:%.c=$(BUILD_DIR)/%.o)
+.PHONY: all build run
 
-.PHONY: all build run clean
+all: build
 
-all: build run
-
-build: $(TARGET)
-
-$(TARGET): $(OBJS)
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CCFLAGS) $(INCLUDES) $(OBJS) $(LDFLAGS) -o $(TARGET)
-
-$(BUILD_DIR)/%.o: %.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CCFLAGS) $(INCLUDES) -c $< -o $@
-
-run: build
-	@$(TARGET) --iso $(ISO) --arch $(ARCH) --mem $(MEM)
-
-clean:
-	@rm -rf $(BUILD_DIR)
+build: $(BUILD_TOOL)
+	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
+		--src-dir $(SRC_DIR) \
+		--build-dir $(BUILD_DIR) \
+		--cc $(CC) \
+		--cflags "$(CCFLAGS)" \
+		--includes "$(INCLUDES)" \
+		--output $(TARGET) \
+		--type exe \
+		--ldflags "$(LDFLAGS)" 
+	@mkdir -p $(OVMF_DST)
+	@cp -r $(OVMF_SRC)/* $(OVMF_DST)/

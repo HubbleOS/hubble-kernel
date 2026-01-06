@@ -254,6 +254,7 @@ void idt_init(void)
 	// Загружаем IDT
 	idt_flush((uint64_t)&idt_ptr);
 }
+
 void idt_load()
 {
 	idt_flush((uint64_t)&idt_ptr);
