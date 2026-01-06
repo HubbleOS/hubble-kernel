@@ -626,6 +626,23 @@ int lapic_init_xapic(void)
 	return 0;
 }
 
+void find_ioapic(uint8_t id, uint32_t addr, uint32_t gsi, void *ctx)
+{
+	struct
+	{
+		bool found;
+		uint32_t address;
+		uint32_t gsi_base;
+	} *data = ctx;
+	if (!data->found)
+	{
+		data->found = true;
+		data->address = addr;
+		data->gsi_base = gsi;
+		printk("I/O APIC found: ID=%u addr=0x%x GSI_base=%u\n", id, addr, gsi);
+	}
+}
+
 int apic_init(void)
 {
 	if (!acpi_is_initialized())
@@ -682,23 +699,6 @@ int apic_init(void)
 		uint32_t address;
 		uint32_t gsi_base;
 	} ioapic_ctx = {0};
-
-	void find_ioapic(uint8_t id, uint32_t addr, uint32_t gsi, void *ctx)
-	{
-		struct
-		{
-			bool found;
-			uint32_t address;
-			uint32_t gsi_base;
-		} *data = ctx;
-		if (!data->found)
-		{
-			data->found = true;
-			data->address = addr;
-			data->gsi_base = gsi;
-			printk("I/O APIC found: ID=%u addr=0x%x GSI_base=%u\n", id, addr, gsi);
-		}
-	}
 
 	acpi_enum_ioapics(find_ioapic, &ioapic_ctx);
 

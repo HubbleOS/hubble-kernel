@@ -1,27 +1,36 @@
-; user_enter.asm
-; Jump from kernel (ring 0) to user mode (ring 3)
 [BITS 64]
-
 global user_enter
 
-; Arguments:
-;   rdi - entry point (VA) of user program
-;   rsi - user stack top (VA)
 user_enter:
     cli
-    ; Ensure stack is 16-byte aligned before building IRETQ frame
-    and rsp, ~0xF               ; Align RSP to 16 bytes
-    ; Build IRETQ frame
-    push qword 0x1B             ; SS 0x1B (User Data)
-    push rsi                    ; RSP
+
+    ; Сохраняем аргументы
+    mov rcx, rdi                ; entry point
+    mov r11, rsi                ; stack top
+
+    ; Выравниваем стек ядра
+    and rsp, ~0xF
+
+    ; Устанавливаем сегменты данных
+    mov ax, 0x23                ; User Data (0x20 + RPL=3)
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
+    ; Строим IRETQ frame
+    push qword 0x23             ; SS: User Data
+    push r11                    ; RSP: user stack
+    
     pushfq
     pop rax
-    or rax, 0x202               ; IF + reserved bit 1
+    or rax, 0x200               ; IF
     push rax                    ; RFLAGS
-    push qword 0x23             ; CS 0x23 (User Code)
-    push rdi                    ; RIP
     
-    ; Now zero registers
+    push qword 0x1B             ; CS: User Code (0x18 + RPL=3)
+    push rcx                    ; RIP: entry
+
+    ; Обнуляем регистры
     xor rax, rax
     xor rbx, rbx
     xor rcx, rcx
@@ -37,7 +46,6 @@ user_enter:
     xor r13, r13
     xor r14, r14
     xor r15, r15
-    
+
     iretq
-    
     ud2

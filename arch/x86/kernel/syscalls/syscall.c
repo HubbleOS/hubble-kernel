@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 #include <sys/syscall.h>
-#include <syscalls/syscall.h>
+#include <syscalls/syscall_entry.h>
 
 // syscall_fn_t syscall_table[SYSCALL_COUNT] = {
 //     [SYS_write] = sys_write,

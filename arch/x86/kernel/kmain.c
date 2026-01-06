@@ -45,15 +45,11 @@ kernel_entry(BootInfo *bi)
 	smp_init();
 	scheduler_init();
 
-	// printk(KERN_INFO "Starting OS main loop...\n");
-	// os_main(bi);
-
 	// acpi_reboot();
 	// acpi_shutdown();
 
 	// load_elf_and_run("/usr/bin/user.elf");
 
-	// printk(KERN_WARNING "os_main() returned! Entering infinite loop...\n");
 	while (1)
 		asm volatile("hlt");
 }
