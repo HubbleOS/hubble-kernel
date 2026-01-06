@@ -1,239 +1,167 @@
+# Main Makefile
 Q = @
 export Q
 
 ARCH ?= x86
-
 OUT_DIR ?= $(abspath out)
-BUILD_DIR := $(OUT_DIR)/$(ARCH)/build
-ISO_DIR := $(OUT_DIR)/$(ARCH)/iso
+BUILD_DIR := $(OUT_DIR)/build/$(ARCH)
 ARCH_DIR := $(abspath arch/$(ARCH))
 
-LIB_DIR := $(abspath lib)
-CONFIG_MK := $(abspath tools/config/config.mk)
-
 TOOLS_DIR := tools
-SCRIPT_DIR := $(abspath $(TOOLS_DIR)/scripts)
-
-UNAME_S := $(shell uname -s)
-
-WIN_NAMES := CYGWIN MINGW MSYS
-
-IS_WIN := $(filter-out ,$(foreach w,$(WIN_NAMES),$(findstring $(w),$(UNAME_S))))
-
-ifeq ($(IS_WIN),)
-  DOCKER_RUN := docker-compose run --rm $(ARCH)-builder
-else
-  DOCKER_RUN := powershell.exe -File $(SCRIPT_DIR)/docker/docker-run.ps1 $(ARCH)-builder
-endif
-
-IS_WSL := $(findstring Microsoft,$(UNAME_S))
-
-ifeq ($(IS_WSL),Microsoft)
-  $(warning ⚠️  You are running inside WSL. Please ensure Docker Desktop's WSL 2 integration is enabled:
-  $(warning https://docs.docker.com/docker-for-windows/wsl/)
-endif
+CONFIG_MK := tools/config/config.mk
+DEV_TOOLS_DIR := tools/dev
+BUILD_TOOL := $(OUT_DIR)/tools/dev/build/build_main
 
 SUPPORTED_ARCHES := x86 x86_64 arm64
+
 ifneq ($(ARCH),$(filter $(ARCH),$(SUPPORTED_ARCHES)))
   $(error Unsupported architecture: $(ARCH). Supported architectures are: $(SUPPORTED_ARCHES))
 endif
 
+CFLAGS = -ffreestanding -O2 -Wall -Wextra -mcmodel=kernel
+CFLAGS += -g
+ASMFLAGS := -f elf64 -F dwarf
+ASMFLAGS += -g
+
 # Cross compiler
 ifeq ($(ARCH),x86)
 	CROSS = x86_64-elf-
+	ASM = nasm
+	CFLAGS += -m64
 endif
+
 ifeq ($(ARCH), x86_64)
 	CROSS = x86_64-elf-
+	ASM = nasm
+	CFLAGS += -m64
 endif
+
 ifeq ($(ARCH),arm64)
 	CROSS = aarch64-elf-
 endif
 
 LD = $(CROSS)ld
 CC = $(CROSS)gcc
-CXX = $(CROSS)g++
 AS = $(CROSS)as
 AR = $(CROSS)ar
 OBJCOPY = $(CROSS)objcopy
 
-HOST_LD = ld
-HOST_CC = gcc
-HOST_CXX = g++
-HOST_AS = as
-HOST_AR = ar
-HOST_OBJCOPY = objcopy
-
-CFLAGS = -MMD -MP -ffreestanding -m64 -O2 -Wall -Wextra -c
-CXXFLAGS = -MMD -MP -ffreestanding -fno-exceptions -fno-rtti -m64 -O2 -Wall -Wextra -c
-LDFLAGS_NOSTDLIB = -nostdlib -T
-OBJCPYFLAGS = binary
-
-BOOT_CFLAGS = -Iinclude -Ikernel\
-			-Ignu-efi -Ignu-efi/inc \
-			-fpic -ffreestanding -fno-stack-protector \
-			-fno-stack-check -fshort-wchar -mno-red-zone \
-			-maccumulate-outgoing-args -c
-
-BOOT_LDFLAGS = -shared -Bsymbolic -Lgnu-efi/x86_64/lib \
-		 -Lgnu-efi/x86_64/gnuefi -Tgnu-efi/gnuefi/elf_x86_64_efi.lds
-
-BOOT_LIBS = -lgnuefi -lefi
-
-EFI_SECTIONS = -j .text -j .sdata -j .data -j .rodata \
-		-j .dynamic -j .dynsym -j .rel -j .rela \
-		-j .rel.* -j .rela.* -j .reloc
-
-export LD CC CXX AS AR OBJCOPY
-export HOST_LD HOST_CC HOST_CXX HOST_AS HOST_AR HOST_OBJCOPY
-
-export CFLAGS CXXFLAGS LDFLAGS_NOSTDLIB OBJCPYFLAGS
-export BOOT_CFLAGS BOOT_LDFLAGS BOOT_LIBS EFI_SECTIONS
-
-# export ARCH
-export OUT_DIR
-export BUILD_DIR
-export ISO_DIR
-export ARCH_DIR
-export LIB_DIR
-export CONFIG_MK
-export TOOLS_DIR
-export SCRIPT_DIR
+export LD CC AS AR OBJCOPY ASM
+export CFLAGS ASMFLAGS
+export ARCH OUT_DIR BUILD_DIR ARCH_DIR CONFIG_MK TOOLS_DIR BUILD_TOOL
 
 INCLUDES += -I$(abspath include)
-INCLUDES += -I$(LIB_DIR)/libc/include
-INCLUDES += -I$(LIB_DIR)/libc/src/internal
 INCLUDES += -I$(ARCH_DIR)/include
 INCLUDES += -I$(ARCH_DIR)/kernel
-
 export INCLUDES
+
+LIB_DIR := $(abspath lib)
+export LIB_DIR
+
+LOG_DIR := $(OUT_DIR)/logs/$(shell date +%Y-%m-%d)
+LOG_FILE := $(LOG_DIR)/$(shell date +%H-%M-%S).log
+export LOG_DIR LOG_FILE
+
+define kbuild-subdir
+  obj-y :=
+  subdir-y :=
+  include $(1)/Makefile
+  subdirs += $$(addprefix $(1)/, $$(subdir-y))
+  obj-y :=
+  subdir-y :=
+endef
+
+subdirs :=
+
+# Architecture-specific directories
+$(eval $(call kbuild-subdir,arch/$(ARCH)))
+
+# Core subsystems
+$(eval $(call kbuild-subdir,lib))
+$(eval $(call kbuild-subdir,tools/dev))
+
+# User space
+subdirs += usr
+USR_DIR := $(abspath usr)
+export USR_DIR
+
+# Tools Makefiles
+include tools/dev/Makefile
+
+ISO_DIR := $(BUILD_DIR)/iso
+export ISO_DIR
+
+BUILD_TOOL_FLAGS := --log-file $(LOG_FILE) -v
 
 PHONY += all
 all:
-	@$(MAKE) -C tools/dev
+	@$(MAKE) -C tools/dev/menu run
 
-###########################################################################
-
-subdirs += $(LIB_DIR)
-subdirs += $(ARCH_DIR) 
-
-USR_DIR := $(abspath usr)
-subdirs += $(USR_DIR)/src
-
-GNU_EFI_BUILD_DIR := $(OUT_DIR)/$(ARCH)/gnu-efi
-GNU_EFI_BUILT_MARK := $(GNU_EFI_BUILD_DIR)/.built
-
-gnu-efi: $(GNU_EFI_BUILT_MARK)
-
-$(GNU_EFI_BUILT_MARK):
-	$(MAKE) -C $(ARCH_DIR)/gnu-efi
-	@mkdir -p $(dir $@)
-	@touch $@
-
-
-# LOG_DIR := $(OUT_DIR)/logs
-# 
-# prepare-log-dir:
-# 	@mkdir -p $(LOG_DIR)
-# 
-# PHONY += build
-# build: gnu-efi | prepare-log-dir
-# 	@timestamp=$$(date +%Y%m%d-%H%M%S); \
-# 	logfile="$(LOG_DIR)/build $$timestamp.log"; \
-# 	echo "📦 Logging build to $$logfile"; \
-# 	{ \
-# 		echo "== Build started at $$(date) =="; \
-# 		set -e; \
-# 		for dir in $(subdirs); do \
-# 			$(MAKE) -C $$dir; \
-# 		done; \
-# 		echo "== Build finished at $$(date) =="; \
-# 	} 2>&1 | tee "$$logfile"
-# 	@echo "✅ Build complete for $(ARCH)"
+PHONY += build-tool
+build-tool:
+	@$(MAKE) -C $(DEV_TOOLS_DIR)/build build
 
 PHONY += build
-build: gnu-efi
+build: build-tool
 	$(Q)set -e; \
 	for dir in $(subdirs); do \
-        	$(MAKE) -C $$dir; \
-    	done
-	@echo "✅ Build complete for $(ARCH)"
-###########################################################################
+		$(MAKE) -C $$dir BUILD_TOOL_FLAGS="$(BUILD_TOOL_FLAGS)"; \
+	done
+	@echo "Build complete"
+
+PHONY += stats
+stats:
+	out/tools/dev/stats/stats
+
+PHONY += debug
+debug:
+	out/tools/dev/debug/debug
+
+PHONY += disk
+disk:
+	@mkdir -p out/disks
+	out/tools/dev/disk/disk out/disks/disk.img 64 out/usr
 
 PHONY += run
 run: build
-	@echo "🚀 Running kernel for $(ARCH)..."
-	$(MAKE) host-run
-
-PHONY += host-run
-host-run:
-	@echo "🖥  Launching QEMU from host..."
-	$(MAKE) -C tools/dev/qemu run ISO=$(ISO_DIR) ARCH=x86_64 MEM=256;
-
-###########################################################################
+	out/tools/dev/qemu/qemu
 
 PHONY += clean
 clean:
-	@echo "🧹 Cleaning build output for $(ARCH)..."
 	@rm -rf $(OUT_DIR)
-	@echo "✅ Clean complete"
+	@echo "Clean complete"
+
+PHONY += rebuild
+rebuild: clean build
 
 PHONY += help
 help:
-	@echo "🧰 Kernel Build System"
+	@echo "Kernel Build System with BUILD_TOOL"
 	@echo ""
-	@echo "📦 Usage:"
-	@echo "  make [TARGET] [ARCH=<arch>] [VARIABLE=value]"
+	@echo "Usage:"
+	@echo "  make [TARGET] [ARCH=<arch>]"
 	@echo ""
-	@echo "🎯 Targets:"
+	@echo "Targets:"
 	@echo "  all            - Build the kernel (default)"
-	@echo "  build          - Build the kernel"
-	@echo "  run            - Run the built kernel via QEMU (on host)"
-	@echo "  qemu           - Run QEMU using current build "
-	@echo "  img            - Build the kernel image (if implemented)"
-	@echo "  flash          - Flash the kernel image to a USB device (if implemented)"
+	@echo "  build          - Build the kernel with BUILD_TOOL"
+	@echo "  rebuild        - Clean and build from scratch"
+	@echo "  run            - Run the built kernel via QEMU"
 	@echo "  clean          - Remove all build output"
-	@echo "  mkvars         - Print key build variables (debug info)"
+	@echo "  mkvars         - Print key build variables"
 	@echo "  help           - Show this help message"
 	@echo ""
-	@echo "🐳 Docker Targets:"
-	@echo "  docker-build   - Build the kernel inside Docker container"
-	@echo "  docker-run     - Build in Docker, run kernel on host QEMU"
-	@echo "  docker-clean   - Clean build output via Docker"
-	@echo "  docker-<target>- Run any target inside Docker, e.g., 'make docker-img'"
-	@echo ""
-	@echo "🖥 Host-only Targets:"
-	@echo "  host-run       - Run QEMU from host using current build output"
-	@echo ""
-	@echo "🛠 Variables:"
-	@echo "  ARCH           - Target architecture (e.g. x86, arm64). Default: x86"
-	@echo "  DOCKER_RUN     - Override Docker run command if needed"
-	@echo ""
-	@echo "✅ Available ARCH values:"
-	@echo "  x86, arm64 (extendable in config/config.mk and docker-compose.yml)"
-	@echo ""
+	@echo "Variables:"
+	@echo "  ARCH           - Target architecture (default: x86)"
+	@echo "  Available: x86, x86_64, arm64"
 
 PHONY += mkvars
 mkvars:
-	@echo "📦 Build Variables:"
+	@echo "Build Variables:"
 	@echo "  ARCH         = $(ARCH)"
 	@echo "  OUT_DIR      = $(OUT_DIR)"
-	@echo "  BUILD_DIR    = $(BUILD_DIR)"
-	@echo "  ISO_DIR      = $(ISO_DIR)"
 	@echo "  ARCH_DIR     = $(ARCH_DIR)"
-	@echo "  LIB_DIR     = $(LIB_DIR)"
-	@echo "  CONFIG_MK    = $(CONFIG_MK)"
-	@echo "  TOOLS_DIR    = $(TOOLS_DIR)"
-	@echo "  SCRIPT_DIR   = $(SCRIPT_DIR)"
+	@echo "  BUILD_TOOL   = $(BUILD_TOOL)"
 	@echo "  INCLUDES     = $(INCLUDES)"
-	@echo "  DOCKER_RUN   = $(DOCKER_RUN)"
 	@echo "  subdirs      = $(subdirs)"
-
-include $(SCRIPT_DIR)/scripts.mk
-include $(SCRIPT_DIR)/docker/docker.mk
-
-# DEP_FILES := $(OBJ_FILES:.o=.d)
-DEP_FILES = $(shell find $(BUILD_DIR) -name '*.d')
-
--include $(DEP_FILES)
 
 .PHONY: $(PHONY)

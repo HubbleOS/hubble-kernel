@@ -23,7 +23,7 @@ Linux)
 	read -rp "Input name of device (for example, /dev/sdX): " DEVICE
 	sudo dd if="$IMAGE" of="$DEVICE" bs=1M status=progress
 	sync
-	echo "✅ Image written to $DEVICE"
+	echo "Image written to $DEVICE"
 	;;
 
 Darwin)
@@ -35,7 +35,7 @@ Darwin)
 	sudo dd if="$IMAGE" of=/dev/r"$DISK" bs=1m status=progress
 	sync
 	diskutil eject /dev/"$DISK"
-	echo "✅ Image written to /dev/$DISK"
+	echo "Image written to /dev/$DISK"
 	;;
 
 *)

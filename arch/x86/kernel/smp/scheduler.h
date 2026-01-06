@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <smp/spinlock.h>
-#include <gdt/interrupt.h>
+#include <interrupt/interrupt.h>
 
 #include "task.h"
 #define MAX_TASKS 256

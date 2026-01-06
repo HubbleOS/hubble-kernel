@@ -3,7 +3,7 @@
 #include <mm/kmalloc.h>
 #include <string.h>
 #include <apic/apic.h>
-#include <gdt/interrupt.h>
+#include <interrupt/interrupt.h>
 #include <printk.h>
 #include <hpet/hpet.h>
 #include "io.h"

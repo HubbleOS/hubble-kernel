@@ -41,14 +41,14 @@ test/
 *.dmp
 *.map
 
-# Coverage reports (if you use any)
+# Coverage reports
 coverage/
 *.gcda
 *.gcno
 *.gcov
 
-# Docker-related files
-docker-compose.override.yml
-
 # Other temp files
 *.bak
+
+# Except
+!tools/dev/build

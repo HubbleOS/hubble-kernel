@@ -105,7 +105,6 @@ int gpt_init(gpt_partition_t *partitions)
 	for (uint32_t i = 0; i < gpt_header->num_partition_entries; i++)
 	{
 		GPT_Partition_Entry *entry = (GPT_Partition_Entry *)(entry_buf + i * gpt_header->sizeof_partition_entry);
-
 		int is_empty = 1;
 		for (int b = 0; b < 16; b++)
 		{

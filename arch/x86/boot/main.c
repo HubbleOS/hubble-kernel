@@ -385,7 +385,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	pml4[511] = hh_pdpt_addr | 0x3;
 
 	// Теперь заполняем маппинг для 0xFFFFFFFF80000000 -> 0x0
-
 	for (UINT64 offset = 0; offset < 0x100000000ULL; offset += 0x200000)
 	{
 		UINT64 virt = PHYS_TO_VIRT(offset);

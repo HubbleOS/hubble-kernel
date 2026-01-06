@@ -1,4 +1,4 @@
-#include <syscalls/syscall.h>
+#include "syscall_entry.h"
 #include <sys/input_device.h>
 
 long sys_read(int fd, char *buffer, size_t len)

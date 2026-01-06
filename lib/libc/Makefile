@@ -1,22 +1,21 @@
 # libs/libc/Makefile
-LIBC_DIR := $(abspath src)
-LIBC_SRC := $(shell find $(LIBC_DIR) -type f -name "*.c")
-LIBC_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(LIBC_SRC))
-LIBC_OUT := $(BUILD_DIR)/libc.a
 
-INCLUDES ?= -Iinclude
+LIBC_DIR := src
+LIBC_OUT := $(USR_DIR)/lib/libc.a
 
-CFLAGS += -mcmodel=kernel
-CXXFLAGS += -mcmodel=kernel
+INCLUDES += -Iinclude
 
+.PHONY: all
 all: $(LIBC_OUT)
 
-$(BUILD_DIR)/%.o: %.c
-	@echo "Compiling: $<"
-	@mkdir -p $(dir $@)
-	$(CC) -ffreestanding -c $(CFLAGS) $(INCLUDES) $< -o $@
-
-$(LIBC_OUT): $(LIBC_OBJ)
-	@echo "Archiving libc.a..."
-	@mkdir -p $(dir $@)
-	$(AR) rcs $@ $^
+$(LIBC_OUT): $(BUILD_TOOL)
+	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
+		--src-dir $(LIBC_DIR) \
+		--build-dir $(OUT_DIR)/build/lib/libc \
+		--cc $(CC) \
+		--cflags "$(CFLAGS)" \
+		--includes "$(INCLUDES)" \
+		--ar $(AR) \
+		--output $@ \
+		--type archive
+	@cp include/*.h $(USR_DIR)/include/

@@ -82,7 +82,7 @@ typedef struct
 	bool alt;
 } input_event_t;
 
-#include <gdt/interrupt.h>
+#include <interrupt/interrupt.h>
 
 _Begin_C_Header;
 
