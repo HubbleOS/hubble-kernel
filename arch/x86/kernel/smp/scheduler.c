@@ -228,6 +228,7 @@ void lapic_timer_handler(registers_t *regs)
 	{
 		return;
 	}
+	// outb(0x3f8, 'T');
 
 	uint8_t cpu_id = lapic_get_id();
 	task_t *current = current_task[cpu_id];
