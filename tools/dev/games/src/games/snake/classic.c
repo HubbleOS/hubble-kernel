@@ -14,8 +14,11 @@
 
 AppState snake_classic_run(App *app)
 {
-	werase(app->menu_win);
-	wrefresh(app->menu_win);
+	werase(app->win);
+	wrefresh(app->win);
+
+	werase(app->hint_win);
+	wrefresh(app->hint_win);
 
 	snake_reset();
 

@@ -20,6 +20,8 @@ int main()
 	{
 		if (app.state == STATE_MENU)
 			app.state = menu_run(&app);
+		if (app.state == STATE_NONE)
+			app.state = STATE_MENU;
 	}
 
 	app_shutdown(&app);
