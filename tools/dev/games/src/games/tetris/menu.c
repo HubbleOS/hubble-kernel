@@ -5,8 +5,8 @@
 #include "misc.h"
 
 static MenuItem items[] = {
-    {"Classic", NULL, tetris_classic_run},
-    {"Back", NULL, back}};
+    {"Classic", NULL, NULL, MENU_ITEM_ACTION, tetris_classic_run},
+    {"Back", NULL, NULL, MENU_ITEM_BACK, NULL}};
 
 static Menu menu = {
     "TETRIS",

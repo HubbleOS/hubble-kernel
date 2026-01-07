@@ -12,13 +12,13 @@
 #include "ui/menu.h"
 #include "menu.h"
 
-AppState snake_classic_run(App *app)
+void snake_classic_run()
 {
-	werase(app->win);
-	wrefresh(app->win);
+	// werase(app->win);
+	// wrefresh(app->win);
 
-	werase(app->hint_win);
-	wrefresh(app->hint_win);
+	// werase(app->hint_win);
+	// wrefresh(app->hint_win);
 
 	snake_reset();
 
@@ -34,14 +34,16 @@ AppState snake_classic_run(App *app)
 
 	nodelay(stdscr, TRUE);
 
-	WINDOW *win = newwin(app->win_h, app->win_w, app->win_y, app->win_x);
+	int th, tw;
+	getmaxyx(stdscr, th, tw);
+	WINDOW *win = newwin(th - 3, tw, 0, 0);
 
 	while (1)
 	{
 		if (snake_handle_input())
 		{
 			window_destroy(win);
-			return STATE_MENU;
+			return;
 		}
 
 		snake_apply_buffered_input();
@@ -50,7 +52,7 @@ AppState snake_classic_run(App *app)
 		if (snake_is_game_over())
 		{
 			window_destroy(win);
-			return STATE_MENU;
+			return;
 		}
 
 		werase(win);
@@ -62,7 +64,7 @@ AppState snake_classic_run(App *app)
 		int score = snake_get_score();
 		char score_str[32];
 		snprintf(score_str, sizeof(score_str), " Score: %d ", score);
-		mvwprintw(win, 0, (app->win_w - (int)strlen(score_str)) / 2, "%s", score_str);
+		mvwprintw(win, 0, (tw - (int)strlen(score_str)) / 2, "%s", score_str);
 
 		wrefresh(win);
 

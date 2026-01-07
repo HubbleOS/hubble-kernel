@@ -11,31 +11,27 @@
 
 Menu games_menu;
 
-AppState open_games_menu(App *app)
+void open_games_menu()
 {
-	(void)app;
-	menu_push(app, &games_menu);
-	return STATE_MENU;
+	menu_push(&games_menu);
 }
 
-AppState open_snake_menu(App *app)
+void open_snake_menu()
 {
-	(void)app;
-	menu_push(app, &snake_menu);
-	return STATE_MENU;
+	menu_push(&snake_menu);
 }
 
-AppState open_tetris_menu(App *app)
+void open_tetris_menu()
 {
-	(void)app;
-	menu_push(app, &tetris_menu);
-	return STATE_MENU;
+	menu_push(&tetris_menu);
 }
 
 MenuItem games_items[] = {
-    {"Snake", NULL, open_snake_menu},
-    {"Tetris", NULL, open_tetris_menu},
-    {"Back", NULL, back}};
+    {"Snake", NULL, NULL, MENU_ITEM_ACTION, open_snake_menu},
+    {"Tetris", NULL, NULL, MENU_ITEM_ACTION, open_tetris_menu},
+    {"Back", NULL, NULL, MENU_ITEM_BACK, NULL},
+
+};
 
 Menu games_menu = {
     "GAMES",
@@ -43,8 +39,8 @@ Menu games_menu = {
     SIZE_OF_ARRAY(games_items)};
 
 MenuItem help_items[] = {
-    {"Back", NULL, back},
-    {"Exit", NULL, exit_app},
+    {"Back", NULL, NULL, MENU_ITEM_BACK, NULL},
+    {"Exit", NULL, NULL, MENU_ITEM_EXIT, NULL},
 };
 
 Menu help_menu = {
@@ -53,9 +49,10 @@ Menu help_menu = {
     SIZE_OF_ARRAY(help_items)};
 
 MenuItem main_items[] = {
-    {"Games", NULL, open_games_menu},
-    {"Help", "Show Help-Menu", open_help_menu},
-    {"Exit", NULL, exit_app}};
+    {"Games", NULL, NULL, MENU_ITEM_ACTION, open_games_menu},
+    {"Help", "Show Help-Menu", NULL, MENU_ITEM_ACTION, open_help_menu},
+    {"Exit", NULL, NULL, MENU_ITEM_EXIT, NULL},
+};
 
 Menu main_menu = {
     "MAIN MENU",

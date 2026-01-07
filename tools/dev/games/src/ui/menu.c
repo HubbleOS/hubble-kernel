@@ -42,15 +42,14 @@ static void draw_menu(App *app, Menu *menu, int sel)
 	wrefresh(app->hint_win);
 }
 
-AppState open_help_menu(App *app)
+void open_help_menu()
 {
-	menu_push_unique(app, &help_menu);
-	return STATE_MENU;
+	menu_push_unique(&help_menu);
 }
 
 AppState menu_run(App *app)
 {
-	Menu *menu = menu_current(app);
+	Menu *menu = menu_current();
 	int sel = 0;
 
 	nodelay(stdscr, FALSE);
@@ -70,16 +69,52 @@ AppState menu_run(App *app)
 			break;
 
 		case INPUT_SELECT:
-			if (menu->items[sel].action)
-				return menu->items[sel].action(app);
-			if (menu->items[sel].action == NULL)
-				return STATE_NONE;
+		{
+			MenuItem *item = &menu->items[sel];
+
+			switch (item->type)
+			{
+			case MENU_ITEM_ACTION:
+				if (item->action)
+					item->action();
+				break;
+
+				// if (item->action && item->cmd)
+				// 	item->action();
+				// break;
+
+				// case MENU_ITEM_SUBMENU:
+				// 	if (item->submenu)
+				// 		menu_push(item->submenu);
+				// 	break;
+
+			case MENU_ITEM_BACK:
+				menu_pop();
+				break;
+
+			case MENU_ITEM_EXIT:
+				return STATE_EXIT;
+			}
+
+			return STATE_MENU;
+			break;
+		}
 
 		case INPUT_BACK:
 			return back(app);
 
 		case INPUT_HELP:
-			return open_help_menu(app);
+		{
+			if (menu == &help_menu)
+			{
+				menu_pop();
+			}
+			else
+			{
+				menu_push_unique(&help_menu);
+			}
+			return STATE_MENU;
+		}
 
 		case INPUT_EXIT:
 			return exit_app(app);

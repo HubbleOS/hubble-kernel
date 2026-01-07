@@ -2,11 +2,23 @@
 #pragma once
 #include "app.h"
 
+typedef enum
+{
+	MENU_ITEM_ACTION,
+	MENU_ITEM_SUBMENU,
+	MENU_ITEM_BACK,
+	MENU_ITEM_EXIT
+} MenuItemType;
+
 typedef struct MenuItem
 {
 	const char *label;
 	const char *hint;
-	AppState (*action)(App *);
+	const char *cmd;
+
+	MenuItemType type;
+
+	void (*action)(void);
 } MenuItem;
 
 typedef struct Menu
@@ -18,4 +30,4 @@ typedef struct Menu
 
 AppState menu_run(App *app);
 
-AppState open_help_menu(App *app);
+void open_help_menu();

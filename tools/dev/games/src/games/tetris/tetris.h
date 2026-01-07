@@ -2,7 +2,7 @@
 
 #include <ncurses.h>
 
-AppState tetris_classic_run(App *app);
+void tetris_classic_run();
 
 void tetris_reset();
 

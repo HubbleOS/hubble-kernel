@@ -11,14 +11,8 @@
 
 #include "menu.h"
 
-AppState tetris_classic_run(App *app)
+void tetris_classic_run()
 {
-	werase(app->win);
-	wrefresh(app->win);
-
-	werase(app->hint_win);
-	wrefresh(app->hint_win);
-
 	tetris_reset();
 
 	start_color();
@@ -38,14 +32,16 @@ AppState tetris_classic_run(App *app)
 
 	nodelay(stdscr, TRUE);
 
-	WINDOW *win = newwin(app->win_h + 3, app->win_w, app->win_y, app->win_x);
+	int th, tw;
+	getmaxyx(stdscr, th, tw);
+	WINDOW *win = newwin(th - 3, tw, 0, 0);
 
 	while (1)
 	{
 		if (tetris_handle_input())
 		{
 			window_destroy(win);
-			return STATE_MENU;
+			return;
 		}
 
 		tetris_move();
@@ -53,7 +49,7 @@ AppState tetris_classic_run(App *app)
 		if (tetris_is_game_over())
 		{
 			window_destroy(win);
-			return STATE_MENU;
+			return;
 		}
 
 		werase(win);
@@ -64,7 +60,7 @@ AppState tetris_classic_run(App *app)
 		int score = tetris_get_score();
 		char score_str[32];
 		snprintf(score_str, sizeof(score_str), " Score: %d ", score);
-		mvwprintw(win, 0, (app->win_w - (int)strlen(score_str)) / 2, "%s", score_str);
+		mvprintw(0, (tw - (int)strlen(score_str)) / 2, "%s", score_str);
 
 		wrefresh(win);
 		napms(delay_ms);

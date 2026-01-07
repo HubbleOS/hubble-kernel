@@ -14,9 +14,6 @@ typedef struct Menu Menu;
 
 typedef struct
 {
-	Menu *menu_stack[MENU_STACK_MAX];
-	int menu_top;
-
 	AppState state;
 	WINDOW *win;
 	WINDOW *hint_win;

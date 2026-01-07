@@ -4,6 +4,7 @@ CC         := gcc
 CCFLAGS    :=
 INCLUDES   := -Iinclude -I$(SRC_DIR)
 LDFLAGS    := -lncurses
+# LDFLAGS    += -ljansson
 
 override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/menu,build)
 TARGET     := $(BUILD_DIR)/main

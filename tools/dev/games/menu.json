@@ -1,0 +1,16 @@
+[
+	{
+		"title": "Kernel",
+		"hint": "Kernel operations",
+		"submenu": [
+			{ "title": "Build", "cmd": "make build", "hint": "Build kernel" },
+			{ "title": "Run", "cmd": "make run", "hint": "Run in QEMU" },
+			{ "title": "Disk", "cmd": "make disk", "hint": "Create disk image" }
+		]
+	},
+	{
+		"title": "Exit",
+		"cmd": "exit",
+		"hint": "Exit Dev-tools"
+	}
+]
