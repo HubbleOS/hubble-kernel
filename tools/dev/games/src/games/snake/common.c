@@ -126,6 +126,9 @@ int snake_handle_input()
 		if (d == NONE)
 			continue;
 
+		if (d == current_dir)
+			continue;
+
 		if (!is_opposite(d, current_dir))
 		{
 			current_dir = d;

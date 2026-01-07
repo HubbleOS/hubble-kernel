@@ -5,9 +5,9 @@
 #include "misc.h"
 
 static MenuItem items[] = {
-    {"Classic", snake_classic_run},
-    {"Hardcore", snake_hardcore_run},
-    {"Back", back}};
+    {"Classic", "Start with 3 segments", snake_classic_run},
+    {"Hardcore", "In development...", snake_hardcore_run},
+    {"Back", NULL, back}};
 
 static Menu menu = {
     "SNAKE",

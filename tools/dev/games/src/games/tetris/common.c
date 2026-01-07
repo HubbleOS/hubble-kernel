@@ -128,6 +128,9 @@ void spawn_piece()
 		game_over = true;
 }
 
+static int lock_delay = 0;
+#define LOCK_DELAY_MAX 5
+
 int tetris_handle_input()
 {
 	int ch;
@@ -137,19 +140,31 @@ int tetris_handle_input()
 		{
 		case KEY_LEFT:
 			if (!check_collision(pos_x - 1, pos_y, rotation))
+			{
 				pos_x--;
+				lock_delay = 0;
+			}
 			break;
 		case KEY_RIGHT:
 			if (!check_collision(pos_x + 1, pos_y, rotation))
+			{
 				pos_x++;
+				lock_delay = 0;
+			}
 			break;
 		case KEY_DOWN:
 			if (!check_collision(pos_x, pos_y + 1, rotation))
+			{
 				pos_y++;
+				lock_delay = 0;
+			}
 			break;
 		case KEY_UP:
 			if (!check_collision(pos_x, pos_y, (rotation + 1) % 4))
+			{
 				rotation = (rotation + 1) % 4;
+				lock_delay = 0;
+			}
 			break;
 
 		case ' ': // ПРОБЕЛ → мгновенное падение
@@ -176,10 +191,18 @@ void tetris_move()
 	{
 		tick = 0;
 		if (!check_collision(pos_x, pos_y + 1, rotation))
+		{
 			pos_y++;
+			lock_delay = 0; // сбрасываем таймер, если фигура движется вниз
+		}
 		else
 		{
-			spawn_piece();
+			lock_delay++;
+			if (lock_delay >= LOCK_DELAY_MAX)
+			{
+				spawn_piece();
+				lock_delay = 0;
+			}
 		}
 	}
 }

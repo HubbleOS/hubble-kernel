@@ -5,46 +5,42 @@
 #include "core/action.h"
 #include "core/menu_stack.h"
 
+#include "ui/input.h"
+#include "ui/menu_def.h"
+
 #include "misc.h"
 
 static void draw_menu(App *app, Menu *menu, int sel)
 {
-	werase(app->menu_win);
-	box(app->menu_win, 0, 0);
+	werase(app->win);
+	box(app->win, 0, 0);
 
-	mvwprintw(app->menu_win, 2,
+	mvwprintw(app->win, 2,
 		  (app->win_w - strlen(menu->title)) / 2,
 		  "%s", menu->title);
 
 	for (int i = 0; i < menu->count; i++)
 	{
 		int y = 5 + i;
-
-		mvwprintw(app->menu_win, y,
-			  //   (app->win_w - strlen(menu->items[i].label)) / 2,
-			  (2),
-			  "%s",
-			  menu->items[i].label);
+		mvwprintw(app->win, y, 2, "  %s  ", menu->items[i].label);
 
 		if (i == sel)
-		{
-			mvwchgat(app->menu_win, y, 2, app->win_w - 4, A_REVERSE, 0, NULL);
-		}
+			mvwchgat(app->win, y, 2, app->win_w - 4, A_REVERSE, 0, NULL);
 	}
 
-	wrefresh(app->menu_win);
+	wrefresh(app->win);
+
+	// hint
+	werase(app->hint_win);
+	box(app->hint_win, 0, 0);
+
+	if (menu->items[sel].hint)
+	{
+		mvwprintw(app->hint_win, 1, 2, "%s", menu->items[sel].hint);
+	}
+
+	wrefresh(app->hint_win);
 }
-
-MenuItem help_items[] = {
-    {"Back", back},
-    {"Help", NULL},
-    {"Exit", exit_app},
-};
-
-Menu help_menu = {
-    "HELP",
-    help_items,
-    SIZE_OF_ARRAY(help_items)};
 
 AppState open_help_menu(App *app)
 {
@@ -63,33 +59,33 @@ AppState menu_run(App *app)
 	{
 		draw_menu(app, menu, sel);
 
-		int ch = wgetch(app->menu_win);
-		switch (ch)
+		switch (input_get_action(app->win))
 		{
-		case KEY_UP:
+		case INPUT_UP:
 			sel = (sel - 1 + menu->count) % menu->count;
 			break;
 
-		case KEY_DOWN:
+		case INPUT_DOWN:
 			sel = (sel + 1) % menu->count;
 			break;
 
-		case KEY_ENTER:
-		case '\n':
-		case ' ':
+		case INPUT_SELECT:
 			if (menu->items[sel].action)
 				return menu->items[sel].action(app);
+			if (menu->items[sel].action == NULL)
+				return STATE_NONE;
 
-		case KEY_BACKSPACE:
-		case 127:
-		case 8:
+		case INPUT_BACK:
 			return back(app);
 
-		case 27: // ESC
+		case INPUT_HELP:
 			return open_help_menu(app);
 
-		case 'q':
+		case INPUT_EXIT:
 			return exit_app(app);
+
+		default:
+			break;
 		}
 	}
 }

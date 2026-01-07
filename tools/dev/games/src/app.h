@@ -3,6 +3,7 @@
 
 typedef enum
 {
+	STATE_NONE,
 	STATE_MENU,
 	STATE_EXIT
 } AppState;
@@ -17,7 +18,8 @@ typedef struct
 	int menu_top;
 
 	AppState state;
-	WINDOW *menu_win;
+	WINDOW *win;
+	WINDOW *hint_win;
 	int win_w, win_h;
 	int win_x, win_y;
 } App;

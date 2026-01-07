@@ -5,6 +5,7 @@
 typedef struct MenuItem
 {
 	const char *label;
+	const char *hint;
 	AppState (*action)(App *);
 } MenuItem;
 
@@ -16,3 +17,5 @@ typedef struct Menu
 } Menu;
 
 AppState menu_run(App *app);
+
+AppState open_help_menu(App *app);
