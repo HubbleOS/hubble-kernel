@@ -7,6 +7,9 @@
 #include <printk.h>
 #include <hpet/hpet.h>
 #include "io.h"
+
+#include <smp/smp.h>
+
 // Per-CPU current task
 
 static __thread task_t *current_task[MAX_CPUS];
@@ -19,13 +22,6 @@ void scheduler_add_task(task_t *task);
 void task_wrapper(void);
 void schedule(void);
 void save_context(task_t *current, registers_t *regs);
-
-task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority);
-task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority);
-
-// Macro that selects the right function based on arguments
-#define task_create(...) _task_create_select(__VA_ARGS__, _task_create_with_arg, _task_create_no_arg)(__VA_ARGS__)
-#define _task_create_select(_1, _2, _3, NAME, ...) NAME
 
 // Initialize a new task
 task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority)
@@ -124,7 +120,7 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 // Create a new idle task
 task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority)
 {
-	void *arg = NULL;
+	// void *arg = NULL;
 	return _task_create_with_arg((void (*)(void *))entry_point, NULL, priority);
 }
 
@@ -172,6 +168,30 @@ void task_exit(int exit_code)
 		asm volatile("hlt");
 }
 
+void task_sleep(void)
+{
+	uint8_t cpu_id = lapic_get_id();
+	task_t *current = current_task[cpu_id];
+
+	if (!current)
+		return;
+
+	// Mark as blocked
+	current->state = TASK_BLOCKED;
+
+	// Force reschedule
+	schedule();
+}
+
+void task_wake(task_t *task)
+{
+	if (!task || task->state != TASK_BLOCKED)
+		return;
+
+	// Mark as ready
+	task->state = TASK_READY;
+}
+
 __attribute__((noreturn)) void task_wrapper(void)
 {
 	register task_t *current asm("rdi");
@@ -191,15 +211,27 @@ void schedule(void)
 	// Get next task from runqueue
 	task_t *new_task = get_next_task(cpu_id);
 
+	if (new_task == runqueues[cpu_id].idle_task)
+	{
+
+		if (old_task && old_task->state == TASK_RUNNING)
+			return;
+	}
+
 	if (!new_task || new_task == old_task)
 	{
-		new_task = runqueues[cpu_id].idle_task;
+		if (old_task)
+		{
+			outb(0x3f8, 'S');
+			return;
+		}
+		// new_task = runqueues[cpu_id].idle_task;
 	}
 
 	// Update states
 	if (old_task)
 	{
-		old_task->state = TASK_READY;
+		old_task->state = old_task->state == TASK_BLOCKED ? TASK_BLOCKED : TASK_READY;
 		old_task->total_runtime += 100;
 	}
 
@@ -214,9 +246,9 @@ void schedule(void)
 		asm volatile("mov %0, %%cr3" ::"r"(new_task->page_table));
 	}
 	// print rax
-	printk("RAX: %p\n", new_task->context.rax);
+	// printk("RAX: %p\n", new_task->context.rax);
 	// print rdi
-	printk("enter point from rdi: %p\n", new_task->context.rdi);
+	// printk("enter point from rdi: %p\n", new_task->context.rdi);
 	// Perform context switch
 	extern void switch_to_task(cpu_context_t * old, cpu_context_t * new);
 	switch_to_task(old_task ? &old_task->context : NULL, &new_task->context);
@@ -229,9 +261,7 @@ void lapic_timer_handler(registers_t *regs)
 		return;
 	}
 	// outb(0x3f8, 'T');
-
-	uint8_t cpu_id = lapic_get_id();
-	task_t *current = current_task[cpu_id];
+	task_t *current = get_current_task();
 
 	if (current)
 	{
@@ -246,7 +276,7 @@ void lapic_timer_handler(registers_t *regs)
 
 		schedule();
 
-		__builtin_unreachable();
+		// __builtin_unreachable();
 	}
 
 	lapic_eoi();
@@ -323,37 +353,14 @@ task_t *get_current_task(void)
 	return current_task[cpu_id];
 }
 
-void counter_task(void);
-
 // Example: kernel thread entry point
 void idle_task(void)
 {
-	task_t *task1 = task_create(counter_task, 0);
-	scheduler_add_task(task1);
-	task_t *task2 = task_create(counter_task, 0);
-	scheduler_add_task(task2);
 	uint16_t count = 0;
 	while (1)
 	{
-		printk("CPU %d idle, time: %d\n", lapic_get_id(), count++);
+		// printk("CPU %d idle, time: %d\n", lapic_get_id(), count++);
 		hpet_delay_ms(1000);
-		// asm volatile("hlt");
-	}
-}
-
-void counter_task(void)
-{
-	outb(0x3f8, 'c');
-	uint16_t count = 0;
-	while (1)
-	{
-		printk("CPU %d counter, time: %d ", lapic_get_id(), count++);
-		hpet_delay_ms(1000);
-		printk("%dend\n", lapic_get_id());
-		if (count == 10)
-		{
-			break;
-		}
 		// asm volatile("hlt");
 	}
 }
@@ -362,7 +369,7 @@ void counter_task(void)
 void scheduler_init(void)
 {
 	printk("Initializing scheduler\n");
-	for (int i = 0; i < 2; i++)
+	for (int i = 0; i < smp_get_cpu_count(); i++)
 	{
 		printk("Initializing runqueue for CPU %d\n", i);
 		runqueues[i].count = 0;
@@ -372,7 +379,16 @@ void scheduler_init(void)
 		runqueues[i].idle_task = idle;
 		current_task[i] = NULL;
 	}
+
+	extern void kmain_thread(void);
+	task_t *kmain = task_create(kmain_thread, 255);
+	scheduler_add_task(kmain);
+
 	initialized = true;
+	while (1)
+	{
+		asm volatile("hlt");
+	}
 }
 
 void scheduler_add_task(task_t *task)
@@ -382,7 +398,7 @@ void scheduler_add_task(task_t *task)
 	int target_cpu = 0;
 	size_t min_load = runqueues[0].count;
 
-	for (int i = 1; i < 2; i++)
+	for (int i = 1; i < smp_get_cpu_count(); i++)
 	{
 		if (runqueues[i].count < min_load)
 		{
