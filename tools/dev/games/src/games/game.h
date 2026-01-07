@@ -23,8 +23,7 @@ typedef struct
 	int win_w, win_h;
 	int win_x, win_y;
 
-	// void (*run)(void);
-	AppState (*run)(App *app);
+	void (*run)(void);
 	// void (*draw)(void);
 	void (*draw)(WINDOW *win);
 	void (*reset)(void);

@@ -13,7 +13,7 @@ int main()
 	snake_init();
 	tetris_init();
 
-	menu_push(&app, &main_menu);
+	menu_push(&main_menu);
 	app.state = STATE_MENU;
 
 	while (app.state != STATE_EXIT)
