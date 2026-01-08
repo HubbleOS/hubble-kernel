@@ -2,6 +2,10 @@
 Q = @
 export Q
 
+ROOT_DIR := $(abspath .)
+export ROOT_DIR
+
+
 ARCH ?= x86
 OUT_DIR ?= $(abspath out)
 BUILD_DIR := $(OUT_DIR)/build/$(ARCH)

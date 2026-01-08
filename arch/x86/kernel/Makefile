@@ -1,4 +1,4 @@
-# arch/x86/Makefile
+# arch/x86/kernel/Makefile
 KERNEL_DIR := .
 
 # Output paths

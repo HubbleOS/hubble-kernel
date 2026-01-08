@@ -71,3 +71,5 @@ void scan_directory(const char *dir, const char *ext, SourceFile *files, int *co
  * and changes the file extension to ".o".
  */
 void get_obj_path(const char *src, const char *src_dir, const char *build_dir, char *obj, size_t obj_size);
+
+const char *pretty_path(const char *full_path);

@@ -67,6 +67,35 @@ int needs_rebuild(const char *src, const char *obj)
 	return src_time > obj_time;
 }
 
+#include <string.h>
+#include <stdlib.h>
+#include "fs.h"
+
+#define MAX_PATH 4096
+
+const char *pretty_path(const char *full_path)
+{
+	static char buf[MAX_PATH];
+	const char *root = getenv("ROOT_DIR"); // берём корень проекта из Makefile
+
+	if (!root || !full_path)
+		return full_path;
+
+	size_t root_len = strlen(root);
+
+	if (strncmp(full_path, root, root_len) == 0)
+	{
+		const char *p = full_path + root_len;
+		if (*p == '/')
+			p++; // убираем лишний слеш
+		strncpy(buf, p, MAX_PATH - 1);
+		buf[MAX_PATH - 1] = '\0';
+		return buf;
+	}
+
+	return full_path; // если путь не внутри ROOT_DIR, возвращаем как есть
+}
+
 /**
  * @brief Recursively scans a directory for files with a given extension
  */
@@ -82,6 +111,8 @@ void scan_directory(const char *dir, const char *ext, SourceFile *files, int *co
 		LOG_WARN("Cannot open directory: %s", dir);
 		return;
 	}
+
+	char real[MAX_PATH];
 
 	while ((entry = readdir(d)) != NULL && *count < max)
 	{
@@ -102,9 +133,18 @@ void scan_directory(const char *dir, const char *ext, SourceFile *files, int *co
 				char *dot = strrchr(entry->d_name, '.');
 				if (dot && strcmp(dot, ext) == 0)
 				{
-					strncpy(files[*count].path, path, MAX_PATH - 1);
+					if (realpath(path, real))
+					{
+						strncpy(files[*count].path, real, MAX_PATH - 1);
+					}
+					else
+					{
+						strncpy(files[*count].path, path, MAX_PATH - 1);
+					}
+
 					files[*count].mtime = st.st_mtime;
-					LOG_INFO("Found source file: %s", path);
+					// LOG_INFO("Found source file: %s", files[*count].path);
+					LOG_INFO("Found source file: %s", pretty_path(files[*count].path));
 					(*count)++;
 				}
 			}
