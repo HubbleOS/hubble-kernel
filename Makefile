@@ -99,7 +99,7 @@ BUILD_TOOL_FLAGS := --log-file $(LOG_FILE) -v
 
 PHONY += all
 all:
-	@$(MAKE) -C tools/dev/menu run
+	@$(MAKE) -C tools/dev/shell run
 
 PHONY += build-tool
 build-tool:
