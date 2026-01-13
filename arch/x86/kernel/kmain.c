@@ -10,7 +10,6 @@
 #include "io.h"
 
 // Forward declarations
-extern void os_main(BootInfo *bi);
 extern int load_elf_and_run(const char *path);
 
 // -----------------------------------------------------------------------------
@@ -29,11 +28,9 @@ kernel_entry(BootInfo *bi)
 	printk(KERN_INFO "=== Higher-Half Kernel Starting ===\n");
 
 	acpi_init(bi->rsdp);
-
+	hpet_init();
 	init.memory(bi);
 	init.cpu();
-
-	hpet_init();
 
 	init.filesystems();
 
@@ -52,6 +49,37 @@ kernel_entry(BootInfo *bi)
 
 	while (1)
 		asm volatile("hlt");
+}
+void counter_task(void);
+
+void kmain_thread(void)
+{
+	printk("kmain thread\n");
+	task_t *task1 = task_create(counter_task, 255);
+	scheduler_add_task(task1);
+	while (1)
+	{
+		printk("kmain thread\n");
+		hpet_delay_ms(1000);
+		asm volatile("hlt");
+	}
+}
+
+void counter_task(void)
+{
+	outb(0x3f8, 'c');
+	uint16_t count = 0;
+	while (1)
+	{
+		printk("CPU %d counter, time: %d ", lapic_get_id(), count++);
+		hpet_delay_ms(1000);
+		printk("%dend\n", lapic_get_id());
+		if (count == 10)
+		{
+			break;
+		}
+		// asm volatile("hlt");
+	}
 }
 
 void kernel_main(BootInfo *bi) __attribute__((alias("kernel_entry")));

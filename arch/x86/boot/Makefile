@@ -49,4 +49,4 @@ boot-objs: $(BUILD_TOOL)
 bootloader: $(EFI_OUT)
 $(EFI_OUT): $(BOOT_SO)
 	@mkdir -p $(EFI_OUT_DIR)
-	$(OBJCOPY) $(EFI_SECTIONS) --target=efi-app-x86_64 --subsystem=10 $< $@
+	objcopy $(EFI_SECTIONS) --target=efi-app-x86_64 --subsystem=10 $< $@
