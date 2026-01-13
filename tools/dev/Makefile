@@ -1,6 +1,6 @@
 # tools/dev/Makefile
 
-subdir-y += menu/
+subdir-y += shell/
 subdir-y += debug/
 subdir-y += stats/
 subdir-y += img/
