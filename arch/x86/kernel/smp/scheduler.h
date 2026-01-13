@@ -22,3 +22,14 @@ typedef struct
 
 void lapic_timer_handler(registers_t *regs);
 void scheduler_init(void);
+task_t *get_current_task(void);
+void scheduler_add_task(task_t *task);
+
+void task_wake(task_t *task);
+void task_sleep(void);
+task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority);
+task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority);
+
+// Macro that selects the right function based on arguments
+#define task_create(...) _task_create_select(__VA_ARGS__, _task_create_with_arg, _task_create_no_arg)(__VA_ARGS__)
+#define _task_create_select(_1, _2, _3, NAME, ...) NAME

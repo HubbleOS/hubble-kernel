@@ -5,6 +5,7 @@
 #include "printk.h"
 #include <io.h>
 #include <apic/apic.h>
+#include <smp/scheduler.h>
 
 // ============================================================================
 // Legacy PIC functions (kept for fallback/compatibility)
@@ -160,7 +161,7 @@ void irq_handler(registers_t *regs)
 {
 	// IRQs start at vector 32
 	uint8_t irq = regs->int_no - 32;
-
+	// outb(0x3f8, 'I');
 	// Call registered handler if exists
 	if (irq < 256 && irq_handlers[irq])
 		irq_handlers[irq](regs);
@@ -239,8 +240,8 @@ void interrupts_init(void)
 		ioapic_unmask_irq(1);
 
 		// Optional: Setup LAPIC timer for preemptive multitasking
-		// lapic_timer_init(100);  // 100 Hz timer
-		// irq_install_handler(0, timer_handler);  // Timer on vector 32
+		lapic_timer_init(100);			     // 100 Hz timer
+		irq_install_handler(0, lapic_timer_handler); // Timer on vector 32
 	}
 	else
 	{

@@ -25,6 +25,9 @@
 #define LAPIC_TIMER_CCR 0x390 // Timer Current Count
 #define LAPIC_TIMER_DCR 0x3E0 // Timer Divide Configuration
 
+#define LAPIC_TIMER_PERIODIC (1 << 17)
+#define LAPIC_TIMER_VECTOR 32
+
 // I/O APIC register offsets
 #define IOAPIC_REG_ID 0x00
 #define IOAPIC_REG_VER 0x01
@@ -148,22 +151,41 @@ void lapic_timer_init(uint32_t frequency_hz)
 		return;
 	}
 
-	// Set divide value to 16
+	printk("Testing HPET delay...\n");
+	uint64_t hpet_before = hpet_get_counter();
+	hpet_delay_ms(10);
+	uint64_t hpet_after = hpet_get_counter();
+	printk("HPET ticks in 10ms: %llu\n", hpet_after - hpet_before);
+
 	lapic_write(LAPIC_TIMER_DCR, 0x3);
 
-	// Start calibration with max count
+	// CRITICAL: Put timer in ONE-SHOT mode for calibration
+	// (vector doesn't matter, we're not letting it fire)
+	lapic_write(LAPIC_TIMER, 0xFF | (1 << 16)); // Masked, vector 0xFF
+
+	// NOW start counting
 	lapic_write(LAPIC_TIMER_ICR, 0xFFFFFFFF);
+
+	uint32_t ccr_start = lapic_read(LAPIC_TIMER_CCR);
+	printk("Timer started, CCR = 0x%08x\n", ccr_start);
 
 	// Wait 10ms
 	hpet_delay_ms(10);
 
-	// Stop timer and read elapsed ticks
-	lapic_write(LAPIC_TIMER_ICR, 0);
-	uint32_t elapsed = 0xFFFFFFFF - lapic_read(LAPIC_TIMER_CCR);
+	// Read final value BEFORE stopping
+	uint32_t ccr_final = lapic_read(LAPIC_TIMER_CCR);
 
-	if (elapsed == 0)
+	// Stop timer
+	lapic_write(LAPIC_TIMER_ICR, 0);
+
+	uint32_t elapsed = ccr_start - ccr_final;
+
+	printk("CCR after 10ms: 0x%08x\n", ccr_final);
+	printk("Elapsed ticks: %u\n", elapsed);
+
+	if (elapsed == 0 || elapsed < 1000)
 	{
-		printk("ERROR: LAPIC timer calibration failed\n");
+		printk("ERROR: LAPIC timer calibration failed (elapsed too small)\n");
 		return;
 	}
 
@@ -176,10 +198,23 @@ void lapic_timer_init(uint32_t frequency_hz)
 		return;
 	}
 
-	// Setup timer in periodic mode (vector 32, unmasked)
-	lapic_write(LAPIC_TIMER, 0x20 | (1 << 17)); // Vector 32, Periodic
-	lapic_write(LAPIC_TIMER_DCR, 0x3);	    // Divide by 16
+	printk("Calculated: %u ticks for %u Hz interrupt\n", ticks_per_interrupt, frequency_hz);
+
+	// Setup timer in periodic mode
+	lapic_write(LAPIC_TIMER, LAPIC_TIMER_VECTOR | LAPIC_TIMER_PERIODIC);
+	lapic_write(LAPIC_TIMER_DCR, 0x3);
 	lapic_write(LAPIC_TIMER_ICR, ticks_per_interrupt);
+
+	// verify ticks
+	uint32_t icr = lapic_read(LAPIC_TIMER_ICR);
+	printk("LAPIC timer ICR: 0x%08x\n", icr);
+
+	// Verify it's configured correctly
+	uint32_t lvt = lapic_read(LAPIC_TIMER);
+	printk("LVT Timer: 0x%08x (Vector=%u, Periodic=%s, Masked=%s)\n",
+	       lvt, lvt & 0xFF,
+	       (lvt & (1 << 17)) ? "YES" : "NO",
+	       (lvt & (1 << 16)) ? "YES" : "NO");
 
 	printk("LAPIC timer initialized (%u Hz, %u ticks/int)\n",
 	       frequency_hz, ticks_per_interrupt);
