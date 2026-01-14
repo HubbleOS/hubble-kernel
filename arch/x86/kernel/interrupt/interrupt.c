@@ -155,6 +155,13 @@ void isr_handler(registers_t *regs)
 			asm volatile("cli; hlt");
 		}
 	}
+	else
+	{
+		if (is_scheduler_initialized())
+		{
+			task_exit(-1);
+		}
+	}
 }
 
 void irq_handler(registers_t *regs)
