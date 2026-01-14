@@ -57,8 +57,14 @@ void kmain_thread(void)
 	printk("kmain thread\n");
 	task_t *task1 = task_create(counter_task, 255);
 	scheduler_add_task(task1);
+	uint8_t counter = 0;
 	while (1)
 	{
+		if (counter++ == 5)
+		{
+			task_kill_by_task(task1);
+			printk("killing task\n");
+		}
 		printk("kmain thread\n");
 		hpet_delay_ms(1000);
 		asm volatile("hlt");
