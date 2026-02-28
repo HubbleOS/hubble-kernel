@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <smp/scheduler.h>
 
 typedef struct
 {
@@ -28,8 +27,6 @@ static inline void spinlock_init(spinlock_t *lock, const char *name)
 // Acquire spinlock (busy-wait)
 static inline void spinlock_acquire(spinlock_t *lock)
 {
-	task_t *current = get_current_task();
-	current->spinlocks++;
 	while (__sync_lock_test_and_set(&lock->lock, 1))
 	{
 		// Spin with pause instruction (reduces contention)
@@ -56,9 +53,6 @@ static inline void spinlock_release(spinlock_t *lock)
 {
 	__sync_synchronize(); // Memory barrier
 	__sync_lock_release(&lock->lock);
-
-	task_t *current = get_current_task();
-	current->spinlocks--;
 }
 
 // Check if spinlock is held
