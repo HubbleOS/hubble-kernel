@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <smp/spinlock.h>
 
 // Task states
 typedef enum

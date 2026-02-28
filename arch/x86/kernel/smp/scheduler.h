@@ -4,8 +4,8 @@
 #include <stddef.h>
 #include <smp/spinlock.h>
 #include <interrupt/interrupt.h>
+#include <smp/task.h>
 
-#include "task.h"
 #define MAX_TASKS 256
 #define MAX_CPUS 16
 
