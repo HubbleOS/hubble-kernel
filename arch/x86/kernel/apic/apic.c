@@ -572,45 +572,28 @@ void ioapic_unmask_irq(uint8_t irq)
 	ioapic_write(reg, val & ~(1 << 16));
 }
 
-// === Initialization ===
-
-static void disable_pic(void)
-{
-	// Mask all interrupts on PIC
-	outb(0x21, 0xFF);
-	outb(0xA1, 0xFF);
-
-	printk("Legacy PIC disabled\n");
-}
-
 static void setup_iso_callback(uint8_t irq_source, uint32_t gsi, uint16_t flags, void *ctx)
 {
-	// Map IRQ to interrupt vector (32 + IRQ)
-	uint8_t vector = 34 + irq_source;
+	uint8_t vector = 32 + irq_source;
 
-	// Determine polarity and trigger mode from flags
 	bool active_low = flags & 0x2;
 	bool level_triggered = flags & 0x8;
 
-	// Setup redirect entry
 	uint32_t low = vector;
 	uint32_t high = ((uint32_t)apic_state.bsp_id) << 24;
 
 	if (active_low)
-		low |= (1 << 13); // Active low
+		low |= (1 << 13);
 	if (level_triggered)
-		low |= (1 << 15); // Level triggered
+		low |= (1 << 15);
+
+	low |= (1 << 16); // ← MASK
 
 	uint8_t reg_low = IOAPIC_REDTBL_BASE + (gsi * 2);
 	uint8_t reg_high = IOAPIC_REDTBL_BASE + (gsi * 2) + 1;
 
 	ioapic_write(reg_high, high);
 	ioapic_write(reg_low, low);
-
-	printk("IRQ %u -> GSI %u (vector %u, %s, %s)\n",
-	       irq_source, gsi, vector,
-	       active_low ? "active_low" : "active_high",
-	       level_triggered ? "level" : "edge");
 }
 
 int lapic_init_x2apic(void)
@@ -724,8 +707,6 @@ int apic_init(void)
 	printk("BSP APIC ID: %u\n", apic_state.bsp_id);
 
 	lapic_enable();
-
-	disable_pic();
 
 	// Find I/O APIC
 	struct

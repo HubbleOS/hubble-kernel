@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 #include "../utils/color.h"
 
@@ -18,5 +19,4 @@ typedef struct
 	uint32_t *buffer;
 
 	char *text;
-
 } element_t;

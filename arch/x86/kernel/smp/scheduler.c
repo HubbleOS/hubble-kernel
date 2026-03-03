@@ -17,11 +17,17 @@ static __thread task_t *current_task[MAX_CPUS];
 static cpu_runqueue_t runqueues[MAX_CPUS];
 static bool initialized = false;
 
+bool is_scheduler_initialized(void)
+{
+	return initialized;
+}
+
 task_t *get_next_task(uint8_t cpu_id);
 void scheduler_add_task(task_t *task);
 void task_wrapper(void);
 void schedule(void);
 void save_context(task_t *current, registers_t *regs);
+void free_context(task_t *task);
 
 // Initialize a new task
 task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority)
@@ -113,6 +119,8 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	task->page_table = (uint64_t *)cr3; // Or create new one
 	printk("Page table: %p\n", task->page_table);
 
+	task->signal = 0;
+
 	printk("Task created\n");
 	return task;
 }
@@ -127,13 +135,15 @@ task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority)
 void task_exit(int exit_code)
 {
 	uint8_t cpu_id = lapic_get_id();
-	task_t *task = current_task[cpu_id];
+	task_t *task = get_current_task();
+
+	outb(0x3f8, 'E');
 
 	if (!task)
 		return;
 
 	task->exit_code = exit_code;
-	task->state = TASK_ZOMBIE;
+	task->state = TASK_DEAD;
 
 	// Remove task from runqueue
 	spinlock_acquire(&runqueues[cpu_id].lock);
@@ -157,7 +167,7 @@ void task_exit(int exit_code)
 
 	runqueues[cpu_id].count--;
 	spinlock_release(&runqueues[cpu_id].lock);
-
+	free_context(task);
 	current_task[cpu_id] = NULL;
 
 	// Force immediate reschedule to idle or another task
@@ -202,11 +212,20 @@ __attribute__((noreturn)) void task_wrapper(void)
 	__builtin_unreachable();
 }
 
+void task_kill_by_task(task_t *task)
+{
+	task->state = TASK_ZOMBIE;
+}
+void task_kill_by_pid(uint32_t pid)
+{
+	// not implemented yet)
+}
+
 // Schedule next task on current CPU
 void schedule(void)
 {
 	uint8_t cpu_id = lapic_get_id();
-	task_t *old_task = current_task[cpu_id];
+	task_t *old_task = get_current_task();
 
 	// Get next task from runqueue
 	task_t *new_task = get_next_task(cpu_id);
@@ -215,7 +234,11 @@ void schedule(void)
 	{
 
 		if (old_task && old_task->state == TASK_RUNNING)
+		{
+			// outb(0x3f8, 'O');
 			return;
+		}
+		outb(0x3f8, 'I');
 	}
 
 	if (!new_task || new_task == old_task)
@@ -227,9 +250,10 @@ void schedule(void)
 		}
 		// new_task = runqueues[cpu_id].idle_task;
 	}
+	outb(0x3f8, 'R');
 
 	// Update states
-	if (old_task)
+	if (old_task && (old_task->state == TASK_RUNNING || old_task->state == TASK_BLOCKED))
 	{
 		old_task->state = old_task->state == TASK_BLOCKED ? TASK_BLOCKED : TASK_READY;
 		old_task->total_runtime += 100;
@@ -267,6 +291,19 @@ void lapic_timer_handler(registers_t *regs)
 	{
 		save_context(current, regs);
 		current->time_slice--;
+		if (current->state == TASK_UNINTERRUPTIBLE)
+		{
+			if (current->time_slice < 30)
+			{
+				outb(0x3f8, 'W');
+			}
+			if (current->time_slice < 60)
+			{
+				outb(0x3f8, 'K');
+				task_exit(-1);
+			}
+			return;
+		}
 	}
 
 	if (!current || current->time_slice == 0)
@@ -277,6 +314,15 @@ void lapic_timer_handler(registers_t *regs)
 		schedule();
 
 		// __builtin_unreachable();
+	}
+
+	if (current->state == TASK_ZOMBIE)
+	{
+		if (current->spinlocks > 0)
+		{
+			return;
+		}
+		task_exit(-1);
 	}
 
 	lapic_eoi();
@@ -318,6 +364,22 @@ void save_context(task_t *current, registers_t *regs)
 	}
 }
 
+void free_context(task_t *task)
+{
+
+	// Free kernel stack
+	if (task->kernel_stack)
+	{
+		kfree((void *)task->kernel_stack);
+	}
+
+	// free fpu state
+	if (task->context.fpu_state)
+	{
+		kfree(task->context.fpu_state);
+	}
+}
+
 task_t *get_next_task(uint8_t cpu_id)
 {
 	cpu_runqueue_t *rq = &runqueues[cpu_id];
@@ -334,7 +396,7 @@ task_t *get_next_task(uint8_t cpu_id)
 	for (size_t i = 0; i < rq->count; i++)
 	{
 		size_t index = (rq->next_index + i) % rq->count;
-		if (rq->queue[index]->state == TASK_READY)
+		if (rq->queue[index]->state == TASK_READY || rq->queue[index]->state == TASK_ZOMBIE)
 		{
 			rq->next_index = (index + 1) % rq->count;
 			task_t *next = rq->queue[index];

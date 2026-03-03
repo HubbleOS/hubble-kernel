@@ -33,6 +33,7 @@ static inline void spinlock_acquire(spinlock_t *lock)
 		while (lock->lock)
 			asm volatile("pause");
 	}
+
 	__sync_synchronize(); // Memory barrier
 }
 

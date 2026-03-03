@@ -25,7 +25,7 @@ window_t *window_create(int x, int y, int w, int h)
 	win->focused = false;
 	strcpy(win->title, "Window");
 
-	compositor_add(win->surface);
+	compositor_add(win->surface, LAYER_WINDOWS);
 
 	return win;
 }
@@ -35,7 +35,7 @@ void window_destroy(window_t *win)
 	if (!win)
 		return;
 
-	compositor_remove(win->surface);
+	compositor_remove(win->surface, LAYER_WINDOWS);
 	object_destroy(win->surface);
 	free(win);
 }
@@ -56,7 +56,7 @@ void window_move(window_t *win, int x, int y)
 void window_focus(window_t *win)
 {
 	win->focused = true;
-	compositor_bring_to_front(win->surface);
+	compositor_bring_to_front(win->surface, LAYER_WINDOWS);
 }
 
 void window_resize(window_t *win, int w, int h)
