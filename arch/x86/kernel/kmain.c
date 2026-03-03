@@ -11,8 +11,9 @@
 
 #include "gui/screen.h"
 #include "gui/window.h"
-#include "gui/console.h"
 #include "gui/compositor.h"
+
+#include "gui/ui/rect/rect.h"
 
 // Forward declarations
 extern int load_elf_and_run(const char *path);
@@ -73,32 +74,32 @@ void fps_delay(uint32_t fps)
 void render_task(void)
 {
 	compositor_init();
-	console_t *con = console_create(0, 0, 400, 300, rgb(255, 255, 255), rgb(11, 207, 34));
-	window_t *win = window_create(0, 0, fb_width, fb_height);
 
-	window_drawRect(win, 0, 0, 400, 300, 0xFF202020);
-	window_drawRect(win, 50, 50, 100, 100, 0xFFFF0000);
+	window_t *win = window_create(0, 0, 300, 150);
 
-	int x = 200;
+	element_t *square = create_rect(0, 0, 100, 100, rgb(255, 0, 0));
+	element_t *square1 = create_rect(0, 110, 290, 10, rgb(14, 255, 54));
+
+	window_addElement(win, square);
+	window_addElement(win, square1);
+
+	int x = 0;
+	int dx = 1;
+
 	while (1)
 	{
-		console_putc(con, 'A');
-		window_move(win, x++, 0);
+		window_resize(win, x, 300);
+		window_move(win, x, 0);
 
-		if (x % 9 == 0)
-		{
-			window_focus(win);
-		}
-		else
-		{
-			window_focus(con->win);
-		}
+		x += dx;
+
+		if (x > 300 || x < 0)
+			dx *= -1;
 
 		compositor_render();
 		fps_delay(60);
 	}
 }
-
 // void counter_task(void)
 // {
 // 	outb(0x3f8, 'c');

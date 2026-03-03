@@ -7,17 +7,14 @@
 #include "object.h"
 #include "compositor.h"
 
-#define MAX_WINDOWS 256
-static window_t windows[MAX_WINDOWS];
-static int window_count = 0;
-
 window_t *window_create(int x, int y, int w, int h)
 {
 	window_t *win = malloc(sizeof(window_t));
 	if (!win)
 		return NULL;
 
-	win->surface = object_create(x, y, w, h);
+	win->surface = object_create(x, y, w, h, rgb(255, 255, 255));
+
 	if (!win->surface)
 	{
 		free(win);
@@ -43,51 +40,12 @@ void window_destroy(window_t *win)
 	free(win);
 }
 
-int window_drawPixel(window_t *win, int x, int y, color_t color)
+int window_addElement(window_t *win, element_t *el)
 {
-	object_t *obj = win->surface;
-
-	if (x < 0 || y < 0 ||
-	    x >= obj->width || y >= obj->height)
+	if (!win || !el)
 		return -1;
 
-	obj->buffer[y * obj->width + x] = color;
-	return 0;
-}
-
-int window_drawRect(window_t *win, int x, int y, int w, int h, color_t color)
-{
-	object_t *obj = win->surface;
-
-	if (w <= 0 || h <= 0)
-		return -1;
-
-	if (x < 0)
-	{
-		w += x;
-		x = 0;
-	}
-	if (y < 0)
-	{
-		h += y;
-		y = 0;
-	}
-
-	if (x + w > obj->width)
-		w = obj->width - x;
-	if (y + h > obj->height)
-		h = obj->height - y;
-	if (w <= 0 || h <= 0)
-		return -1;
-
-	for (int row = 0; row < h; row++)
-	{
-		uint32_t *pixel = obj->buffer + (y + row) * obj->width + x;
-		for (int col = 0; col < w; col++)
-			pixel[col] = color;
-	}
-
-	return 0;
+	object_add_element(win->surface, el);
 }
 
 void window_move(window_t *win, int x, int y)
@@ -99,4 +57,10 @@ void window_focus(window_t *win)
 {
 	win->focused = true;
 	compositor_bring_to_front(win->surface);
+}
+
+void window_resize(window_t *win, int w, int h)
+{
+	compositor_change_size_object(win->surface, w, h);
+	object_redraw_elements(win->surface);
 }

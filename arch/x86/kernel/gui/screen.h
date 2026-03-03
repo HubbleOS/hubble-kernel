@@ -13,5 +13,3 @@ extern int fb_height;
 void screen_init(framebuffer_info_t *fb);
 void screen_present(void);
 void screen_present_rect(int x, int y, int w, int h);
-
-color_t color_blend(color_t src, color_t dst);

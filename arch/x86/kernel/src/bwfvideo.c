@@ -4,7 +4,7 @@
 #include <fs/vfs/vfs.h>
 #include <fs/vfs/vfs_standart_struct.h>
 #include <utils/bwfvideo.h>
-#include <utils/color.h>
+#include <gui/utils/color.h>
 #include <mm/kmalloc.h>
 
 // frame header
