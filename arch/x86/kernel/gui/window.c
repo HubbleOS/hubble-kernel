@@ -92,8 +92,7 @@ int window_drawRect(window_t *win, int x, int y, int w, int h, color_t color)
 
 void window_move(window_t *win, int x, int y)
 {
-	win->surface->x = x;
-	win->surface->y = y;
+	compositor_move_object(win->surface, x, y);
 }
 
 void window_focus(window_t *win)

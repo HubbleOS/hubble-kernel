@@ -94,13 +94,7 @@ void render_task(void)
 			window_focus(con->win);
 		}
 
-		if (x >= 210)
-		{
-			window_destroy(con->win);
-		}
-
 		compositor_render();
-		screen_present();
 		fps_delay(60);
 	}
 }

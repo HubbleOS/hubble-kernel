@@ -2,29 +2,34 @@
 #include <stdlib.h>
 #include <string.h>
 
-screen_t screen;
+framebuffer_info_t *g_fb = NULL;
 uint32_t *framebuffer_back = NULL;
 int fb_width = 0;
 int fb_height = 0;
 
-static int screen_getWidth(void *self) { return fb_width; }
-static int screen_getHeight(void *self) { return fb_height; }
-
-static int screen_drawPixel(void *self, int x, int y, color_t color)
+void screen_present(void)
 {
-	if (x < 0 || y < 0 || x >= fb_width || y >= fb_height)
-		return -1;
+	if (!g_fb || !framebuffer_back)
+		return;
 
-	uint32_t *pixel = framebuffer_back + y * fb_width + x;
-	*pixel = color_blend(color, *pixel);
-	return 0;
+	uint8_t *dst_base = (uint8_t *)g_fb->base;
+
+	for (int row = 0; row < fb_height; row++)
+	{
+		uint32_t *dst = (uint32_t *)(dst_base + row * g_fb->pitch);
+		uint32_t *src = framebuffer_back + row * fb_width;
+
+		for (int col = 0; col < fb_width; col++)
+			dst[col] = src[col];
+	}
 }
 
-static int screen_drawRect(void *self, int x, int y, int w, int h, color_t color)
+void screen_present_rect(int x, int y, int w, int h)
 {
-	if (w <= 0 || h <= 0)
-		return -1;
+	if (!g_fb || !framebuffer_back)
+		return;
 
+	// crop to the edges of the screen
 	if (x < 0)
 	{
 		w += x;
@@ -39,51 +44,28 @@ static int screen_drawRect(void *self, int x, int y, int w, int h, color_t color
 		w = fb_width - x;
 	if (y + h > fb_height)
 		h = fb_height - y;
+
 	if (w <= 0 || h <= 0)
-		return -1;
-
-	uint8_t alpha = get_alpha(color);
-
-	for (int row = 0; row < h; row++)
-	{
-		uint32_t *pixel = framebuffer_back + (y + row) * fb_width + x;
-
-		for (int col = 0; col < w; col++)
-		{
-			if (alpha == 255)
-				pixel[col] = color;
-			else
-				pixel[col] = color_blend(color, pixel[col]);
-		}
-	}
-
-	return 0;
-}
-
-void screen_present(void)
-{
-	if (!screen.fb || !framebuffer_back)
 		return;
 
-	uint8_t *dst_base = (uint8_t *)screen.fb->base;
+	uint8_t *dst_base = (uint8_t *)g_fb->base;
 
-	for (int row = 0; row < fb_height; row++)
+	for (int row = y; row < y + h; row++)
 	{
-		uint32_t *dst = (uint32_t *)(dst_base + row * screen.fb->pitch);
-		uint32_t *src = framebuffer_back + row * fb_width;
+		uint32_t *dst = (uint32_t *)(dst_base + row * g_fb->pitch + x * sizeof(uint32_t));
+		uint32_t *src = framebuffer_back + row * fb_width + x;
 
-		for (int col = 0; col < fb_width; col++)
+		for (int col = 0; col < w; col++)
 			dst[col] = src[col];
 	}
 }
 
 void screen_init(framebuffer_info_t *fb)
 {
-	screen.fb = fb;
-	screen.getWidth = screen_getWidth;
-	screen.getHeight = screen_getHeight;
-	screen.drawPixel = screen_drawPixel;
-	screen.drawRect = screen_drawRect;
+	if (!fb)
+		return;
+
+	g_fb = fb;
 
 	fb_width = fb->width;
 	fb_height = fb->height;
