@@ -158,24 +158,67 @@ void scan_directory(const char *dir, const char *ext, SourceFile *files, int *co
  *
  * Changes extension to ".o" and preserves relative path inside build_dir
  */
+// void get_obj_path(const char *src, const char *src_dir, const char *build_dir, char *obj, size_t obj_size)
+// {
+// 	const char *rel = src;
+
+// 	// Remove src_dir prefix
+// 	if (strncmp(src, src_dir, strlen(src_dir)) == 0)
+// 	{
+// 		rel = src + strlen(src_dir);
+// 		while (*rel == '/')
+// 			rel++;
+// 	}
+
+// 	snprintf(obj, obj_size, "%s/%s", build_dir, rel);
+
+// 	// Replace extension with ".o"
+// 	char *dot = strrchr(obj, '.');
+// 	if (dot)
+// 	{
+// 		strcpy(dot, ".o");
+// 	}
+// }
+
+#include <limits.h>
+#include <string.h>
+#include <stdlib.h>
+
 void get_obj_path(const char *src, const char *src_dir, const char *build_dir, char *obj, size_t obj_size)
 {
-	const char *rel = src;
+	char abs_src[MAX_PATH];
+	char abs_src_dir[MAX_PATH];
 
-	// Remove src_dir prefix
-	if (strncmp(src, src_dir, strlen(src_dir)) == 0)
+	// Получаем абсолютный путь к исходнику
+	if (!realpath(src, abs_src))
 	{
-		rel = src + strlen(src_dir);
-		while (*rel == '/')
-			rel++;
+		strncpy(abs_src, src, sizeof(abs_src) - 1);
+		abs_src[sizeof(abs_src) - 1] = '\0';
 	}
 
+	// Абсолютный путь к каталогу исходников
+	if (!realpath(src_dir, abs_src_dir))
+	{
+		strncpy(abs_src_dir, src_dir, sizeof(abs_src_dir) - 1);
+		abs_src_dir[sizeof(abs_src_dir) - 1] = '\0';
+	}
+
+	const char *rel = abs_src;
+
+	// Отрезаем префикс src_dir
+	size_t prefix_len = strlen(abs_src_dir);
+	if (strncmp(abs_src, abs_src_dir, prefix_len) == 0)
+	{
+		rel = abs_src + prefix_len;
+		while (*rel == '/')
+			rel++; // убираем ведущий слеш
+	}
+
+	// Формируем путь в build
 	snprintf(obj, obj_size, "%s/%s", build_dir, rel);
 
-	// Replace extension with ".o"
+	// Меняем расширение на .o
 	char *dot = strrchr(obj, '.');
 	if (dot)
-	{
 		strcpy(dot, ".o");
-	}
 }
