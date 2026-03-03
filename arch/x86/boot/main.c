@@ -26,10 +26,20 @@ static void *find_rsdp(EFI_SYSTEM_TABLE *SystemTable)
 {
 	Print(L"=== Searching for RSDP ===\n");
 	Print(L"Configuration table entries: %u\n", SystemTable->NumberOfTableEntries);
-
-	for (UINTN i = 0; i < SystemTable->NumberOfTableEntries; i++)
+	Print(L" GUID = %08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x\n", Acpi20Guid.Data1,
+	      Acpi20Guid.Data2,
+	      Acpi20Guid.Data3,
+	      Acpi20Guid.Data4[0],
+	      Acpi20Guid.Data4[1],
+	      Acpi20Guid.Data4[2],
+	      Acpi20Guid.Data4[3],
+	      Acpi20Guid.Data4[4],
+	      Acpi20Guid.Data4[5],
+	      Acpi20Guid.Data4[6],
+	      Acpi20Guid.Data4[7]);
+	for (UINTN i = 0; i < g_systab->NumberOfTableEntries; i++)
 	{
-		EFI_CONFIGURATION_TABLE *tbl = &SystemTable->ConfigurationTable[i];
+		EFI_CONFIGURATION_TABLE *tbl = &g_systab->ConfigurationTable[i];
 
 		// Print GUID for debugging
 		Print(L"Entry %u: GUID = %08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x\n",
@@ -46,7 +56,7 @@ static void *find_rsdp(EFI_SYSTEM_TABLE *SystemTable)
 		      tbl->VendorGuid.Data4[6],
 		      tbl->VendorGuid.Data4[7]);
 
-		if (CompareGuid(&tbl->VendorGuid, &Acpi20Guid))
+		if (CompareGuid(&tbl->VendorGuid, &Acpi20Guid) == 0)
 		{
 			Print(L"Found ACPI 2.0 RSDP at %p\n", tbl->VendorTable);
 
@@ -67,7 +77,7 @@ static void *find_rsdp(EFI_SYSTEM_TABLE *SystemTable)
 			}
 		}
 
-		if (CompareGuid(&tbl->VendorGuid, &Acpi10Guid))
+		if (CompareGuid(&tbl->VendorGuid, &Acpi10Guid) == 0)
 		{
 			Print(L"Found ACPI 1.0 RSDP at %p\n", tbl->VendorTable);
 

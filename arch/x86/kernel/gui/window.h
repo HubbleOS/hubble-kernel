@@ -17,7 +17,6 @@ typedef struct
 	bool focused;
 
 	char title[64];
-
 } window_t;
 
 window_t *window_create(int x, int y, int w, int h);

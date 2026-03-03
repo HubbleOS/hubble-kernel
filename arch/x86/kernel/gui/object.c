@@ -84,9 +84,53 @@ void object_add_element(object_t *obj, element_t *el)
 		return;
 	obj->elements[obj->element_count++] = el;
 
-	// сразу отрисовать элемент на buffer
 	object_redraw_elements(obj);
 
-	// пометить область как dirty
 	compositor_add_damage(obj->x + el->x, obj->y + el->y, el->width, el->height);
+}
+
+static rect_t rect_union(rect_t a, rect_t b)
+{
+	int x1 = a.x < b.x ? a.x : b.x;
+	int y1 = a.y < b.y ? a.y : b.y;
+	int x2 = (a.x + a.w) > (b.x + b.w) ? (a.x + a.w) : (b.x + b.w);
+	int y2 = (a.y + a.h) > (b.y + b.h) ? (a.y + a.h) : (b.y + b.h);
+	rect_t r = {x1, y1, x2 - x1, y2 - y1};
+	return r;
+}
+
+void object_move_element(object_t *obj, element_t *el, int new_x, int new_y)
+{
+	if (!obj || !el)
+		return;
+
+	// 1. сохраняем старые координаты
+	int old_x = el->x;
+	int old_y = el->y;
+
+	// 2. вычисляем прямоугольник, который надо перерисовать
+	rect_t old_rect = {old_x, old_y, el->width, el->height};
+	rect_t new_rect = {new_x, new_y, el->width, el->height};
+	rect_t dirty_rect = rect_union(old_rect, new_rect);
+
+	// 3. очищаем старую область в буфере объекта
+	for (int y = dirty_rect.y; y < dirty_rect.y + dirty_rect.h; y++)
+	{
+		for (int x = dirty_rect.x; x < dirty_rect.x + dirty_rect.w; x++)
+		{
+			if (x >= 0 && x < obj->width && y >= 0 && y < obj->height)
+				obj->buffer[y * obj->width + x] = obj->bg_color;
+		}
+	}
+
+	// 4. обновляем координаты элемента
+	el->x = new_x;
+	el->y = new_y;
+
+	// 5. перерисовываем элемент
+	object_redraw_elements(obj);
+
+	// 6. помечаем объединённый прямоугольник как dirty для композитора
+	compositor_add_damage(obj->x + dirty_rect.x, obj->y + dirty_rect.y,
+			      dirty_rect.w, dirty_rect.h);
 }

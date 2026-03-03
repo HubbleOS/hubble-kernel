@@ -11,8 +11,18 @@ typedef enum
 	TASK_BLOCKED,
 	TASK_SLEEPING,
 	TASK_ZOMBIE,
-	TASK_DEAD
+	TASK_DEAD,
+	TASK_UNINTERRUPTIBLE
 } task_state_t;
+
+typedef enum
+{
+	SIG_BLOCKED,
+	SIG_UNBLOCKED,
+	SIG_DIED,
+	SIG_KILLED,
+	SIG_IGNORED
+} signals_t;
 
 // CPU context saved during context switch
 typedef struct __attribute__((packed))
@@ -55,6 +65,9 @@ typedef struct task
 	uint64_t time_slice;	 // Remaining time slice
 	uint64_t total_runtime;	 // Total CPU time used
 	uint64_t last_scheduled; // Last time scheduled
+	uint16_t signal;	 // Pending signals
+
+	uint16_t lock;
 
 	// CPU context
 	cpu_context_t context;
@@ -81,5 +94,7 @@ typedef struct task
 	// File descriptors, signals, etc.
 	void *files;
 	void *signal_handlers;
+
+	uint8_t spinlocks;
 
 } task_t;

@@ -22,3 +22,4 @@ void object_destroy(object_t *obj);
 
 void object_redraw_elements(object_t *obj);
 void object_add_element(object_t *obj, element_t *el);
+void object_move_element(object_t *obj, element_t *el, int new_x, int new_y);
