@@ -29,20 +29,21 @@ void pic_disable(void)
 
 void pic_remap(void)
 {
-	uint8_t a1, a2;
-	a1 = inb(PIC1_DATA);
-	a2 = inb(PIC2_DATA);
-
 	outb(PIC1_COMMAND, 0x11);
 	outb(PIC2_COMMAND, 0x11);
+	// ICW2: remap to vectors 0x20 (32) and 0x28 (40)
 	outb(PIC1_DATA, 32);
 	outb(PIC2_DATA, 40);
+	// ICW3: cascade
 	outb(PIC1_DATA, 4);
 	outb(PIC2_DATA, 2);
+	// ICW4: 8086 mode
 	outb(PIC1_DATA, 0x01);
 	outb(PIC2_DATA, 0x01);
-	outb(PIC1_DATA, a1);
-	outb(PIC2_DATA, a2);
+
+	// DON'T restore a1/a2 here — mask everything immediately
+	outb(PIC1_DATA, 0xFF);
+	outb(PIC2_DATA, 0xFF);
 }
 
 void pic_send_eoi(uint8_t irq)
@@ -166,22 +167,34 @@ void isr_handler(registers_t *regs)
 
 void irq_handler(registers_t *regs)
 {
-	// IRQs start at vector 32
 	uint8_t irq = regs->int_no - 32;
-	// outb(0x3f8, 'I');
-	// Call registered handler if exists
-	if (irq < 256 && irq_handlers[irq])
+	// outb(0x3f8, irq + '0');
+	// Check for PIC spurious IRQ before doing anything
+	if (irq == 7)
+	{
+		// Check master PIC ISR
+		outb(PIC1_COMMAND, 0x0B); // Read ISR
+		if (!(inb(PIC1_COMMAND) & 0x80))
+			return; // Spurious — no EOI
+	}
+	if (irq == 15)
+	{
+		// Check slave PIC ISR
+		outb(PIC2_COMMAND, 0x0B);
+		if (!(inb(PIC2_COMMAND) & 0x80))
+		{
+			outb(PIC1_COMMAND, PIC_EOI); // Still need master EOI
+			return;
+		}
+	}
+
+	if (irq_handlers[irq])
 		irq_handlers[irq](regs);
 
-	// Send EOI (End of Interrupt)
 	if (using_apic && apic_is_initialized())
-	{
 		lapic_eoi();
-	}
 	else
-	{
 		pic_send_eoi(irq);
-	}
 }
 
 // ============================================================================
@@ -236,15 +249,22 @@ void interrupts_init(void)
 	{
 		printk("Using APIC for interrupt handling\n");
 		using_apic = true;
+		// 1. Remap PIC away from CPU exception vectors FIRST
+		pic_remap();
 
+		// 2. NOW disable (mask all) — safe, no vector collisions
+		pic_disable();
 		// Enable Local APIC on BSP
 		lapic_enable();
 
 		// Register keyboard handler on IRQ 1 (vector 33)
-		irq_install_handler(1, keyboard_irq);
+		// irq_install_handler(1, keyboard_irq);
 
 		// Unmask keyboard interrupt in I/O APIC
 		ioapic_unmask_irq(1);
+		ioapic_unmask_irq(2);
+		ioapic_unmask_irq(12);
+		irq_install_handler(1, keyboard_irq);
 
 		// Optional: Setup LAPIC timer for preemptive multitasking
 		lapic_timer_init(100);			     // 100 Hz timer

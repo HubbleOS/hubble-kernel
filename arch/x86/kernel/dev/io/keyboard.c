@@ -302,8 +302,9 @@ static inline uint8_t kbd_read_scancode_irq(void)
 
 void keyboard_irq(registers_t *r)
 {
-	(void)r;
+	outb(0x3f8, 'K');
 	uint8_t raw = kbd_read_scancode_irq();
+	// outb(0x3f8, 'O');
 
 	// debug: печатаем scancode — поможет понять, приходят ли IRQ
 	// printk("[kbd irq] raw=0x%02x\n", raw);
@@ -311,8 +312,10 @@ void keyboard_irq(registers_t *r)
 	key_event_t evt;
 	if (process_scancode_once(raw, &evt))
 	{
+		// outb(0x3f8, 'P');
 		kbd_push(evt);
 	}
+	// outb(0x3f8, 'E');
 	// не отправляем EOI здесь — это делает общий irq_handler после возврата
 }
 
