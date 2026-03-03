@@ -1,5 +1,5 @@
 #include "console.h"
-#include <utils/color.h>
+#include "utils/color.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -26,7 +26,7 @@ console_t *console_create(int x, int y, int w, int h, color_t font, color_t bg)
 
 	object_t *obj = con->win->surface;
 
-	window_drawRect(con->win, 0, 0, obj->width, obj->height, con->bg_color);
+	// window_drawRect(con->win, 0, 0, obj->width, obj->height, con->bg_color);
 
 	return con;
 }
@@ -105,7 +105,7 @@ void console_clear(console_t *con)
 
 	object_t *obj = con->win->surface;
 
-	window_drawRect(con->win, 0, 0, obj->width, obj->height, con->bg_color);
+	// window_drawRect(con->win, 0, 0, obj->width, obj->height, con->bg_color);
 	con->cursor_x = 0;
 	con->cursor_y = 0;
 }

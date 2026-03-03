@@ -1,6 +1,6 @@
 #include "printk.h"
 #include "utils/font.h"
-#include <utils/color.h>
+#include <gui/utils/color.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdint.h>
