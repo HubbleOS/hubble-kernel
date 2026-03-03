@@ -1,42 +1,12 @@
 #include <bootinfo/framebuffer.h>
 #include <utils/font.h>
-#include <utils/color.h>
+#include <gui/utils/color.h>
 
 const uint8_t *get_glyph(char c)
 {
 	if ((unsigned char)c >= 128)
 		return 0;	       // Перевірка межі
 	return font[(unsigned char)c]; // Повертаємо гліф для символу
-}
-
-static inline uint8_t get_alpha(color_t c) { return (c >> 24) & 0xFF; }
-static inline uint8_t get_red(color_t c) { return (c >> 16) & 0xFF; }
-static inline uint8_t get_green(color_t c) { return (c >> 8) & 0xFF; }
-static inline uint8_t get_blue(color_t c) { return c & 0xFF; }
-
-static inline color_t make_color(uint8_t a, uint8_t r, uint8_t g, uint8_t b)
-{
-	return ((color_t)a << 24) | ((color_t)r << 16) | ((color_t)g << 8) | b;
-}
-
-static color_t blend_colors(color_t src, color_t dst)
-{
-	alpha_t alpha = get_alpha(src);
-
-	if (alpha == 0)
-		alpha = 255;
-
-	if (alpha == 255)
-		return src;
-
-	alpha_t inv_alpha = 255 - alpha;
-
-	chan_t r = (get_red(src) * alpha + get_red(dst) * inv_alpha) / 255;
-	chan_t g = (get_green(src) * alpha + get_green(dst) * inv_alpha) / 255;
-	chan_t b = (get_blue(src) * alpha + get_blue(dst) * inv_alpha) / 255;
-	alpha_t a = 255;
-
-	return make_color(a, r, g, b);
 }
 
 static void draw_pixel_array_scaled(uint8_t *glyph, int pitch, framebuffer_info_t *fb,
@@ -59,7 +29,7 @@ static void draw_pixel_array_scaled(uint8_t *glyph, int pitch, framebuffer_info_
 						{
 							color_t *pixel = &((uint32_t *)fb->base)[py * pitch + px];
 							color_t dst_color = *pixel;
-							color_t blended = blend_colors(font_color, dst_color);
+							color_t blended = color_blend(font_color, dst_color);
 							*pixel = blended;
 						}
 					}

@@ -2,3 +2,4 @@
 # <number> <name> <entry point>
 1 write sys_write
 2 read sys_read
+42 fb sys_framebuffer

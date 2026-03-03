@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <io.h>
 #include <bootinfo/framebuffer.h>
-#include "utils/color.h"
+#include <gui/utils/color.h>
 
 #define CHAR_WIDTH 8
 #define CHAR_HEIGHT 8

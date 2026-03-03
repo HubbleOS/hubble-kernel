@@ -19,7 +19,7 @@ user_enter:
     mov gs, ax
 
     ; Строим IRETQ frame
-    push qword 0x23             ; SS: User Data
+    push qword 0x1B             ; SS: User Data
     push r11                    ; RSP: user stack
     
     pushfq
@@ -27,7 +27,7 @@ user_enter:
     or rax, 0x200               ; IF
     push rax                    ; RFLAGS
     
-    push qword 0x1B             ; CS: User Code (0x18 + RPL=3)
+    push qword 0x23             ; CS: User Code (0x18 + RPL=3)
     push rcx                    ; RIP: entry
 
     ; Обнуляем регистры

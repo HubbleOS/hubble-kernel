@@ -4,6 +4,8 @@
 
 #define SYS_write 1
 #define SYS_read 2
+#define SYS_fb 42
+
 #define SYSCALL_COUNT 3
 
 // Используем SYSCALL instruction (быстрее)
