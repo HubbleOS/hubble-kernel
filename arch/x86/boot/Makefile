@@ -8,7 +8,7 @@ EFI_OUT_DIR := $(ISO_DIR)/EFI/BOOT
 GNU_EFI_DIR := $(LIB_DIR)/gnu-efi
 
 BOOT_CFLAGS = -Iinclude -Ikernel \
-	-I$(GNU_EFI_DIR) -I$(GNU_EFI_DIR)/inc \
+	-I$(GNU_EFI_DIR) -I$(GNU_EFI_DIR)/inc -I$(GNU_EFI_DIR)/inc/x86_64 \
 	-fpic -ffreestanding -fno-stack-protector \
 	-fno-stack-check -fshort-wchar -mno-red-zone \
 	-maccumulate-outgoing-args -c
@@ -49,4 +49,4 @@ boot-objs: $(BUILD_TOOL)
 bootloader: $(EFI_OUT)
 $(EFI_OUT): $(BOOT_SO)
 	@mkdir -p $(EFI_OUT_DIR)
-	objcopy $(EFI_SECTIONS) --target=efi-app-x86_64 --subsystem=10 $< $@
+	objcopy $(EFI_SECTIONS) --output-target=efi-app-x86_64 --subsystem=10 $< $@

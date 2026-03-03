@@ -7,7 +7,10 @@
 #include "init/init.h"
 #include <printk.h>
 #include "higher_half.h"
+#include <dev/mouse.h>
+#include <dev/ps2.h>
 #include "io.h"
+
 // Forward declarations
 extern void os_main(BootInfo *bi);
 extern int load_elf_and_run(const char *path);
@@ -39,6 +42,9 @@ kernel_entry(BootInfo *bi)
 	hpet_delay_ms(3000);
 
 	apic_debug_check();
+	ps2_init();
+	mouse_init();
+
 	smp_init();
 	scheduler_init();
 
@@ -55,18 +61,20 @@ void counter_task(void);
 void kmain_thread(void)
 {
 	printk("kmain thread\n");
-	task_t *task1 = task_create(counter_task, 255);
-	scheduler_add_task(task1);
 	uint8_t counter = 0;
+
+	// mouse_init();
+	mouse_t *m = get_mouse_info();
+	uint32_t old_x = m->x;
+	uint32_t old_y = m->y;
 	while (1)
 	{
-		if (counter++ == 5)
+		if (old_x != m->x || old_y != m->y)
 		{
-			task_kill_by_task(task1);
-			printk("killing task\n");
+			printk("x: %d y: %d l:%d r:%d \n", m->x, m->y, m->left_clicked, m->right_clicked);
+			old_x = m->x;
+			old_y = m->y;
 		}
-		printk("kmain thread\n");
-		hpet_delay_ms(1000);
 		asm volatile("hlt");
 	}
 }
