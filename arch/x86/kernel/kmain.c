@@ -20,6 +20,8 @@
 #include "gui/screen.h"
 #include "gui/compositor.h"
 
+#include <sys/keyboard.h>
+
 // Forward declarations
 extern int load_elf_and_run(const char *path);
 
@@ -53,6 +55,7 @@ kernel_entry(BootInfo *bi)
 	apic_debug_check();
 	ps2_init();
 	mouse_init();
+	keyboard_init();
 
 	smp_init();
 
@@ -137,6 +140,13 @@ void kmain_thread(void)
 	printk("kmain thread\n");
 	task_t *task1 = task_create(render_task, 255);
 	scheduler_add_task(task1);
+
+	// while (1)
+	// {
+	// 	char c = keyboard_get_char();
+	// 	printk("key: %c\n", c);
+	// }
+
 	// uint8_t counter = 0;
 
 	// // mouse_init();

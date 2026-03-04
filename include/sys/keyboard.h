@@ -98,4 +98,6 @@ char keymap_lookup_char(uint8_t scancode, bool extended, bool shift, bool caps);
 
 void keyboard_irq(registers_t *r);
 
+void keyboard_init();
+
 _End_C_Header;
