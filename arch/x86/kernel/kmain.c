@@ -86,7 +86,7 @@ void render_task(void)
 	object_t *bg = background_create(rgb(0, 0, 0));
 
 	window_t *win = window_create(100, 100, 800, 600);
-	window_t *win2 = window_create(100, 100, 800, 600);
+	// window_t *win2 = window_create(100, 100, 800, 600);
 
 	element_t *square = create_rect(0, 0, 100, 100, rgb(255, 0, 0));
 	element_t *square1 = create_rect(0, 110, 290, 10, rgb(14, 255, 54));
@@ -107,7 +107,7 @@ void render_task(void)
 			cursor_move(cursor, m->x, m->y);
 
 		if (square->x != m->x || square->y != m->y)
-			if (m->left_clicked == 1)
+			if (m->left == 1)
 				object_move_element(win->surface, square, m->x - win->surface->x, m->y - win->surface->y);
 
 		compositor_render();

@@ -6,22 +6,6 @@
 
 static compositor_t compositor;
 
-static bool rects_intersect(rect_t a, rect_t b)
-{
-	return !(a.x + a.w <= b.x || b.x + b.w <= a.x ||
-		 a.y + a.h <= b.y || b.y + b.h <= a.y);
-}
-
-static rect_t rect_union(rect_t a, rect_t b)
-{
-	int x1 = a.x < b.x ? a.x : b.x;
-	int y1 = a.y < b.y ? a.y : b.y;
-	int x2 = (a.x + a.w) > (b.x + b.w) ? (a.x + a.w) : (b.x + b.w);
-	int y2 = (a.y + a.h) > (b.y + b.h) ? (a.y + a.h) : (b.y + b.h);
-	rect_t r = {x1, y1, x2 - x1, y2 - y1};
-	return r;
-}
-
 void compositor_add_damage(int x, int y, int w, int h)
 {
 	if (compositor.dirty_count >= MAX_DIRTY || w <= 0 || h <= 0)
@@ -84,32 +68,6 @@ void compositor_remove(object_t *obj, int layer)
 			return;
 		}
 	}
-}
-
-void merge_dirty_rects(rect_t *dirty, int *count)
-{
-	bool merged_any;
-	do
-	{
-		merged_any = false;
-		for (int i = 0; i < *count; i++)
-		{
-			for (int j = i + 1; j < *count; j++)
-			{
-				if (rects_intersect(dirty[i], dirty[j]))
-				{
-					dirty[i] = rect_union(dirty[i], dirty[j]);
-					for (int k = j; k < *count - 1; k++)
-						dirty[k] = dirty[k + 1];
-					(*count)--;
-					merged_any = true;
-					break;
-				}
-			}
-			if (merged_any)
-				break;
-		}
-	} while (merged_any);
 }
 
 void compositor_render()
