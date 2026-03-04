@@ -308,7 +308,6 @@ static inline uint8_t kbd_read_scancode_irq(void)
 
 void keyboard_irq(registers_t *r)
 {
-	outb(0x3f8, 'K');
 	uint8_t status = inb(0x64);
 
 	if ((status & 0x20))
@@ -317,12 +316,6 @@ void keyboard_irq(registers_t *r)
 		return;
 
 	uint8_t raw = kbd_read_scancode_irq();
-
-	outb(0x3f8, 'O');
-	for (size_t i = 0; i < 8; i++)
-	{
-		outb(0x3f8, ((raw >> i) & 1) + '0');
-	}
 
 	outb(0x3f8, '\n');
 
@@ -335,6 +328,7 @@ void keyboard_irq(registers_t *r)
 		// outb(0x3f8, 'P');
 		kbd_push(evt);
 	}
+	outb(0x3f8, 'K');
 	// outb(0x3f8, 'E');
 	// не отправляем EOI здесь — это делает общий irq_handler после возврата
 }
@@ -346,9 +340,7 @@ char keyboard_get_char(void)
 	while (true)
 	{
 		// Атомарно проверяем буфер
-		asm volatile("cli");
 		bool has_event = kbd_pop(&ev);
-		asm volatile("sti");
 
 		if (has_event)
 		{

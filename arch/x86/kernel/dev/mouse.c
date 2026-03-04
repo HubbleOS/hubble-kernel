@@ -74,7 +74,7 @@ void mouse_handler(registers_t *regs)
 		mouse_g->x = 1920;
 	if (mouse_g->y > 1080)
 		mouse_g->y = 1080;
-	outb(0x3f8, 'M');
+	// outb(0x3f8, 'M');
 }
 
 static void mouse_write(uint8_t cmd)
