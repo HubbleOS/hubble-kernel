@@ -1,11 +1,10 @@
+#include "window.h"
+
 #include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include "window.h"
-#include "screen.h"
 
-#include "object.h"
-#include "compositor.h"
+#include <gui/core/compositor/compositor.h>
 
 window_t *window_create(int x, int y, int w, int h)
 {

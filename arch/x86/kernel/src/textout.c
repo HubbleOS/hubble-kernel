@@ -1,8 +1,8 @@
 #include <bootinfo/framebuffer.h>
 #include <utils/font.h>
-#include <gui/utils/color.h>
+#include <gui/utils/color/color.h>
 
-const uint8_t *get_glyph(char c)
+static uint8_t *get_glyph(char c)
 {
 	if ((unsigned char)c >= 128)
 		return 0;	       // Перевірка межі
@@ -46,24 +46,4 @@ void draw_char(framebuffer_info_t *fb, char c, int x, int y, int w, int h, color
 	int pitch = fb->pitch / 4; // Вираховуємо ширину рядка в пікселях (з
 				   // урахуванням 32 біт на піксель)
 	draw_pixel_array_scaled(glyph, pitch, fb, x, y, w, h, 1, 1, font_color);
-}
-
-// crutch
-void clear_char_area(framebuffer_info_t *fb, int x, int y, int w, int h, color_t bg_color)
-{
-	int pitch = fb->pitch / 4;
-
-	for (int row = 0; row < h; ++row)
-	{
-		for (int col = 0; col < w; ++col)
-		{
-			unsigned int px = x + col;
-			unsigned int py = y + row;
-
-			if (px < fb->width && py < fb->height)
-			{
-				((uint32_t *)fb->base)[py * pitch + px] = bg_color;
-			}
-		}
-	}
 }

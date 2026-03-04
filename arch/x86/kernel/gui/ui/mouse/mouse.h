@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../object.h"
+#include <gui/core/object/object.h>
+#include <gui/core/compositor/compositor.h>
 #include "../element.h"
-#include "../../compositor.h"
 
 typedef struct
 {

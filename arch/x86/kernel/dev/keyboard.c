@@ -1,7 +1,7 @@
 #include <stddef.h>
 #include <ctype.h>
-#include <sys/keyboard.h>
-#include <sys/keymap.h>
+#include "keyboard.h"
+#include "keymap.h"
 #include <lib/misc.k.h>
 #include <utils/font.h>
 #include <io.h>

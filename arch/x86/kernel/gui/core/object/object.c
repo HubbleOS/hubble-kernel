@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "compositor.h"
+#include "../compositor/compositor.h"
 
 #define MAX_ELEMENTS 16
 

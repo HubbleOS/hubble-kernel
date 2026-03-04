@@ -7,23 +7,6 @@ uint32_t *framebuffer_back = NULL;
 int fb_width = 0;
 int fb_height = 0;
 
-void screen_present(void)
-{
-	if (!g_fb || !framebuffer_back)
-		return;
-
-	uint8_t *dst_base = (uint8_t *)g_fb->base;
-
-	for (int row = 0; row < fb_height; row++)
-	{
-		uint32_t *dst = (uint32_t *)(dst_base + row * g_fb->pitch);
-		uint32_t *src = framebuffer_back + row * fb_width;
-
-		for (int col = 0; col < fb_width; col++)
-			dst[col] = src[col];
-	}
-}
-
 void screen_present_rect(int x, int y, int w, int h)
 {
 	if (!g_fb || !framebuffer_back)

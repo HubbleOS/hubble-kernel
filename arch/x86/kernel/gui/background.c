@@ -1,5 +1,5 @@
-#include "compositor.h"
-#include "screen.h"
+#include <gui/core/compositor/compositor.h>
+#include <gui/core/screen/screen.h>
 #include <stdlib.h>
 #include <string.h>
 

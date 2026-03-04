@@ -8,23 +8,22 @@
 #include <printk.h>
 #include "higher_half.h"
 #include <dev/mouse.h>
+#include <dev/keyboard.h>
 #include <dev/ps2.h>
 #include "io.h"
 
+#include <gui/core/screen/screen.h>
+#include <gui/core/object/object.h>
+#include <gui/core/compositor/compositor.h>
+
+#include <gui/ui/button/button.h>
+#include <gui/ui/сursor/cursor.h>
+#include <gui/ui/mouse/mouse.h>
+#include <gui/ui/window/window.h>
+#include <gui/ui/rect/rect.h>
+#include <gui/ui/text/text.h>
+
 #include "gui/background.h"
-#include "gui/window.h"
-#include "gui/cursor.h"
-
-#include "gui/ui/rect/rect.h"
-
-#include "gui/screen.h"
-#include "gui/object.h"
-#include "gui/compositor.h"
-#include "gui/ui/button/button.h"
-
-#include "gui/ui/mouse/mouse.h"
-
-#include <sys/keyboard.h>
 
 // Forward declarations
 extern int load_elf_and_run(const char *path);
@@ -75,6 +74,8 @@ kernel_entry(BootInfo *bi)
 		asm volatile("hlt");
 }
 
+void kernel_main(BootInfo *bi) __attribute__((alias("kernel_entry")));
+
 void fps_delay(uint32_t fps)
 {
 	if (fps == 0)
@@ -106,6 +107,9 @@ void render_task(void)
 
 	window_addElement(win, square1);
 	window_addElement(win, square);
+
+	text_t *text = element_create_text(0, 0, "Hello, World! 123412341234");
+	window_addElement(win, &text->base);
 
 	cursor_t *cursor = cursor_create(16, 16, rgb(0, 0, 0), rgb(255, 255, 255));
 	mouse_t *m = get_mouse_info();
@@ -146,5 +150,3 @@ void kmain_thread(void)
 	task_t *task1 = task_create(render_task, 255);
 	scheduler_add_task(task1);
 }
-
-void kernel_main(BootInfo *bi) __attribute__((alias("kernel_entry")));
