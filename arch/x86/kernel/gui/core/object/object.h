@@ -1,8 +1,8 @@
 #pragma once
 
 #include <stdint.h>
-#include "utils/color.h"
-#include "ui/element.h"
+#include <gui/utils/color/color.h>
+#include "gui/ui/element.h"
 
 typedef struct
 {

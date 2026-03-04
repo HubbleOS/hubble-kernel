@@ -1,6 +1,7 @@
 #pragma once
-#include "object.h"
-#include "rect.h"
+
+#include <gui/core/object/object.h>
+#include <gui/utils/rect/rect.h>
 
 #define MAX_OBJECTS 256
 #define MAX_DIRTY 64

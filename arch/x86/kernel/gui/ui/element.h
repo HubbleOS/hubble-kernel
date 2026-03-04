@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "../utils/color.h"
+#include <gui/utils/color/color.h>
 
 typedef enum
 {
@@ -11,16 +11,6 @@ typedef enum
 	UI_TEXTBOX,
 	UI_RECT,
 } element_type_t;
-
-// typedef struct
-// {
-// 	int x, y, width, height;
-// 	element_type_t type;
-
-// 	uint32_t *buffer;
-
-// 	char *text;
-// } element_t;
 
 typedef struct element element_t;
 

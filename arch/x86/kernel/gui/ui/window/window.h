@@ -5,9 +5,8 @@
 
 #include <bootinfo/framebuffer.h>
 
-#include "utils/color.h"
-
-#include "object.h"
+#include <gui/utils/color/color.h>
+#include <gui/core/object/object.h>
 
 typedef struct
 {
@@ -27,6 +26,3 @@ int window_addElement(window_t *win, element_t *el);
 void window_move(window_t *win, int x, int y);
 void window_resize(window_t *win, int w, int h);
 void window_focus(window_t *win);
-void window_fill(window_t *win, color_t color);
-
-element_t *create_square(int x, int y, int w, int h, color_t color);

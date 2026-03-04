@@ -1,6 +1,6 @@
 #include "printk.h"
 #include "utils/font.h"
-#include <gui/utils/color.h>
+#include <gui/utils/color/color.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -99,7 +99,7 @@ static void early_putchar(char c)
 		if (early_x >= CHAR_WIDTH)
 		{
 			early_x -= CHAR_WIDTH;
-			clear_char_area(early_fb, early_x, early_y, CHAR_WIDTH, CHAR_HEIGHT, 0x000000);
+			// clear_char_area(early_fb, early_x, early_y, CHAR_WIDTH, CHAR_HEIGHT, 0x000000);
 		}
 		return;
 	}

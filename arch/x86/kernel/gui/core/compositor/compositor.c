@@ -1,5 +1,5 @@
 #include "compositor.h"
-#include "screen.h"
+#include "../screen/screen.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
