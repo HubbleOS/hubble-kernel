@@ -114,7 +114,7 @@
 #define KEY_NUM_SLASH 0x35 // extended
 
 // Arrow keys
-#define KEY_UP 0x48	   // extended
+#define KEY_UP 0x48    // extended
 #define KEY_LEFT 0x4B  // extended
 #define KEY_RIGHT 0x4D // extended
 #define KEY_DOWN 0x50  // extended
@@ -134,24 +134,24 @@
 #define KEY_WAKE 0x63	   // extended
 
 // Multimedia keys
-#define KEY_PREV_TRACK 0x10	 // extended
-#define KEY_NEXT_TRACK 0x19	 // extended
-#define KEY_MUTE 0x20		 // 0xE0 0x20
-#define KEY_CALCULATOR 0x21	 // extended
-#define KEY_PLAY 0x22		 // 0xE0 0x22
-#define KEY_STOP 0x24		 // 0xE0 0x24
+#define KEY_PREV_TRACK 0x10  // extended
+#define KEY_NEXT_TRACK 0x19  // extended
+#define KEY_MUTE 0x20	     // 0xE0 0x20
+#define KEY_CALCULATOR 0x21  // extended
+#define KEY_PLAY 0x22	     // 0xE0 0x22
+#define KEY_STOP 0x24	     // 0xE0 0x24
 #define KEY_VOLUME_DOWN 0x2E // extended
-#define KEY_VOLUME_UP 0x30	 // extended
+#define KEY_VOLUME_UP 0x30   // extended
 
-#define KEY_WWW_SEARCH 0x65	   // extended
+#define KEY_WWW_SEARCH 0x65    // extended
 #define KEY_WWW_FAVORITES 0x66 // extended
 #define KEY_WWW_REFRESH 0x67   // extended
-#define KEY_WWW_STOP 0x68	   // extended
+#define KEY_WWW_STOP 0x68      // extended
 #define KEY_WWW_FORWARD 0x69   // extended
-#define KEY_WWW_BACK 0x6A	   // extended
+#define KEY_WWW_BACK 0x6A      // extended
 
 #define KEY_MY_COMPUTER 0x6B  // extended
-#define KEY_MAIL 0x6C		  // extended
+#define KEY_MAIL 0x6C	      // extended
 #define KEY_MEDIA_SELECT 0x6D // extended
 
 // Other keys

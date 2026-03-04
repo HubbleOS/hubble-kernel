@@ -19,9 +19,9 @@ mouse_t *get_mouse_info(void)
 
 void mouse_handler(registers_t *regs)
 {
-	if (!(inb(0x64) & 0x20))
+	if (!(inb(PS2_COMMAND) & 0x20))
 		return;
-	mouse_packet[mouse_cycle++] = inb(0x60);
+	mouse_packet[mouse_cycle++] = inb(PS2_DATA);
 
 	if (mouse_cycle < 3)
 		return;
@@ -80,15 +80,15 @@ void mouse_handler(registers_t *regs)
 static void mouse_write(uint8_t cmd)
 {
 	ps2_wait_input();
-	outb(0x64, 0xD4);
+	outb(PS2_COMMAND, 0xD4);
 	ps2_wait_input();
-	outb(0x60, cmd);
+	outb(PS2_DATA, cmd);
 }
 
 static uint8_t mouse_read(void)
 {
 	ps2_wait_output();
-	return inb(0x60);
+	return inb(PS2_DATA);
 }
 
 void mouse_init()
@@ -97,13 +97,13 @@ void mouse_init()
 
 	// 1. Enable second PS/2 port
 	ps2_wait_input();
-	outb(0x64, 0xA8);
+	outb(PS2_COMMAND, 0xA8);
 
 	// 3. Read config, enable IRQ12 and mouse clock
 	ps2_wait_input();
-	outb(0x64, 0x20);
+	outb(PS2_COMMAND, 0x20);
 	ps2_wait_output();
-	uint8_t config = inb(0x60);
+	uint8_t config = inb(PS2_DATA);
 
 	config |= 0x01;
 	config |= 0x02;
@@ -111,9 +111,9 @@ void mouse_init()
 	config &= ~0x40;
 
 	ps2_wait_input();
-	outb(0x64, 0x60);
+	outb(PS2_COMMAND, PS2_DATA);
 	ps2_wait_input();
-	outb(0x60, config);
+	outb(PS2_DATA, config);
 
 	// 4. Reset mouse
 	mouse_write(0xFF);

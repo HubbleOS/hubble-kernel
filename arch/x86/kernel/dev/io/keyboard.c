@@ -250,6 +250,12 @@ static bool process_scancode_once(uint8_t raw, key_event_t *out_evt)
 	static bool caps_lock_active = false;
 
 	uint8_t scancode = GET_SCANCODE(raw);
+	for (int i = 0; i < 8; i++)
+	{
+		outb(0x3f8, ((raw >> i) & 1) + '0');
+	}
+	outb(0x3f8, '\n');
+
 	bool released = IS_RELEASED(raw);
 
 	if (IS_EXTENDED(raw))
@@ -303,8 +309,22 @@ static inline uint8_t kbd_read_scancode_irq(void)
 void keyboard_irq(registers_t *r)
 {
 	outb(0x3f8, 'K');
+	uint8_t status = inb(0x64);
+
+	if ((status & 0x20))
+		return;
+	if (!(status & 0x01))
+		return;
+
 	uint8_t raw = kbd_read_scancode_irq();
-	// outb(0x3f8, 'O');
+
+	outb(0x3f8, 'O');
+	for (size_t i = 0; i < 8; i++)
+	{
+		outb(0x3f8, ((raw >> i) & 1) + '0');
+	}
+
+	outb(0x3f8, '\n');
 
 	// debug: печатаем scancode — поможет понять, приходят ли IRQ
 	// printk("[kbd irq] raw=0x%02x\n", raw);
@@ -361,4 +381,37 @@ key_event_t keyboard_get_event(void)
 		// Ждём следующего прерывания
 		asm volatile("hlt");
 	}
+}
+
+#include <dev/ps2.h>
+#include <printk.h>
+
+static void keyboard_write(uint8_t cmd)
+{
+	ps2_wait_input();
+	outb(PS2_DATA, cmd);
+}
+
+static uint8_t keyboard_read(void)
+{
+	ps2_wait_output();
+	return inb(PS2_DATA);
+}
+
+void keyboard_init()
+{
+	__asm__ volatile("cli");
+
+	uint8_t act;
+	keyboard_write(0xF0);
+	act = keyboard_read();
+
+	printk("Keyboard active: %02x\n", act);
+
+	keyboard_write(0x01);
+	act = keyboard_read();
+	printk("Keyboard active: %02x\n", act);
+
+	__asm__ volatile("sti");
+	printk("Keyboard initialized\n");
 }
