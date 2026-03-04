@@ -14,6 +14,8 @@ element_t *create_rect(int x, int y, int w, int h, color_t color)
 	rect->width = w;
 	rect->height = h;
 
+	rect->type = UI_RECT;
+
 	rect->buffer = malloc(w * h * sizeof(uint32_t));
 	if (!rect->buffer)
 	{

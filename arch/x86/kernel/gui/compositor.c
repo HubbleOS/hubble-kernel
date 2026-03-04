@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-static compositor_t compositor;
+compositor_t compositor;
 
 void compositor_add_damage(int x, int y, int w, int h)
 {
@@ -150,15 +150,23 @@ void compositor_bring_to_front(object_t *obj, int layer)
 
 void compositor_move_object(object_t *obj, int new_x, int new_y)
 {
-	compositor_add_damage(obj->x, obj->y, obj->width, obj->height);
+	rect_t old_rect = {obj->x, obj->y, obj->width, obj->height};
+	rect_t new_rect = {new_x, new_y, obj->width, obj->height};
+	rect_t rect = rect_union(old_rect, new_rect);
+
+	compositor_add_damage(rect.x, rect.y, rect.w, rect.h);
+
 	obj->x = new_x;
 	obj->y = new_y;
-	compositor_add_damage(obj->x, obj->y, obj->width, obj->height);
 }
 
 void compositor_change_size_object(object_t *obj, int new_w, int new_h)
 {
-	compositor_add_damage(obj->x, obj->y, obj->width, obj->height);
+	rect_t old_rect = {obj->x, obj->y, obj->width, obj->height};
+	rect_t new_rect = {obj->x, obj->y, new_w, new_h};
+	rect_t rect = rect_union(old_rect, new_rect);
+
+	compositor_add_damage(rect.x, rect.y, rect.w, rect.h);
 
 	uint32_t *new_buf = malloc(new_w * new_h * sizeof(uint32_t));
 	if (!new_buf)
@@ -176,6 +184,4 @@ void compositor_change_size_object(object_t *obj, int new_w, int new_h)
 	obj->height = new_h;
 
 	object_redraw_elements(obj);
-
-	compositor_add_damage(obj->x, obj->y, obj->width, obj->height);
 }
