@@ -224,14 +224,18 @@ slab_cache_t *slab_cache_create(size_t size, size_t align)
 
 static slab_t *select_slab_for_alloc(slab_cache_t *cache)
 {
-	slab_t *slab = cache->slabs_partial;
-	if (!slab && (slab = cache->slabs_free))
+	if (cache->slabs_partial)
+		return cache->slabs_partial;
+
+	if (cache->slabs_free)
 	{
+		slab_t *slab = cache->slabs_free;
 		slab_remove_from_list(&cache->slabs_free, slab);
 		slab_add_to_list(&cache->slabs_partial, slab);
+		return slab;
 	}
-	if (!slab)
-		slab = slab_create(cache);
+
+	slab_t *slab = slab_create(cache);
 	if (slab)
 		slab_add_to_list(&cache->slabs_partial, slab);
 	return slab;

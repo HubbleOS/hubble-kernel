@@ -1,4 +1,5 @@
 #include "cursor.h"
+#include "printk.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -6,7 +7,10 @@ cursor_t *cursor_create(int w, int h, uint32_t color_outer, uint32_t color_inner
 {
 	cursor_t *c = malloc(sizeof(cursor_t));
 	if (!c)
+	{
+		printk("failed to create");
 		return NULL;
+	}
 
 	c->width = w;
 	c->height = h;
@@ -14,10 +18,12 @@ cursor_t *cursor_create(int w, int h, uint32_t color_outer, uint32_t color_inner
 	c->y = 0;
 
 	// transparent cursor object
+	// __asm__ volatile("cli");
 	c->surface = object_create(0, 0, w, h, 0);
-
+	// __asm__ volatile("sti");
 	if (!c->surface)
 	{
+		printk("no cursor surface");
 		free(c);
 		return NULL;
 	}
@@ -56,8 +62,11 @@ void cursor_destroy(cursor_t *c)
 void cursor_move(cursor_t *c, int x, int y)
 {
 	if (!c)
+	{
 		return;
+	}
 	c->x = x;
 	c->y = y;
+	// printk("new x: %d new y: %d", x, y);
 	compositor_move_object(c->surface, x, y);
 }

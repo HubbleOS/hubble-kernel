@@ -101,7 +101,6 @@ void render_task(void)
 	int dx = 1;
 
 	cursor_t *cursor = cursor_create(16, 16, rgb(0, 0, 0), rgb(255, 255, 255));
-
 	mouse_t *m = get_mouse_info();
 
 	while (1)
@@ -141,11 +140,11 @@ void kmain_thread(void)
 	task_t *task1 = task_create(render_task, 255);
 	scheduler_add_task(task1);
 
-	// while (1)
-	// {
-	// 	char c = keyboard_get_char();
-	// 	printk("key: %c\n", c);
-	// }
+	while (1)
+	{
+		char c = keyboard_get_char();
+		printk("key: %c\n", c);
+	}
 
 	// uint8_t counter = 0;
 
