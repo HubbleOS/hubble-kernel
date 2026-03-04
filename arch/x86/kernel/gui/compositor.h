@@ -25,6 +25,8 @@ typedef struct
 	int dirty_count;
 } compositor_t;
 
+extern compositor_t compositor;
+
 void compositor_init();
 void compositor_add(object_t *obj, int layer);
 void compositor_remove(object_t *obj, int layer);
