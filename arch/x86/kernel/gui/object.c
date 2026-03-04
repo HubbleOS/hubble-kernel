@@ -89,16 +89,6 @@ void object_add_element(object_t *obj, element_t *el)
 	compositor_add_damage(obj->x + el->x, obj->y + el->y, el->width, el->height);
 }
 
-static rect_t rect_union(rect_t a, rect_t b)
-{
-	int x1 = a.x < b.x ? a.x : b.x;
-	int y1 = a.y < b.y ? a.y : b.y;
-	int x2 = (a.x + a.w) > (b.x + b.w) ? (a.x + a.w) : (b.x + b.w);
-	int y2 = (a.y + a.h) > (b.y + b.h) ? (a.y + a.h) : (b.y + b.h);
-	rect_t r = {x1, y1, x2 - x1, y2 - y1};
-	return r;
-}
-
 void object_move_element(object_t *obj, element_t *el, int new_x, int new_y)
 {
 	if (!obj || !el)

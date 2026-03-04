@@ -1,5 +1,6 @@
 #pragma once
 #include "object.h"
+#include "rect.h"
 
 #define MAX_OBJECTS 256
 #define MAX_DIRTY 64
@@ -10,11 +11,6 @@
 #define LAYER_EFFECTS 3
 
 #define MAX_LAYERS 4
-
-typedef struct
-{
-	int x, y, w, h;
-} rect_t;
 
 typedef struct
 {
