@@ -13,7 +13,10 @@ object_t *object_create(int x, int y, int w, int h, color_t bg_color)
 	object_t *obj = malloc(sizeof(object_t));
 
 	if (!obj)
+	{
+		// printk("failed to alloc currsor");
 		return NULL;
+	}
 
 	obj->x = x;
 	obj->y = y;

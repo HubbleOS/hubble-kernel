@@ -4,7 +4,7 @@
 AppState back(App *app)
 {
 	(void)app;
-	menu_pop(app);
+	// menu_pop(app);
 	return STATE_MENU;
 }
 
