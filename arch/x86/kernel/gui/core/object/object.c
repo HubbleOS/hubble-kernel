@@ -11,7 +11,6 @@
 object_t *object_create(int x, int y, int w, int h, color_t bg_color)
 {
 	object_t *obj = malloc(sizeof(object_t));
-	// object_t *obj = calloc(1, sizeof(object_t));
 
 	if (!obj)
 		return NULL;
@@ -94,16 +93,13 @@ void object_move_element(object_t *obj, element_t *el, int new_x, int new_y)
 	if (!obj || !el)
 		return;
 
-	// 1. сохраняем старые координаты
 	int old_x = el->x;
 	int old_y = el->y;
 
-	// 2. вычисляем прямоугольник, который надо перерисовать
 	rect_t old_rect = {old_x, old_y, el->width, el->height};
 	rect_t new_rect = {new_x, new_y, el->width, el->height};
 	rect_t dirty_rect = rect_union(old_rect, new_rect);
 
-	// 3. очищаем старую область в буфере объекта
 	for (int y = dirty_rect.y; y < dirty_rect.y + dirty_rect.h; y++)
 	{
 		for (int x = dirty_rect.x; x < dirty_rect.x + dirty_rect.w; x++)
@@ -113,14 +109,11 @@ void object_move_element(object_t *obj, element_t *el, int new_x, int new_y)
 		}
 	}
 
-	// 4. обновляем координаты элемента
 	el->x = new_x;
 	el->y = new_y;
 
-	// 5. перерисовываем элемент
 	object_redraw_elements(obj);
 
-	// 6. помечаем объединённый прямоугольник как dirty для композитора
 	compositor_add_damage(obj->x + dirty_rect.x, obj->y + dirty_rect.y,
 			      dirty_rect.w, dirty_rect.h);
 }
