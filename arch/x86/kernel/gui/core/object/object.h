@@ -15,6 +15,8 @@ typedef struct object
 	element_t **elements;
 	int element_count;
 	int element_capacity;
+
+	int layer;
 } object_t;
 
 object_t *object_create(int x, int y, int w, int h, color_t bg_color);

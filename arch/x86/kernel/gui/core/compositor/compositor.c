@@ -4,11 +4,43 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+#include <printk.h>
+
 compositor_t compositor;
 
-void compositor_add_damage(int x, int y, int w, int h)
+void compositor_init()
 {
-	if (compositor.dirty_count >= MAX_DIRTY || w <= 0 || h <= 0)
+	for (int i = 0; i < MAX_LAYERS; i++)
+	{
+		compositor.layers[i].count = 0;
+		compositor.layers[i].buffer = malloc(fb_width * fb_height * sizeof(uint32_t));
+		if (!compositor.layers[i].buffer)
+		{
+
+			printk("Error: Failed to allocate compositor buffer\n");
+			return;
+		}
+
+		memset(compositor.layers[i].buffer, 0, fb_width * fb_height * sizeof(uint32_t));
+	}
+	compositor.dirty_count = 0;
+}
+
+typedef struct
+{
+	rect_t dirty[MAX_DIRTY];
+	int dirty_count;
+} layer_dirty_t;
+
+layer_dirty_t layer_dirty[MAX_LAYERS];
+
+void compositor_add_damage(int layer, int x, int y, int w, int h)
+{
+	if (layer < 0 || layer >= MAX_LAYERS)
+		return;
+
+	layer_dirty_t *ld = &layer_dirty[layer];
+	if (ld->dirty_count >= MAX_DIRTY || w <= 0 || h <= 0)
 		return;
 
 	// clamp
@@ -29,27 +61,7 @@ void compositor_add_damage(int x, int y, int w, int h)
 	if (w <= 0 || h <= 0)
 		return;
 
-	compositor.dirty[compositor.dirty_count++] = (rect_t){x, y, w, h};
-}
-
-void compositor_init()
-{
-	for (int i = 0; i < MAX_LAYERS; i++)
-		compositor.layers[i].count = 0;
-	compositor.dirty_count = 0;
-}
-
-void compositor_add(object_t *obj, int layer)
-{
-	if (layer < 0 || layer >= MAX_LAYERS)
-		return;
-
-	layer_t *l = &compositor.layers[layer];
-	if (l->count >= MAX_OBJECTS)
-		return;
-
-	l->objects[l->count++] = obj;
-	compositor_add_damage(obj->x, obj->y, obj->width, obj->height);
+	ld->dirty[ld->dirty_count++] = (rect_t){x, y, w, h};
 }
 
 void compositor_remove(object_t *obj, int layer)
@@ -62,7 +74,7 @@ void compositor_remove(object_t *obj, int layer)
 	{
 		if (l->objects[i] == obj)
 		{
-			compositor_add_damage(obj->x, obj->y, obj->width, obj->height);
+			compositor_add_damage(obj->layer, obj->x, obj->y, obj->width, obj->height);
 			l->objects[i] = l->objects[l->count - 1];
 			l->count--;
 			return;
@@ -70,21 +82,36 @@ void compositor_remove(object_t *obj, int layer)
 	}
 }
 
+static inline bool rects_overlap(int ax1, int ay1, int ax2, int ay2,
+				 int bx1, int by1, int bx2, int by2)
+{
+	return !(ax2 <= bx1 || ax1 >= bx2 || ay2 <= by1 || ay1 >= by2);
+}
+
 void compositor_render()
 {
-	merge_dirty_rects(compositor.dirty, &compositor.dirty_count);
+	// 1. Собираем глобальный dirty из всех слоёв
+	rect_t global_dirty[MAX_DIRTY];
+	int global_count = 0;
 
-	for (int d = 0; d < compositor.dirty_count; d++)
+	for (int l = 0; l < MAX_LAYERS; l++)
 	{
-		rect_t r = compositor.dirty[d];
+		layer_dirty_t *ld = &layer_dirty[l];
+		if (ld->dirty_count == 0)
+			continue;
 
-		// clear dirty region
-		for (int row = r.y; row < r.y + r.h; row++)
-			memset(framebuffer_back + row * fb_width + r.x, 0, r.w * sizeof(uint32_t));
+		merge_dirty_rects(ld->dirty, &ld->dirty_count);
 
-		// render layers bottom → top
-		for (int l = 0; l < MAX_LAYERS; l++)
+		// 2. Рендерим объекты слоя в его собственный буфер
+		for (int d = 0; d < ld->dirty_count; d++)
 		{
+			rect_t r = ld->dirty[d];
+			uint32_t *layer_buf = compositor.layers[l].buffer;
+
+			// Очищаем регион в буфере слоя
+			for (int y = r.y; y < r.y + r.h; y++)
+				memset(layer_buf + y * fb_width + r.x, 0, r.w * sizeof(uint32_t));
+
 			layer_t *layer = &compositor.layers[l];
 			for (int i = 0; i < layer->count; i++)
 			{
@@ -93,7 +120,6 @@ void compositor_render()
 				int obj_x1 = obj->x, obj_y1 = obj->y;
 				int obj_x2 = obj->x + obj->width;
 				int obj_y2 = obj->y + obj->height;
-
 				int r_x2 = r.x + r.w, r_y2 = r.y + r.h;
 
 				if (obj_x1 >= r_x2 || obj_x2 <= r.x || obj_y1 >= r_y2 || obj_y2 <= r.y)
@@ -106,22 +132,49 @@ void compositor_render()
 
 				for (int y = start_y; y < end_y; y++)
 				{
-					for (int x = start_x; x < end_x; x++)
-					{
-						int obj_px = x - obj->x;
-						int obj_py = y - obj->y;
-						uint32_t src = obj->buffer[obj_py * obj->width + obj_px];
-						uint32_t *dst = framebuffer_back + y * fb_width + x;
-						*dst = color_blend(src, *dst);
-					}
+					uint32_t *obj_row = obj->buffer + (y - obj->y) * obj->width;
+					uint32_t *dst_row = layer_buf + y * fb_width + start_x;
+
+					for (int x = 0; x < end_x - start_x; x++)
+						dst_row[x] = color_blend(obj_row[(start_x - obj->x) + x], dst_row[x]);
 				}
+			}
+
+			// Запоминаем регион для финальной компоновки
+			if (global_count < MAX_DIRTY)
+				global_dirty[global_count++] = r;
+		}
+
+		ld->dirty_count = 0;
+	}
+
+	if (global_count == 0)
+		return;
+
+	merge_dirty_rects(global_dirty, &global_count);
+
+	// 3. Компонуем все слои снизу вверх в framebuffer_back только в dirty-регионах
+	for (int d = 0; d < global_count; d++)
+	{
+		rect_t r = global_dirty[d];
+
+		for (int y = r.y; y < r.y + r.h; y++)
+		{
+			uint32_t *dst = framebuffer_back + y * fb_width + r.x;
+
+			// Начинаем с нуля
+			memset(dst, 0, r.w * sizeof(uint32_t));
+
+			for (int l = 0; l < MAX_LAYERS; l++)
+			{
+				uint32_t *src = compositor.layers[l].buffer + y * fb_width + r.x;
+				for (int x = 0; x < r.w; x++)
+					dst[x] = color_blend(src[x], dst[x]);
 			}
 		}
 
 		screen_present_rect(r.x, r.y, r.w, r.h);
 	}
-
-	compositor.dirty_count = 0;
 }
 
 void compositor_bring_to_front(object_t *obj, int layer)
@@ -148,25 +201,38 @@ void compositor_bring_to_front(object_t *obj, int layer)
 	l->objects[l->count - 1] = obj;
 }
 
+void compositor_add(object_t *obj, int layer)
+{
+	if (layer < 0 || layer >= MAX_LAYERS)
+		return;
+	layer_t *l = &compositor.layers[layer];
+	if (l->count >= MAX_OBJECTS)
+		return;
+
+	obj->layer = layer;
+	l->objects[l->count++] = obj;
+
+	compositor_add_damage(layer, obj->x, obj->y, obj->width, obj->height);
+}
+
 void compositor_move_object(object_t *obj, int new_x, int new_y)
 {
 	rect_t old_rect = {obj->x, obj->y, obj->width, obj->height};
 	rect_t new_rect = {new_x, new_y, obj->width, obj->height};
 	rect_t rect = rect_union(old_rect, new_rect);
 
-	compositor_add_damage(rect.x, rect.y, rect.w, rect.h);
+	compositor_add_damage(obj->layer, rect.x, rect.y, rect.w, rect.h);
 
 	obj->x = new_x;
 	obj->y = new_y;
 }
-
 void compositor_change_size_object(object_t *obj, int new_w, int new_h)
 {
 	rect_t old_rect = {obj->x, obj->y, obj->width, obj->height};
 	rect_t new_rect = {obj->x, obj->y, new_w, new_h};
 	rect_t rect = rect_union(old_rect, new_rect);
 
-	compositor_add_damage(rect.x, rect.y, rect.w, rect.h);
+	compositor_add_damage(obj->layer, rect.x, rect.y, rect.w, rect.h);
 
 	uint32_t *new_buf = malloc(new_w * new_h * sizeof(uint32_t));
 	if (!new_buf)

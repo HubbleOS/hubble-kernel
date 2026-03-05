@@ -54,23 +54,38 @@ void canvas_set_pixel(canvas_t *c, int x, int y, uint32_t color)
 	c->base.buffer[y * c->base.width + x] = color;
 }
 
-void canvas_draw_line(canvas_t *c, int x1, int y1, int x2, int y2, uint32_t color)
+void canvas_draw_line(canvas_t *c, int x0, int y0, int x1, int y1, uint32_t color)
 {
-	int dx = x2 - x1;
-	int dy = y2 - y1;
-	int steps = abs(dx) > abs(dy) ? abs(dx) : abs(dy);
-	float xinc = dx / (float)steps;
-	float yinc = dy / (float)steps;
-	float x = x1;
-	float y = y1;
-	for (int i = 0; i <= steps; i++)
+	int dx = abs(x1 - x0);
+	int dy = abs(y1 - y0);
+
+	int sx = (x0 < x1) ? 1 : -1;
+	int sy = (y0 < y1) ? 1 : -1;
+
+	int err = dx - dy;
+
+	while (1)
 	{
-		canvas_set_pixel(c, x, y, color);
-		x += xinc;
-		y += yinc;
+		canvas_set_pixel(c, x0, y0, color);
+
+		if (x0 == x1 && y0 == y1)
+			break;
+
+		int e2 = err * 2;
+
+		if (e2 > -dy)
+		{
+			err -= dy;
+			x0 += sx;
+		}
+
+		if (e2 < dx)
+		{
+			err += dx;
+			y0 += sy;
+		}
 	}
 }
-
 void canvas_draw_rect(canvas_t *c, int x, int y, int w, int h, uint32_t color)
 {
 	for (int row = 0; row < h; row++)

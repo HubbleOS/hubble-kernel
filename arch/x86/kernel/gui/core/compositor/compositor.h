@@ -17,6 +17,7 @@ typedef struct
 {
 	object_t *objects[MAX_OBJECTS];
 	int count;
+	uint32_t *buffer;
 } layer_t;
 
 typedef struct
@@ -33,7 +34,7 @@ void compositor_add(object_t *obj, int layer);
 void compositor_remove(object_t *obj, int layer);
 void compositor_render();
 
-void compositor_add_damage(int x, int y, int w, int h);
+void compositor_add_damage(int layer, int x, int y, int w, int h);
 void compositor_bring_to_front(object_t *obj, int layer);
 void compositor_move_object(object_t *obj, int new_x, int new_y);
 void compositor_change_size_object(object_t *obj, int new_w, int new_h);
