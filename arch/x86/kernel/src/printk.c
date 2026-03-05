@@ -54,11 +54,11 @@ static void log_buffer_append(const char *buf, size_t len)
 // Early console functions (как ваш старый код)
 static void early_putchar(char c)
 {
-	if (!early_fb)
-		return;
-
 	// out to serial
 	outb(0x3f8, c);
+
+	if (!early_fb || !early_fb->base)
+		return;
 
 	if (c == '\n')
 	{

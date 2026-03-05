@@ -21,6 +21,7 @@ static int formula_parabola(int x) { return x * x / 100; }
 static int formula_line(int x) { return x; }
 
 static int g_graph_dirty = 1;
+static int g_graph_render_dirty = 1;
 
 static void on_parabola(void *unused)
 {
@@ -102,7 +103,7 @@ void draw_graph(void)
 	{
 		object_t *obj = current_window->surface;
 
-		// object_redraw_elements(obj);
+		object_redraw_elements(obj);
 
 		compositor_add_damage(
 		    obj->layer,
@@ -140,12 +141,17 @@ void graph_app_update(void)
 		return;
 
 	g_graph_dirty = 0;
+	g_graph_render_dirty = 1;
 }
 
 void graph_app_render(void)
 {
 	if (!current_canvas || !current_formula)
 		return;
+
+	if (!g_graph_render_dirty)
+		return;
+	g_graph_render_dirty = 0;
 
 	draw_graph();
 

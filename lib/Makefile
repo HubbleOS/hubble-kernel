@@ -1,2 +1,2 @@
 # libs/Makefile
-subdir-y += libc
+# subdir-y += libc

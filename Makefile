@@ -44,6 +44,9 @@ ifeq ($(ARCH),arm64)
 	CROSS = aarch64-elf-
 endif
 
+CFLAGS += -mno-mmx -mno-sse -mno-sse2 -mno-sse3 -mno-avx -mno-avx2
+CFLAGS += -mno-red-zone
+
 LD = $(CROSS)ld
 CC = $(CROSS)gcc
 AS = $(CROSS)as

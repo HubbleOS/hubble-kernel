@@ -19,9 +19,6 @@ cursor_t *cursor_create(int w, int h, uint32_t color_outer, uint32_t color_inner
 		return NULL;
 	}
 
-	/// clearing buffer
-	memset(c->surface->buffer, 0, w * h * sizeof(uint32_t));
-
 	int iw = w / 2, ih = h / 2;
 
 	element_t *rect = create_rect(iw - 2, ih - 2, 4, 4, color_inner);
