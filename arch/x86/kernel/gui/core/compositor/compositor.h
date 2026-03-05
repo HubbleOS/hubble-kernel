@@ -21,7 +21,7 @@ typedef struct
 
 typedef struct
 {
-	layer_t layers[MAX_LAYERS]; // массив слоев
+	layer_t layers[MAX_LAYERS];
 	rect_t dirty[MAX_DIRTY];
 	int dirty_count;
 } compositor_t;

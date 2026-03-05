@@ -1,4 +1,4 @@
-#include <sys/output_device.h>
+#include "output_device.h"
 
 static output_device_t *stdout_dev = NULL;
 

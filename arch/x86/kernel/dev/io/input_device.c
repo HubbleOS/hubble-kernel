@@ -1,4 +1,4 @@
-#include <sys/input_device.h>
+#include "input_device.h"
 
 static input_device_t *stdin_dev = NULL;
 

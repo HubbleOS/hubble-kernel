@@ -237,7 +237,7 @@ uint64_t syscall_handler_wrapper(registers_t *regs)
 // Init
 // ============================================================================
 
-#include <sys/keyboard.h>
+#include <dev/keyboard.h>
 #include <acpi/acpi.h>
 
 void interrupts_init(void)

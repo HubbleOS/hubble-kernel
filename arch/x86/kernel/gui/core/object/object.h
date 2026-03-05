@@ -2,9 +2,9 @@
 
 #include <stdint.h>
 #include <gui/utils/color/color.h>
-#include "gui/ui/element.h"
+#include <gui/ui/element.h>
 
-typedef struct
+typedef struct object
 {
 	int x, y;
 	int width, height;
