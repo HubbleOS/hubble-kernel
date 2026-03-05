@@ -54,9 +54,7 @@ text_t *element_create_text(int x, int y, const char *text)
 	if (!txt)
 		return NULL;
 
-	element_t *el = malloc(sizeof(element_t));
-	if (!el)
-		return NULL;
+	element_t *el = &txt->base;
 
 	el->x = x;
 	el->y = y;

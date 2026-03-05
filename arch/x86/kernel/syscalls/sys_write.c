@@ -1,5 +1,5 @@
 #include "syscall_entry.h"
-#include <sys/output_device.h>
+#include <dev/io/output_device.h>
 
 #include "printk.h"
 
