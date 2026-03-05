@@ -77,6 +77,7 @@ static void fps_delay(uint32_t fps)
 		return;
 	hpet_delay_ms(1000 / fps);
 }
+
 void update_task(void)
 {
 	mouse_t *m = get_mouse_info();
@@ -144,8 +145,6 @@ void render_task(void)
 
 void kmain_thread(void)
 {
-	printk("kmain thread\n");
-
 	spinlock_init(&gui_lock, "gui");
 
 	task_t *render = task_create(render_task, 250);

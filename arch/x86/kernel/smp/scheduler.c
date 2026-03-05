@@ -29,6 +29,10 @@ void schedule(void);
 void save_context(task_t *current, registers_t *regs);
 void free_context(task_t *task);
 
+#include <mm/slab.h>
+
+static slab_cache_t *fpu_cache = NULL;
+
 // Initialize a new task
 task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority)
 {
@@ -100,8 +104,11 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 
 	// Allocate FPU state (512 bytes, 16-byte aligned)
 	printk("Allocating FPU state\n");
-	void *fpu_state = kmalloc(512 + 16, GFP_KERNEL);
-	task->context.fpu_state = (void *)(((uintptr_t)fpu_state + 15) & ~0xF);
+	// void *fpu_state = kmalloc(512 + 16, GFP_KERNEL);
+	fpu_cache = slab_cache_create(512, 16);
+	// task->context.fpu_state = (void *)(((uintptr_t)fpu_state + 15) & ~0xF);
+	task->context.fpu_state = slab_cache_alloc(fpu_cache);
+
 	if (task->context.fpu_state)
 	{
 		// Initialize with default FPU state
@@ -374,10 +381,13 @@ void free_context(task_t *task)
 	}
 
 	// free fpu state
+	// if (task->context.fpu_state)
+	// {
+	// 	kfree(task->context.fpu_state);
+	// }
+
 	if (task->context.fpu_state)
-	{
-		kfree(task->context.fpu_state);
-	}
+		slab_cache_free(fpu_cache, task->context.fpu_state);
 }
 
 task_t *get_next_task(uint8_t cpu_id)

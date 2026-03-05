@@ -112,7 +112,9 @@ static void redraw(void)
 	if (g_win)
 	{
 		object_t *obj = g_win->surface;
-		// object_redraw_elements(obj);
+
+		object_redraw_elements(obj);
+
 		compositor_add_damage(
 		    obj->layer,
 		    obj->x + g_cnv->base.x,
@@ -122,7 +124,8 @@ static void redraw(void)
 	}
 }
 
-static int g_geo_dirty = 1;
+static int g_geo_dirty = 1;	   // for update
+static int g_geo_render_dirty = 1; // for render
 
 static void on_triangle(void *unused)
 {
@@ -208,14 +211,14 @@ void geometry_app_update(void)
 		return;
 
 	g_geo_dirty = 0;
+	g_geo_render_dirty = 1;
 }
 
 void geometry_app_render(void)
 {
-	if (!g_geo_dirty)
+	if (!g_geo_render_dirty)
 		return;
-
-	g_geo_dirty = 0;
+	g_geo_render_dirty = 0;
 	redraw();
 
 	compositor_add_damage(
