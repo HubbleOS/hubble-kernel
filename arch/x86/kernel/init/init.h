@@ -2,11 +2,8 @@
 
 #include <bootinfo/bootinfo.h>
 
-typedef struct
-{
-	void (*cpu)(void);
-	void (*memory)(BootInfo *bi);
-	void (*filesystems)(void);
-} KernelInit;
+void init_cpu(void);
 
-extern KernelInit init;
+void init_memory(BootInfo *bi);
+
+void init_filesystems(void);

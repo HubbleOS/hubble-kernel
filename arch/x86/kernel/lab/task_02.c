@@ -221,6 +221,8 @@ void geometry_app_render(void)
 	g_geo_render_dirty = 0;
 	redraw();
 
+	object_redraw_elements(g_win->surface);
+
 	compositor_add_damage(
 	    g_win->surface->layer,
 	    g_win->surface->x +

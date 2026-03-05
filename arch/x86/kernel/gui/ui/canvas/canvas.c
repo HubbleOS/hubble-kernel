@@ -39,8 +39,14 @@ void canvas_clear(canvas_t *c, uint32_t color)
 	if (!c || !c->base.buffer)
 		return;
 
-	for (int i = 0; i < c->base.width * c->base.height; i++)
-		c->base.buffer[i] = color;
+	int total = c->base.width * c->base.height;
+	uint32_t *buf = c->base.buffer;
+
+	for (int i = 0; i < c->base.width; i++)
+		buf[i] = color;
+
+	for (int row = 1; row < c->base.height; row++)
+		memcpy(buf + row * c->base.width, buf, c->base.width * sizeof(uint32_t));
 }
 
 void canvas_set_pixel(canvas_t *c, int x, int y, uint32_t color)
@@ -86,13 +92,27 @@ void canvas_draw_line(canvas_t *c, int x0, int y0, int x1, int y1, uint32_t colo
 		}
 	}
 }
+
 void canvas_draw_rect(canvas_t *c, int x, int y, int w, int h, uint32_t color)
 {
-	for (int row = 0; row < h; row++)
-		for (int col = 0; col < w; col++)
-			canvas_set_pixel(c, x + col, y + row, color);
-}
+	if (!c || !c->base.buffer)
+		return;
 
+	uint32_t row_buf[w];
+	for (int i = 0; i < w; i++)
+		row_buf[i] = color;
+
+	for (int row = y; row < y + h && row < c->base.height; row++)
+	{
+		if (row < 0)
+			continue;
+		int cx = x < 0 ? 0 : x;
+		int cw = (x + w > c->base.width ? c->base.width - cx : x + w - cx);
+		if (cw <= 0)
+			continue;
+		memcpy(c->base.buffer + row * c->base.width + cx, row_buf + (cx - x), cw * sizeof(uint32_t));
+	}
+}
 void canvas_draw_text(canvas_t *c, int x, int y, const char *text, uint32_t color)
 {
 	if (!c || !text)

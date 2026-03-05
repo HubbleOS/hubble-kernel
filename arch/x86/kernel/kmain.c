@@ -43,10 +43,10 @@ kernel_entry(BootInfo *bi)
 
 	acpi_init(bi->rsdp);
 	hpet_init();
-	init.memory(bi);
-	init.cpu();
+	init_memory(bi);
+	init_cpu();
 
-	init.filesystems();
+	init_filesystems();
 
 	printk(KERN_INFO "\n=== Kernel Initialization Complete ===\n\n");
 	outb(0x3F8, 'A');
