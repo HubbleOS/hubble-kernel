@@ -32,7 +32,7 @@ typedef struct
 	int dirty_count;
 } layer_dirty_t;
 
-layer_dirty_t layer_dirty[MAX_LAYERS];
+layer_dirty_t layer_dirty[MAX_LAYERS] = {0};
 
 void compositor_add_damage(int layer, int x, int y, int w, int h)
 {
@@ -132,11 +132,11 @@ void compositor_render()
 
 				for (int y = start_y; y < end_y; y++)
 				{
-					uint32_t *obj_row = obj->buffer + (y - obj->y) * obj->width;
+					uint32_t *obj_row = obj->buffer + (y - obj->y) * obj->width + (start_x - obj->x);
 					uint32_t *dst_row = layer_buf + y * fb_width + start_x;
+					int w = end_x - start_x;
 
-					for (int x = 0; x < end_x - start_x; x++)
-						dst_row[x] = color_blend(obj_row[(start_x - obj->x) + x], dst_row[x]);
+					memcpy(dst_row, obj_row, w * sizeof(uint32_t));
 				}
 			}
 

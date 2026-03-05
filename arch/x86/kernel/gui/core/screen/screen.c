@@ -12,7 +12,6 @@ void screen_present_rect(int x, int y, int w, int h)
 	if (!g_fb || !framebuffer_back)
 		return;
 
-	// crop to the edges of the screen
 	if (x < 0)
 	{
 		w += x;
@@ -27,7 +26,6 @@ void screen_present_rect(int x, int y, int w, int h)
 		w = fb_width - x;
 	if (y + h > fb_height)
 		h = fb_height - y;
-
 	if (w <= 0 || h <= 0)
 		return;
 
@@ -35,11 +33,9 @@ void screen_present_rect(int x, int y, int w, int h)
 
 	for (int row = y; row < y + h; row++)
 	{
-		uint32_t *dst = (uint32_t *)(dst_base + row * g_fb->pitch + x * sizeof(uint32_t));
-		uint32_t *src = framebuffer_back + row * fb_width + x;
-
-		for (int col = 0; col < w; col++)
-			dst[col] = src[col];
+		void *dst = dst_base + row * g_fb->pitch + x * 4;
+		void *src = framebuffer_back + row * fb_width + x;
+		memcpy(dst, src, w * 4);
 	}
 }
 

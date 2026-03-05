@@ -155,6 +155,8 @@ void graph_app_render(void)
 
 	draw_graph();
 
+	object_redraw_elements(current_window->surface);
+
 	compositor_add_damage(
 	    current_window->surface->layer,
 	    current_window->surface->x + current_canvas->base.x,
