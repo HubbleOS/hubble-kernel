@@ -3,6 +3,7 @@
 #include <apic/apic.h>
 #include <hpet/hpet.h>
 #include <smp/scheduler.h>
+#include <smp/spinlock.h>
 #include <smp/smp.h>
 #include "init/init.h"
 #include <printk.h>
@@ -68,11 +69,48 @@ void kernel_main(BootInfo *bi) __attribute__((alias("kernel_entry")));
 
 #include <lab/tasks.h>
 
+spinlock_t gui_lock;
+
 static void fps_delay(uint32_t fps)
 {
 	if (fps == 0)
 		return;
 	hpet_delay_ms(1000 / fps);
+}
+void update_task(void)
+{
+	mouse_t *m = get_mouse_info();
+
+	while (1)
+	{
+		spinlock_acquire(&gui_lock);
+
+		graph_app_update();
+		geometry_app_update();
+
+		mouse_update(m->x, m->y, m->left);
+
+		if (g_mouse.drag_obj)
+		{
+			if (g_mouse.drag_el)
+				object_move_element(
+				    g_mouse.drag_obj,
+				    g_mouse.drag_el,
+				    g_mouse.x - g_mouse.drag_offset_x - g_mouse.drag_obj->x,
+				    g_mouse.y - g_mouse.drag_offset_y - g_mouse.drag_obj->y);
+			else
+				compositor_move_object(
+				    g_mouse.drag_obj,
+				    g_mouse.x - g_mouse.drag_offset_x,
+				    g_mouse.y - g_mouse.drag_offset_y);
+
+			compositor_bring_to_front(g_mouse.drag_obj, LAYER_WINDOWS);
+		}
+
+		spinlock_release(&gui_lock);
+
+		fps_delay(120);
+	}
 }
 
 void render_task(void)
@@ -88,35 +126,31 @@ void render_task(void)
 
 	while (1)
 	{
-		graph_app_update();
-		geometry_app_update();
+		spinlock_acquire(&gui_lock);
 
-		mouse_update(m->x, m->y, m->left);
-
-		if (cursor->x != m->x || cursor->y != m->y)
+		if (cursor->surface->x != m->x || cursor->surface->y != m->y)
 			cursor_move(cursor, m->x, m->y);
 
-		if (g_mouse.drag_obj)
-		{
-			if (g_mouse.drag_el)
-				object_move_element(g_mouse.drag_obj, g_mouse.drag_el,
-						    g_mouse.x - g_mouse.drag_offset_x - g_mouse.drag_obj->x,
-						    g_mouse.y - g_mouse.drag_offset_y - g_mouse.drag_obj->y);
-			else
-				compositor_move_object(g_mouse.drag_obj,
-						       g_mouse.x - g_mouse.drag_offset_x,
-						       g_mouse.y - g_mouse.drag_offset_y);
-
-			compositor_bring_to_front(g_mouse.drag_obj, LAYER_WINDOWS);
-		}
+		graph_app_render();
+		geometry_app_render();
 
 		compositor_render();
+
+		spinlock_release(&gui_lock);
+
 		fps_delay(60);
 	}
 }
+
 void kmain_thread(void)
 {
 	printk("kmain thread\n");
-	task_t *task1 = task_create(render_task, 255);
-	scheduler_add_task(task1);
+
+	spinlock_init(&gui_lock, "gui");
+
+	task_t *render = task_create(render_task, 250);
+	task_t *update = task_create(update_task, 200);
+
+	scheduler_add_task(render);
+	scheduler_add_task(update);
 }

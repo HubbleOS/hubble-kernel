@@ -102,9 +102,10 @@ void draw_graph(void)
 	{
 		object_t *obj = current_window->surface;
 
-		object_redraw_elements(obj);
+		// object_redraw_elements(obj);
 
 		compositor_add_damage(
+		    obj->layer,
 		    obj->x + current_canvas->base.x,
 		    obj->y + current_canvas->base.y,
 		    current_canvas->base.width,
@@ -137,12 +138,21 @@ void graph_app_update(void)
 {
 	if (!g_graph_dirty)
 		return;
+
 	g_graph_dirty = 0;
+}
+
+void graph_app_render(void)
+{
+	if (!current_canvas || !current_formula)
+		return;
 
 	draw_graph();
-	// object_redraw_elements(current_window->surface);
-	compositor_add_damage(current_window->surface->x + current_canvas->base.x,
-			      current_window->surface->y + current_canvas->base.y,
-			      current_canvas->base.width,
-			      current_canvas->base.height);
+
+	compositor_add_damage(
+	    current_window->surface->layer,
+	    current_window->surface->x + current_canvas->base.x,
+	    current_window->surface->y + current_canvas->base.y,
+	    current_canvas->base.width,
+	    current_canvas->base.height);
 }

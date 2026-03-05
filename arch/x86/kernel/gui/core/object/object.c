@@ -49,6 +49,8 @@ void object_destroy(object_t *obj)
 
 void object_redraw_elements(object_t *obj)
 {
+	uint32_t *obj_buf = obj->buffer;
+
 	for (int e = 0; e < obj->element_count; e++)
 	{
 		element_t *el = obj->elements[e];
@@ -63,15 +65,17 @@ void object_redraw_elements(object_t *obj)
 		if (end_y > obj->height)
 			end_y = obj->height;
 
+		uint32_t *el_buf = el->buffer;
+		int copy_width = end_x - start_x;
+
 		for (int y = start_y; y < end_y; y++)
 		{
-			for (int x = start_x; x < end_x; x++)
-			{
-				int el_px = x - el->x;
-				int el_py = y - el->y;
+			uint32_t *obj_row = obj_buf + y * obj->width + start_x;
+			uint32_t *el_row = el_buf + (y - start_y) * el->width;
 
-				uint32_t src = el->buffer[el_py * el->width + el_px];
-				obj->buffer[y * obj->width + x] = color_blend(src, obj->buffer[y * obj->width + x]);
+			for (int x = 0; x < copy_width; x++)
+			{
+				obj_row[x] = color_blend(el_row[x], obj_row[x]);
 			}
 		}
 	}
@@ -85,7 +89,7 @@ void object_add_element(object_t *obj, element_t *el)
 
 	object_redraw_elements(obj);
 
-	compositor_add_damage(obj->x + el->x, obj->y + el->y, el->width, el->height);
+	compositor_add_damage(obj->layer, obj->x + el->x, obj->y + el->y, el->width, el->height);
 }
 
 void object_move_element(object_t *obj, element_t *el, int new_x, int new_y)
@@ -100,20 +104,19 @@ void object_move_element(object_t *obj, element_t *el, int new_x, int new_y)
 	rect_t new_rect = {new_x, new_y, el->width, el->height};
 	rect_t dirty_rect = rect_union(old_rect, new_rect);
 
-	for (int y = dirty_rect.y; y < dirty_rect.y + dirty_rect.h; y++)
-	{
-		for (int x = dirty_rect.x; x < dirty_rect.x + dirty_rect.w; x++)
-		{
-			if (x >= 0 && x < obj->width && y >= 0 && y < obj->height)
-				obj->buffer[y * obj->width + x] = obj->bg_color;
-		}
-	}
+	int start_x = dirty_rect.x < 0 ? 0 : dirty_rect.x;
+	int start_y = dirty_rect.y < 0 ? 0 : dirty_rect.y;
+	int end_x = dirty_rect.x + dirty_rect.w > obj->width ? obj->width : dirty_rect.x + dirty_rect.w;
+	int end_y = dirty_rect.y + dirty_rect.h > obj->height ? obj->height : dirty_rect.y + dirty_rect.h;
+
+	for (int y = start_y; y < end_y; y++)
+		memset(obj->buffer + y * obj->width + start_x, obj->bg_color, (end_x - start_x) * sizeof(uint32_t));
 
 	el->x = new_x;
 	el->y = new_y;
 
 	object_redraw_elements(obj);
 
-	compositor_add_damage(obj->x + dirty_rect.x, obj->y + dirty_rect.y,
+	compositor_add_damage(obj->layer, obj->x + dirty_rect.x, obj->y + dirty_rect.y,
 			      dirty_rect.w, dirty_rect.h);
 }

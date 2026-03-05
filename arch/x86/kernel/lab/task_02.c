@@ -112,11 +112,13 @@ static void redraw(void)
 	if (g_win)
 	{
 		object_t *obj = g_win->surface;
-		object_redraw_elements(obj);
-		compositor_add_damage(obj->x + g_cnv->base.x,
-				      obj->y + g_cnv->base.y,
-				      g_cnv->base.width,
-				      g_cnv->base.height);
+		// object_redraw_elements(obj);
+		compositor_add_damage(
+		    obj->layer,
+		    obj->x + g_cnv->base.x,
+		    obj->y + g_cnv->base.y,
+		    g_cnv->base.width,
+		    g_cnv->base.height);
 	}
 }
 
@@ -126,7 +128,6 @@ static void on_triangle(void *unused)
 {
 	geo_init(&g_obj, TRIANGLE_X, TRIANGLE_Y, TRIANGLE_N,
 		 300, 200, 1.0f, rgb(0, 200, 255));
-	redraw();
 	g_geo_dirty = 1;
 }
 
@@ -134,7 +135,6 @@ static void on_square(void *unused)
 {
 	geo_init(&g_obj, SQUARE_X, SQUARE_Y, SQUARE_N,
 		 300, 200, 1.0f, rgb(255, 200, 0));
-	redraw();
 	g_geo_dirty = 1;
 }
 
@@ -142,7 +142,6 @@ static void on_hexagon(void *unused)
 {
 	geo_init(&g_obj, HEXAGON_X, HEXAGON_Y, HEXAGON_N,
 		 300, 200, 1.0f, rgb(200, 0, 255));
-	redraw();
 	g_geo_dirty = 1;
 }
 
@@ -151,7 +150,6 @@ static void on_scale_up(void *unused)
 	if (!g_obj.alive)
 		return;
 	g_obj.scale *= 1.2f;
-	redraw();
 	g_geo_dirty = 1;
 }
 
@@ -160,14 +158,12 @@ static void on_scale_down(void *unused)
 	if (!g_obj.alive)
 		return;
 	g_obj.scale /= 1.2f;
-	redraw();
 	g_geo_dirty = 1;
 }
 
 static void on_destroy(void *unused)
 {
 	geo_destroy(&g_obj);
-	redraw();
 	g_geo_dirty = 1;
 }
 
@@ -210,11 +206,22 @@ void geometry_app_update(void)
 {
 	if (!g_geo_dirty)
 		return;
-	g_geo_dirty = 0;
 
+	g_geo_dirty = 0;
+}
+
+void geometry_app_render(void)
+{
+	if (!g_geo_dirty)
+		return;
+
+	g_geo_dirty = 0;
 	redraw();
+
 	compositor_add_damage(
-	    g_win->surface->x + g_cnv->base.x,
+	    g_win->surface->layer,
+	    g_win->surface->x +
+		g_cnv->base.x,
 	    g_win->surface->y + g_cnv->base.y,
 	    g_cnv->base.width,
 	    g_cnv->base.height);
