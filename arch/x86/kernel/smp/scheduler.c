@@ -422,8 +422,8 @@ void idle_task(void)
 	while (1)
 	{
 		// printk("CPU %d idle, time: %d\n", lapic_get_id(), count++);
-		hpet_delay_ms(1000);
-		// asm volatile("hlt");
+		// hpet_delay_ms(1000);
+		asm volatile("hlt");
 	}
 }
 

@@ -119,4 +119,27 @@ void kmain_thread(void)
 	printk("kmain thread\n");
 	task_t *task1 = task_create(render_task, 255);
 	scheduler_add_task(task1);
+
+	while (1)
+	{
+		char c = keyboard_get_char();
+		printk("key: %c\n", c);
+	}
+
+	// uint8_t counter = 0;
+
+	// // mouse_init();
+	// mouse_t *m = get_mouse_info();
+	// uint32_t old_x = m->x;
+	// uint32_t old_y = m->y;
+	// while (1)
+	// {
+	// 	if (old_x != m->x || old_y != m->y)
+	// 	{
+	// 		printk("x: %d y: %d l:%d r:%d \n", m->x, m->y, m->left_clicked, m->right_clicked);
+	// 		old_x = m->x;
+	// 		old_y = m->y;
+	// 	}
+	// 	asm volatile("hlt");
+	// }
 }
