@@ -1,12 +1,15 @@
 #pragma once
 
-#include "../element.h"
+#include <gui/core/element/element.h>
+
 #include <stdint.h>
 #include <stddef.h>
 
 typedef element_t canvas_t;
 
 canvas_t *canvas_create(int x, int y, int width, int height);
+
+void canvas_destroy(canvas_t *c);
 
 void canvas_clear(canvas_t *c, uint32_t color);
 

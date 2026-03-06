@@ -2,7 +2,7 @@
 
 #include <gui/core/object/object.h>
 #include <gui/core/compositor/compositor.h>
-#include "../element.h"
+#include <gui/core/element/element.h>
 
 typedef struct
 {

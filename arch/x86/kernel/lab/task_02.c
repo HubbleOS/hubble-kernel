@@ -2,15 +2,16 @@
 
 #include <gui/core/compositor/compositor.h>
 #include <gui/core/object/object.h>
+
 #include <gui/ui/button/button.h>
 #include <gui/ui/canvas/canvas.h>
 #include <gui/ui/сursor/cursor.h>
 #include <gui/ui/mouse/mouse.h>
 #include <gui/ui/window/window.h>
+#include <gui/ui/background/background.h>
+
 #include <gui/utils/color/color.h>
-#include <hpet/hpet.h>
-#include <dev/mouse.h>
-#include "gui/background.h"
+
 #include <stdlib.h>
 #include <string.h>
 

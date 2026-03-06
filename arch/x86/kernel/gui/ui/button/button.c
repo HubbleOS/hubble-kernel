@@ -6,29 +6,23 @@
 
 button_t *button_create(int x, int y, int w, int h, const char *text)
 {
-	button_t *btn = malloc(sizeof(button_t));
-	if (!btn)
+	element_t *el = element_create(x, y, w, h);
+	if (!el)
 		return NULL;
 
-	element_init(btn);
+	el->type = UI_BUTTON;
 
-	btn->x = x;
-	btn->y = y;
-	btn->width = w;
-	btn->height = h;
-	btn->type = UI_BUTTON;
-
-	btn->buffer = malloc(w * h * sizeof(uint32_t));
-
-	if (!btn->buffer)
+	if (text)
 	{
-		free(btn);
-		return NULL;
+		el->text = strdup(text);
 	}
 
-	btn->text = strdup(text);
-	btn->on_click = NULL;
+	el->needs_redraw = true;
 
-	btn->needs_redraw = true;
-	return btn;
+	return el;
+}
+
+void button_destroy(button_t *btn)
+{
+	element_destroy(btn);
 }
