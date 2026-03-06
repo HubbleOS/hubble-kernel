@@ -4,6 +4,8 @@
 #include "../text/text.h"
 #include <gui/utils/color/color.h>
 
+#include <gui/core/object/object.h>
+
 static void canvas_draw_element(element_t *el)
 {
 	(void)el;
@@ -15,49 +17,57 @@ canvas_t *canvas_create(int x, int y, int width, int height)
 	if (!c)
 		return NULL;
 
-	c->base.x = x;
-	c->base.y = y;
-	c->base.width = width;
-	c->base.height = height;
-	c->base.type = UI_RECT;
-	c->base.draw = canvas_draw_element;
-	c->base.event = NULL;
+	element_init(c);
 
-	c->base.buffer = malloc(width * height * sizeof(uint32_t));
-	if (!c->base.buffer)
+	c->x = x;
+	c->y = y;
+	c->width = width;
+	c->height = height;
+	c->type = UI_RECT;
+	c->draw = NULL;
+
+	c->on_mouse_enter = NULL;
+	c->on_mouse_leave = NULL;
+	c->on_mouse_down = NULL;
+	c->on_mouse_up = NULL;
+
+	c->buffer = malloc(width * height * sizeof(uint32_t));
+	if (!c->buffer)
 	{
 		free(c);
 		return NULL;
 	}
 
-	memset(c->base.buffer, 0, width * height * sizeof(uint32_t));
+	memset(c->buffer, 0, width * height * sizeof(uint32_t));
 	return c;
 }
 
 void canvas_clear(canvas_t *c, uint32_t color)
 {
-	if (!c || !c->base.buffer)
+	if (!c || !c->buffer)
 		return;
 
-	int total = c->base.width * c->base.height;
-	uint32_t *buf = c->base.buffer;
+	int total = c->width * c->height;
+	uint32_t *buf = c->buffer;
 
-	for (int i = 0; i < c->base.width; i++)
+	for (int i = 0; i < c->width; i++)
 		buf[i] = color;
 
-	for (int row = 1; row < c->base.height; row++)
-		memcpy(buf + row * c->base.width, buf, c->base.width * sizeof(uint32_t));
+	for (int row = 1; row < c->height; row++)
+		memcpy(buf + row * c->width, buf, c->width * sizeof(uint32_t));
+
+	element_mark_dirty(c);
 }
 
 void canvas_set_pixel(canvas_t *c, int x, int y, uint32_t color)
 {
-	if (!c || !c->base.buffer)
+	if (!c || !c->buffer)
 		return;
 
-	if (x < 0 || y < 0 || x >= c->base.width || y >= c->base.height)
+	if (x < 0 || y < 0 || x >= c->width || y >= c->height)
 		return;
 
-	c->base.buffer[y * c->base.width + x] = color;
+	c->buffer[y * c->width + x] = color;
 }
 
 void canvas_draw_line(canvas_t *c, int x0, int y0, int x1, int y1, uint32_t color)
@@ -91,28 +101,33 @@ void canvas_draw_line(canvas_t *c, int x0, int y0, int x1, int y1, uint32_t colo
 			y0 += sy;
 		}
 	}
+
+	int bx = x0 < x1 ? x0 : x1;
+	int by = y0 < y1 ? y0 : y1;
+	int bw = abs(x1 - x0) + 1;
+	int bh = abs(y1 - y0) + 1;
 }
 
 void canvas_draw_rect(canvas_t *c, int x, int y, int w, int h, uint32_t color)
 {
-	if (!c || !c->base.buffer)
+	if (!c || !c->buffer)
 		return;
 
-	uint32_t row_buf[w];
-	for (int i = 0; i < w; i++)
-		row_buf[i] = color;
-
-	for (int row = y; row < y + h && row < c->base.height; row++)
+	for (int row = y; row < y + h && row < c->height; row++)
 	{
 		if (row < 0)
 			continue;
 		int cx = x < 0 ? 0 : x;
-		int cw = (x + w > c->base.width ? c->base.width - cx : x + w - cx);
+		int cw = (x + w > c->width ? c->width - cx : x + w - cx);
 		if (cw <= 0)
 			continue;
-		memcpy(c->base.buffer + row * c->base.width + cx, row_buf + (cx - x), cw * sizeof(uint32_t));
+
+		uint32_t *dst = c->buffer + row * c->width + cx;
+		for (int i = 0; i < cw; i++)
+			dst[i] = color;
 	}
 }
+
 void canvas_draw_text(canvas_t *c, int x, int y, const char *text, uint32_t color)
 {
 	if (!c || !text)
@@ -122,17 +137,17 @@ void canvas_draw_text(canvas_t *c, int x, int y, const char *text, uint32_t colo
 	if (!txt)
 		return;
 
-	for (int row = 0; row < txt->base.height; row++)
+	for (int row = 0; row < txt->height; row++)
 	{
-		for (int col = 0; col < txt->base.width; col++)
+		for (int col = 0; col < txt->width; col++)
 		{
-			uint32_t px = txt->base.buffer[row * txt->base.width + col];
+			uint32_t px = txt->buffer[row * txt->width + col];
 			if (px == rgb(255, 255, 255))
 				canvas_set_pixel(c, x + col, y + row, color);
 		}
 	}
 
-	free(txt->base.buffer);
-	free(txt->base.text);
+	free(txt->buffer);
+	free(txt->text);
 	free(txt);
 }

@@ -50,17 +50,24 @@ text_t *element_create_text(int x, int y, const char *text)
 	if (!text)
 		return NULL;
 
-	text_t *txt = malloc(sizeof(text_t));
-	if (!txt)
+	text_t *el = malloc(sizeof(text_t));
+	if (!el)
 		return NULL;
-
-	element_t *el = &txt->base;
 
 	el->x = x;
 	el->y = y;
 	el->width = strlen(text) * FONT_SIZE;
 	el->height = FONT_SIZE;
 	el->type = UI_LABEL;
+	el->draw = draw_text_in_element;
+
+	el->on_mouse_enter = NULL;
+	el->on_mouse_leave = NULL;
+	el->on_mouse_down = NULL;
+	el->on_mouse_up = NULL;
+	el->owner = NULL;
+
+	el->dirty_rect = (dirty_rect_t){0, 0, el->width, el->height, true};
 
 	el->buffer = malloc(el->width * el->height * sizeof(uint32_t));
 	if (!el->buffer)
@@ -70,12 +77,8 @@ text_t *element_create_text(int x, int y, const char *text)
 	}
 
 	el->text = strdup(text);
-	el->draw = draw_text_in_element;
-	el->event = NULL;
-
-	txt->base = *el;
 
 	draw_text_in_element(el);
 
-	return txt;
+	return el;
 }

@@ -21,7 +21,6 @@
 #include <gui/ui/сursor/cursor.h>
 #include <gui/ui/mouse/mouse.h>
 #include <gui/ui/window/window.h>
-#include <gui/ui/rect/rect.h>
 #include <gui/ui/text/text.h>
 #include <gui/ui/canvas/canvas.h>
 
@@ -85,32 +84,30 @@ void update_task(void)
 	while (1)
 	{
 		spinlock_acquire(&gui_lock);
-
-		graph_app_update();
-		geometry_app_update();
-
 		mouse_update(m->x, m->y, m->left);
 
-		if (g_mouse.drag_obj)
-		{
-			if (g_mouse.drag_el)
-				object_move_element(
-				    g_mouse.drag_obj,
-				    g_mouse.drag_el,
-				    g_mouse.x - g_mouse.drag_offset_x - g_mouse.drag_obj->x,
-				    g_mouse.y - g_mouse.drag_offset_y - g_mouse.drag_obj->y);
-			else
-				compositor_move_object(
-				    g_mouse.drag_obj,
-				    g_mouse.x - g_mouse.drag_offset_x,
-				    g_mouse.y - g_mouse.drag_offset_y);
+		object_t *drag_obj = g_mouse.drag_obj;
+		element_t *drag_el = g_mouse.drag_el;
+		int drag_x = g_mouse.x - g_mouse.drag_offset_x;
+		int drag_y = g_mouse.y - g_mouse.drag_offset_y;
 
-			compositor_bring_to_front(g_mouse.drag_obj, LAYER_WINDOWS);
+		if (drag_obj)
+		{
+			if (drag_el)
+			{
+				object_move_element(drag_obj, drag_el,
+						    drag_x - drag_obj->x,
+						    drag_y - drag_obj->y);
+			}
+			else
+			{
+				compositor_move_object(drag_obj, drag_x, drag_y);
+				compositor_bring_to_front(drag_obj, LAYER_WINDOWS);
+			}
 		}
 
 		spinlock_release(&gui_lock);
-
-		fps_delay(120);
+		fps_delay(240);
 	}
 }
 
@@ -118,7 +115,6 @@ void render_task(void)
 {
 	compositor_init();
 	background_create(rgb(20, 20, 20));
-
 	graph_app_init();
 	geometry_app_init();
 
@@ -134,8 +130,7 @@ void render_task(void)
 
 		graph_app_render();
 		geometry_app_render();
-
-		compositor_render();
+		compositor_render(); // ← внутри лока
 
 		spinlock_release(&gui_lock);
 

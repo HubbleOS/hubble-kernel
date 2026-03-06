@@ -12,6 +12,8 @@ typedef struct
 	element_t *hover_el;	  // element under cursor
 	element_t *prev_hover_el; // previous element
 
+	element_t *pressed_el;
+
 	object_t *drag_obj; // drag object
 	element_t *drag_el; // drag element
 	int drag_offset_x;  // cursor offset inside an object/element
