@@ -17,7 +17,6 @@ typedef struct
 {
 	object_t *objects[MAX_OBJECTS];
 	int count;
-	uint32_t *buffer;
 } layer_t;
 
 typedef struct

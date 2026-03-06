@@ -4,10 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-typedef struct
-{
-	element_t base;
-} canvas_t;
+typedef element_t canvas_t;
 
 canvas_t *canvas_create(int x, int y, int width, int height);
 
