@@ -2,8 +2,9 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+
 #include <gui/utils/color/color.h>
-#include <gui/ui/element.h>
+#include <gui/core/element/element.h>
 
 typedef struct object
 {

@@ -1,4 +1,5 @@
-#include "../element.h"
+#include "label.h"
+
 #include "../text/text.h"
 
 #include <stdlib.h>
@@ -30,11 +31,9 @@ element_t *label_create(int x, int y, const char *text, uint32_t color)
 		return NULL;
 	}
 
-	// прозрачный фон (или нужный цвет)
 	for (int i = 0; i < w * h; i++)
-		el->buffer[i] = rgb(180, 180, 180); // фон окна
+		el->buffer[i] = rgb(180, 180, 180);
 
-	// рисуем текст
 	text_t *txt = element_create_text(0, 0, text);
 	if (txt)
 	{
@@ -50,11 +49,15 @@ element_t *label_create(int x, int y, const char *text, uint32_t color)
 		free(txt);
 	}
 
-	// label не реагирует на мышь
 	el->on_mouse_enter = NULL;
 	el->on_mouse_leave = NULL;
 	el->on_mouse_down = NULL;
 	el->on_mouse_up = NULL;
 
 	return el;
+}
+
+void label_destroy(element_t *el)
+{
+	element_destroy(el);
 }

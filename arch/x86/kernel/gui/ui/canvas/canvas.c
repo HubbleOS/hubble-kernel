@@ -6,40 +6,29 @@
 
 #include <gui/core/object/object.h>
 
-static void canvas_draw_element(element_t *el)
-{
-	(void)el;
-}
-
 canvas_t *canvas_create(int x, int y, int width, int height)
 {
-	canvas_t *c = malloc(sizeof(canvas_t));
-	if (!c)
+	element_t *el = element_create(x, y, width, height);
+	if (!el)
 		return NULL;
 
-	element_init(c);
+	el->type = UI_RECT;
 
-	c->x = x;
-	c->y = y;
-	c->width = width;
-	c->height = height;
-	c->type = UI_RECT;
-	c->draw = NULL;
+	el->draw = NULL;
 
-	c->on_mouse_enter = NULL;
-	c->on_mouse_leave = NULL;
-	c->on_mouse_down = NULL;
-	c->on_mouse_up = NULL;
+	el->on_mouse_enter = NULL;
+	el->on_mouse_leave = NULL;
+	el->on_mouse_down = NULL;
+	el->on_mouse_up = NULL;
 
-	c->buffer = malloc(width * height * sizeof(uint32_t));
-	if (!c->buffer)
-	{
-		free(c);
-		return NULL;
-	}
+	memset(el->buffer, 0, width * height * sizeof(uint32_t));
 
-	memset(c->buffer, 0, width * height * sizeof(uint32_t));
-	return c;
+	return (canvas_t *)el;
+}
+
+void canvas_destroy(canvas_t *c)
+{
+	element_destroy(c);
 }
 
 void canvas_clear(canvas_t *c, uint32_t color)

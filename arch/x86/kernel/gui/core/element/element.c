@@ -5,7 +5,7 @@
 #include <string.h>
 #include <stddef.h>
 
-#include "text/text.h"
+#include <gui/ui/text/text.h>
 
 void element_draw(element_t *el)
 {
@@ -120,4 +120,54 @@ void element_init(element_t *el)
 	el->bg_color = rgb(180, 180, 180);
 	el->text_color = rgb(30, 30, 30);
 	el->on_click = NULL;
+}
+
+element_t *element_create(int x, int y, int w, int h)
+{
+	element_t *el = malloc(sizeof(element_t));
+	if (!el)
+		return NULL;
+
+	memset(el, 0, sizeof(element_t));
+
+	el->x = x;
+	el->y = y;
+	el->width = w;
+	el->height = h;
+
+	el->state = ELEMENT_NORMAL;
+
+	el->bg_color = rgb(180, 180, 180);
+	el->text_color = rgb(30, 30, 30);
+
+	el->draw = element_draw;
+
+	el->on_mouse_enter = element_on_enter;
+	el->on_mouse_leave = element_on_leave;
+	el->on_mouse_down = element_on_down;
+	el->on_mouse_up = element_on_up;
+
+	el->buffer = malloc(w * h * sizeof(uint32_t));
+
+	if (!el->buffer)
+	{
+		free(el);
+		return NULL;
+	}
+
+	return el;
+}
+
+void element_destroy(element_t *el)
+{
+	if (!el)
+		return;
+
+	if (el->buffer)
+		free(el->buffer);
+
+	if (el->text)
+		free(el->text);
+
+	free(el);
 }

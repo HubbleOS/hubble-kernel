@@ -8,12 +8,12 @@ typedef float alpha_t;	  // opacity / alpha value (0.0–1.0)
 
 enum Color
 {
-	COLOR_BLACK = 0x000000,
-	COLOR_WHITE = 0xFFFFFF,
-	COLOR_RED = 0xFF0000,
-	COLOR_GREEN = 0x00FF00,
-	COLOR_BLUE = 0x0000FF,
-	COLOR_YELLOW = 0xFFFF00
+	COLOR_BLACK = 0xFF000000,
+	COLOR_WHITE = 0xFFFFFFFF,
+	COLOR_RED = 0xFFFF0000,
+	COLOR_GREEN = 0xFF00FF00,
+	COLOR_BLUE = 0xFF0000FF,
+	COLOR_YELLOW = 0xFFFFFF00
 };
 
 inline color_t rgb(chan_t r, chan_t g, chan_t b)

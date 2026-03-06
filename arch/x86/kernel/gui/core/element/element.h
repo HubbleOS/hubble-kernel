@@ -69,3 +69,6 @@ typedef struct element
 } element_t;
 
 void element_init(element_t *el);
+
+element_t *element_create(int x, int y, int w, int h);
+void element_destroy(element_t *el);

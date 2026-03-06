@@ -23,8 +23,7 @@
 #include <gui/ui/window/window.h>
 #include <gui/ui/text/text.h>
 #include <gui/ui/canvas/canvas.h>
-
-#include "gui/background.h"
+#include <gui/ui/background/background.h>
 
 extern int load_elf_and_run(const char *path);
 
@@ -38,17 +37,12 @@ kernel_entry(BootInfo *bi)
 
 	early_printk_init(g_boot_info->framebuffer);
 
-	printk(KERN_INFO "=== Higher-Half Kernel Starting ===\n");
-
 	acpi_init(bi->rsdp);
 	hpet_init();
 	init_memory(bi);
 	init_cpu();
 
 	init_filesystems();
-
-	printk(KERN_INFO "\n=== Kernel Initialization Complete ===\n\n");
-	outb(0x3F8, 'A');
 
 	apic_debug_check();
 	ps2_init();
@@ -130,7 +124,7 @@ void render_task(void)
 
 		graph_app_render();
 		geometry_app_render();
-		compositor_render(); // ← внутри лока
+		compositor_render();
 
 		spinlock_release(&gui_lock);
 
