@@ -1,5 +1,7 @@
 #include "style.h"
 
+#include "../element.h"
+
 void element_style_init(element_style_t *style)
 {
 	if (!style)

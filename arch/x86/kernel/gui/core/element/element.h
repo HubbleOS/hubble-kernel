@@ -47,7 +47,7 @@ typedef struct element
 	int x, y;
 	int width, height;
 
-	element_style_t *style;
+	element_style_t active_style;
 	element_style_set_t *style_set;
 
 	color_t bg_color;

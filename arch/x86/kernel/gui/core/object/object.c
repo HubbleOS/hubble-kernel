@@ -130,9 +130,25 @@ void object_flush(object_t *obj)
 
 		for (int y = 0; y < dh; y++)
 		{
+			uint32_t *dst = obj->buffer + (abs_y + y) * obj->width + abs_x;
+			for (int x = 0; x < dw; x++)
+				dst[x] = obj->bg_color;
+		}
+
+		for (int y = 0; y < dh; y++)
+		{
 			uint32_t *src = el->buffer + (dy + y) * el->width + dx;
 			uint32_t *dst = obj->buffer + (abs_y + y) * obj->width + abs_x;
-			memcpy(dst, src, dw * sizeof(uint32_t));
+			for (int x = 0; x < dw; x++)
+			{
+				uint8_t a = src[x] >> 24;
+				if (a == 0)
+					continue;
+				if (a == 255)
+					dst[x] = src[x];
+				else
+					dst[x] = color_blend(src[x], dst[x]);
+			}
 		}
 
 		el->dirty_rect.valid = false;
@@ -165,7 +181,17 @@ void object_flush(object_t *obj)
 
 				uint32_t *src = over->buffer + src_row * over->width + src_col;
 				uint32_t *dst = obj->buffer + y * obj->width + ix1;
-				memcpy(dst, src, (ix2 - ix1) * sizeof(uint32_t));
+
+				for (int x = 0; x < ix2 - ix1; x++)
+				{
+					uint8_t a = src[x] >> 24;
+					if (a == 0)
+						continue;
+					if (a == 255)
+						dst[x] = src[x];
+					else
+						dst[x] = color_blend(src[x], dst[x]);
+				}
 			}
 		}
 
@@ -186,6 +212,10 @@ void object_add_element(object_t *obj, element_t *el)
 		return;
 	el->owner = obj;
 	obj->elements[obj->element_count++] = el;
+
+	if (el->style_set)
+		element_apply_style(el, NULL);
+
 	element_mark_dirty(el);
 	object_flush(obj);
 }
