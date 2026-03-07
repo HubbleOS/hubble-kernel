@@ -3,8 +3,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifndef FBSIM
 #include <bootinfo/framebuffer.h>
-
+#else
+#include "main.h"
+#endif
 #include <gui/utils/color/color.h>
 #include <gui/core/object/object.h>
 

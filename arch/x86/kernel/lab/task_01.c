@@ -8,8 +8,14 @@
 #include <gui/ui/сursor/cursor.h>
 #include <gui/ui/window/window.h>
 #include <gui/utils/color/color.h>
-#include <hpet/hpet.h>
+// #include <hpet/hpet.h>
+
+#ifndef FBSIM
 #include <dev/mouse.h>
+#else
+#include "main.h"
+#endif
+
 #include "gui/background.h"
 
 static int (*current_formula)(int x) = NULL;
@@ -140,7 +146,7 @@ void graph_app_update(void)
 	g_graph_dirty = 0;
 
 	draw_graph();
-	// object_redraw_elements(current_window->surface);
+	object_redraw_elements(current_window->surface);
 	compositor_add_damage(current_window->surface->x + current_canvas->base.x,
 			      current_window->surface->y + current_canvas->base.y,
 			      current_canvas->base.width,

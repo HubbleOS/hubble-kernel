@@ -9,7 +9,13 @@
 #include <gui/ui/window/window.h>
 #include <gui/utils/color/color.h>
 #include <hpet/hpet.h>
+
+#ifndef FBSIM
 #include <dev/mouse.h>
+#else
+#include "main.h"
+#endif
+
 #include "gui/background.h"
 #include <stdlib.h>
 #include <string.h>

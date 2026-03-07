@@ -16,12 +16,12 @@ enum Color
 	COLOR_YELLOW = 0xFFFF00
 };
 
-inline color_t rgb(chan_t r, chan_t g, chan_t b)
+static inline color_t rgb(chan_t r, chan_t g, chan_t b)
 {
 	return ((color_t)b << 0) | ((color_t)g << 8) | ((color_t)r << 16) | ((color_t)255 << 24);
 }
 
-inline color_t rgba(chan_t r, chan_t g, chan_t b, float a)
+static inline color_t rgba(chan_t r, chan_t g, chan_t b, float a)
 {
 	return ((color_t)b << 0) | ((color_t)g << 8) | ((color_t)r << 16) | ((uint32_t)(a * 255.0f + 0.5f) << 24);
 }

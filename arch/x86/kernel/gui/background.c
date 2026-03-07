@@ -2,6 +2,7 @@
 #include <gui/core/screen/screen.h>
 #include <stdlib.h>
 #include <string.h>
+#include <gui/core/object/object.h>
 
 object_t *background_create(color_t color)
 {
