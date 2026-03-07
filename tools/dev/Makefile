@@ -6,4 +6,5 @@ subdir-y += stats/
 subdir-y += img/
 subdir-y += qemu/
 subdir-y += disk/
+subdir-y += demo/
 # subdir-y += config/

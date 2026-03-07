@@ -29,15 +29,12 @@ void merge_dirty_rects(rect_t *dirty, int *count)
 				if (rects_intersect(dirty[i], dirty[j]))
 				{
 					dirty[i] = rect_union(dirty[i], dirty[j]);
-					for (int k = j; k < *count - 1; k++)
-						dirty[k] = dirty[k + 1];
+					dirty[j] = dirty[*count - 1];
 					(*count)--;
 					merged_any = true;
-					break;
+					j--;
 				}
 			}
-			if (merged_any)
-				break;
 		}
 	} while (merged_any);
 }

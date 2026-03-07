@@ -1,7 +1,10 @@
 #pragma once
 
+#include <stdbool.h>
+#include <stdint.h>
+
 void mouse_init();
-// void mouse_handler();
+
 typedef struct
 {
 	int32_t x, y;

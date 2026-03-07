@@ -2,11 +2,10 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <gui/utils/color/color.h>
-#ifndef FBSIM
+#ifndef GUI_DEMO
 #include <bootinfo/framebuffer.h>
 #else
-
-#include "main.h"
+#include "platform/fb.h"
 #endif
 extern framebuffer_info_t *g_fb;
 extern uint32_t *framebuffer_back;

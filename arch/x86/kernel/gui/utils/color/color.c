@@ -2,12 +2,7 @@
 
 color_t color_blend(color_t src, color_t dst)
 {
-	uint8_t alpha;
-
-	if ((src & 0xFF000000) == 0)
-		alpha = 255;
-	else
-		alpha = get_alpha(src);
+	uint8_t alpha = get_alpha(src);
 
 	if (alpha == 0)
 		return dst;

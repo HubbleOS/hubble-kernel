@@ -44,6 +44,9 @@ ifeq ($(ARCH),arm64)
 	CROSS = aarch64-elf-
 endif
 
+CFLAGS += -mno-mmx -mno-sse -mno-sse2 -mno-sse3 -mno-avx -mno-avx2
+CFLAGS += -mno-red-zone
+
 LD = $(CROSS)ld
 CC = $(CROSS)gcc
 AS = $(CROSS)as
@@ -112,6 +115,10 @@ build: build-tool
 		$(MAKE) -C $$dir BUILD_TOOL_FLAGS="$(BUILD_TOOL_FLAGS)"; \
 	done
 	@echo "Build complete"
+
+PHONY += demo
+demo:
+	@${MAKE} -C tools/dev/demo run
 
 PHONY += stats
 stats:

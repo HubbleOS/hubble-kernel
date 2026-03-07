@@ -3,10 +3,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifndef FBSIM
+#ifndef GUI_DEMO
 #include <bootinfo/framebuffer.h>
 #else
-#include "main.h"
+#include "platform/fb.h"
 #endif
 #include <gui/utils/color/color.h>
 #include <gui/core/object/object.h>
