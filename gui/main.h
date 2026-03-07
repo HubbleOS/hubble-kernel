@@ -21,3 +21,5 @@ typedef struct
 } mouse_t;
 
 mouse_t *get_mouse_info(void);
+
+void kmain(framebuffer_info_t *fb);

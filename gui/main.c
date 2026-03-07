@@ -1,4 +1,7 @@
 #include <SDL2/SDL.h>
+
+#include "globals.h"
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -34,9 +37,6 @@ framebuffer_info_t *fb_create(uint32_t width, uint32_t height, uint8_t bpp)
 	fb->base = malloc(fb->pitch * height);
 	return fb;
 }
-
-mouse_t *mouse_g = NULL;
-cursor_t *cursor = NULL;
 
 // static double_buffer_t g_db = {0};
 // static framebuffer_info_t *g_fb = NULL;
@@ -87,12 +87,12 @@ int main()
 
 	screen_init(fb);
 	compositor_init();
-	mouse_t *m = malloc(sizeof(mouse_t));
-	m->x = 1920 / 2;
-	m->y = 1080 / 2;
+	mouse = malloc(sizeof(mouse_t));
+	mouse->x = 1920 / 2;
+	mouse->y = 1080 / 2;
 
 	background_create(rgb(188, 49, 49));
-	cursor_t *cursor = cursor_create(16, 16, rgb(0, 0, 0), rgb(255, 255, 255));
+	cursor = cursor_create(16, 16, rgb(0, 0, 0), rgb(255, 255, 255));
 	graph_app_init();
 	geometry_app_init();
 	int running = 1;
@@ -107,20 +107,20 @@ int main()
 			// Mouse events — same as your ps/2 mouse
 			if (e.type == SDL_MOUSEMOTION)
 			{
-				m->x = e.motion.x;
-				m->y = e.motion.y;
+				mouse->x = e.motion.x;
+				mouse->y = e.motion.y;
 			}
 			if (e.type == SDL_MOUSEBUTTONDOWN)
 			{
 				// check if presed
 				if (e.button.button == SDL_BUTTON_LEFT)
-					m->left = 1;
+					mouse->left = 1;
 			}
 			if (e.type == SDL_MOUSEBUTTONUP)
 			{
 				// check if relesed
 				if (e.button.button == SDL_BUTTON_LEFT)
-					m->left = 0;
+					mouse->left = 0;
 			}
 
 			// Keyboard
