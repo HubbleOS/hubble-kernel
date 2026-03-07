@@ -1,5 +1,5 @@
 #include "cursor.h"
-#include "printk.h"
+// #include "printk.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -8,7 +8,7 @@ cursor_t *cursor_create(int w, int h, uint32_t color_outer, uint32_t color_inner
 	cursor_t *c = malloc(sizeof(cursor_t));
 	if (!c)
 	{
-		printk("failed to create");
+		// printk("failed to create");
 		return NULL;
 	}
 
@@ -23,7 +23,7 @@ cursor_t *cursor_create(int w, int h, uint32_t color_outer, uint32_t color_inner
 	// __asm__ volatile("sti");
 	if (!c->surface)
 	{
-		printk("no cursor surface");
+		// printk("no cursor surface");
 		free(c);
 		return NULL;
 	}

@@ -3,10 +3,12 @@
 #include <string.h>
 
 framebuffer_info_t *g_fb = NULL;
+#ifndef FBSIM
+
 uint32_t *framebuffer_back = NULL;
 int fb_width = 0;
 int fb_height = 0;
-
+#endif
 void screen_present_rect(int x, int y, int w, int h)
 {
 	if (!g_fb || !framebuffer_back)

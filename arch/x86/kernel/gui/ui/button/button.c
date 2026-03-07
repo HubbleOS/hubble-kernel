@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <gui/utils/color/color.h>
+
 #include "../text/text.h"
 
 void button_draw(element_t *el)
