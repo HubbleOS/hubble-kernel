@@ -267,7 +267,17 @@ void object_move_element(object_t *obj, element_t *el, int new_x, int new_y)
 
 			uint32_t *src = other->buffer + src_row * other->width + src_col;
 			uint32_t *dst = obj->buffer + y * obj->width + ix1;
-			memcpy(dst, src, (ix2 - ix1) * sizeof(uint32_t));
+
+			for (int x = 0; x < ix2 - ix1; x++)
+			{
+				uint8_t a = src[x] >> 24;
+				if (a == 0)
+					continue;
+				if (a == 255)
+					dst[x] = src[x];
+				else
+					dst[x] = color_blend(src[x], dst[x]);
+			}
 		}
 	}
 
