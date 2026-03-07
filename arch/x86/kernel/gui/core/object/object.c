@@ -20,7 +20,6 @@ void element_mark_dirty(element_t *el)
 	el->dirty_rect = (dirty_rect_t){0, 0, el->width, el->height, true};
 }
 
-// Пометить только часть элемента грязным (для canvas_set_pixel)
 void element_mark_dirty_rect(element_t *el, int x, int y, int w, int h)
 {
 	if (element_is_fully_dirty(el))
@@ -31,7 +30,7 @@ void element_mark_dirty_rect(element_t *el, int x, int y, int w, int h)
 		el->dirty_rect = (dirty_rect_t){x, y, w, h, true};
 		return;
 	}
-	// expand existing dirty rect
+
 	int x1 = el->dirty_rect.x < x ? el->dirty_rect.x : x;
 	int y1 = el->dirty_rect.y < y ? el->dirty_rect.y : y;
 	int x2_old = el->dirty_rect.x + el->dirty_rect.w;
@@ -79,6 +78,7 @@ void object_destroy(object_t *obj)
 	free(obj);
 }
 
+// __attribute__((optimize("O0"), noinline))
 void object_flush(object_t *obj)
 {
 	for (int e = 0; e < obj->element_count; e++)
@@ -137,7 +137,6 @@ void object_flush(object_t *obj)
 
 		el->dirty_rect.valid = false;
 
-		// перерисовать поверх перекрывающиеся элементы
 		for (int j = e + 1; j < obj->element_count; j++)
 		{
 			element_t *over = obj->elements[j];
@@ -152,7 +151,6 @@ void object_flush(object_t *obj)
 			if (ix1 >= ix2 || iy1 >= iy2)
 				continue;
 
-			// обновить буфер перекрывающего элемента
 			if (over->draw)
 				over->draw(over);
 
@@ -202,7 +200,6 @@ void object_move_element(object_t *obj, element_t *el, int new_x, int new_y)
 	if (oy + oh > obj->height)
 		oh = obj->height - oy;
 
-	// залить старую позицию фоном
 	for (int y = 0; y < oh; y++)
 	{
 		uint32_t *row = obj->buffer + (oy + y) * obj->width + ox;

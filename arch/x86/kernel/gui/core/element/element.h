@@ -6,6 +6,8 @@
 
 #include <gui/utils/color/color.h>
 
+#include "styles/style.h"
+
 typedef enum
 {
 	UI_BUTTON,
@@ -44,6 +46,9 @@ typedef struct element
 {
 	int x, y;
 	int width, height;
+
+	element_style_t *style;
+	element_style_set_t *style_set;
 
 	color_t bg_color;
 	color_t text_color;

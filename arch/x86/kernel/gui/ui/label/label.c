@@ -54,6 +54,15 @@ element_t *label_create(int x, int y, const char *text, uint32_t color)
 	el->on_mouse_down = NULL;
 	el->on_mouse_up = NULL;
 
+	if (el->style_set)
+	{
+		free(el->style_set->normal);
+		free(el->style_set->hover);
+		free(el->style_set->pressed);
+		free(el->style_set);
+		el->style_set = NULL;
+	}
+
 	return el;
 }
 
