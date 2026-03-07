@@ -1,4 +1,5 @@
 #include "element.h"
+
 #include <gui/core/object/object.h>
 
 #include <stdlib.h>
@@ -7,33 +8,61 @@
 
 #include <gui/ui/text/fonts/font.h>
 
-static void element_apply_style(element_t *el, element_style_t *override)
+#include "styles/border_radius.h"
+
+static bool point_in_rounded_rect(int x, int y, int w, int h, int r)
 {
-	if (!el->style_set || !el->style_set->normal)
-		return;
+	int cx, cy;
 
-	element_style_t *base = el->style_set->normal;
+	if (x < r && y < r)
+	{
+		cx = r;
+		cy = r;
+	}
+	else if (x >= w - r && y < r)
+	{
+		cx = w - r - 1;
+		cy = r;
+	}
+	else if (x < r && y >= h - r)
+	{
+		cx = r;
+		cy = h - r - 1;
+	}
+	else if (x >= w - r && y >= h - r)
+	{
+		cx = w - r - 1;
+		cy = h - r - 1;
+	}
+	else
+		return false;
 
-	el->style->background_color = base->background_color;
-	el->style->text_color = base->text_color;
-
-	if (override && override->background_color)
-		el->style->background_color = override->background_color;
-	if (override && override->text_color)
-		el->style->text_color = override->text_color;
+	int dx = x - cx;
+	int dy = y - cy;
+	return dx * dx + dy * dy > r * r;
 }
 
 void element_draw(element_t *el)
 {
-	if (!el->buffer || !el->style)
+	if (!el->buffer)
 		return;
 
-	uint32_t bg = el->style->background_color
-			  ? el->style->background_color
+	uint32_t bg = el->active_style.background_color
+			  ? el->active_style.background_color
 			  : el->bg_color;
 
-	for (int i = 0; i < el->width * el->height; i++)
-		el->buffer[i] = bg;
+	int r = el->active_style.border_radius;
+
+	for (int y = 0; y < el->height; y++)
+	{
+		for (int x = 0; x < el->width; x++)
+		{
+			if (r > 0 && point_in_rounded_rect(x, y, el->width, el->height, r))
+				el->buffer[y * el->width + x] = 0; // transparent
+			else
+				el->buffer[y * el->width + x] = bg;
+		}
+	}
 
 	if (!el->text)
 		return;
@@ -86,9 +115,12 @@ static void element_on_leave(element_t *el)
 	if (el->owner)
 		object_flush(el->owner);
 }
+
 static void element_on_down(element_t *el)
 {
 	el->state = ELEMENT_PRESSED;
+	if (el->style_set)
+		element_apply_style(el, el->style_set->pressed);
 	el->needs_redraw = true;
 	element_mark_dirty(el);
 	if (el->owner)
@@ -97,10 +129,11 @@ static void element_on_down(element_t *el)
 
 static void element_on_up(element_t *el)
 {
-
 	if (el->state == ELEMENT_PRESSED && el->on_click)
 		el->on_click();
 	el->state = ELEMENT_HOVER;
+	if (el->style_set)
+		element_apply_style(el, el->style_set->hover);
 	el->needs_redraw = true;
 	element_mark_dirty(el);
 	if (el->owner)
@@ -110,20 +143,13 @@ static void element_on_up(element_t *el)
 void element_init(element_t *el)
 {
 	el->draw = element_draw;
-	el->on_mouse_enter = NULL;
-	el->on_mouse_leave = NULL;
-	el->on_mouse_down = NULL;
-	el->on_mouse_up = NULL;
-	el->owner = NULL;
-	el->dirty_rect = (dirty_rect_t){0};
-
 	el->on_mouse_enter = element_on_enter;
 	el->on_mouse_leave = element_on_leave;
 	el->on_mouse_down = element_on_down;
 	el->on_mouse_up = element_on_up;
-
+	el->owner = NULL;
+	el->dirty_rect = (dirty_rect_t){0};
 	el->state = ELEMENT_NORMAL;
-
 	el->bg_color = rgb(180, 180, 180);
 	el->text_color = rgb(30, 30, 30);
 	el->on_click = NULL;
@@ -137,19 +163,9 @@ element_t *element_create(int x, int y, int w, int h)
 
 	memset(el, 0, sizeof(element_t));
 
-	el->style = malloc(sizeof(element_style_t));
-	if (!el->style)
-	{
-		free(el);
-		return NULL;
-	}
-
-	element_style_init(el->style);
-
 	el->style_set = malloc(sizeof(element_style_set_t));
 	if (!el->style_set)
 	{
-		free(el->style);
 		free(el);
 		return NULL;
 	}
@@ -168,24 +184,27 @@ element_t *element_create(int x, int y, int w, int h)
 	el->height = h;
 
 	el->state = ELEMENT_NORMAL;
-
 	el->bg_color = rgb(180, 180, 180);
 	el->text_color = rgb(30, 30, 30);
 
 	el->draw = element_draw;
-
 	el->on_mouse_enter = element_on_enter;
 	el->on_mouse_leave = element_on_leave;
 	el->on_mouse_down = element_on_down;
 	el->on_mouse_up = element_on_up;
 
 	el->buffer = malloc(w * h * sizeof(uint32_t));
-
 	if (!el->buffer)
 	{
+		free(el->style_set->normal);
+		free(el->style_set->hover);
+		free(el->style_set->pressed);
+		free(el->style_set);
 		free(el);
 		return NULL;
 	}
+
+	element_apply_style(el, NULL);
 
 	return el;
 }
@@ -195,25 +214,15 @@ void element_destroy(element_t *el)
 	if (!el)
 		return;
 
-	if (el->style)
-		free(el->style);
-
 	if (el->style_set)
 	{
-		if (el->style_set->normal)
-			free(el->style_set->normal);
-		if (el->style_set->hover)
-			free(el->style_set->hover);
-		if (el->style_set->pressed)
-			free(el->style_set->pressed);
+		free(el->style_set->normal);
+		free(el->style_set->hover);
+		free(el->style_set->pressed);
 		free(el->style_set);
 	}
 
-	if (el->buffer)
-		free(el->buffer);
-
-	if (el->text)
-		free(el->text);
-
+	free(el->buffer);
+	free(el->text);
 	free(el);
 }

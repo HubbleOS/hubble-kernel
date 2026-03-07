@@ -91,18 +91,12 @@ void compositor_compose(rect_t *dirty, int dirty_count)
 					uint32_t *src = obj->buffer + (y - obj->y) * obj->width + (ix1 - obj->x);
 					uint32_t *d = dst + (ix1 - r.x);
 
-					if (l == LAYER_CURSOR || l == LAYER_EFFECTS)
+					for (int x = 0; x < ix2 - ix1; x++)
 					{
-						for (int x = 0; x < ix2 - ix1; x++)
-						{
-							if (src[x] == 0)
-								continue;
-							d[x] = color_blend(src[x], d[x]);
-						}
-					}
-					else
-					{
-						memcpy(d, src, (ix2 - ix1) * sizeof(uint32_t));
+						if ((src[x] >> 24) == 0)
+							continue;
+
+						d[x] = color_blend(src[x], d[x]);
 					}
 				}
 			}
