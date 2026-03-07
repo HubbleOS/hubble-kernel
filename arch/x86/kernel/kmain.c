@@ -25,6 +25,8 @@
 #include <gui/ui/canvas/canvas.h>
 #include <gui/ui/background/background.h>
 
+#include <gui/utils/color/color.h>
+
 extern int load_elf_and_run(const char *path);
 
 __attribute__((section(".text.boot")))

@@ -5,4 +5,4 @@
 typedef element_t text_t;
 
 text_t *element_create_text(int x, int y, const char *text);
-void destroy_text(text_t *txt);
+void text_destroy(text_t *txt);

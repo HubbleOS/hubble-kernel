@@ -33,6 +33,9 @@ static void draw_text_in_element(element_t *el)
 	color_t bg = rgb(50, 50, 50);
 	color_t fg = rgb(255, 255, 255);
 
+	// color_t bg = el->style ? el->style->background_color : el->bg_color;
+	// color_t fg = el->text_color;
+
 	for (int i = 0; i < el->width * el->height; i++)
 		el->buffer[i] = bg;
 

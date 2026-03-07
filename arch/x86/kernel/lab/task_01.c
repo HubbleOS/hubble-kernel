@@ -92,6 +92,9 @@ void graph_app_init(void)
 
 	button_t *btn_parabola = button_create(700, 100, 80, 30, "Parabola");
 	btn_parabola->on_click = on_parabola;
+	btn_parabola->style_set->normal->background_color = rgb(255, 0, 0);
+	btn_parabola->style_set->hover->background_color = rgb(0, 255, 0);
+
 	window_addElement(win, btn_parabola);
 
 	button_t *btn_line = button_create(700, 150, 80, 30, "Line");

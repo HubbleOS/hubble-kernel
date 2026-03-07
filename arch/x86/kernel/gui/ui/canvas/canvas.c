@@ -21,9 +21,7 @@ canvas_t *canvas_create(int x, int y, int width, int height)
 	el->on_mouse_down = NULL;
 	el->on_mouse_up = NULL;
 
-	memset(el->buffer, 0, width * height * sizeof(uint32_t));
-
-	return (canvas_t *)el;
+	return el;
 }
 
 void canvas_destroy(canvas_t *c)
