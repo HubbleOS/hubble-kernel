@@ -16,8 +16,7 @@
 
 #include "gui/background.h"
 
-extern cursor_t *cursor;
-extern mouse_t *m;
+#include "globals.h"
 
 void kmain(framebuffer_info_t *fb)
 {
@@ -25,10 +24,10 @@ void kmain(framebuffer_info_t *fb)
 	graph_app_update();
 	geometry_app_update();
 
-	mouse_update(m->x, m->y, m->left);
-	if (cursor->x != m->x || cursor->y != m->y)
+	mouse_update(mouse->x, mouse->y, mouse->left);
+	if (cursor->x != mouse->x || cursor->y != mouse->y)
 	{
-		cursor_move(cursor, m->x, m->y);
+		cursor_move(cursor, mouse->x, mouse->y);
 	}
 
 	if (g_mouse.drag_obj)
