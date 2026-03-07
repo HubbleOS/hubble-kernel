@@ -33,6 +33,9 @@ static void draw_text_in_element(element_t *el)
 	color_t bg = rgb(50, 50, 50);
 	color_t fg = rgb(255, 255, 255);
 
+	// color_t bg = el->style ? el->style->background_color : el->bg_color;
+	// color_t fg = el->text_color;
+
 	for (int i = 0; i < el->width * el->height; i++)
 		el->buffer[i] = bg;
 
@@ -50,32 +53,31 @@ text_t *element_create_text(int x, int y, const char *text)
 	if (!text)
 		return NULL;
 
-	text_t *txt = malloc(sizeof(text_t));
-	if (!txt)
+	size_t len = strlen(text);
+
+	text_t *el = element_create(x, y, len * FONT_SIZE, FONT_SIZE);
+	if (!el)
 		return NULL;
 
-	element_t *el = &txt->base;
-
-	el->x = x;
-	el->y = y;
-	el->width = strlen(text) * FONT_SIZE;
-	el->height = FONT_SIZE;
 	el->type = UI_LABEL;
+	el->draw = draw_text_in_element;
 
-	el->buffer = malloc(el->width * el->height * sizeof(uint32_t));
-	if (!el->buffer)
+	el->text = strdup(text);
+	if (!el->text)
 	{
-		free(el);
+		element_destroy((element_t *)el);
 		return NULL;
 	}
 
-	el->text = strdup(text);
-	el->draw = draw_text_in_element;
-	el->event = NULL;
+	el->dirty_rect = (dirty_rect_t){0, 0, el->width, el->height, true};
 
-	txt->base = *el;
-
+	// temp
 	draw_text_in_element(el);
 
-	return txt;
+	return el;
+}
+
+void text_destroy(element_t *el)
+{
+	element_destroy(el);
 }

@@ -45,6 +45,8 @@ int window_addElement(window_t *win, element_t *el)
 		return -1;
 
 	object_add_element(win->surface, el);
+
+	return 0;
 }
 
 void window_move(window_t *win, int x, int y)

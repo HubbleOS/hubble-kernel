@@ -6,12 +6,20 @@
 
 compositor_t compositor;
 
-void compositor_add_damage(int x, int y, int w, int h)
+void compositor_init()
 {
+	for (int i = 0; i < MAX_LAYERS; i++)
+		compositor.layers[i].count = 0;
+	compositor.dirty_count = 0;
+}
+
+void compositor_add_damage(int layer, int x, int y, int w, int h)
+{
+	(void)layer;
+
 	if (compositor.dirty_count >= MAX_DIRTY || w <= 0 || h <= 0)
 		return;
 
-	// clamp
 	if (x < 0)
 	{
 		w += x;
@@ -32,26 +40,6 @@ void compositor_add_damage(int x, int y, int w, int h)
 	compositor.dirty[compositor.dirty_count++] = (rect_t){x, y, w, h};
 }
 
-void compositor_init()
-{
-	for (int i = 0; i < MAX_LAYERS; i++)
-		compositor.layers[i].count = 0;
-	compositor.dirty_count = 0;
-}
-
-void compositor_add(object_t *obj, int layer)
-{
-	if (layer < 0 || layer >= MAX_LAYERS)
-		return;
-
-	layer_t *l = &compositor.layers[layer];
-	if (l->count >= MAX_OBJECTS)
-		return;
-
-	l->objects[l->count++] = obj;
-	compositor_add_damage(obj->x, obj->y, obj->width, obj->height);
-}
-
 void compositor_remove(object_t *obj, int layer)
 {
 	if (layer < 0 || layer >= MAX_LAYERS)
@@ -62,7 +50,7 @@ void compositor_remove(object_t *obj, int layer)
 	{
 		if (l->objects[i] == obj)
 		{
-			compositor_add_damage(obj->x, obj->y, obj->width, obj->height);
+			compositor_add_damage(layer, obj->x, obj->y, obj->width, obj->height);
 			l->objects[i] = l->objects[l->count - 1];
 			l->count--;
 			return;
@@ -70,49 +58,44 @@ void compositor_remove(object_t *obj, int layer)
 	}
 }
 
-void compositor_render()
+void compositor_compose(rect_t *dirty, int dirty_count)
 {
-	merge_dirty_rects(compositor.dirty, &compositor.dirty_count);
-
-	for (int d = 0; d < compositor.dirty_count; d++)
+	for (int d = 0; d < dirty_count; d++)
 	{
-		rect_t r = compositor.dirty[d];
+		rect_t r = dirty[d];
 
-		// clear dirty region
-		for (int row = r.y; row < r.y + r.h; row++)
-			memset(framebuffer_back + row * fb_width + r.x, 0, r.w * sizeof(uint32_t));
-
-		// render layers bottom → top
-		for (int l = 0; l < MAX_LAYERS; l++)
+		for (int y = r.y; y < r.y + r.h; y++)
 		{
-			layer_t *layer = &compositor.layers[l];
-			for (int i = 0; i < layer->count; i++)
+			uint32_t *dst = framebuffer_back + y * fb_width + r.x;
+			memset(dst, 0, r.w * sizeof(uint32_t));
+
+			for (int l = 0; l < MAX_LAYERS; l++)
 			{
-				object_t *obj = layer->objects[i];
+				layer_t *layer = &compositor.layers[l];
 
-				int obj_x1 = obj->x, obj_y1 = obj->y;
-				int obj_x2 = obj->x + obj->width;
-				int obj_y2 = obj->y + obj->height;
-
-				int r_x2 = r.x + r.w, r_y2 = r.y + r.h;
-
-				if (obj_x1 >= r_x2 || obj_x2 <= r.x || obj_y1 >= r_y2 || obj_y2 <= r.y)
-					continue;
-
-				int start_x = obj_x1 > r.x ? obj_x1 : r.x;
-				int start_y = obj_y1 > r.y ? obj_y1 : r.y;
-				int end_x = obj_x2 < r_x2 ? obj_x2 : r_x2;
-				int end_y = obj_y2 < r_y2 ? obj_y2 : r_y2;
-
-				for (int y = start_y; y < end_y; y++)
+				for (int i = 0; i < layer->count; i++)
 				{
-					for (int x = start_x; x < end_x; x++)
+					object_t *obj = layer->objects[i];
+
+					if (y < obj->y || y >= obj->y + obj->height)
+						continue;
+
+					int ix1 = obj->x > r.x ? obj->x : r.x;
+					int ix2 = (obj->x + obj->width) < (r.x + r.w)
+						      ? (obj->x + obj->width)
+						      : (r.x + r.w);
+					if (ix1 >= ix2)
+						continue;
+
+					uint32_t *src = obj->buffer + (y - obj->y) * obj->width + (ix1 - obj->x);
+					uint32_t *d = dst + (ix1 - r.x);
+
+					for (int x = 0; x < ix2 - ix1; x++)
 					{
-						int obj_px = x - obj->x;
-						int obj_py = y - obj->y;
-						uint32_t src = obj->buffer[obj_py * obj->width + obj_px];
-						uint32_t *dst = framebuffer_back + y * fb_width + x;
-						*dst = color_blend(src, *dst);
+						if ((src[x] >> 24) == 0)
+							continue;
+
+						d[x] = color_blend(src[x], d[x]);
 					}
 				}
 			}
@@ -120,8 +103,22 @@ void compositor_render()
 
 		screen_present_rect(r.x, r.y, r.w, r.h);
 	}
+}
 
+void compositor_frame()
+{
+	if (compositor.dirty_count == 0)
+		return;
+
+	merge_dirty_rects(compositor.dirty, &compositor.dirty_count);
+
+	compositor_compose(compositor.dirty, compositor.dirty_count);
 	compositor.dirty_count = 0;
+}
+
+void compositor_render()
+{
+	compositor_frame();
 }
 
 void compositor_bring_to_front(object_t *obj, int layer)
@@ -146,15 +143,38 @@ void compositor_bring_to_front(object_t *obj, int layer)
 		l->objects[i] = l->objects[i + 1];
 
 	l->objects[l->count - 1] = obj;
+
+	compositor_add_damage(layer, obj->x, obj->y, obj->width, obj->height);
+}
+
+void compositor_add(object_t *obj, int layer)
+{
+	if (layer < 0 || layer >= MAX_LAYERS)
+		return;
+	layer_t *l = &compositor.layers[layer];
+	if (l->count >= MAX_OBJECTS)
+		return;
+
+	obj->layer = layer;
+	l->objects[l->count++] = obj;
+
+	compositor_add_damage(layer, obj->x, obj->y, obj->width, obj->height);
 }
 
 void compositor_move_object(object_t *obj, int new_x, int new_y)
 {
-	rect_t old_rect = {obj->x, obj->y, obj->width, obj->height};
-	rect_t new_rect = {new_x, new_y, obj->width, obj->height};
-	rect_t rect = rect_union(old_rect, new_rect);
-
-	compositor_add_damage(rect.x, rect.y, rect.w, rect.h);
+	if (obj->layer == LAYER_CURSOR)
+	{
+		rect_t old_rect = {obj->x, obj->y, obj->width, obj->height};
+		rect_t new_rect = {new_x, new_y, obj->width, obj->height};
+		rect_t rect = rect_union(old_rect, new_rect);
+		compositor_add_damage(obj->layer, rect.x, rect.y, rect.w, rect.h);
+	}
+	else
+	{
+		compositor_add_damage(obj->layer, obj->x, obj->y, obj->width, obj->height);
+		compositor_add_damage(obj->layer, new_x, new_y, obj->width, obj->height);
+	}
 
 	obj->x = new_x;
 	obj->y = new_y;
@@ -166,7 +186,7 @@ void compositor_change_size_object(object_t *obj, int new_w, int new_h)
 	rect_t new_rect = {obj->x, obj->y, new_w, new_h};
 	rect_t rect = rect_union(old_rect, new_rect);
 
-	compositor_add_damage(rect.x, rect.y, rect.w, rect.h);
+	compositor_add_damage(obj->layer, rect.x, rect.y, rect.w, rect.h);
 
 	uint32_t *new_buf = malloc(new_w * new_h * sizeof(uint32_t));
 	if (!new_buf)

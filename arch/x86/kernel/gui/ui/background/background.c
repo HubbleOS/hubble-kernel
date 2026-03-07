@@ -22,5 +22,5 @@ void background_set_color(object_t *bg, color_t color)
 	for (int i = 0; i < bg->width * bg->height; i++)
 		bg->buffer[i] = color;
 
-	compositor_add_damage(0, 0, fb_width, fb_height);
+	compositor_add_damage(LAYER_BG, 0, 0, fb_width, fb_height);
 }

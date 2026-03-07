@@ -20,8 +20,8 @@ void mouse_update(int new_x, int new_y, bool left_pressed)
 	mouse->hover_el = NULL;
 
 	mouse_update_hover(mouse);
-	mouse_handle_hover_events(mouse);
 	mouse_handle_button_events(mouse, left_pressed);
+	mouse_handle_hover_events(mouse);
 	mouse_handle_drag(mouse, left_pressed);
 
 	mouse->left = left_pressed;
@@ -67,11 +67,11 @@ static void mouse_handle_hover_events(local_mouse_t *mouse)
 {
 	if (mouse->hover_el != mouse->prev_hover_el)
 	{
-		if (mouse->prev_hover_el && mouse->prev_hover_el->event)
-			mouse->prev_hover_el->event(mouse->prev_hover_el, UI_EVENT_MOUSE_LEAVE);
+		if (mouse->prev_hover_el && mouse->prev_hover_el->on_mouse_leave)
+			mouse->prev_hover_el->on_mouse_leave(mouse->prev_hover_el);
 
-		if (mouse->hover_el && mouse->hover_el->event)
-			mouse->hover_el->event(mouse->hover_el, UI_EVENT_MOUSE_ENTER);
+		if (mouse->hover_el && mouse->hover_el->on_mouse_enter)
+			mouse->hover_el->on_mouse_enter(mouse->hover_el);
 
 		mouse->prev_hover_el = mouse->hover_el;
 	}
@@ -81,14 +81,21 @@ static void mouse_handle_button_events(local_mouse_t *mouse, bool left_pressed)
 {
 	if (left_pressed && !mouse->left)
 	{
-		if (mouse->hover_el && mouse->hover_el->event)
-			mouse->hover_el->event(mouse->hover_el, UI_EVENT_MOUSE_DOWN);
+		if (mouse->hover && mouse->hover->layer == LAYER_WINDOWS)
+			compositor_bring_to_front(mouse->hover, LAYER_WINDOWS);
+
+		if (mouse->hover_el && mouse->hover_el->on_mouse_down)
+		{
+			mouse->hover_el->on_mouse_down(mouse->hover_el);
+			mouse->pressed_el = mouse->hover_el;
+		}
 	}
 
 	if (!left_pressed && mouse->left)
 	{
-		if (mouse->hover_el && mouse->hover_el->event)
-			mouse->hover_el->event(mouse->hover_el, UI_EVENT_MOUSE_UP);
+		if (mouse->pressed_el && mouse->pressed_el->on_mouse_up)
+			mouse->pressed_el->on_mouse_up(mouse->pressed_el);
+		mouse->pressed_el = NULL;
 	}
 }
 
@@ -96,15 +103,27 @@ static void mouse_handle_drag(local_mouse_t *mouse, bool left_pressed)
 {
 	if (left_pressed && !mouse->drag_obj)
 	{
-		if (mouse->hover_el && mouse->hover_el->type != UI_BUTTON)
+		if (!mouse->hover)
+			return;
+		if (mouse->hover->layer == LAYER_CURSOR)
+			return;
+		if (mouse->hover->layer == LAYER_BG)
+			return;
+
+		if (mouse->hover_el && mouse->hover_el->type == UI_BUTTON)
+			return;
+
+		if (mouse->hover_el)
 		{
+
 			mouse->drag_obj = mouse->hover;
 			mouse->drag_el = mouse->hover_el;
 			mouse->drag_offset_x = mouse->x - (mouse->drag_obj->x + mouse->drag_el->x);
 			mouse->drag_offset_y = mouse->y - (mouse->drag_obj->y + mouse->drag_el->y);
 		}
-		else if (mouse->hover)
+		else
 		{
+
 			mouse->drag_obj = mouse->hover;
 			mouse->drag_el = NULL;
 			mouse->drag_offset_x = mouse->x - mouse->drag_obj->x;

@@ -2,7 +2,7 @@
 
 #include <gui/core/object/object.h>
 #include <gui/core/compositor/compositor.h>
-#include "../element.h"
+#include <gui/core/element/element.h>
 
 typedef struct
 {
@@ -11,6 +11,8 @@ typedef struct
 	object_t *hover;	  // the object under the cursor
 	element_t *hover_el;	  // element under cursor
 	element_t *prev_hover_el; // previous element
+
+	element_t *pressed_el;
 
 	object_t *drag_obj; // drag object
 	element_t *drag_el; // drag element
