@@ -10,7 +10,7 @@ static const uint32_t SCREEN_W = 1920;
 static const uint32_t SCREEN_H = 1080;
 static const uint8_t SCREEN_BPP = 32;
 
-int main()
+int main(void)
 {
 	demo_ctx_t ctx = demo_init(SCREEN_W, SCREEN_H, SCREEN_BPP);
 
