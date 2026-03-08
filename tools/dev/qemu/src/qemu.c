@@ -68,6 +68,8 @@ void qemu_build_command(const QemuOptions *opts, char *cmd, size_t len)
 	// Debug
 	// pos += snprintf(cmd + pos, len - pos, "-S -s ");
 	// pos += snprintf(cmd + pos, len - pos, "-d int ");
+
+	pos += snprintf(cmd + pos, len - pos, "| sed 's/\x1b\[[0-9;]*m//g' ");
 }
 
 int qemu_run(const QemuOptions *opts)
