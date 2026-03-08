@@ -57,7 +57,7 @@ kernel_entry(BootInfo *bi)
 
 	smp_init();
 
-	screen_init(bi->framebuffer);
+	// screen_init(bi->framebuffer);
 	scheduler_init();
 
 	while (1)
@@ -117,13 +117,14 @@ void render_task(void)
 void kmain_thread(void)
 {
 	printk("kmain thread\n");
-	task_t *task1 = task_create(render_task, 255);
-	scheduler_add_task(task1);
-
+	// task_t *task1 = task_create(render_task, 255);
+	// scheduler_add_task(task1);
+	load_elf_and_run("/usr/bin/user.elf");
 	while (1)
 	{
-		char c = keyboard_get_char();
-		printk("key: %c\n", c);
+		// char c = keyboard_get_char();
+		// printk("key: %c\n", c);
+		asm volatile("hlt");
 	}
 
 	// uint8_t counter = 0;
