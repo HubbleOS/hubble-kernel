@@ -262,7 +262,7 @@ void dump_page(uint64_t va, size_t len)
 	printk("\n");
 }
 
-// Увага: робити лише якщо ти точно знаєш, що вся 2MiB зона безпечна для user.
+// make only when 2MB page is user only
 int make_pd_entry_user(uint64_t va)
 {
 	uint64_t cr3 = get_cr3();
@@ -283,21 +283,15 @@ int make_pd_entry_user(uint64_t va)
 	uint64_t *pd = PHYS_TO_VIRT_PTR(uint64_t, (pdpte & ~0xFFFULL));
 	uint64_t pde = pd[pd_idx];
 
-	// Перевіримо чи це large page
 	if (!(pde & (1ULL << 7)))
 	{
 		printk("Not a large page at PDE\n");
 		return -1;
 	}
 
-	// Додати user біт (біти: bit2 = US)
 	uint64_t new_pde = pde | (1ULL << 2);
 	pd[pd_idx] = new_pde;
 
-	// Якщо потрібно, очистити NX (bit63) -- залежить від p_flags
-	// new_pde &= ~(1ULL<<63);
-
-	// Скинути TLB для цього діапазону
 	invlpg((void *)va);
 	return 0;
 }
