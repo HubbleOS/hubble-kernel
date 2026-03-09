@@ -13,6 +13,7 @@ typedef struct
 	element_t *prev_hover_el; // previous element
 
 	element_t *pressed_el;
+	object_t *pressed_obj;
 
 	object_t *drag_obj; // drag object
 	element_t *drag_el; // drag element
