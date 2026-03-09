@@ -11,6 +11,10 @@ typedef struct object
 	int x, y;
 	int width, height;
 
+	int prev_x, prev_y;
+	int prev_w, prev_h;
+	bool maximized;
+
 	uint32_t *buffer;
 	color_t bg_color;
 

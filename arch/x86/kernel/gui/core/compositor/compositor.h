@@ -37,3 +37,6 @@ void compositor_add_damage(int layer, int x, int y, int w, int h);
 void compositor_bring_to_front(object_t *obj, int layer);
 void compositor_move_object(object_t *obj, int new_x, int new_y);
 void compositor_change_size_object(object_t *obj, int new_w, int new_h);
+
+void object_maximize(object_t *obj, int screen_w, int screen_h);
+void object_restore(object_t *obj);

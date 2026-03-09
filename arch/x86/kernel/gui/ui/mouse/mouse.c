@@ -77,12 +77,26 @@ static void mouse_handle_hover_events(local_mouse_t *mouse)
 	}
 }
 
+void maximize_button_click(object_t *obj, int screen_w, int screen_h)
+{
+	if (obj->maximized)
+		object_restore(obj);
+	else
+		object_maximize(obj, screen_w, screen_h);
+}
+
+#include <gui/core/screen/screen.h>
+
 static void mouse_handle_button_events(local_mouse_t *mouse, bool left_pressed)
 {
 	if (left_pressed && !mouse->left)
 	{
 		if (mouse->hover && mouse->hover->layer == LAYER_WINDOWS)
+		{
+
 			compositor_bring_to_front(mouse->hover, LAYER_WINDOWS);
+			maximize_button_click(mouse->hover, g_fb->width, g_fb->height);
+		}
 
 		if (mouse->hover_el && mouse->hover_el->on_mouse_down)
 		{

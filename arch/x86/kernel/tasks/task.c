@@ -59,6 +59,14 @@ static void fps_delay(uint32_t fps)
 	platform_delay(1000 / fps);
 }
 
+// void maximize_button_click(object_t *obj, int screen_w, int screen_h)
+// {
+// 	if (obj->maximized)
+// 		object_restore(obj);
+// 	else
+// 		object_maximize(obj, screen_w, screen_h);
+// }
+
 #ifdef GUI_DEMO
 static void *update_thread(void *arg)
 #else

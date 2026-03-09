@@ -191,10 +191,11 @@ void compositor_change_size_object(object_t *obj, int new_w, int new_h)
 	uint32_t *new_buf = malloc(new_w * new_h * sizeof(uint32_t));
 	if (!new_buf)
 		return;
-	memset(new_buf, 0, new_w * new_h * sizeof(uint32_t));
+	memset(new_buf, obj->bg_color, new_w * new_h * sizeof(uint32_t));
 
 	int copy_w = obj->width < new_w ? obj->width : new_w;
 	int copy_h = obj->height < new_h ? obj->height : new_h;
+
 	for (int y = 0; y < copy_h; y++)
 		memcpy(new_buf + y * new_w, obj->buffer + y * obj->width, copy_w * sizeof(uint32_t));
 
@@ -204,4 +205,31 @@ void compositor_change_size_object(object_t *obj, int new_w, int new_h)
 	obj->height = new_h;
 
 	object_redraw_elements(obj);
+}
+
+void object_maximize(object_t *obj, int screen_w, int screen_h)
+{
+	if (!obj || obj->maximized)
+		return;
+
+	obj->prev_x = obj->x;
+	obj->prev_y = obj->y;
+	obj->prev_w = obj->width;
+	obj->prev_h = obj->height;
+
+	compositor_move_object(obj, 0, 0);
+	compositor_change_size_object(obj, screen_w, screen_h);
+
+	obj->maximized = true;
+}
+
+void object_restore(object_t *obj)
+{
+	if (!obj || !obj->maximized)
+		return;
+
+	compositor_move_object(obj, obj->prev_x, obj->prev_y);
+	compositor_change_size_object(obj, obj->prev_w, obj->prev_h);
+
+	obj->maximized = false;
 }
