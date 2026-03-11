@@ -4,5 +4,5 @@
 
 typedef element_t label_t;
 
-label_t *label_reate(int x, int y, int w, int h, const char *text);
-void label_destroy(label_t *btn);
+label_t *label_create(int x, int y, int w, int h, const char *text);
+void label_destroy(label_t *label);

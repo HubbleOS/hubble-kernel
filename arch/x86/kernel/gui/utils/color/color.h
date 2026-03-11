@@ -16,24 +16,15 @@ enum Color
 	COLOR_YELLOW = 0xFFFFFF00
 };
 
-static inline color_t rgb(chan_t r, chan_t g, chan_t b)
-{
-	return ((color_t)b << 0) | ((color_t)g << 8) | ((color_t)r << 16) | ((color_t)255 << 24);
-}
+#define rgb(r, g, b) ((color_t)b << 0) | ((color_t)g << 8) | ((color_t)r << 16) | ((color_t)255 << 24)
+// #define rgba(r, g, b, a) ((color_t)b << 0) | ((color_t)g << 8) | ((color_t)r << 16) | ((color_t)a << 24)
+#define rgba(r, g, b, a) ((color_t)b << 0) | ((color_t)g << 8) | ((color_t)r << 16) | ((uint32_t)(a * 255.0f + 0.5f) << 24)
 
-static inline color_t rgba(chan_t r, chan_t g, chan_t b, float a)
-{
-	return ((color_t)b << 0) | ((color_t)g << 8) | ((color_t)r << 16) | ((uint32_t)(a * 255.0f + 0.5f) << 24);
-}
+#define get_alpha(c) ((c >> 24) & 0xFF)
+#define get_red(c) ((c >> 16) & 0xFF)
+#define get_green(c) ((c >> 8) & 0xFF)
+#define get_blue(c) (c & 0xFF)
 
-static inline uint8_t get_alpha(color_t c) { return (c >> 24) & 0xFF; }
-static inline uint8_t get_red(color_t c) { return (c >> 16) & 0xFF; }
-static inline uint8_t get_green(color_t c) { return (c >> 8) & 0xFF; }
-static inline uint8_t get_blue(color_t c) { return c & 0xFF; }
-
-static inline color_t make_color(uint8_t a, uint8_t r, uint8_t g, uint8_t b)
-{
-	return ((color_t)a << 24) | ((color_t)r << 16) | ((color_t)g << 8) | b;
-}
+#define make_color(a, r, g, b) ((color_t)b << 0) | ((color_t)g << 8) | ((color_t)r << 16) | ((color_t)a << 24)
 
 color_t color_blend(color_t src, color_t dst);

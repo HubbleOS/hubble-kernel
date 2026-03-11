@@ -7,8 +7,7 @@
 #include <gui/utils/color/color.h>
 
 #ifdef GUI_DEMO
-// #include "platform/keyboard.h"
-#include <dev/keyboard.h>
+#include "platform/keyboard.h"
 #else
 #include <dev/keyboard.h>
 #endif
@@ -92,7 +91,8 @@ typedef struct element
 	void (*on_key_up)(struct element *);
 
 	void (*on_key_char)(element_t *, char);
-	void (*on_key_special)(element_t *, key_action_t);
+	// void (*on_key_special)(element_t *, key_action_t);
+	void (*on_key_special)(element_t *, int);
 
 } element_t;
 
