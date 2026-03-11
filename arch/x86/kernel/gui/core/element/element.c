@@ -94,7 +94,7 @@ void element_draw(element_t *el)
 	}
 }
 
-static void element_redraw(element_t *el)
+void element_redraw(element_t *el)
 {
 	el->needs_redraw = true;
 	element_mark_dirty(el);
@@ -119,11 +119,16 @@ static void element_on_leave(element_t *el)
 	element_redraw(el);
 }
 
+#include <gui/dev/keyboard/keyboard.h>
+
 static void element_on_down(element_t *el)
 {
 	el->state = ELEMENT_PRESSED;
 	if (el->style_set)
 		element_apply_style(el, el->style_set->pressed);
+
+	if (el->type == UI_TEXTBOX)
+		g_keyboard.focused_el = el;
 
 	element_redraw(el);
 }
@@ -142,38 +147,6 @@ static void element_key_down(element_t *el)
 {
 
 	element_redraw(el);
-}
-
-static void input_key_char(element_t *el, char c)
-{
-	size_t len = strlen(el->text);
-
-	char *new = malloc(len + 2);
-	strcpy(new, el->text);
-
-	new[len] = c;
-	new[len + 1] = 0;
-
-	free(el->text);
-	el->text = new;
-
-	element_redraw(el);
-}
-
-static void input_key_special(element_t *el, key_action_t action)
-{
-	if (!el->text)
-		return;
-
-	if (action == KEY_ACTION_BACKSPACE)
-	{
-		size_t len = strlen(el->text);
-		if (len == 0)
-			return;
-
-		el->text[len - 1] = 0;
-		element_redraw(el);
-	}
 }
 
 element_t *element_create(int x, int y, int w, int h)
@@ -217,8 +190,8 @@ element_t *element_create(int x, int y, int w, int h)
 	el->on_key_down = NULL;
 	el->on_key_up = NULL;
 
-	el->on_key_special = input_key_special;
-	el->on_key_char = input_key_char;
+	el->on_key_special = NULL;
+	el->on_key_char = NULL;
 
 	el->buffer = malloc(w * h * sizeof(uint32_t));
 	if (!el->buffer)
