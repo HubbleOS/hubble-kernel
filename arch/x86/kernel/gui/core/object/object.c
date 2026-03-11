@@ -80,7 +80,6 @@ void object_destroy(object_t *obj)
 	free(obj);
 }
 
-// __attribute__((optimize("O0"), noinline))
 void object_flush(object_t *obj)
 {
 	for (int e = 0; e < obj->element_count; e++)

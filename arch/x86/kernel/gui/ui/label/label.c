@@ -1,34 +1,26 @@
 #include "label.h"
 
-#include "../text/text.h"
-
 #include <stdlib.h>
-#include <stddef.h>
 #include <string.h>
 
-element_t *label_create(int x, int y, const char *text, uint32_t color)
+label_t *label_create(int x, int y, int w, int h, const char *text)
 {
-	element_t *el = element_create(x, y, 0, 0);
+	element_t *el = element_create(x, y, w, h);
 	if (!el)
 		return NULL;
 
-	int w = strlen(text) * 8;
-	int h = 8;
-
-	el->width = w;
-	el->height = h;
 	el->type = UI_LABEL;
-	el->text = strdup(text);
+	el->bg_color = 0;
+	el->text_color = rgb(0, 0, 0);
 
-	el->on_mouse_enter = NULL;
-	el->on_mouse_leave = NULL;
-	el->on_mouse_down = NULL;
-	el->on_mouse_up = NULL;
+	if (text)
+		el->text = strdup(text);
 
+	el->needs_redraw = true;
 	return el;
 }
 
-void label_destroy(element_t *el)
+void label_destroy(label_t *label)
 {
-	element_destroy(el);
+	element_destroy(label);
 }

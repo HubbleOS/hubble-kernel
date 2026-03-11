@@ -22,7 +22,8 @@ static void input_key_char(element_t *el, char c)
 	element_redraw(el);
 }
 
-static void input_key_special(element_t *el, key_action_t action)
+// static void input_key_special(element_t *el, key_action_t action)
+static void input_key_special(element_t *el, int action)
 {
 	if (!el->text)
 		return;
