@@ -3,7 +3,7 @@
 // ============================================================================
 
 #pragma once
-#include <_cheader.h>
+// #include <_cheader.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -84,7 +84,7 @@ typedef struct
 
 #include <interrupt/interrupt.h>
 
-_Begin_C_Header;
+// _Begin_C_Header;
 
 // Low-level keyboard functions (already exist)
 key_event_t keyboard_get_event(void);
@@ -100,4 +100,6 @@ void keyboard_irq(registers_t *r);
 
 void keyboard_init();
 
-_End_C_Header;
+bool keyboard_poll_event(key_event_t *ev);
+
+// _End_C_Header;

@@ -4,12 +4,13 @@
 #include <gui/core/object/object.h>
 
 #include <gui/ui/button/button.h>
+#include <gui/ui/input/input.h>
 #include <gui/ui/canvas/canvas.h>
-#include <gui/ui/mouse/mouse.h>
 #include <gui/ui/сursor/cursor.h>
 #include <gui/ui/window/window.h>
 #include <gui/ui/background/background.h>
 
+#include <gui/dev/mouse/mouse.h>
 #include <gui/utils/color/color.h>
 
 static int (*current_formula)(int x) = NULL;
@@ -101,6 +102,9 @@ void graph_app_init(void)
 	button_t *btn_line = button_create(700, 150, 80, 30, "Line");
 	btn_line->on_click = on_line;
 	window_addElement(win, btn_line);
+
+	input_t *input_block = input_create(700, 200, 80, 30, "Input");
+	window_addElement(win, input_block);
 
 	current_formula = formula_parabola;
 	current_canvas = cnv;

@@ -94,15 +94,20 @@ void element_draw(element_t *el)
 	}
 }
 
+static void element_redraw(element_t *el)
+{
+	el->needs_redraw = true;
+	element_mark_dirty(el);
+	if (el->owner)
+		object_flush(el->owner);
+}
 static void element_on_enter(element_t *el)
 {
 	el->state = ELEMENT_HOVER;
 	if (el->style_set)
 		element_apply_style(el, el->style_set->hover);
-	el->needs_redraw = true;
-	element_mark_dirty(el);
-	if (el->owner)
-		object_flush(el->owner);
+
+	element_redraw(el);
 }
 
 static void element_on_leave(element_t *el)
@@ -110,10 +115,8 @@ static void element_on_leave(element_t *el)
 	el->state = ELEMENT_NORMAL;
 	if (el->style_set)
 		element_apply_style(el, NULL);
-	el->needs_redraw = true;
-	element_mark_dirty(el);
-	if (el->owner)
-		object_flush(el->owner);
+
+	element_redraw(el);
 }
 
 static void element_on_down(element_t *el)
@@ -121,10 +124,8 @@ static void element_on_down(element_t *el)
 	el->state = ELEMENT_PRESSED;
 	if (el->style_set)
 		element_apply_style(el, el->style_set->pressed);
-	el->needs_redraw = true;
-	element_mark_dirty(el);
-	if (el->owner)
-		object_flush(el->owner);
+
+	element_redraw(el);
 }
 
 static void element_on_up(element_t *el)
@@ -134,25 +135,45 @@ static void element_on_up(element_t *el)
 	el->state = ELEMENT_HOVER;
 	if (el->style_set)
 		element_apply_style(el, el->style_set->hover);
-	el->needs_redraw = true;
-	element_mark_dirty(el);
-	if (el->owner)
-		object_flush(el->owner);
+	element_redraw(el);
 }
 
-void element_init(element_t *el)
+static void element_key_down(element_t *el)
 {
-	el->draw = element_draw;
-	el->on_mouse_enter = element_on_enter;
-	el->on_mouse_leave = element_on_leave;
-	el->on_mouse_down = element_on_down;
-	el->on_mouse_up = element_on_up;
-	el->owner = NULL;
-	el->dirty_rect = (dirty_rect_t){0};
-	el->state = ELEMENT_NORMAL;
-	el->bg_color = rgb(255, 0, 0);
-	el->text_color = rgb(30, 30, 30);
-	el->on_click = NULL;
+
+	element_redraw(el);
+}
+
+static void input_key_char(element_t *el, char c)
+{
+	size_t len = strlen(el->text);
+
+	char *new = malloc(len + 2);
+	strcpy(new, el->text);
+
+	new[len] = c;
+	new[len + 1] = 0;
+
+	free(el->text);
+	el->text = new;
+
+	element_redraw(el);
+}
+
+static void input_key_special(element_t *el, key_action_t action)
+{
+	if (!el->text)
+		return;
+
+	if (action == KEY_ACTION_BACKSPACE)
+	{
+		size_t len = strlen(el->text);
+		if (len == 0)
+			return;
+
+		el->text[len - 1] = 0;
+		element_redraw(el);
+	}
 }
 
 element_t *element_create(int x, int y, int w, int h)
@@ -192,6 +213,12 @@ element_t *element_create(int x, int y, int w, int h)
 	el->on_mouse_leave = element_on_leave;
 	el->on_mouse_down = element_on_down;
 	el->on_mouse_up = element_on_up;
+
+	el->on_key_down = NULL;
+	el->on_key_up = NULL;
+
+	el->on_key_special = input_key_special;
+	el->on_key_char = input_key_char;
 
 	el->buffer = malloc(w * h * sizeof(uint32_t));
 	if (!el->buffer)

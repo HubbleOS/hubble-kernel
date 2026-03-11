@@ -1,5 +1,5 @@
 #include "cursor.h"
-// #include "printk.h"
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -7,28 +7,26 @@ cursor_t *cursor_create(int w, int h, uint32_t color_outer, uint32_t color_inner
 {
 	cursor_t *c = malloc(sizeof(cursor_t));
 	if (!c)
-	{
-		// printk("failed to create");
 		return NULL;
-	}
 
 	c->surface = object_create(0, 0, w, h, color_outer);
 	if (!c->surface)
 	{
-		// printk("no cursor surface");
 		free(c);
 		return NULL;
 	}
 
 	int iw = w / 2, ih = h / 2;
 
-	element_t *dot = malloc(sizeof(element_t));
-	element_init(dot);
+	// element_t *dot = element_create(0, 0, 0, 0);
+	element_t *dot = element_create(iw - 2, ih - 2, 4, 4);
+	if (!dot)
+	{
+		object_destroy(c->surface);
+		free(c);
+		return NULL;
+	}
 
-	dot->x = iw - 2;
-	dot->y = ih - 2;
-	dot->width = 4;
-	dot->height = 4;
 	dot->type = UI_RECT;
 	dot->bg_color = color_inner;
 

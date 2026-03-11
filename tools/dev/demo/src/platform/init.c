@@ -4,11 +4,9 @@
 
 #include <stdlib.h>
 #include <gui/core/screen/screen.h>
-// #include <gui/ui/mouse/mouse.h>
+#include <gui/dev/mouse/mouse.h>
 #include <gui/utils/color/color.h>
 #include <tasks/task.h>
-
-extern mouse_t *mouse;
 
 demo_ctx_t demo_init(uint32_t w, uint32_t h, uint8_t bpp)
 {

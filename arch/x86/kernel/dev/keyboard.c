@@ -407,3 +407,12 @@ void keyboard_init()
 	__asm__ volatile("sti");
 	printk("Keyboard initialized\n");
 }
+
+bool keyboard_poll_event(key_event_t *ev)
+{
+	asm volatile("cli");
+	bool ok = kbd_pop(ev);
+	asm volatile("sti");
+
+	return ok;
+}

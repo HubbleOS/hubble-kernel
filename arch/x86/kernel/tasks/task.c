@@ -7,11 +7,13 @@
 
 #include <gui/ui/button/button.h>
 #include <gui/ui/сursor/cursor.h>
-#include <gui/ui/mouse/mouse.h>
 #include <gui/ui/window/window.h>
 #include <gui/ui/text/text.h>
 #include <gui/ui/canvas/canvas.h>
 #include <gui/ui/background/background.h>
+
+#include <gui/dev/mouse/mouse.h>
+#include <gui/dev/keyboard/keyboard.h>
 
 #include <gui/utils/color/color.h>
 
@@ -79,6 +81,7 @@ void update_task(void)
 	{
 		LOCK();
 		mouse_update(mouse->x, mouse->y, mouse->left);
+		keyboard_update();
 
 		if (g_mouse.drag_obj)
 		{
@@ -94,6 +97,7 @@ void update_task(void)
 				compositor_bring_to_front(g_mouse.drag_obj, LAYER_WINDOWS);
 			}
 		}
+
 		UNLOCK();
 		fps_delay(240);
 	}
