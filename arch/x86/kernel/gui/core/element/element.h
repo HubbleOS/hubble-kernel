@@ -98,3 +98,6 @@ typedef struct element
 
 element_t *element_create(int x, int y, int w, int h);
 void element_destroy(element_t *el);
+
+void element_draw(element_t *el);
+void element_redraw(element_t *el);
