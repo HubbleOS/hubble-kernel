@@ -29,9 +29,9 @@ kernel_entry(BootInfo *bi)
 
 	early_printk_init(g_boot_info->framebuffer);
 
-	acpi_init(bi->rsdp);
+	acpi_init(g_boot_info->rsdp);
 	hpet_init();
-	init_memory(bi);
+	init_memory(g_boot_info);
 	init_cpu();
 
 	init_filesystems();
@@ -43,7 +43,7 @@ kernel_entry(BootInfo *bi)
 
 	smp_init();
 
-	screen_init(bi->framebuffer);
+	screen_init(g_boot_info->framebuffer);
 	scheduler_init();
 
 	while (1)

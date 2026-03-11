@@ -6,10 +6,10 @@
 #include <gui/ui/button/button.h>
 #include <gui/ui/canvas/canvas.h>
 #include <gui/ui/сursor/cursor.h>
-#include <gui/ui/mouse/mouse.h>
 #include <gui/ui/window/window.h>
 #include <gui/ui/background/background.h>
 
+#include <gui/dev/mouse/mouse.h>
 #include <gui/utils/color/color.h>
 #include <hpet/hpet.h>
 

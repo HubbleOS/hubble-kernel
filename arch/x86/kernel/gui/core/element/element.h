@@ -6,6 +6,13 @@
 
 #include <gui/utils/color/color.h>
 
+#ifdef GUI_DEMO
+// #include "platform/keyboard.h"
+#include <dev/keyboard.h>
+#else
+#include <dev/keyboard.h>
+#endif
+
 #include "styles/style.h"
 
 typedef enum
@@ -44,24 +51,35 @@ typedef enum
 
 typedef struct element
 {
+	// position and size:
 	int x, y;
 	int width, height;
 
-	element_style_t active_style;
-	element_style_set_t *style_set;
+	// for draw:
+	struct object *owner;
+	dirty_rect_t dirty_rect;
+	uint32_t *buffer;
+	element_draw_fn draw;
+	bool needs_redraw;
 
 	color_t bg_color;
 	color_t text_color;
 
-	uint32_t *buffer;
+	bool is_active;
+	bool on_focus;
+
+	// styles
+	element_style_t active_style;
+	element_style_set_t *style_set;
+
+	// data:
 	char *text;
 
-	dirty_rect_t dirty_rect;
-	struct object *owner;
-
+	// state and type:
 	element_type_t type;
 	element_state_t state;
 
+	// mouse event:
 	void (*on_mouse_enter)(struct element *);
 	void (*on_mouse_leave)(struct element *);
 	void (*on_mouse_down)(struct element *);
@@ -69,11 +87,14 @@ typedef struct element
 
 	void (*on_click)(void);
 
-	void (*draw)(struct element *);
-	bool needs_redraw;
-} element_t;
+	// keyboard event:
+	void (*on_key_down)(struct element *, char);
+	void (*on_key_up)(struct element *);
 
-void element_init(element_t *el);
+	void (*on_key_char)(element_t *, char);
+	void (*on_key_special)(element_t *, key_action_t);
+
+} element_t;
 
 element_t *element_create(int x, int y, int w, int h);
 void element_destroy(element_t *el);
