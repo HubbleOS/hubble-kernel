@@ -16,7 +16,7 @@ switch_to_task:
     ; Load new context (RSI = new context)
     
     ; Restore FPU/SSE state
-    mov rax, [rsi + 164]
+    mov rax, [rsi + 200]  ; fpu_state  ← fix this
     test rax, rax
     jz .skip_fpu_load
     fxrstor [rax]
@@ -24,16 +24,18 @@ switch_to_task:
 .skip_fpu_load:
     ; out 0x3f8, 0x20
     ; Restore segment selectors
-    mov ax, [rsi + 148]
+    mov ax, [rsi + 168]   ; ds
     mov ds, ax
-    mov ax, [rsi + 150]
+    mov ax, [rsi + 176]   ; es
     mov es, ax
-    mov ax, [rsi + 152]
+    mov ax, [rsi + 184]   ; fs
     mov fs, ax
-    mov ax, [rsi + 154]
+    mov ax, [rsi + 192]   ; gs
     mov gs, ax
 
+    push rsi          ; ← save before call
     call lapic_eoi
+    pop rsi           ; ← restore after call
     sti
     
     ; Restore general purpose registers
@@ -52,17 +54,14 @@ switch_to_task:
     mov rcx, [rsi + 112]
     mov rax, [rsi + 120]
     
-    ; Restore RSP
-    mov rsp, [rsi + 128]
-    
-    ; Push new RIP onto stack for ret
-    push qword [rsi + 136]
-
-    ; Restore RDI and RSI last
-    mov rdi, [rsi + 64]
-    mov rsi, [rsi + 72]    
-    ; Jump to new RIP
-    ret
+    push qword [rsi + 160]  ; SS
+    push qword [rsi + 128]  ; RSP
+    push qword [rsi + 144]  ; RFLAGS
+    push qword [rsi + 152]  ; CS
+    push qword [rsi + 136]  ; RIP
+    mov rdi, [rsi + 64]     ; restore rdi
+    mov rsi, [rsi + 72]     ; restore rsi LAST (kills context pointer)
+    iretq  
 
 
 

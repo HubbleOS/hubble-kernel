@@ -34,6 +34,14 @@ typedef struct
 	VFS_Node *node;
 } VFS_File;
 
+// typedef struct
+// {
+// 	void *device;
+// 	uint64_t size;
+// 	uint8_t type;
+
+// } VFS_Device_File;
+
 // Таблиця функцій для ФС
 typedef struct VFS_FS
 {
@@ -47,6 +55,7 @@ typedef struct VFS_FS
 	VFS_Node *(*open)(struct VFS_FS *fs, const char *path);
 	int (*read)(VFS_File *file, void *buf, uint32_t size);
 	int (*write)(VFS_File *file, const void *buf, uint32_t size);
+	uint64_t (*mmap)(VFS_File *file, uint64_t offset, size_t size);
 
 	bool (*mkdir)(struct VFS_FS *fs, const char *path);
 	bool (*unlink)(struct VFS_FS *fs, const char *path);
@@ -54,6 +63,7 @@ typedef struct VFS_FS
 	int (*close)(VFS_File *file);
 	Directory (*readdir)(struct VFS_FS *fs, const char *path);
 } VFS_FS;
+
 // typedef enum
 // {
 // 	DEV_ATA,

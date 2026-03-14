@@ -6,6 +6,7 @@
 #include <io.h>
 #include <apic/apic.h>
 #include <smp/scheduler.h>
+#include "sys/syscall.h"
 
 // ============================================================================
 // Legacy PIC functions (kept for fallback/compatibility)
@@ -208,7 +209,10 @@ typedef long (*syscall_fn_t)(long arg1, long arg2, long arg3, long arg4, long ar
 syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_write] = (syscall_fn_t)sys_write,
     [SYS_read] = (syscall_fn_t)sys_read,
-};
+    [3] = (syscall_fn_t)sys_mmap,
+    [4] = (syscall_fn_t)sys_open,
+    [5] = (syscall_fn_t)sys_close,
+    [6] = (syscall_fn_t)sys_read_file};
 
 uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
 			 uint64_t a4, uint64_t a5, uint64_t a6)

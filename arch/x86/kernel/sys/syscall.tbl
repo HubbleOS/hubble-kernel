@@ -3,3 +3,4 @@
 1 write sys_write
 2 read sys_read
 42 fb sys_fb
+3 mmap sys_fb
