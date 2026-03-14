@@ -8,6 +8,7 @@
 #include "printk.h"
 #include <stdint.h>
 #include <string.h>
+#include <smp/scheduler.h>
 
 #define ELF_MAGIC 0x464c457fUL
 #define PAGE_SIZE 4096
@@ -347,6 +348,16 @@ int elf_run(uint64_t entry)
 	uint64_t pte = pt[PT_INDEX(entry)];
 	printk("  PTE[%d] = 0x%llx (USER=%d)\n", PT_INDEX(entry), pte, !!(pte & PTE_USER));
 	// After all ELF segments are loaded, before user_enter():
+
+	task_t *current_task = get_current_task();
+
+	// current_task->context.cs = 0x23;
+	// current_task->context.ss = 0x1B;
+
+	current_task->context.ds = 0x1B;
+	current_task->context.es = 0x1B;
+	current_task->context.fs = 0x1B;
+	current_task->context.gs = 0x1B;
 
 	user_enter(entry, USER_STACK_TOP);
 

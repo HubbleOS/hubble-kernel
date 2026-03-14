@@ -23,8 +23,10 @@
 #include <gui/ui/rect/rect.h>
 #include <gui/ui/text/text.h>
 #include <gui/ui/canvas/canvas.h>
+#include <fs/vfs/dev.h>
 
 #include "gui/background.h"
+#include <errno.h>
 
 extern int load_elf_and_run(const char *path);
 
@@ -46,6 +48,11 @@ kernel_entry(BootInfo *bi)
 	init.cpu();
 
 	init.filesystems();
+	uint64_t fb_mmap(uint64_t offset, size_t size)
+	{
+		return (uint64_t)g_fb->base;
+	};
+	dev_vfs_register("fb0", fb_mmap, NULL);
 
 	printk(KERN_INFO "\n=== Kernel Initialization Complete ===\n\n");
 	outb(0x3F8, 'A');
@@ -54,10 +61,12 @@ kernel_entry(BootInfo *bi)
 	ps2_init();
 	mouse_init();
 	keyboard_init();
+	dev_vfs_register("mouse", mouse_mmap, mouse_read_file);
 
 	smp_init();
 
-	// screen_init(bi->framebuffer);
+	screen_init(bi->framebuffer);
+
 	scheduler_init();
 
 	while (1)

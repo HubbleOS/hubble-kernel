@@ -50,8 +50,8 @@ static inline long do_syscall_int(long num, long arg1, long arg2, long arg3,
 	return ret;
 }
 
-#define do_syscall do_syscall_fast
-// #define do_syscall do_syscall_int
+// #define do_syscall do_syscall_fast
+#define do_syscall do_syscall_int
 
 #define syscall1(n, a1) do_syscall(n, a1, 0, 0, 0, 0, 0)
 #define syscall2(n, a1, a2) do_syscall(n, a1, a2, 0, 0, 0, 0)

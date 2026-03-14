@@ -7,9 +7,12 @@
 #include <stddef.h>
 #include <mm/kmalloc.h>
 #include "mouse.h"
+#include <mm/vmm.h>
+#include <mm/pmm.h>
+#include "higher_half.h"
 
 static mouse_t *mouse_g = NULL;
-static uint8_t mouse_packet[2];
+static uint8_t mouse_packet[3];
 static uint8_t mouse_cycle = 0;
 mouse_t *get_mouse_info(void)
 {
@@ -17,10 +20,22 @@ mouse_t *get_mouse_info(void)
 	return mouse_g;
 }
 
+uint64_t mouse_mmap(uint64_t offset, size_t size)
+{
+	// printk("mouse mmap %p\n", VIRT_TO_PHYS(mouse_g));
+	return (uint64_t)VIRT_TO_PHYS(mouse_g);
+}
+uint64_t mouse_read_file(uint64_t offset, size_t size)
+{
+	return (uint64_t)VIRT_TO_PHYS(mouse_g);
+}
+
 void mouse_handler(registers_t *regs)
 {
 	if (!(inb(PS2_COMMAND) & 0x20))
 		return;
+
+	// outb(0x3f8, 'M');
 	mouse_packet[mouse_cycle++] = inb(PS2_DATA);
 
 	if (mouse_cycle < 3)
@@ -132,8 +147,8 @@ void mouse_init()
 	mouse_read();
 
 	irq_install_handler(12, mouse_handler);
-
-	mouse_g = (mouse_t *)kmalloc(sizeof(mouse_t), GFP_KERNEL);
+	uint64_t phys = pmm_alloc_page();
+	mouse_g = PHYS_TO_VIRT_PTR(mouse_t, phys);
 	mouse_g->x = 1920 / 2;
 	mouse_g->y = 1080 / 2;
 

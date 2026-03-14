@@ -66,7 +66,6 @@ bool is_mmio(uint64_t pa)
 // --- Map a virtual page to a physical page ---
 int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags)
 {
-	printk("[VMM] Mapping page 0x%llx to 0x%llx\n", va, pa);
 	uint64_t *pml4 = pml4_table();
 
 	// CRITICAL: Intermediate tables MUST have USER bit if final page is USER!
@@ -164,6 +163,9 @@ int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags)
 		pte_flags |= PTE_GLOBAL;
 
 	if (flags & VMM_MAP_USER)
+		pte_flags |= PTE_USER;
+
+	if (flags & PTE_USER)
 		pte_flags |= PTE_USER;
 
 	uint64_t *pt = pt_table(va);
