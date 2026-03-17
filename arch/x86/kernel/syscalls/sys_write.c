@@ -11,7 +11,7 @@ long sys_write(int fd, const char *buffer, size_t len)
 	if (!buffer)
 		return -1;
 
-	printk("%s", buffer);
+	printk("%.*s", (int)len, buffer);
 
 	output_device_t *dev = get_stdout_device();
 	if (!dev || !dev->write)

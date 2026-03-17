@@ -50,7 +50,9 @@ kernel_entry(BootInfo *bi)
 
 	smp_init();
 
-	scheduler_init();
+	load_elf_and_run("/usr/bin/user.elf");
+
+	// scheduler_init();
 
 	while (1)
 		asm volatile("hlt");

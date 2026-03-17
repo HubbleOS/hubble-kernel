@@ -5,7 +5,7 @@ OUTPUT := $(OUT_DIR)/usr/user.elf
 LDSCRIPT := $(SRC_DIR)/user.ld
 
 # CFLAGS для userland
-CFLAGS := -ffreestanding -O2 -Wall -Wextra -m64 -mcmodel=large -g
+# CFLAGS := -ffreestanding -O2 -Wall -Wextra -m64 -g
 
 # Include пути: сначала общий include, потом libc
 INCLUDES := -I../include -I../include/libc

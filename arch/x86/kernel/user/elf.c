@@ -18,7 +18,7 @@
 #define PF_W 0x2
 #define PF_R 0x4
 
-#define USER_STACK_PAGES 32
+#define USER_STACK_PAGES 128
 #define USER_STACK_TOP 0x70000000ULL
 
 /**
@@ -354,17 +354,19 @@ int elf_run(uint64_t entry)
 	// current_task->context.cs = 0x23;
 	// current_task->context.ss = 0x1B;
 
-	current_task->context.ds = 0x1B;
-	current_task->context.es = 0x1B;
-	current_task->context.fs = 0x1B;
-	current_task->context.gs = 0x1B;
+	current_task->context.ds = 0x23; // User Data
+	current_task->context.es = 0x23;
+	current_task->context.fs = 0x23;
+	current_task->context.gs = 0x23;
 
-	user_enter(entry, USER_STACK_TOP);
+	user_enter(entry, USER_STACK_TOP - 8);
 
 	// Should never return
 	printk("[ELF] ERROR: Returned from userspace!\n");
 	return -1;
 }
+
+#include <gdt/gdt.h>
 
 int load_elf_and_run(const char *path)
 {

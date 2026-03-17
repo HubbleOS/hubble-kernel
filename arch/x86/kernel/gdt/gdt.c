@@ -83,13 +83,12 @@ void gdt_init(void)
 			 GDT_ACCESS_RW,
 		     GDT_GRAN_4K | GDT_GRAN_64BIT);
 
-	// User Data Segment (0x18) - ИЗМЕНЕНО: теперь на позиции 3
+	// User Data (index 3 = 0x18 -> selector 0x1B)
 	gdt_set_gate(3, 0, 0xFFFFF,
-		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
-			 GDT_ACCESS_RW,
+		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM | GDT_ACCESS_RW,
 		     GDT_GRAN_4K | GDT_GRAN_64BIT);
 
-	// User Code Segment (0x20) - ИЗМЕНЕНО: теперь на позиции 4
+	// User Code (index 4 = 0x20 -> selector 0x23)
 	gdt_set_gate(4, 0, 0xFFFFF,
 		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
 			 GDT_ACCESS_EXECUTABLE | GDT_ACCESS_RW,
