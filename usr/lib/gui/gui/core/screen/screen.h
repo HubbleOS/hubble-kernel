@@ -3,7 +3,17 @@
 #include <stddef.h>
 #include <gui/utils/color/color.h>
 #ifndef GUI_DEMO
-#include <bootinfo/framebuffer.h>
+// #include <bootinfo/framebuffer.h>
+
+typedef struct
+{
+	void *base;
+	unsigned int width;
+	unsigned int height;
+	unsigned int pitch;
+	unsigned int bpp;
+} framebuffer_info_t;
+
 #else
 #include "platform/fb.h"
 #endif

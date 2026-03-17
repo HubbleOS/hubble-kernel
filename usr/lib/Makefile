@@ -1,5 +1,5 @@
 # usr/lib/Makefile
-subdirs := libc
+subdirs := libc gui
 
 .PHONY: all
 all:

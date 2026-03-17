@@ -10,6 +10,15 @@
 
 #include <sys/syscall.h>
 
+#include <gui/core/screen/screen.h>
+#include <gui/core/compositor/compositor.h>
+
+#include <gui/dev/mouse/mouse.h>
+
+#include <gui/ui/window/window.h>
+#include <gui/ui/сursor/cursor.h>
+#include <gui/ui/background/background.h>
+
 void *mmap_(uint64_t addr, size_t length, int prot, int flags,
 	    int fd, uint64_t offset)
 {
@@ -49,24 +58,52 @@ void _start(void)
 
 	int x = 0, y = 0;
 
-	const char *test = "test\n";
-	syscall3(SYS_write, 1, (long)test, strlen(test));
+	framebuffer_info_t fb_info;
 
-	putchar('a');
-	putchar('b');
-	printf("hello %s\n", "world");
-	printf("num: %d\n", 42);
-	printf("flt: %f\n", 1.0);
+	fb_info.base = fb_test;
+	fb_info.width = width;
+	fb_info.height = height;
+	fb_info.pitch = pitch;
+	fb_info.bpp = 32;
+
+	screen_init(&fb_info);
+	compositor_init();
+	background_create(rgb(20, 20, 20));
+
+	cursor_t *cursor = cursor_create(16, 16, rgb(0, 0, 0), rgb(255, 255, 255));
+	window_t *win = window_create(0, 0, 400, 300);
 
 	while (1)
 	{
-		mouse_t state;
-		read_file(mouse_file, &state, sizeof(mouse_t));
-		if (state.x != x || state.y != y)
+		// mouse_t state;
+		// read_file(mouse_file, &state, sizeof(mouse_t));
+		// if (state.x != x || state.y != y)
+		// {
+		// 	x = state.x;
+		// 	y = state.y;
+		// 	printf("x: %d y: %d\n", x, y);
+		// }
+		// mouse_update(state.x, state.y, state.left);
+		mouse_update(mouse->x, mouse->y, mouse->left);
+
+		if (cursor->surface->x != mouse->x || cursor->surface->y != mouse->y)
+			cursor_move(cursor, mouse->x, mouse->y);
+
+		if (g_mouse.drag_obj)
 		{
-			x = state.x;
-			y = state.y;
-			printf("x: %d y: %d\n", x, y);
+			int drag_x = g_mouse.x - g_mouse.drag_offset_x;
+			int drag_y = g_mouse.y - g_mouse.drag_offset_y;
+			if (g_mouse.drag_el)
+				object_move_element(g_mouse.drag_obj, g_mouse.drag_el,
+						    drag_x - g_mouse.drag_obj->x,
+						    drag_y - g_mouse.drag_obj->y);
+			else
+			{
+				compositor_move_object(g_mouse.drag_obj, drag_x, drag_y);
+				compositor_bring_to_front(g_mouse.drag_obj, LAYER_WINDOWS);
+			}
 		}
+
+		compositor_render();
 	}
 }

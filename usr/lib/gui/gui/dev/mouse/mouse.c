@@ -95,7 +95,7 @@ static void mouse_handle_button_events(local_mouse_t *mouse, bool left_pressed)
 	{
 		if (mouse->hover_el)
 		{
-			g_keyboard.focused_el = mouse->hover_el;
+			// g_keyboard.focused_el = mouse->hover_el;
 		}
 
 		if (mouse->hover && mouse->hover->layer == LAYER_WINDOWS)
