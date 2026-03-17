@@ -2,6 +2,10 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <mm/map/vm_map.h>
+#include <fs/vfs/vfs.h>
+
+#define MAX_FDS 64
 
 // Task states
 typedef enum
@@ -27,26 +31,16 @@ typedef enum
 // CPU context saved during context switch
 typedef struct __attribute__((packed))
 {
-	// General purpose registers
 	uint64_t r15, r14, r13, r12, r11, r10, r9, r8;
 	uint64_t rdi, rsi, rbp, unused, rbx, rdx, rcx, rax;
-
-	// Stack pointer
 	uint64_t rsp;
-
-	// Instruction pointer
 	uint64_t rip;
-
-	// Segment selectors
-	uint16_t cs, ss, ds, es, fs, gs;
-
-	// Flags
 	uint64_t rflags;
-
-	// FPU/SSE state pointer (allocated separately)
-	void *fpu_state; // 512 bytes for FXSAVE
+	uint64_t cs;
+	uint64_t ss;
+	uint64_t ds, es, fs, gs;
+	void *fpu_state;
 } cpu_context_t;
-
 // Task Control Block (TCB)
 typedef struct task
 {
@@ -82,6 +76,9 @@ typedef struct task
 	uint64_t user_stack;   // User stack base
 	size_t stack_size;
 
+	// Virtual memory
+	vm_map_t *vm_map;
+
 	// Linked list pointers
 	struct task *next;
 	struct task *prev;
@@ -92,7 +89,7 @@ typedef struct task
 	struct task *sibling;
 
 	// File descriptors, signals, etc.
-	void *files;
+	VFS_File *fds[MAX_FDS];
 	void *signal_handlers;
 
 	uint8_t spinlocks;

@@ -66,7 +66,6 @@ bool is_mmio(uint64_t pa)
 // --- Map a virtual page to a physical page ---
 int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags)
 {
-	printk("[VMM] Mapping page 0x%llx to 0x%llx\n", va, pa);
 	uint64_t *pml4 = pml4_table();
 
 	// CRITICAL: Intermediate tables MUST have USER bit if final page is USER!
@@ -166,6 +165,9 @@ int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags)
 	if (flags & VMM_MAP_USER)
 		pte_flags |= PTE_USER;
 
+	if (flags & PTE_USER)
+		pte_flags |= PTE_USER;
+
 	uint64_t *pt = pt_table(va);
 	pt[PT_INDEX(va)] = pte_make(pa, pte_flags);
 
@@ -262,7 +264,7 @@ void dump_page(uint64_t va, size_t len)
 	printk("\n");
 }
 
-// Увага: робити лише якщо ти точно знаєш, що вся 2MiB зона безпечна для user.
+// make only when 2MB page is user only
 int make_pd_entry_user(uint64_t va)
 {
 	uint64_t cr3 = get_cr3();
@@ -283,21 +285,15 @@ int make_pd_entry_user(uint64_t va)
 	uint64_t *pd = PHYS_TO_VIRT_PTR(uint64_t, (pdpte & ~0xFFFULL));
 	uint64_t pde = pd[pd_idx];
 
-	// Перевіримо чи це large page
 	if (!(pde & (1ULL << 7)))
 	{
 		printk("Not a large page at PDE\n");
 		return -1;
 	}
 
-	// Додати user біт (біти: bit2 = US)
 	uint64_t new_pde = pde | (1ULL << 2);
 	pd[pd_idx] = new_pde;
 
-	// Якщо потрібно, очистити NX (bit63) -- залежить від p_flags
-	// new_pde &= ~(1ULL<<63);
-
-	// Скинути TLB для цього діапазону
 	invlpg((void *)va);
 	return 0;
 }

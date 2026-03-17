@@ -57,18 +57,23 @@ bool vfs_mount(const char *mountpoint, gpt_partition_t *partition, FileSystemTyp
 		extern void ext2_init_vfs(VFS_FS * fs);
 		ext2_init_vfs(fs);
 		break;
+	case FS_DEV:
+		printk("VFS: init dev vfs\n");
+		extern void dev_vfs_init(VFS_FS * fs, VFS_Device * device, uint32_t start_lba);
+		dev_vfs_init(fs, partition->device, partition->first_lba);
+		break;
 	default:
 		printk("VFS: unsupported FS type %d\n", type);
 		kfree(fs);
 		return false;
 	}
 	printk("VFS: mount %d at %s\n", type, mountpoint);
-	if (!partition->device->read)
+	if (!partition->device->read && type != FS_DEV)
 	{
 		printk("partition has no device\n");
 	}
 	printk("VFS: mount %d at %s\n", type, mountpoint);
-	if (!fs->mount(fs, partition->device, partition->first_lba))
+	if (type != FS_DEV && !fs->mount(fs, partition->device, partition->first_lba))
 	{
 		printk("VFS: failed to mount %d at %s\n", type, mountpoint);
 		return false;
@@ -127,6 +132,7 @@ VFS_File *vfs_open(const char *path, int flags)
 
 	if (!node)
 		return ERR_PTR(-ENOENT);
+	printk("node pointer: %p\n", node);
 
 	VFS_File *f = kmalloc(sizeof(VFS_File), GFP_KERNEL);
 	f->node = node;

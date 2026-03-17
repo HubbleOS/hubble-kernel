@@ -34,6 +34,7 @@ typedef enum
 	FS_NONE,
 	FS_FAT32,
 	FS_EXT2,
+	FS_DEV
 	// інші
 } FileSystemType;
 typedef struct

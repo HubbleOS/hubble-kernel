@@ -70,9 +70,9 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 
 	// Push initial values onto stack
 	printk("Pushing initial values onto stack\n");
-	*(--stack_top) = 0x202;			 // RFLAGS (interrupts enabled)
-	*(--stack_top) = 0x08;			 // CS
-	*(--stack_top) = (uint64_t)task_wrapper; // RIP
+	// *(--stack_top) = 0x202;			 // RFLAGS (interrupts enabled)
+	// *(--stack_top) = 0x08;			 // CS
+	// *(--stack_top) = (uint64_t)task_wrapper; // RIP
 
 	// Initialize context
 	printk("Initializing context\n");
@@ -193,6 +193,8 @@ void task_sleep(void)
 	if (!current)
 		return;
 
+	outb(0x3f8, 'S');
+
 	// Mark as blocked
 	current->state = TASK_BLOCKED;
 
@@ -234,6 +236,9 @@ void schedule(void)
 	uint8_t cpu_id = lapic_get_id();
 	task_t *old_task = get_current_task();
 
+	// if (old_task && old_task->state == TASK_READY)
+	// 	old_task->state = TASK_RUNNING;
+
 	// Get next task from runqueue
 	task_t *new_task = get_next_task(cpu_id);
 
@@ -245,22 +250,42 @@ void schedule(void)
 			// outb(0x3f8, 'O');
 			return;
 		}
-		outb(0x3f8, 'I');
+		// outb(0x3f8, old_task->state + '0');
+		if (!old_task)
+		{
+			// printk("old_task is NULL\n");
+			outb(0x3f8, 'N');
+		}
+		// if (!old_task)
+		// {
+
+		// 	// outb(0x3f8, 'I');
+		// }
+		// if (old_task && old_task->state == TASK_READY && old_task != runqueues[cpu_id].idle_task)
+		// {
+		// 	old_task->state = TASK_RUNNING;
+		// 	outb(0x3f8, 'P');
+		// 	outb(0x3f8, old_task->state + '0');
+		// printk("Switching to %p, state p: %p\n", old_task, old_task->state);
+		// 	return;
+		// }
+		// outb(0x3f8, old_task->state == TASK_BLOCKED ? 'B' : 'R');
+		// outb(0x3f8, old_task->state + '0');
 	}
 
 	if (!new_task || new_task == old_task)
 	{
 		if (old_task)
 		{
-			outb(0x3f8, 'S');
+			// outb(0x3f8, 'S');
 			return;
 		}
 		// new_task = runqueues[cpu_id].idle_task;
 	}
-	outb(0x3f8, 'R');
+	// outb(0x3f8, 'R');
 
 	// Update states
-	if (old_task && (old_task->state == TASK_RUNNING || old_task->state == TASK_BLOCKED))
+	if (old_task && (old_task->state == TASK_RUNNING || old_task->state == TASK_BLOCKED || old_task->state == TASK_READY))
 	{
 		old_task->state = old_task->state == TASK_BLOCKED ? TASK_BLOCKED : TASK_READY;
 		old_task->total_runtime += 100;

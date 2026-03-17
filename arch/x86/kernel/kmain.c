@@ -13,11 +13,15 @@
 #include <dev/ps2.h>
 #include "io.h"
 
-#include <gui/core/screen/screen.h>
-
-#include <tasks/task.h>
+#include <fs/vfs/dev.h>
+// #include <tasks/task.h>
 
 extern int load_elf_and_run(const char *path);
+
+uint64_t fb_mmap(uint64_t offset, size_t size)
+{
+	return (uint64_t)g_boot_info->framebuffer->base;
+};
 
 __attribute__((section(".text.boot")))
 __attribute__((used)) void
@@ -36,14 +40,16 @@ kernel_entry(BootInfo *bi)
 
 	init_filesystems();
 
+	dev_vfs_register("fb0", fb_mmap, NULL);
+
 	apic_debug_check();
 	ps2_init();
 	mouse_init();
 	keyboard_init();
+	dev_vfs_register("mouse", mouse_mmap, mouse_read_file);
 
 	smp_init();
 
-	screen_init(g_boot_info->framebuffer);
 	scheduler_init();
 
 	while (1)
@@ -51,3 +57,8 @@ kernel_entry(BootInfo *bi)
 }
 
 void kernel_main(BootInfo *bi) __attribute__((alias("kernel_entry")));
+
+void kmain_thread(void)
+{
+	load_elf_and_run("/usr/bin/user.elf");
+}
