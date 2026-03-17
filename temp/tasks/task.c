@@ -146,12 +146,12 @@ void kmain_thread(void)
 	pthread_detach(update);
 }
 #else
-void kmain_thread(void)
-{
-	spinlock_init(&gui_lock, "gui");
-	task_t *render = task_create(render_task, 250);
-	task_t *update = task_create(update_task, 200);
-	scheduler_add_task(render);
-	scheduler_add_task(update);
-}
+// void kmain_thread(void)
+// {
+// 	spinlock_init(&gui_lock, "gui");
+// 	task_t *render = task_create(render_task, 250);
+// 	task_t *update = task_create(update_task, 200);
+// 	scheduler_add_task(render);
+// 	scheduler_add_task(update);
+// }
 #endif

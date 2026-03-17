@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <mm/vmm.h>
 
 void mouse_init();
 
@@ -14,3 +15,5 @@ typedef struct
 } mouse_t;
 
 mouse_t *get_mouse_info(void);
+uint64_t mouse_mmap(uint64_t offset, size_t size);
+uint64_t mouse_read_file(uint64_t offset, size_t size);

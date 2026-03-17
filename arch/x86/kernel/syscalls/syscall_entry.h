@@ -3,12 +3,27 @@
 #include <_cheader.h>
 
 #include <stddef.h>
+#include <stdint.h>
+#include <fs/vfs/dev.h>
+#include <mm/vmm.h>
+#include <smp/scheduler.h>
+#include <smp/task.h>
+#include <errno.h>
 
 _Begin_C_Header;
 
 void syscall_init(void);
 
+VFS_File *task_get_fd(task_t *task, int fd);
+
 long sys_read(int, char *, size_t);
 long sys_write(int, const char *, size_t);
+long sys_fb(void);
+long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
+	      int fd, uint64_t offset);
+
+long sys_open(const char *path, int flags);
+long sys_close(int fd);
+long sys_read_file(int fd, void *buf, size_t size);
 
 _End_C_Header;
