@@ -8,10 +8,11 @@ LDSCRIPT := $(SRC_DIR)/user.ld
 # CFLAGS := -ffreestanding -O2 -Wall -Wextra -m64 -g
 
 # Include пути: сначала общий include, потом libc
-INCLUDES := -I../include -I../include/libc
+INCLUDES := -I../include -I../include/libc -I../lib -I../lib/gui
 
 # Линковка с libc
 LIBC := ../lib/libc.a
+LIBGUI := ../lib/libgui.a
 LDFLAGS := -T$(LDSCRIPT) -Ttext-segment=0x400000
 
 .PHONY: all
@@ -28,4 +29,4 @@ $(OUTPUT): $(BUILD_TOOL) $(LIBC)
 		--type exe \
 		--ld $(LD) \
 		--ldflags "$(LDFLAGS)" \
-		--libs "$(LIBC)"
+		--libs "$(LIBGUI) $(LIBC)"

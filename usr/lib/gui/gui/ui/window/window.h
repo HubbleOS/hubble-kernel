@@ -4,7 +4,7 @@
 #include <stdbool.h>
 
 #ifndef GUI_DEMO
-#include <bootinfo/framebuffer.h>
+// #include <bootinfo/framebuffer.h>
 #else
 #include "platform/fb.h"
 #endif

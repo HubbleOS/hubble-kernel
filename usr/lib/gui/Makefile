@@ -1,7 +1,7 @@
 # usr/lib/gui/Makefile
-GUI_SRC := src
+GUI_SRC := .
 GUI_OUT := $(USR_DIR)/lib/libgui.a
-INCLUDES := -Iinclude -I../libc/include
+INCLUDES := -Iinclude -I../libc/include -I./
 
 .PHONY: all
 all: $(GUI_OUT)
