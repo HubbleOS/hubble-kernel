@@ -3,14 +3,15 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "libc.h"
 #include <stdio.h>
 
 #include <sys/syscall.h>
 
-void *mmap(uint64_t addr, size_t length, int prot, int flags,
-	   int fd, uint64_t offset)
+void *mmap_(uint64_t addr, size_t length, int prot, int flags,
+	    int fd, uint64_t offset)
 {
 	return (uint64_t *)syscall6(3, addr, length, prot, flags, fd, offset);
 }
@@ -33,10 +34,10 @@ void _start(void)
 	printf("Hello from user space!\n");
 
 	int fb_file = open("/dev/fb0", 0);
-	uint32_t *fb_test = (uint32_t *)mmap(0, 800 * 5120, 3, 1, fb_file, 0);
+	uint32_t *fb_test = (uint32_t *)mmap_(0, 800 * 5120, 3, 1, fb_file, 0);
 
 	int mouse_file = open("/dev/mouse", 0);
-	mouse_t *mouse = (mouse_t *)mmap(0, sizeof(mouse_t), 3, 1, mouse_file, 0);
+	mouse_t *mouse = (mouse_t *)mmap_(0, sizeof(mouse_t), 3, 1, mouse_file, 0);
 
 	int width = 1280;
 	int height = 800;
@@ -46,9 +47,16 @@ void _start(void)
 		for (int x = 0; x < width; x++)
 			fb_test[y * (pitch / 4) + x] = 0xFFFF0000;
 
-	printf("FB test done\n");
 	int x = 0, y = 0;
-	putchar('0' + (char)mouse->x);
+
+	const char *test = "test\n";
+	syscall3(SYS_write, 1, (long)test, strlen(test));
+
+	putchar('a');
+	putchar('b');
+	printf("hello %s\n", "world");
+	printf("num: %d\n", 42);
+	printf("flt: %f\n", 1.0);
 
 	while (1)
 	{

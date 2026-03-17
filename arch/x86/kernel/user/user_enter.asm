@@ -12,23 +12,21 @@ user_enter:
     and rsp, ~0xF
 
     ; Устанавливаем сегменты данных
-    mov ax, 0x23                ; User Data (0x20 + RPL=3)
+    mov ax, 0x1B
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
 
     ; Строим IRETQ frame
-    push qword 0x1B             ; SS: User Data
-    push r11                    ; RSP: user stack
-    
+    push qword 0x1B    ; SS = User Data (index 3 = 0x18 | 3)
+    push r11           ; RSP
     pushfq
     pop rax
-    or rax, 0x200               ; IF
-    push rax                    ; RFLAGS
-    
-    push qword 0x23             ; CS: User Code (0x18 + RPL=3)
-    push rcx                    ; RIP: entry
+    or rax, 0x200
+    push rax           ; RFLAGS
+    push qword 0x23    ; CS = User Code (index 4 = 0x20 | 3)
+    push rcx           ; RIP
 
     ; Обнуляем регистры
     xor rax, rax

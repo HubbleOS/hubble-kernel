@@ -26,11 +26,11 @@ typedef struct FILE
 	int (*write)(struct FILE *stream, const char *buffer, int len);
 	int (*read)(struct FILE *stream, char *buffer, int len);
 
-	// // ungetc support
+	// ungetc support
 	int ungetc_buf;
 	int has_ungetc;
 
-	// // buffering
+	// buffering
 	char buf[FILE_BUFSIZE];
 	int buf_len;
 	int buf_pos;

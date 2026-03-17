@@ -10,7 +10,7 @@ USR_DIR := $(abspath .)
 export USR_DIR
 
 # CFLAGS для userland
-CFLAGS := -ffreestanding -O2 -Wall -Wextra -m64 -mcmodel=large -g
+CFLAGS := -ffreestanding -O2 -Wall -Wextra -m64 -g -fno-stack-protector
 export CFLAGS
 
 # BUILD_TOOL

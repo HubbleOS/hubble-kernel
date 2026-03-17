@@ -84,7 +84,7 @@ subdirs :=
 $(eval $(call kbuild-subdir,arch/$(ARCH)))
 
 # Core subsystems
-$(eval $(call kbuild-subdir,lib))
+# $(eval $(call kbuild-subdir,lib))
 $(eval $(call kbuild-subdir,tools/dev))
 
 # User space

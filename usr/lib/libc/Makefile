@@ -17,6 +17,5 @@ $(LIBC_OUT): $(BUILD_TOOL)
 		--output $@ \
 		--type archive
 
-	# копируем заголовки libc
 	@mkdir -p $(USR_DIR)/include/libc
 	@cp include/*.h $(USR_DIR)/include/libc/
