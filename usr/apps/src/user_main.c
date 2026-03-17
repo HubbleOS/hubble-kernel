@@ -4,11 +4,10 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include <syscall.h>
 #include "libc.h"
 #include <stdio.h>
 
-#include "sys/syscall.h"
+#include <sys/syscall.h>
 
 void *mmap(uint64_t addr, size_t length, int prot, int flags,
 	   int fd, uint64_t offset)
