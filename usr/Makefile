@@ -1,29 +1,42 @@
 # usr/Makefile
-SRC_DIR := src
-USR_BUILD_DIR := $(OUT_DIR)/build
-OUTPUT := $(OUT_DIR)/usr/user.elf
-LDSCRIPT := $(SRC_DIR)/user.ld
+Q = @
+export Q
 
-CFLAGS   := -ffreestanding -O2 -m64 -nostdlib -fno-pic -Wall -Wextra -nostartfiles -static -fno-pie -mno-red-zone -mcmodel=large
+OUT_DIR ?= $(abspath ../out)
+BUILD_DIR := $(OUT_DIR)/build/usr
+export OUT_DIR BUILD_DIR
 
-INCLUDES := -Iinclude
-INCLUDES += -I../include
+USR_DIR := $(abspath .)
+export USR_DIR
 
-LIBC := lib/libc.a
-LDFLAGS  := -T$(LDSCRIPT) -Ttext-segment=0x400000
+# CFLAGS для userland
+CFLAGS := -ffreestanding -O2 -Wall -Wextra -m64 -mcmodel=large -g
+export CFLAGS
 
-all: $(OUTPUT)
+# BUILD_TOOL
+BUILD_TOOL := $(OUT_DIR)/tools/dev/build/build_main
+BUILD_TOOL_FLAGS := --log-file $(OUT_DIR)/logs/usr_build.log -v
+export BUILD_TOOL BUILD_TOOL_FLAGS
 
-$(OUTPUT): $(BUILD_TOOL)
-	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
-		--src-dir $(SRC_DIR) \
-		--build-dir $(USR_BUILD_DIR) \
-		--cc $(CC) \
-		--cflags "$(CFLAGS)" \
-		--includes "$(INCLUDES)" \
-		--output $(OUTPUT) \
-		--type exe \
-		--ld $(LD) \
-		--ldflags "$(LDFLAGS)" \
-		--libs "$(LIBC)"
+# Подкаталоги для сборки: сначала lib, потом apps
+subdirs := lib apps
 
+.PHONY: all build clean rebuild
+
+all: build
+
+build: build-tool
+	@set -e; \
+	for dir in $(subdirs); do \
+		$(MAKE) -C $$dir BUILD_TOOL_FLAGS="$(BUILD_TOOL_FLAGS)"; \
+	done
+	@echo "Userland build complete"
+
+build-tool:
+	@$(MAKE) -C ../tools/dev/build build
+
+clean:
+	@rm -rf $(BUILD_DIR)
+	@echo "Userland clean complete"
+
+rebuild: clean build

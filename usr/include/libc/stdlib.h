@@ -2,7 +2,6 @@
 
 #include <_cheader.h>
 #include <stddef.h>
-#include <mm/kmalloc.h>
 
 _Begin_C_Header;
 
@@ -19,7 +18,7 @@ int atoi(const char *);
 
 // void *calloc(size_t nmemb, size_t size);
 void *malloc(size_t);
-void *realloc(void *ptr, size_t size, kmalloc_flags_t flags);
+void *realloc(void *ptr, size_t size);
 void free(void *);
 // void *aligned_alloc(size_t, size_t);
 

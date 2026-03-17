@@ -10,7 +10,7 @@ endif()
 find_package(SDL2 REQUIRED)
 
 if(NOT DEFINED LIB_DIR)
-    set(LIB_DIR "${CMAKE_SOURCE_DIR}/../../../lib")
+    set(LIB_DIR "${CMAKE_SOURCE_DIR}/../../../usr/lib")
 endif()
 
 file(GLOB_RECURSE GUI_SRC
