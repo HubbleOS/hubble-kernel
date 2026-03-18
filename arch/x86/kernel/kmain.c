@@ -16,7 +16,7 @@
 #include <fs/vfs/dev.h>
 // #include <tasks/task.h>
 
-extern int load_elf_and_run(const char *path);
+extern int elf_load(const char *path, uint64_t *entry_out);
 
 uint64_t fb_mmap(uint64_t offset, size_t size)
 {
@@ -50,9 +50,7 @@ kernel_entry(BootInfo *bi)
 
 	smp_init();
 
-	load_elf_and_run("/usr/bin/user.elf");
-
-	// scheduler_init();
+	scheduler_init();
 
 	while (1)
 		asm volatile("hlt");
@@ -62,5 +60,35 @@ void kernel_main(BootInfo *bi) __attribute__((alias("kernel_entry")));
 
 void kmain_thread(void)
 {
-	load_elf_and_run("/usr/bin/user.elf");
+	printk("kmain thread\n");
+	// task_t *task1 = task_create(render_task, 255);
+	// scheduler_add_task(task1);
+	uint64_t entry;
+	elf_load("/usr/bin/user.elf", &entry);
+	task_t *task1 = task_create((void *)entry, 255, 1);
+	scheduler_add_task(task1);
+
+	while (1)
+	{
+		// char c = keyboard_get_char();
+		// printk("key: %c\n", c);
+		asm volatile("hlt");
+	}
+
+	// uint8_t counter = 0;
+
+	// // mouse_init();
+	// mouse_t *m = get_mouse_info();
+	// uint32_t old_x = m->x;
+	// uint32_t old_y = m->y;
+	// while (1)
+	// {
+	// 	if (old_x != m->x || old_y != m->y)
+	// 	{
+	// 		printk("x: %d y: %d l:%d r:%d \n", m->x, m->y, m->left_clicked, m->right_clicked);
+	// 		old_x = m->x;
+	// 		old_y = m->y;
+	// 	}
+	// 	asm volatile("hlt");
+	// }
 }

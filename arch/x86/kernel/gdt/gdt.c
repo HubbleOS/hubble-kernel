@@ -2,6 +2,9 @@
 #include <string.h>
 #include <printk.h>
 
+#include <apic/apic.h>
+
+#define MAX_CPUS 8
 // ============================================================================
 // GDT + TSS Tables
 // ============================================================================
@@ -14,10 +17,9 @@ static struct
 } __attribute__((packed, aligned(16))) gdt_table;
 
 static gdt_ptr_t gdt_ptr;
-static tss_t tss;
 
-// Стек для Ring 0
-static uint8_t kernel_stack[16384] __attribute__((aligned(16)));
+static tss_t tss[MAX_CPUS];
+static uint8_t kernel_stacks[MAX_CPUS][16384] __attribute__((aligned(16)));
 
 // ============================================================================
 // GDT Helper Functions
@@ -115,14 +117,25 @@ uint16_t get_gdt_limit(void) { return gdt_ptr.limit; }
 
 void tss_init(void)
 {
-	// Очищаємо TSS
-	memset(&tss, 0, sizeof(tss));
+	uint8_t cpu_id = lapic_get_id();
 
-	// Встановлюємо стек для Ring 0
-	tss.rsp0 = (uint64_t)(kernel_stack + sizeof(kernel_stack));
+	memset(&tss[cpu_id], 0, sizeof(tss_t));
+	tss[cpu_id].rsp0 = (uint64_t)(kernel_stacks[cpu_id] + sizeof(kernel_stacks[cpu_id]));
+
+	// Update TSS descriptor in GDT with this CPU's TSS
+	tss_set_descriptor((uint64_t)&tss[cpu_id], sizeof(tss_t) - 1);
+
+	// Load TSS
+	tss_flush(GDT_TSS);
+
+	// // Очищаємо TSS
+	// memset(&tss, 0, sizeof(tss));
+
+	// // Встановлюємо стек для Ring 0
+	// tss.rsp0 = (uint64_t)(kernel_stack + sizeof(kernel_stack));
 
 	// Загружаем TSS
-	tss_flush(GDT_TSS);
+	// tss_flush(GDT_TSS);
 }
 
 // ============================================================================
