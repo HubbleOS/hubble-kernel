@@ -256,15 +256,9 @@ int elf_run(uint64_t entry)
 	// Allocate and map stack pages
 	for (uint64_t addr = stack_base; addr < USER_STACK_TOP; addr += PAGE_SIZE)
 	{
-		vmm_unmap_user_page(addr);
+		// vmm_unmap_user_page(addr);
 
 		uint64_t phys = pmm_alloc_page();
-		// if (vmm_is_mapped(addr))
-		// {
-		// 	vmm_unmap_user_page(addr);
-		// 	pmm_free_page(phys);
-		// 	return -1;
-		// }
 		if (!phys)
 		{
 			printk("[ELF] Failed to alloc stack page\n");
@@ -303,12 +297,12 @@ int elf_run(uint64_t entry)
 	printk("  User CS should be: 0x1B\n");
 	printk("  User SS should be: 0x23\n");
 
-	// Verify the entry point is reasonable
-	if (entry < 0x400000 || entry > 0x800000)
-	{
-		printk("[ELF] WARNING: Entry point looks suspicious!\n");
-	}
-	dump_page(0x400000, 0x20);
+	// // Verify the entry point is reasonable
+	// if (entry < 0x400000 || entry > 0x800000)
+	// {
+	// 	printk("[ELF] WARNING: Entry point looks suspicious!\n");
+	// }
+	// dump_page(0x400000, 0x20);
 
 	// Verify the entry point mapping
 	printk("[ELF] Verifying entry point mapping:\n");

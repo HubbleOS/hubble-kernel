@@ -112,11 +112,9 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
 		return (long)vaddr;
 	}
 
-	// File-backed mmap — not implemented yet
 	if (fd < 0)
 		return -1;
 
-	// Look up the file descriptor
 	VFS_File *file = task_get_fd(current, fd);
 	if (!file)
 		return -1;
@@ -126,12 +124,9 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
 	{
 		return -1;
 	}
-	// Check if it's a device file with mmap support
 	if (dev->mmap)
 	{
-		outb(0x3f8, 'a');
-		// Device driver handles the mapping
-		// e.g. framebuffer driver returns its physical base
+
 		uint64_t phys_base = dev->mmap(offset, size);
 		if (!phys_base)
 			return -1;
@@ -155,61 +150,4 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
 		printk("Mapped %p - %p, from physical %p\n", vaddr, vaddr + size, (void *)phys_base);
 		return (long)vaddr;
 	}
-
-	// task_t *current = get_current_task();
-	// if (!current->vm_map)
-	// 	current->vm_map = vm_map_create();
-	// if (!current->vm_map)
-	// {
-	// 	asm("int3");
-	// 	outb(0x3f8, 'M');
-	// 	return -1;
-	// }
-
-	// // Get framebuffer info directly
-	// framebuffer_info_t *fb = g_fb;
-	// if (!fb)
-	// {
-	// 	outb(0x3f8, 'E');
-	// 	return -1;
-	// }
-
-	// size_t fb_size = (size_t)fb->pitch * fb->height;
-	// size_t size = PAGE_ALIGN_UP(fb_size);
-
-	// // Find free virtual address in user process
-	// uint64_t vaddr = vm_find_free_range(current->vm_map, size);
-
-	// // // Create
-	// vm_area_t *vma = kmalloc(sizeof(vm_area_t), GFP_ZERO);
-	// if (!vma)
-	// {
-	// 	outb(0x3f8, 'M');
-	// 	return -1;
-	// }
-	// vma->base = vaddr;
-	// vma->size = size;
-	// vma->flags = VM_READ | VM_WRITE;
-	// vma->type = VMA_DEVICE;
-	// vma->phys_base = (uint64_t)fb->base; // real hw physical address
-
-	// uint64_t flags = PTE_PRESENT | PTE_USER | PTE_WRITE;
-
-	// // // Map all pages immediately
-	// for (uint64_t off = 0; off < size; off += PAGE_SIZE)
-	// {
-	// 	vmm_map_page(
-	// 	    vaddr + off,
-	// 	    vma->phys_base + off,
-	// 	    flags);
-	// }
-
-	// vm_insert_area(current->vm_map, vma);
-
-	// printk("[FB] vma->phys_base=0x%llx vaddr=0x%llx size=0x%llx\n",
-	//        vma->phys_base, vaddr, size);
-	// // // printk("phys: %lx, virt: %lx\n", vma->phys_base, vaddr);
-
-	// return (long)vaddr;
-	// return 0;
 }

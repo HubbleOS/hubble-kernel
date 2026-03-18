@@ -16,7 +16,7 @@ switch_to_task:
     ; Load new context (RSI = new context)
     
     ; Restore FPU/SSE state
-    mov rax, [rsi + 200]  ; fpu_state  ← fix this
+    mov rax, [rsi + 200]  
     test rax, rax
     jz .skip_fpu_load
     fxrstor [rax]

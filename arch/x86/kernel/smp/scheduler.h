@@ -37,12 +37,15 @@ void task_exit(int exit_code);
 void task_wake(task_t *task);
 void task_sleep(void);
 
-task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority);
-task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority);
+task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority, bool userspace);
+task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority, bool userspace);
 
-// Macro that selects the right function based on arguments
-#define task_create(...) _task_create_select(__VA_ARGS__, _task_create_with_arg, _task_create_no_arg)(__VA_ARGS__)
-#define _task_create_select(_1, _2, _3, NAME, ...) NAME
+#define _task_create_select(_1, _2, _3, _4, NAME) NAME
+
+#define task_create(...)                           \
+	_task_create_select(__VA_ARGS__,           \
+			    _task_create_with_arg, \
+			    _task_create_no_arg)(__VA_ARGS__)
 
 void task_kill_by_task(task_t *task);
 void task_kill_by_pid(uint32_t pid);
