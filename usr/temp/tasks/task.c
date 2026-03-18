@@ -43,14 +43,16 @@ void tasks_init(void)
 {
 	compositor_init();
 	background_create(rgb(20, 20, 20));
-	graph_app_init();
-	geometry_app_init();
+	// graph_app_init();
+	// geometry_app_init();
+	app_init();
 }
 
 void tasks_render(void)
 {
-	graph_app_render();
-	geometry_app_render();
+	// graph_app_render();
+	// geometry_app_render();
+	app_render();
 	compositor_render();
 }
 

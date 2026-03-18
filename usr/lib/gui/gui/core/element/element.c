@@ -127,8 +127,8 @@ static void element_on_down(element_t *el)
 	if (el->style_set)
 		element_apply_style(el, el->style_set->pressed);
 
-	// if (el->type == UI_TEXTBOX)
-	// 	g_keyboard.focused_el = el;
+	if (el->type == UI_TEXTBOX)
+		g_keyboard.focused_el = el;
 
 	element_redraw(el);
 }

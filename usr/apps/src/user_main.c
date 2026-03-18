@@ -52,10 +52,6 @@ void _start(void)
 	int height = 800;
 	int pitch = 5120;
 
-	for (int y = 0; y < height; y++)
-		for (int x = 0; x < width; x++)
-			fb_test[y * (pitch / 4) + x] = 0xFFFF0000;
-
 	framebuffer_info_t fb_info;
 
 	fb_info.base = fb_test;

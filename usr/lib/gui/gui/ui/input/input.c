@@ -28,15 +28,15 @@ static void input_key_special(element_t *el, int action)
 	if (!el->text)
 		return;
 
-	// if (action == KEY_ACTION_BACKSPACE)
-	// {
-	// 	size_t len = strlen(el->text);
-	// 	if (len == 0)
-	// 		return;
+	if (action == KEY_ACTION_BACKSPACE)
+	{
+		size_t len = strlen(el->text);
+		if (len == 0)
+			return;
 
-	// 	el->text[len - 1] = 0;
-	// 	element_redraw(el);
-	// }
+		el->text[len - 1] = 0;
+		element_redraw(el);
+	}
 }
 
 input_t *input_create(int x, int y, int w, int h, const char *text)

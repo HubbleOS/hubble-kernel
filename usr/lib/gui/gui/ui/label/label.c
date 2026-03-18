@@ -20,6 +20,12 @@ label_t *label_create(int x, int y, int w, int h, const char *text)
 	return el;
 }
 
+void label_set_text(label_t *label, const char *text)
+{
+	label->text = strdup(text);
+	label->needs_redraw = true;
+}
+
 void label_destroy(label_t *label)
 {
 	element_destroy(label);
