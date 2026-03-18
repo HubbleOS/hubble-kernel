@@ -1,5 +1,6 @@
 #include "syscall_entry.h"
 #include "printk.h"
+#include <apic/apic.h>
 #include <stdint.h>
 
 #define MSR_EFER 0xC0000080
@@ -11,7 +12,8 @@
 extern void syscall_entry(void);
 
 // Отдельный стек для syscall (16 KB)
-uint8_t syscall_kernel_stack[16384] __attribute__((aligned(16)));
+#define MAX_CPUS 8
+static uint8_t syscall_stacks[MAX_CPUS][16384] __attribute__((aligned(16)));
 uint64_t syscall_rsp0 = 0;
 
 static inline void wrmsr(uint32_t msr, uint64_t value)
@@ -33,7 +35,11 @@ void syscall_init(void)
 	printk("Initializing SYSCALL/SYSRET...\n");
 
 	// Инициализируем указатель на вершину стека
-	syscall_rsp0 = (uint64_t)(syscall_kernel_stack + sizeof(syscall_kernel_stack));
+	uint8_t cpu_id = lapic_get_id();
+
+	// per-CPU stack
+	syscall_rsp0 = (uint64_t)(syscall_stacks[cpu_id] + sizeof(syscall_stacks[cpu_id]));
+
 	printk("  Syscall stack at 0x%016llx\n", syscall_rsp0);
 
 	// 1. Включаем SYSCALL Extension
@@ -49,7 +55,6 @@ void syscall_init(void)
 	wrmsr(MSR_STAR, star);
 	printk("  STAR = 0x%016llx\n", star);
 
-	// Теперь при SYSRET:
 	// CS = (0x10 + 16) | 3 = 0x20 | 3 = 0x23 (User Code)
 	// SS = (0x10 + 8) | 3 = 0x18 | 3 = 0x1B (User Data)
 

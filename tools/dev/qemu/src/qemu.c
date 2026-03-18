@@ -66,7 +66,7 @@ void qemu_build_command(const QemuOptions *opts, char *cmd, size_t len)
 	pos += snprintf(cmd + pos, len - pos, "-serial stdio ");
 
 	// Debug
-	// pos += snprintf(cmd + pos, len - pos, "-S -s ");
+	pos += snprintf(cmd + pos, len - pos, "-S -s -d cpu_reset -no-reboot -no-shutdown ");
 	// pos += snprintf(cmd + pos, len - pos, "-d int ");
 }
 

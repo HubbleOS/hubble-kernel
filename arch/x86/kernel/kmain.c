@@ -28,7 +28,7 @@
 #include "gui/background.h"
 #include <errno.h>
 
-extern int load_elf_and_run(const char *path);
+extern int elf_load(const char *path, uint64_t *entry_out);
 
 __attribute__((section(".text.boot")))
 __attribute__((used)) void
@@ -128,7 +128,11 @@ void kmain_thread(void)
 	printk("kmain thread\n");
 	// task_t *task1 = task_create(render_task, 255);
 	// scheduler_add_task(task1);
-	load_elf_and_run("/usr/bin/user.elf");
+	uint64_t entry;
+	elf_load("/usr/bin/user.elf", &entry);
+	task_t *task1 = task_create((void *)entry, 255, 1);
+	scheduler_add_task(task1);
+
 	while (1)
 	{
 		// char c = keyboard_get_char();

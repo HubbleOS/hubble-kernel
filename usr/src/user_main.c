@@ -16,7 +16,7 @@ void *mmap(uint64_t addr, size_t length, int prot, int flags,
 	return (uint64_t *)syscall6(3, addr, length, prot, flags, fd, offset);
 }
 
-int read_file(int fd, void *buf, size_t size) { return syscall3(6, fd, (long)buf, size); }
+int read(int fd, void *buf, size_t size) { return syscall3(0, fd, (long)buf, size); }
 
 typedef struct
 {
@@ -53,13 +53,13 @@ void _start(void)
 
 	while (1)
 	{
-		mouse_t state;
-		read_file(mouse_file, &state, sizeof(mouse_t));
-		if (state.x != x || state.y != y)
+		// mouse_t state;
+		// read(mouse_file, &state, sizeof(mouse_t));
+		if (mouse->x != x || mouse->y != y)
 		{
-			x = state.x;
-			y = state.y;
-			printf("x: %d y: %d\n", x, y);
+			x = mouse->x;
+			y = mouse->y;
+			printf("x: %d y: %d\n", mouse->x, mouse->y);
 		}
 	}
 }

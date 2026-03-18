@@ -17,6 +17,8 @@
 #include <printk.h>
 #include <string.h>
 
+#include <syscalls/syscall_entry.h>
+
 #include "smp.h"
 #include "msr.h"
 
@@ -122,15 +124,17 @@ void ap_entry(void)
 	// Signal that we're ready
 	ap_ready = true;
 	hpet_init();
-	lapic_timer_init(100);
+
 	idt_load();
+	tss_init();
+	syscall_init();
 	uint64_t rflags;
 	asm volatile("pushfq; pop %0" : "=r"(rflags));
 	printk("AP %u: RFLAGS=0x%lx, IF=%d\n",
 	       lapic_get_id(), rflags, (rflags >> 9) & 1);
 	asm volatile("sti");
 	printk("\nAP %u online!\nHello from AP %u \n\n", apic_id, apic_id);
-
+	lapic_timer_init(100);
 	while (1)
 	{
 		asm volatile("hlt");

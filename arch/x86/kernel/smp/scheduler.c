@@ -1,6 +1,10 @@
 #include "task.h"
 #include "scheduler.h"
+
 #include <mm/kmalloc.h>
+#include <mm/vmm.h>
+#include <mm/pmm.h>
+
 #include <string.h>
 #include <apic/apic.h>
 #include <interrupt/interrupt.h>
@@ -30,7 +34,7 @@ void save_context(task_t *current, registers_t *regs);
 void free_context(task_t *task);
 
 // Initialize a new task
-task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority)
+task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority, bool userspace)
 {
 	printk("Creating task\n");
 	task_t *task = kmalloc(sizeof(task_t), GFP_KERNEL);
@@ -51,13 +55,33 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	task->time_slice = 10; // 10 ticks
 
 	// Allocate kernel stack
-	printk("Allocating kernel stack\n");
-	task->stack_size = 16384; // 16 KB
-	task->kernel_stack = (uint64_t)kmalloc(task->stack_size, GFP_KERNEL);
-	if (!task->kernel_stack)
+	if (!userspace)
 	{
-		kfree(task);
-		return NULL;
+		printk("Allocating kernel stack\n");
+		task->stack_size = 16384; // 16 KB
+		task->kernel_stack = (uint64_t)kmalloc(task->stack_size, GFP_KERNEL);
+		if (!task->kernel_stack)
+		{
+			kfree(task);
+			return NULL;
+		}
+	}
+	else
+	{
+		uint64_t stack_base = 0x6fff0000ULL;
+		task->kernel_stack = stack_base;
+		task->stack_size = 65536;
+
+		for (uint64_t i = 0; i < task->stack_size; i += PAGE_SIZE)
+		{
+			uint64_t phys = pmm_alloc_page();
+
+			vmm_unmap_user_page(stack_base + i);
+
+			if (!phys)
+				return NULL;
+			vmm_map_page(stack_base + i, phys, PTE_PRESENT | PTE_USER | PTE_WRITE);
+		}
 	}
 
 	// Set up initial stack
@@ -72,20 +96,39 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 
 	// Initialize context
 	printk("Initializing context\n");
+	if (!userspace)
+	{
+		task->context.rip = (uint64_t)task_wrapper;
+	}
+	else
+	{
+		task->context.rip = (uint64_t)entry_point;
+	}
 	task->context.rsp = (uint64_t)stack_top;
-	task->context.rip = (uint64_t)task_wrapper;
-	task->context.cs = 0x08;
-	task->context.ss = 0x10;
-	task->context.ds = 0x10;
-	task->context.es = 0x10;
-	task->context.fs = 0x10;
-	task->context.gs = 0x10;
-	task->context.rflags = 0x202;
+	if (!userspace)
+	{
 
+		task->context.cs = 0x08;
+		task->context.ss = 0x10;
+		task->context.ds = 0x10;
+		task->context.es = 0x10;
+		task->context.fs = 0x10;
+		task->context.gs = 0x10;
+		task->context.rdi = (uint64_t)task;
+	}
+	else
+	{
+		task->context.cs = 0x23;
+		task->context.ss = 0x1B;
+		task->context.ds = 0x1B;
+		task->context.es = 0x1B;
+		task->context.fs = 0x1B;
+		task->context.gs = 0x1B;
+	}
+
+	task->context.rflags = 0x202;
 	task->entry_point = entry_point;
 	task->entry_arg = entry_arg;
-
-	task->context.rdi = (uint64_t)task;
 
 	// print all
 	printk("RSP: %p\n", task->context.rsp);
@@ -126,10 +169,10 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 }
 
 // Create a new idle task
-task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority)
+task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority, bool userspace)
 {
 	// void *arg = NULL;
-	return _task_create_with_arg((void (*)(void *))entry_point, NULL, priority);
+	return _task_create_with_arg((void (*)(void *))entry_point, NULL, priority, userspace);
 }
 
 void task_exit(int exit_code)
@@ -462,13 +505,13 @@ void scheduler_init(void)
 		runqueues[i].count = 0;
 		runqueues[i].next_index = 0; // Initialize
 		// Create idle task for each CPU
-		task_t *idle = task_create(idle_task, 255);
+		task_t *idle = task_create(idle_task, 255, 0);
 		runqueues[i].idle_task = idle;
 		current_task[i] = NULL;
 	}
 
 	extern void kmain_thread(void);
-	task_t *kmain = task_create(kmain_thread, 255);
+	task_t *kmain = task_create(kmain_thread, 255, 0);
 	scheduler_add_task(kmain);
 
 	initialized = true;
@@ -494,7 +537,6 @@ void scheduler_add_task(task_t *task)
 		}
 	}
 
-	// Add to that CPU's queue
 	spinlock_acquire(&runqueues[target_cpu].lock);
 	runqueues[target_cpu].queue[runqueues[target_cpu].count++] = task;
 	task->cpu = target_cpu;

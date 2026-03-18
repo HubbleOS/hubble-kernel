@@ -208,7 +208,7 @@ typedef long (*syscall_fn_t)(long arg1, long arg2, long arg3, long arg4, long ar
 
 syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_write] = (syscall_fn_t)sys_write,
-    [SYS_read] = (syscall_fn_t)sys_read,
+    [0] = (syscall_fn_t)sys_read,
     [3] = (syscall_fn_t)sys_mmap,
     [4] = (syscall_fn_t)sys_open,
     [5] = (syscall_fn_t)sys_close,
