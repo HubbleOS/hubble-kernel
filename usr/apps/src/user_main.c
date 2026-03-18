@@ -56,8 +56,6 @@ void _start(void)
 		for (int x = 0; x < width; x++)
 			fb_test[y * (pitch / 4) + x] = 0xFFFF0000;
 
-	int x = 0, y = 0;
-
 	framebuffer_info_t fb_info;
 
 	fb_info.base = fb_test;
@@ -75,15 +73,6 @@ void _start(void)
 
 	while (1)
 	{
-		// mouse_t state;
-		// read_file(mouse_file, &state, sizeof(mouse_t));
-		// if (state.x != x || state.y != y)
-		// {
-		// 	x = state.x;
-		// 	y = state.y;
-		// 	printf("x: %d y: %d\n", x, y);
-		// }
-		// mouse_update(state.x, state.y, state.left);
 		mouse_update(mouse->x, mouse->y, mouse->left);
 
 		if (cursor->surface->x != mouse->x || cursor->surface->y != mouse->y)
