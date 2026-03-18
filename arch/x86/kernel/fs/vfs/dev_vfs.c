@@ -4,11 +4,13 @@
 #include <stdbool.h>
 #include <string.h>
 #include <printk.h>
+#include "higher_half.h"
 
 VFS_Node *dev_vfs_open_device(VFS_FS *fs, const char *path);
 VFS_Node *dev_vfs_create_device(VFS_FS *fs, const char *path);
 int dev_vfs_write_device(VFS_File *file, const void *buf, uint32_t size);
 uint64_t mmap_device(VFS_File *file, uint64_t offset, size_t size);
+int dev_vfs_read_device(VFS_File *file, void *buf, uint32_t size);
 
 static VFS_device_reg *dev_vfs_devices = NULL;
 
@@ -19,6 +21,7 @@ bool dev_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba)
 	fs->create_file = dev_vfs_create_device;
 	fs->open = dev_vfs_open_device;
 	fs->write = dev_vfs_write_device;
+	fs->read = dev_vfs_read_device;
 	fs->fs = fs;
 	return 1;
 }
@@ -37,6 +40,18 @@ VFS_device_reg *dev_vfs_find_device(VFS_FS *fs, const char *path)
 	return NULL;
 }
 
+int dev_vfs_read_device(VFS_File *file, void *buf, uint32_t size)
+{
+	VFS_device_reg *dev = (VFS_device_reg *)file->node->fs_node;
+	uint64_t phys = dev->read(0, size);
+	void *src = PHYS_TO_VIRT_PTR(void, phys);
+	memcpy(buf, src, size);
+
+	file->pos = 0;
+
+	return size;
+}
+
 VFS_Node *dev_vfs_open_device(VFS_FS *fs, const char *path)
 {
 	printk("Opening device: %s\n", path);
@@ -48,6 +63,7 @@ VFS_Node *dev_vfs_open_device(VFS_FS *fs, const char *path)
 		strncpy(node->name, path, 255);
 		node->fs = fs;
 		node->fs_node = dev;
+		node->size = 1;
 		return node;
 	}
 

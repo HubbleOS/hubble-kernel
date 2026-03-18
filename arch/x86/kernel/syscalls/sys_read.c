@@ -1,18 +1,17 @@
 #include "syscall_entry.h"
 #include <dev/io/input_device.h>
 
+#include "printk.h"
+
 long sys_read(int fd, char *buffer, size_t len)
 {
-	if (fd != 0) // only stdin
+	if (fd < 0 || fd >= MAX_FDS || !buffer || len == 0)
+	{
 		return -1;
+	}
+	task_t *current = get_current_task();
+	VFS_File *file = task_get_fd(current, fd);
 
-	if (!buffer || len == 0)
-		return -1;
-
-	input_device_t *dev = get_stdin_device();
-	if (!dev || !dev->read)
-		return -1;
-
-	size_t read_count = dev->read(buffer, len, dev->user_data);
+	size_t read_count = vfs_read(file, buffer, len);
 	return (long)read_count;
 }
