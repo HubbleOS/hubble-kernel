@@ -6,7 +6,7 @@
 
 #include "../compositor/compositor.h"
 
-#define MAX_ELEMENTS 16
+#define MAX_ELEMENTS 1024
 
 static inline bool element_is_fully_dirty(element_t *el)
 {
