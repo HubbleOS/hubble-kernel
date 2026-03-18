@@ -17,5 +17,5 @@ $(GUI_OUT): $(BUILD_TOOL)
 		--output $@ \
 		--type archive
 
-	@mkdir -p $(USR_DIR)/include/gui
-	@cp include/*.h $(USR_DIR)/include/gui/
+# 	@mkdir -p $(USR_DIR)/include/gui
+# 	@cp include/*.h $(USR_DIR)/include/gui/
