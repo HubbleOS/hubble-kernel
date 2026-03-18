@@ -19,6 +19,7 @@ file(GLOB_RECURSE GUI_SRC
 
 file(GLOB_RECURSE DEMO_SRC
     ${CMAKE_SOURCE_DIR}/src/*.c
+    ${CMAKE_SOURCE_DIR}/../../../usr/temp/tasks/*.c
 )
 
 add_executable(demo
@@ -36,6 +37,7 @@ target_include_directories(demo PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${SDL2_INCLUDE_DIRS}
     ${LIB_DIR}
+    ${CMAKE_SOURCE_DIR}/../../../usr/temp
 )
 
 target_compile_definitions(demo PRIVATE

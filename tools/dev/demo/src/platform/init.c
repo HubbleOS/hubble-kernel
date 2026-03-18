@@ -6,7 +6,7 @@
 #include <gui/core/screen/screen.h>
 #include <gui/dev/mouse/mouse.h>
 #include <gui/utils/color/color.h>
-// #include <tasks/task.h>
+#include <tasks/task.h>
 
 demo_ctx_t demo_init(uint32_t w, uint32_t h, uint8_t bpp)
 {
@@ -35,8 +35,8 @@ demo_ctx_t demo_init(uint32_t w, uint32_t h, uint8_t bpp)
 	mouse->x = w / 2;
 	mouse->y = h / 2;
 
-	// tasks_init();
-	// kmain_thread();
+	tasks_init();
+	kmain_thread();
 
 	return ctx;
 }
