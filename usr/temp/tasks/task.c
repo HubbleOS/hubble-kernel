@@ -39,6 +39,13 @@ static spinlock_t gui_lock;
 #define UNLOCK() spinlock_release(&gui_lock)
 #endif
 
+#include "lab/ui_editor.h"
+
+extern canvas_t *g_cnv_;
+extern window_t *g_win_;
+
+static ui_editor_t g_editor;
+
 void tasks_init(void)
 {
 	compositor_init();
@@ -46,6 +53,7 @@ void tasks_init(void)
 	// graph_app_init();
 	// geometry_app_init();
 	app_init();
+	ui_editor_init(&g_editor, g_win_);
 }
 
 void tasks_render(void)
@@ -53,6 +61,9 @@ void tasks_render(void)
 	// graph_app_render();
 	// geometry_app_render();
 	app_render();
+	if (g_editor.active)
+		ui_editor_render(&g_editor, g_cnv_);
+
 	compositor_render();
 }
 
@@ -85,20 +96,34 @@ void update_task(void)
 		mouse_update(mouse->x, mouse->y, mouse->left);
 		keyboard_update();
 
-		if (g_mouse.drag_obj)
+		if (g_editor.active)
 		{
-			int drag_x = g_mouse.x - g_mouse.drag_offset_x;
-			int drag_y = g_mouse.y - g_mouse.drag_offset_y;
-			if (g_mouse.drag_el)
-				object_move_element(g_mouse.drag_obj, g_mouse.drag_el,
-						    drag_x - g_mouse.drag_obj->x,
-						    drag_y - g_mouse.drag_obj->y);
-			else
+			/* editor перехоплює весь drag і selection */
+			ui_editor_update(&g_editor, &g_mouse);
+		}
+		else
+		{
+			/* звичайна логіка — без змін */
+			if (g_mouse.drag_obj)
 			{
-				compositor_move_object(g_mouse.drag_obj, drag_x, drag_y);
-				compositor_bring_to_front(g_mouse.drag_obj, LAYER_WINDOWS);
+				int drag_x = g_mouse.x - g_mouse.drag_offset_x;
+				int drag_y = g_mouse.y - g_mouse.drag_offset_y;
+
+				if (g_mouse.drag_el)
+					object_move_element(g_mouse.drag_obj, g_mouse.drag_el,
+							    drag_x - g_mouse.drag_obj->x,
+							    drag_y - g_mouse.drag_obj->y);
+				else
+				{
+					compositor_move_object(g_mouse.drag_obj, drag_x, drag_y);
+					compositor_bring_to_front(g_mouse.drag_obj, LAYER_WINDOWS);
+				}
 			}
 		}
+
+		/* overlay рендериться завжди поверх */
+		if (g_editor.active)
+			ui_editor_render(&g_editor, g_cnv_);
 
 		UNLOCK();
 		fps_delay(240);
