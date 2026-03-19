@@ -184,7 +184,6 @@ static void on_rotate()
 }
 
 // initialization
-
 void graph_app_init(void)
 {
 	window_t *win = window_create(100, 100, 800, 600);
