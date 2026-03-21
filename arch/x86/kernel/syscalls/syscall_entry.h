@@ -24,5 +24,6 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
 
 long sys_open(const char *path, int flags);
 long sys_close(int fd);
+long sys_spawn(void *entry_point, void *arg, uint32_t priority);
 
 _End_C_Header;

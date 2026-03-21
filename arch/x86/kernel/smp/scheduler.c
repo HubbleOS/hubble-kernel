@@ -4,6 +4,7 @@
 #include <mm/kmalloc.h>
 #include <mm/vmm.h>
 #include <mm/pmm.h>
+#include <mm/slab.h>
 
 #include <string.h>
 #include <apic/apic.h>
@@ -31,9 +32,17 @@ void schedule(void);
 void save_context(task_t *current, registers_t *regs);
 void free_context(task_t *task);
 
-#include <mm/slab.h>
-
 static slab_cache_t *fpu_cache = NULL;
+
+static uint64_t next_user_stack = 0x6ff00000ULL;
+#define USER_STACK_SIZE 0x10000 // 64KB per task
+
+static uint64_t alloc_user_stack(void)
+{
+	uint64_t base = next_user_stack;
+	next_user_stack -= USER_STACK_SIZE + PAGE_SIZE; // PAGE_SIZE gap as guard
+	return base;
+}
 
 // Initialize a new task
 task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority, bool userspace)
@@ -70,7 +79,7 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	}
 	else
 	{
-		uint64_t stack_base = 0x6fff0000ULL;
+		uint64_t stack_base = alloc_user_stack();
 		task->kernel_stack = stack_base;
 		task->stack_size = 65536; // 8 is holly (dont touch) temp
 
