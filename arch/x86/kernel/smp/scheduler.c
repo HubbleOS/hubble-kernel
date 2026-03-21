@@ -14,9 +14,7 @@
 
 #include <smp/smp.h>
 
-// Per-CPU current task
-
-static __thread task_t *current_task[MAX_CPUS];
+static task_t *current_task[MAX_CPUS];
 
 static cpu_runqueue_t runqueues[MAX_CPUS];
 static bool initialized = false;
@@ -74,7 +72,7 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	{
 		uint64_t stack_base = 0x6fff0000ULL;
 		task->kernel_stack = stack_base;
-		task->stack_size = 65536 - 8; // 8 is holly (dont touch) temp
+		task->stack_size = 65536; // 8 is holly (dont touch) temp
 
 		for (uint64_t i = 0; i < task->stack_size; i += PAGE_SIZE)
 		{
@@ -90,7 +88,7 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 
 	// Set up initial stack
 	printk("Setting up initial stack\n");
-	uint64_t *stack_top = (uint64_t *)(task->kernel_stack + task->stack_size);
+	uint64_t *stack_top = (uint64_t *)(((task->kernel_stack + task->stack_size) & ~0xFULL) - 8);
 
 	// Push initial values onto stack
 	printk("Pushing initial values onto stack\n");
@@ -238,11 +236,11 @@ void task_sleep(void)
 
 	outb(0x3f8, 'S');
 
-	// Mark as blocked
 	current->state = TASK_BLOCKED;
+	current->time_slice = 0;
 
-	// Force reschedule
-	schedule();
+	// printk("Task sleeping: %p\n", current);
+	asm volatile("int $32");
 }
 
 void task_wake(task_t *task)
@@ -250,7 +248,7 @@ void task_wake(task_t *task)
 	if (!task || task->state != TASK_BLOCKED)
 		return;
 
-	// Mark as ready
+	task->time_slice = 10;
 	task->state = TASK_READY;
 }
 
@@ -278,77 +276,29 @@ void schedule(void)
 {
 	uint8_t cpu_id = lapic_get_id();
 	task_t *old_task = get_current_task();
-
-	// if (old_task && old_task->state == TASK_READY)
-	// 	old_task->state = TASK_RUNNING;
-
-	// Get next task from runqueue
 	task_t *new_task = get_next_task(cpu_id);
 
-	if (new_task == runqueues[cpu_id].idle_task)
-	{
+	if (!new_task || new_task == old_task)
+		return;
 
+	if (new_task && new_task == runqueues[cpu_id].idle_task)
+	{
 		if (old_task && old_task->state == TASK_RUNNING)
 		{
-			// outb(0x3f8, 'O');
 			return;
 		}
-		// outb(0x3f8, old_task->state + '0');
-		if (!old_task)
-		{
-			// printk("old_task is NULL\n");
-			outb(0x3f8, 'N');
-		}
-		// if (!old_task)
-		// {
-
-		// 	// outb(0x3f8, 'I');
-		// }
-		// if (old_task && old_task->state == TASK_READY && old_task != runqueues[cpu_id].idle_task)
-		// {
-		// 	old_task->state = TASK_RUNNING;
-		// 	outb(0x3f8, 'P');
-		// 	outb(0x3f8, old_task->state + '0');
-		// printk("Switching to %p, state p: %p\n", old_task, old_task->state);
-		// 	return;
-		// }
-		// outb(0x3f8, old_task->state == TASK_BLOCKED ? 'B' : 'R');
-		// outb(0x3f8, old_task->state + '0');
 	}
 
-	if (!new_task || new_task == old_task)
-	{
-		if (old_task)
-		{
-			// outb(0x3f8, 'S');
-			return;
-		}
-		// new_task = runqueues[cpu_id].idle_task;
-	}
-	// outb(0x3f8, 'R');
-
-	// Update states
-	if (old_task && (old_task->state == TASK_RUNNING || old_task->state == TASK_BLOCKED || old_task->state == TASK_READY))
-	{
-		old_task->state = old_task->state == TASK_BLOCKED ? TASK_BLOCKED : TASK_READY;
-		old_task->total_runtime += 100;
-	}
+	if (old_task && old_task->state == TASK_RUNNING)
+		old_task->state = TASK_READY;
 
 	new_task->state = TASK_RUNNING;
-	new_task->last_scheduled = 0;
 	new_task->cpu = cpu_id;
 	current_task[cpu_id] = new_task;
 
-	// Switch page tables if different
 	if (new_task->page_table != (old_task ? old_task->page_table : NULL))
-	{
 		asm volatile("mov %0, %%cr3" ::"r"(new_task->page_table));
-	}
-	// print rax
-	// printk("RAX: %p\n", new_task->context.rax);
-	// print rdi
-	// printk("enter point from rdi: %p\n", new_task->context.rdi);
-	// Perform context switch
+
 	extern void switch_to_task(cpu_context_t * old, cpu_context_t * new);
 	switch_to_task(old_task ? &old_task->context : NULL, &new_task->context);
 }
@@ -365,7 +315,9 @@ void lapic_timer_handler(registers_t *regs)
 	if (current)
 	{
 		save_context(current, regs);
-		current->time_slice--;
+		if (current->time_slice > 0)
+			current->time_slice--;
+
 		if (current->state == TASK_UNINTERRUPTIBLE)
 		{
 			if (current->time_slice < 30)
@@ -381,7 +333,7 @@ void lapic_timer_handler(registers_t *regs)
 		}
 	}
 
-	if (!current || current->time_slice == 0)
+	if (!current || current->time_slice <= 0)
 	{
 		if (current)
 			current->time_slice = 10;
@@ -533,7 +485,6 @@ void scheduler_init(void)
 
 void scheduler_add_task(task_t *task)
 {
-	printk("Adding task %s to runqueue\n", task->name);
 	// Find CPU with fewest tasks
 	int target_cpu = 0;
 	size_t min_load = runqueues[0].count;

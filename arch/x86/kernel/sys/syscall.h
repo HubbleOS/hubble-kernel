@@ -1,4 +1,4 @@
-/* Auto-generated from /Users/artemvas/Documents/work/Hubble/Kernel/arch/x86/kernel/sys/syscall.tbl */
+/* Auto-generated from /home/underrated/projects/Kernel/arch/x86/kernel/sys/syscall.tbl */
 
 #pragma once
 

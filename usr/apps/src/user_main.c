@@ -25,7 +25,7 @@ void *mmap_(uint64_t addr, size_t length, int prot, int flags,
 	return (uint64_t *)syscall6(3, addr, length, prot, flags, fd, offset);
 }
 
-int read_file(int fd, void *buf, size_t size) { return syscall3(6, fd, (long)buf, size); }
+int read_file(int fd, void *buf, size_t size) { return syscall3(0, fd, (long)buf, size); }
 
 typedef struct
 {
@@ -47,6 +47,8 @@ void _start(void)
 
 	int mouse_file = open("/dev/mouse", 0);
 	mouse_t *mouse = (mouse_t *)mmap_(0, sizeof(mouse_t), 3, 1, mouse_file, 0);
+
+	int kbd_file = open("/dev/kbd", 0);
 
 	int width = 1280;
 	int height = 800;
@@ -73,6 +75,9 @@ void _start(void)
 
 	while (1)
 	{
+		char c;
+		read_file(kbd_file, &c, 1);
+		printf("key: %c\n", c);
 		mouse_update(mouse->x, mouse->y, mouse->left);
 
 		if (cursor->surface->x != mouse->x || cursor->surface->y != mouse->y)
