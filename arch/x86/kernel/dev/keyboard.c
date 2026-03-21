@@ -305,6 +305,17 @@ static inline uint8_t kbd_read_scancode_irq(void)
 	// extern uint8_t inb(uint16_t port);
 	return inb(0x60);
 }
+#include "printk.h"
+#include <smp/scheduler.h>
+
+#define KBD_BUF_SIZE 128
+
+typedef struct
+{
+	task_t *waiting; // task blocked waiting for input
+} kbd_stream_t;
+
+static kbd_stream_t kbd_stream = {0};
 
 void keyboard_irq(registers_t *r)
 {
@@ -317,20 +328,16 @@ void keyboard_irq(registers_t *r)
 
 	uint8_t raw = kbd_read_scancode_irq();
 
-	outb(0x3f8, '\n');
-
-	// debug: печатаем scancode — поможет понять, приходят ли IRQ
-	// printk("[kbd irq] raw=0x%02x\n", raw);
-
 	key_event_t evt;
 	if (process_scancode_once(raw, &evt))
 	{
-		// outb(0x3f8, 'P');
 		kbd_push(evt);
+		if (kbd_stream.waiting != NULL)
+		{
+			task_wake(kbd_stream.waiting);
+			kbd_stream.waiting = NULL;
+		}
 	}
-	outb(0x3f8, 'K');
-	// outb(0x3f8, 'E');
-	// не отправляем EOI здесь — это делает общий irq_handler после возврата
 }
 
 char keyboard_get_char(void)
@@ -346,14 +353,24 @@ char keyboard_get_char(void)
 		{
 			if (ev.released)
 				continue;
+			// printk("char: %c\n", keymap_lookup_char(ev.id.scancode, ev.id.extended,
+			// 					ev.is_shift, ev.is_caps_lock));
 
 			return keymap_lookup_char(ev.id.scancode, ev.id.extended,
 						  ev.is_shift, ev.is_caps_lock);
 		}
-
-		// Буфер пуст - ждём прерывания
-		asm volatile("hlt");
+		kbd_stream.waiting = get_current_task();
+		task_sleep();
 	}
+}
+
+#include <string.h>
+
+uint64_t kbd_read(uint64_t offset, size_t size, void *buf)
+{
+	char c = keyboard_get_char();
+	memcpy(buf, &c, size < 1 ? size : 1);
+	return 1;
 }
 
 key_event_t keyboard_get_event(void)
@@ -362,16 +379,14 @@ key_event_t keyboard_get_event(void)
 
 	while (true)
 	{
-		// Атомарно проверяем буфер
 		asm volatile("cli");
 		bool has_event = kbd_pop(&ev);
-		asm volatile("sti"); // ВСЕГДА включаем обратно!
+		asm volatile("sti");
 
 		if (has_event && !ev.released)
 			return ev;
 
-		// Ждём следующего прерывания
-		asm volatile("hlt");
+		task_sleep();
 	}
 }
 

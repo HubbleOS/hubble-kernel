@@ -43,18 +43,13 @@ VFS_device_reg *dev_vfs_find_device(VFS_FS *fs, const char *path)
 int dev_vfs_read_device(VFS_File *file, void *buf, uint32_t size)
 {
 	VFS_device_reg *dev = (VFS_device_reg *)file->node->fs_node;
-	uint64_t phys = dev->read(0, size);
-	void *src = PHYS_TO_VIRT_PTR(void, phys);
-	memcpy(buf, src, size);
-
+	dev->read(0, size, buf);
 	file->pos = 0;
-
 	return size;
 }
-
 VFS_Node *dev_vfs_open_device(VFS_FS *fs, const char *path)
 {
-	printk("Opening device: %s\n", path);
+	// printk("Opening device: %s\n", path);
 	VFS_device_reg *dev = dev_vfs_find_device(fs, path);
 	if (dev)
 	{
@@ -92,7 +87,7 @@ VFS_Node *dev_vfs_create_device(VFS_FS *fs, const char *path)
 
 void dev_vfs_register(const char *name,
 		      uint64_t (*mmap)(uint64_t, size_t),
-		      uint64_t (*read)(uint64_t, size_t))
+		      uint64_t (*read)(uint64_t, size_t, void *))
 {
 	VFS_device_reg *dev = kmalloc(sizeof(VFS_device_reg), GFP_KERNEL);
 	memset(dev, 0, sizeof(VFS_device_reg));
@@ -108,8 +103,8 @@ int dev_vfs_write_device(VFS_File *file, const void *device, uint32_t size)
 	VFS_device_reg *dev = (VFS_device_reg *)file->node->fs_node;
 	VFS_device_file *dev_file = (VFS_device_file *)device;
 
-	dev->mmap = dev_file->mmap;
-	dev->read = dev_file->read;
+	// dev->mmap = dev_file->mmap;
+	// dev->read = dev_file->read;
 	return 1;
 }
 uint64_t mmap_device(VFS_File *file, uint64_t offset, size_t size)

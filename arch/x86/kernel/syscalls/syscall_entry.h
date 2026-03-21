@@ -24,6 +24,5 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
 
 long sys_open(const char *path, int flags);
 long sys_close(int fd);
-long sys_read_file(int fd, void *buf, size_t size);
 
 _End_C_Header;

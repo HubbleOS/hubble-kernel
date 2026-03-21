@@ -16,4 +16,4 @@ typedef struct
 
 mouse_t *get_mouse_info(void);
 uint64_t mouse_mmap(uint64_t offset, size_t size);
-uint64_t mouse_read_file(uint64_t offset, size_t size);
+uint64_t mouse_read_file(uint64_t offset, size_t size, void *buf);
