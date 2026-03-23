@@ -3,9 +3,10 @@
 // ============================================================================
 
 #pragma once
-// #include <_cheader.h>
+#include <_cheader.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 // Basic key structure
 typedef struct
@@ -84,7 +85,7 @@ typedef struct
 
 #include <interrupt/interrupt.h>
 
-// _Begin_C_Header;
+_Begin_C_Header;
 
 // Low-level keyboard functions (already exist)
 key_event_t keyboard_get_event(void);
@@ -103,4 +104,4 @@ void keyboard_init();
 bool keyboard_poll_event(key_event_t *ev);
 uint64_t kbd_read(uint64_t offset, size_t size, void *buf);
 
-// _End_C_Header;
+_End_C_Header;

@@ -1,12 +1,9 @@
-// ============================================================================
-// spinlock.h - Basic synchronization primitives
-// ============================================================================
-
-#ifndef SPINLOCK_H
-#define SPINLOCK_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
+
+#include <asm.h>
 
 typedef struct
 {
@@ -31,7 +28,7 @@ static inline void spinlock_acquire(spinlock_t *lock)
 	{
 		// Spin with pause instruction (reduces contention)
 		while (lock->lock)
-			asm volatile("pause");
+			cpu_pause();
 	}
 
 	__sync_synchronize(); // Memory barrier
@@ -96,5 +93,3 @@ static inline void irqlock_release(irqlock_t *lock)
 	if (lock->flags & (1 << 9)) // IF flag
 		asm volatile("sti" ::: "memory");
 }
-
-#endif // SPINLOCK_H

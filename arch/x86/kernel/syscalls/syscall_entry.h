@@ -10,9 +10,15 @@
 #include <smp/task.h>
 #include <errno.h>
 
+#include <interrupt/interrupt.h> // for registers_t
+
 _Begin_C_Header;
 
 void syscall_init(void);
+
+uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
+			 uint64_t a4, uint64_t a5, uint64_t a6);
+uint64_t syscall_handler_wrapper(registers_t *regs);
 
 VFS_File *task_get_fd(task_t *task, int fd);
 

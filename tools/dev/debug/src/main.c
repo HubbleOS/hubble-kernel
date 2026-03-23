@@ -40,7 +40,7 @@ int gdb_send_packet(int sock, const char *cmd, char **out_data, size_t *out_len)
 	snprintf(packet, sizeof(packet), "$%s#%02x", cmd, checksum);
 	send(sock, packet, strlen(packet), 0);
 
-	// Ждём ACK '+'
+	// Wait ACK '+'
 	n = recv(sock, buf, 1, 0);
 	if (n <= 0 || buf[0] != '+')
 	{
@@ -50,7 +50,7 @@ int gdb_send_packet(int sock, const char *cmd, char **out_data, size_t *out_len)
 
 	if (out_data)
 	{
-		// Читаем данные до '#'
+		// Read date to '#'
 		size_t pos = 0;
 		while (1)
 		{
