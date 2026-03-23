@@ -15,6 +15,8 @@
 
 #include <smp/smp.h>
 
+#include <asm.h>
+
 static task_t *current_task[MAX_CPUS];
 
 static cpu_runqueue_t runqueues[MAX_CPUS];
@@ -232,7 +234,7 @@ void task_exit(int exit_code)
 
 	// Should never reach here
 	while (1)
-		asm volatile("hlt");
+		hlt();
 }
 
 void task_sleep(void)
@@ -462,7 +464,7 @@ void idle_task(void)
 	{
 		// printk("CPU %d idle, time: %d\n", lapic_get_id(), count++);
 		// hpet_delay_ms(1000);
-		asm volatile("hlt");
+		hlt();
 	}
 }
 
@@ -488,7 +490,7 @@ void scheduler_init(void)
 	initialized = true;
 	while (1)
 	{
-		asm volatile("hlt");
+		hlt();
 	}
 }
 

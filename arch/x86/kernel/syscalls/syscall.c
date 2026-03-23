@@ -4,33 +4,37 @@
 #include <sys/syscall.h>
 #include <syscalls/syscall_entry.h>
 
-// syscall_fn_t syscall_table[SYSCALL_COUNT] = {
-//     [SYS_write] = sys_write,
-//     [SYS_read] = sys_read,
-// };
+typedef long (*syscall_fn_t)(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6);
 
-// typedef struct
-// {
-// 	uint64_t rax; // syscall number
-// 	uint64_t r9;  // arg6
-// 	uint64_t r8;  // arg5
-// 	uint64_t r10; // arg4
-// 	uint64_t rdx; // arg3
-// 	uint64_t rsi; // arg2
-// 	uint64_t rdi; // arg1
-// } syscall_regs_t;
+#define SYSCALL_COUNT 256
 
-// long syscall_handler(syscall_regs_t *regs)
-// {
-// 	long syscall_num = regs->rax;
+syscall_fn_t syscall_table[SYSCALL_COUNT] = {
+    [SYS_write] = (syscall_fn_t)sys_write,
+    [0] = (syscall_fn_t)sys_read,
+    [3] = (syscall_fn_t)sys_mmap,
+    [4] = (syscall_fn_t)sys_open,
+    [5] = (syscall_fn_t)sys_close,
+    [6] = (syscall_fn_t)sys_spawn};
 
-// 	if (syscall_num < 0 || syscall_num >= SYSCALL_COUNT)
-// 		return -1;
+uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
+			 uint64_t a4, uint64_t a5, uint64_t a6)
+{
+	if (num >= SYSCALL_COUNT || !syscall_table[num])
+		return -1;
 
-// 	syscall_fn_t fn = syscall_table[syscall_num];
-// 	if (fn == NULL)
-// 		return -1;
+	return syscall_table[num](a1, a2, a3, a4, a5, a6);
+}
 
-// 	return fn(regs->rdi, regs->rsi, regs->rdx,
-// 		  regs->r10, regs->r8, regs->r9);
-// }
+uint64_t syscall_handler_wrapper(registers_t *regs)
+{
+	regs->rax = syscall_handler(
+	    regs->rax,
+	    regs->rdi,
+	    regs->rsi,
+	    regs->rdx,
+	    regs->r10,
+	    regs->r8,
+	    regs->r9);
+
+	return regs->rax;
+}

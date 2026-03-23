@@ -15,6 +15,8 @@
 
 #include <fs/vfs/dev.h>
 
+#include <asm.h>
+
 extern int elf_load(const char *path, uint64_t *entry_out);
 
 uint64_t fb_mmap(uint64_t offset, size_t size)
@@ -53,7 +55,9 @@ kernel_entry(BootInfo *bi)
 	scheduler_init();
 
 	while (1)
-		asm volatile("hlt");
+	{
+		hlt();
+	}
 }
 
 void kernel_main(BootInfo *bi) __attribute__((alias("kernel_entry")));
@@ -72,7 +76,7 @@ void kmain_thread(void)
 	{
 		// char c = keyboard_get_char();
 		// printk("key: %c\n", c);
-		asm volatile("hlt");
+		hlt();
 	}
 
 	// uint8_t counter = 0;
@@ -89,6 +93,6 @@ void kmain_thread(void)
 	// 		old_x = m->x;
 	// 		old_y = m->y;
 	// 	}
-	// 	asm volatile("hlt");
+	// 	hlt();
 	// }
 }

@@ -7,16 +7,12 @@
 
 #include <stdint.h>
 
-// ============================================================================
 // Physical Memory Layout
-// ============================================================================
 
 /** Kernel physical load address (1MB) */
 #define KERNEL_PHYS_BASE 0x100000ULL
 
-// ============================================================================
 // Virtual Memory Layout
-// ============================================================================
 
 /** Higher-half kernel base address */
 #define KERNEL_VIRT_BASE 0xFFFFFFFF80000000ULL
@@ -27,9 +23,7 @@
 /** Direct physical memory map base (for high addresses) */
 #define DIRECT_MAP_BASE 0xFFFF800000000000ULL
 
-// ============================================================================
 // Address Conversion Macros
-// ============================================================================
 
 #define VIRT_TO_PHYS(addr) ((uint64_t)((uintptr_t)(addr) - KERNEL_VIRT_BASE))
 

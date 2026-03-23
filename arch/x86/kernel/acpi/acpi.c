@@ -4,6 +4,8 @@
 #include <io.h>
 #include "higher_half.h"
 
+#include <asm.h>
+
 // Global ACPI state
 static struct
 {
@@ -223,18 +225,18 @@ void acpi_shutdown(void)
 		printk("ACPI shutdown unavailable, trying fallback methods\n");
 
 		// Try common QEMU/Bochs shutdown ports
-		asm volatile("cli");
+		cli();
 		outw(0x604, 0x2000);  // QEMU
 		outw(0xB004, 0x2000); // Old QEMU
 		outw(0x4004, 0x3400); // Bochs
 
 		printk("Shutdown failed, halting\n");
 		while (1)
-			asm volatile("hlt");
+			hlt();
 	}
 
 	printk("Shutting down via ACPI...\n");
-	asm volatile("cli");
+	cli();
 
 	// Write SLP_TYP | SLP_EN to PM1 control blocks
 	uint16_t pm1a = acpi_state.fadt->PM1aControlBlock;
@@ -248,7 +250,7 @@ void acpi_shutdown(void)
 	// Fallback if ACPI method didn't work
 	printk("ACPI shutdown failed, halting\n");
 	while (1)
-		asm volatile("hlt");
+		hlt();
 }
 
 void acpi_reboot(void)
@@ -258,17 +260,17 @@ void acpi_reboot(void)
 		printk("ACPI reboot unavailable, trying fallback\n");
 
 		// Try keyboard controller reset
-		asm volatile("cli");
+		cli();
 		outb(0x64, 0xFE);
 
 		// Triple fault as last resort
 		asm volatile("lidt 0; int3");
 		while (1)
-			asm volatile("hlt");
+			hlt();
 	}
 
 	printk("Rebooting via ACPI...\n");
-	asm volatile("cli");
+	cli();
 
 	// Use FADT reset register if available
 	if (acpi_state.fadt->ResetReg.Address)
@@ -291,7 +293,7 @@ void acpi_reboot(void)
 	outb(0x64, 0xFE);	      // Keyboard controller
 	asm volatile("lidt 0; int3"); // Triple fault
 	while (1)
-		asm volatile("hlt");
+		hlt();
 }
 
 // === Public API Functions ===

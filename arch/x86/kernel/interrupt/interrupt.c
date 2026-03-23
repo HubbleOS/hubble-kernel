@@ -1,4 +1,4 @@
-#include "interrupt/interrupt.h"
+#include "interrupt.h"
 #include <syscalls/syscall_entry.h>
 #include <sys/syscall.h>
 #include <stdint.h>
@@ -8,10 +8,9 @@
 #include <smp/scheduler.h>
 #include "sys/syscall.h"
 
-// ============================================================================
-// Legacy PIC functions (kept for fallback/compatibility)
-// ============================================================================
+#include <asm.h>
 
+// Legacy PIC functions (kept for fallback/compatibility)
 #define PIC1_COMMAND 0x20
 #define PIC1_DATA 0x21
 #define PIC2_COMMAND 0xA0
@@ -20,6 +19,11 @@
 
 static bool using_apic = false;
 
+/**
+ * @brief Disable legacy PIC by masking all IRQ lines.
+ *
+ * Used when switching to APIC mode.
+ */
 void pic_disable(void)
 {
 	// Mask all interrupts on both PICs
@@ -28,6 +32,12 @@ void pic_disable(void)
 	printk("Legacy PIC disabled\n");
 }
 
+/**
+ * @brief Remap PIC interrupt vectors.
+ *
+ * Moves IRQs from default (0–15) to 32–47 to avoid collision
+ * with CPU exceptions (0–31).
+ */
 void pic_remap(void)
 {
 	outb(PIC1_COMMAND, 0x11);
@@ -47,6 +57,13 @@ void pic_remap(void)
 	outb(PIC2_DATA, 0xFF);
 }
 
+/**
+ * @brief Send End Of Interrupt (EOI) to PIC controllers.
+ *
+ * Required after handling an IRQ to allow further interrupts.
+ *
+ * @param irq IRQ number
+ */
 void pic_send_eoi(uint8_t irq)
 {
 	if (irq >= 8)
@@ -54,6 +71,11 @@ void pic_send_eoi(uint8_t irq)
 	outb(PIC1_COMMAND, PIC_EOI);
 }
 
+/**
+ * @brief Mask (disable) a specific IRQ line on PIC.
+ *
+ * @param irq IRQ number
+ */
 void irq_set_mask(uint8_t irq)
 {
 	uint16_t port = (irq < 8) ? PIC1_DATA : PIC2_DATA;
@@ -72,28 +94,35 @@ void irq_clear_mask(uint8_t irq)
 	outb(port, value);
 }
 
-// ============================================================================
 // IRQ handlers (supports both PIC and APIC)
-// ============================================================================
-
 static irq_handler_t irq_handlers[256] = {0}; // Extended for APIC vectors
 
+/**
+ * @brief Install an interrupt handler for a given IRQ vector.
+ *
+ * Supports up to 256 vectors (for APIC compatibility).
+ *
+ * @param irq IRQ/vector number
+ * @param handler Handler function
+ */
 void irq_install_handler(uint8_t irq, irq_handler_t handler)
 {
 	if (irq < 256)
 		irq_handlers[irq] = handler;
 }
 
+/**
+ * @brief Uninstall interrupt handler for a given IRQ vector.
+ *
+ * @param irq IRQ/vector number
+ */
 void irq_uninstall_handler(uint8_t irq)
 {
 	if (irq < 256)
 		irq_handlers[irq] = 0;
 }
 
-// ============================================================================
 // Exception messages
-// ============================================================================
-
 static const char *exception_messages[] = {
     "Division By Zero",
     "Debug",
@@ -119,12 +148,15 @@ static const char *exception_messages[] = {
     "Control Protection Exception",
 };
 
-// ============================================================================
 // Handlers
-// ============================================================================
-
-#include "higher_half.h"
-
+/**
+ * @brief Handle CPU exceptions (faults, traps, aborts).
+ *
+ * Prints diagnostic information and halts on critical faults.
+ * Non-fatal exceptions terminate the current task if scheduler is active.
+ *
+ * @param regs Pointer to register snapshot
+ */
 void isr_handler(registers_t *regs)
 {
 	printk("\n\tEXCEPTION OCCURRED\n");
@@ -166,6 +198,15 @@ void isr_handler(registers_t *regs)
 	}
 }
 
+/**
+ * @brief Handle hardware interrupts (IRQs).
+ *
+ * - Detects and ignores spurious IRQs (PIC-specific)
+ * - Dispatches to registered handler
+ * - Sends EOI via PIC or APIC
+ *
+ * @param regs Pointer to register snapshot
+ */
 void irq_handler(registers_t *regs)
 {
 	uint8_t irq = regs->int_no - 32;
@@ -198,52 +239,19 @@ void irq_handler(registers_t *regs)
 		pic_send_eoi(irq);
 }
 
-// ============================================================================
-// Syscall table
-// ============================================================================
-
-typedef long (*syscall_fn_t)(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6);
-
-#define SYSCALL_COUNT 256
-
-syscall_fn_t syscall_table[SYSCALL_COUNT] = {
-    [SYS_write] = (syscall_fn_t)sys_write,
-    [0] = (syscall_fn_t)sys_read,
-    [3] = (syscall_fn_t)sys_mmap,
-    [4] = (syscall_fn_t)sys_open,
-    [5] = (syscall_fn_t)sys_close,
-    [6] = (syscall_fn_t)sys_spawn};
-
-uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
-			 uint64_t a4, uint64_t a5, uint64_t a6)
-{
-	if (num >= SYSCALL_COUNT || !syscall_table[num])
-		return -1;
-
-	return syscall_table[num](a1, a2, a3, a4, a5, a6);
-}
-
-uint64_t syscall_handler_wrapper(registers_t *regs)
-{
-	regs->rax = syscall_handler(
-	    regs->rax,
-	    regs->rdi,
-	    regs->rsi,
-	    regs->rdx,
-	    regs->r10,
-	    regs->r8,
-	    regs->r9);
-
-	return regs->rax;
-}
-
-// ============================================================================
 // Init
-// ============================================================================
-
 #include <dev/keyboard.h>
 #include <acpi/acpi.h>
 
+/**
+ * @brief Initialize interrupt handling subsystem.
+ *
+ * Steps:
+ * - Detect and initialize APIC (if available)
+ * - Fallback to legacy PIC otherwise
+ * - Setup IRQ routing (keyboard, timer, etc.)
+ * - Enable CPU interrupts (STI)
+ */
 void interrupts_init(void)
 {
 	printk("Initializing interrupt system...\n");
@@ -286,6 +294,6 @@ void interrupts_init(void)
 	}
 
 	// Enable interrupts
-	asm volatile("sti");
+	sti();
 	printk("Interrupts enabled\n");
 }

@@ -5,7 +5,7 @@
 #include "globals.h"
 #include "console.h"
 
-#include "asm.h"
+#include <asm.h>
 #include "higher_half.h"
 
 // ACPI 2.0 (XSDT)
@@ -621,7 +621,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	// Should never reach here
 	while (1)
-		asm volatile("hlt");
+		hlt();
 
 	return EFI_SUCCESS;
 }
