@@ -1,6 +1,7 @@
 SRC_DIR    := src
 
 CC         := gcc
+CXX 	   := g++
 CCFLAGS    :=
 INCLUDES   := -Iinclude -I$(SRC_DIR)
 LDFLAGS    := -lncurses
@@ -17,6 +18,7 @@ build: $(BUILD_TOOL)
 		--src-dir $(SRC_DIR) \
 		--build-dir $(BUILD_DIR) \
 		--cc $(CC) \
+		--cxx $(CXX) \
 		--cflags "$(CCFLAGS)" \
 		--includes "$(INCLUDES)" \
 		--output $(TARGET) \
