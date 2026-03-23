@@ -10,6 +10,7 @@
 #include <mm/vmm.h>
 #include <mm/pmm.h>
 #include "higher_half.h"
+#include <string.h>
 
 static mouse_t *mouse_g = NULL;
 static uint8_t mouse_packet[3];
@@ -25,9 +26,10 @@ uint64_t mouse_mmap(uint64_t offset, size_t size)
 	// printk("mouse mmap %p\n", VIRT_TO_PHYS(mouse_g));
 	return (uint64_t)VIRT_TO_PHYS(mouse_g);
 }
-uint64_t mouse_read_file(uint64_t offset, size_t size)
+uint64_t mouse_read_file(uint64_t offset, size_t size, void *buf)
 {
-	return (uint64_t)VIRT_TO_PHYS(mouse_g);
+	memcpy(buf, mouse_g, size);
+	return size;
 }
 
 void mouse_handler(registers_t *regs)

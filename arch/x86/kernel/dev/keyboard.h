@@ -101,5 +101,6 @@ void keyboard_irq(registers_t *r);
 void keyboard_init();
 
 bool keyboard_poll_event(key_event_t *ev);
+uint64_t kbd_read(uint64_t offset, size_t size, void *buf);
 
 // _End_C_Header;

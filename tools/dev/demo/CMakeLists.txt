@@ -30,7 +30,12 @@ add_executable(demo
 target_link_libraries(demo
     SDL2::SDL2
     Threads::Threads
+    m
 )
+
+# target_link_libraries(demo PRIVATE
+#     m
+# )
 
 target_include_directories(demo PRIVATE
     ${CMAKE_SOURCE_DIR}/include

@@ -25,7 +25,9 @@ void *mmap_(uint64_t addr, size_t length, int prot, int flags,
 	return (uint64_t *)syscall6(3, addr, length, prot, flags, fd, offset);
 }
 
-int read_file(int fd, void *buf, size_t size) { return syscall3(6, fd, (long)buf, size); }
+int read_file(int fd, void *buf, size_t size) { return syscall3(0, fd, (long)buf, size); }
+
+int spawn(void *entry_point, void *arg, uint32_t priority) { return syscall3(6, (long)entry_point, (long)arg, priority); }
 
 typedef struct
 {
@@ -37,6 +39,8 @@ typedef struct
 
 uint32_t open(const char *path, int flags) { return syscall2(4, (long)path, flags); }
 
+void test(void);
+
 void _start(void)
 {
 	libc_init();
@@ -47,6 +51,8 @@ void _start(void)
 
 	int mouse_file = open("/dev/mouse", 0);
 	mouse_t *mouse = (mouse_t *)mmap_(0, sizeof(mouse_t), 3, 1, mouse_file, 0);
+
+	int kbd_file = open("/dev/kbd", 0);
 
 	int width = 1280;
 	int height = 800;
@@ -67,8 +73,10 @@ void _start(void)
 	cursor_t *cursor = cursor_create(16, 16, rgb(0, 0, 0), rgb(255, 255, 255));
 	window_t *win = window_create(0, 0, 400, 300);
 
+	int pid = spawn(test, NULL, 0);
 	while (1)
 	{
+
 		mouse_update(mouse->x, mouse->y, mouse->left);
 
 		if (cursor->surface->x != mouse->x || cursor->surface->y != mouse->y)
@@ -91,4 +99,16 @@ void _start(void)
 
 		compositor_render();
 	}
+}
+void test(void)
+{
+	printf("Test task!\n");
+	char c;
+	int kbd_file = open("/dev/kbd", 0);
+	while (1)
+	{
+		read_file(kbd_file, &c, 1);
+		printf("key: %c\n", c);
+	}
+	// printf("Test task!\n");
 }

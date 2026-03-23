@@ -212,7 +212,7 @@ syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [3] = (syscall_fn_t)sys_mmap,
     [4] = (syscall_fn_t)sys_open,
     [5] = (syscall_fn_t)sys_close,
-    [6] = (syscall_fn_t)sys_read_file};
+    [6] = (syscall_fn_t)sys_spawn};
 
 uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
 			 uint64_t a4, uint64_t a5, uint64_t a6)

@@ -14,7 +14,6 @@
 #include "io.h"
 
 #include <fs/vfs/dev.h>
-// #include <tasks/task.h>
 
 extern int elf_load(const char *path, uint64_t *entry_out);
 
@@ -47,6 +46,7 @@ kernel_entry(BootInfo *bi)
 	mouse_init();
 	keyboard_init();
 	dev_vfs_register("mouse", mouse_mmap, mouse_read_file);
+	dev_vfs_register("kbd", NULL, kbd_read);
 
 	smp_init();
 
