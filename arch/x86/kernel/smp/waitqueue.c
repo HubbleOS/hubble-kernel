@@ -2,6 +2,8 @@
 #include <smp/scheduler.h>
 #include <smp/spinlock.h>
 
+#include <asm.h>
+
 typedef struct wait_queue
 {
 	task_t *tasks[MAX_TASKS];
@@ -33,8 +35,8 @@ void waitqueue_sleep(wait_queue_t *wq)
 
 	while (current->state == TASK_BLOCKED)
 	{
-		asm volatile("pause");
-		asm volatile("hlt");
+		cpu_pause();
+		hlt();
 	}
 }
 

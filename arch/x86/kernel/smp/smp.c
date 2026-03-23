@@ -20,7 +20,9 @@
 #include <syscalls/syscall_entry.h>
 
 #include "smp.h"
-#include "msr.h"
+#include <msr.h>
+
+#include <asm.h>
 
 static size_t g_trampoline_size = 0;
 static volatile uint64_t *g_trampoline_cr3 = NULL;
@@ -132,12 +134,12 @@ void ap_entry(void)
 	asm volatile("pushfq; pop %0" : "=r"(rflags));
 	printk("AP %u: RFLAGS=0x%lx, IF=%d\n",
 	       lapic_get_id(), rflags, (rflags >> 9) & 1);
-	asm volatile("sti");
+	sti();
 	printk("\nAP %u online!\nHello from AP %u \n\n", apic_id, apic_id);
 	lapic_timer_init(100);
 	while (1)
 	{
-		asm volatile("hlt");
+		hlt();
 	}
 }
 

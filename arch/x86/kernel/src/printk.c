@@ -10,6 +10,8 @@
 #include <hpet/hpet.h>
 #include <smp/spinlock.h>
 
+#include <asm.h>
+
 // Ring buffer for logs
 static char log_buffer[PRINTK_BUFFER_SIZE];
 static size_t log_head = 0;	 // Position records
@@ -705,7 +707,7 @@ void printk(const char *fmt, ...)
 
 	// Restore interrupt state
 	if (flags & (1ULL << 9))
-		asm volatile("sti");
+		sti();
 
 	va_end(args);
 }

@@ -6,6 +6,8 @@
 #include <utils/font.h>
 #include <io.h>
 
+#include <asm.h>
+
 // Existing keymap (keep as is)
 const keymap_entry_t keymap[] = {
     {.id = {KEY_A, false}, 'a', 'A'},
@@ -379,9 +381,9 @@ key_event_t keyboard_get_event(void)
 
 	while (true)
 	{
-		asm volatile("cli");
+		cli();
 		bool has_event = kbd_pop(&ev);
-		asm volatile("sti");
+		sti();
 
 		if (has_event && !ev.released)
 			return ev;
@@ -425,9 +427,9 @@ void keyboard_init()
 
 bool keyboard_poll_event(key_event_t *ev)
 {
-	asm volatile("cli");
+	cli();
 	bool ok = kbd_pop(ev);
-	asm volatile("sti");
+	sti();
 
 	return ok;
 }

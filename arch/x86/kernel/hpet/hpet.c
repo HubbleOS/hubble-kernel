@@ -5,6 +5,8 @@
 #include <printk.h>
 #include <stddef.h>
 
+#include <asm.h>
+
 // HPET Register Offsets
 #define HPET_GENERAL_CAPS 0x000
 #define HPET_GENERAL_CONFIG 0x010
@@ -89,7 +91,7 @@ void hpet_delay_ns(uint64_t ns)
 	uint64_t ticks = hpet_ns_to_ticks(ns);
 
 	while ((hpet_get_counter() - start) < ticks)
-		asm volatile("pause");
+		cpu_pause();
 }
 
 // Busy-wait delay in microseconds
