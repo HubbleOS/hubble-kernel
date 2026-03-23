@@ -44,7 +44,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
 	{
 		return -1;
 	}
-	printk("sys_mmap(%p, %lu, %x, %x, %d, %lu)\n", addr, length, prot, flags, fd, offset);
+	// printk("sys_mmap(%p, %lu, %x, %x, %d, %lu)\n", addr, length, prot, flags, fd, offset);
 
 	task_t *current = get_current_task();
 	if (!current->vm_map)
@@ -108,7 +108,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
 		vma->flags = vm_flags;
 		vma->type = VMA_ANONYMOUS;
 		vm_insert_area(current->vm_map, vma);
-		printk("Mapped %p - %p, from physical %p\n", vaddr, vaddr + size, (void *)vaddr);
+		// printk("Mapped %p - %p, from physical %p\n", vaddr, vaddr + size, (void *)vaddr);
 		return (long)vaddr;
 	}
 
@@ -147,7 +147,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
 		vma->type = VMA_DEVICE;
 		vma->phys_base = phys_base;
 		vm_insert_area(current->vm_map, vma);
-		printk("Mapped %p - %p, from physical %p\n", vaddr, vaddr + size, (void *)phys_base);
+		// printk("Mapped %p - %p, from physical %p\n", vaddr, vaddr + size, (void *)phys_base);
 		return (long)vaddr;
 	}
 }
