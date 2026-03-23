@@ -8,6 +8,8 @@
 #include <msr.h>
 #include <hpet/hpet.h>
 
+#include <asm.h>
+
 // Local APIC register offsets
 #define LAPIC_ID 0x020
 #define LAPIC_VERSION 0x030
@@ -385,7 +387,7 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 		int timeout = 100000;
 		while ((lapic_read(LAPIC_ICR_LOW) & (1 << 12)) && timeout > 0)
 		{
-			asm volatile("pause");
+			cpu_pause();
 			timeout--;
 		}
 
@@ -429,7 +431,7 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 
 	// Small delay to let SIPI process
 	for (volatile int i = 0; i < 100000; i++)
-		asm volatile("pause");
+		cpu_pause();
 
 	// Read ICR to check delivery status
 	if (apic_mode == APIC_INIT_X2APIC)
@@ -830,7 +832,7 @@ void apic_start_ap(uint8_t apic_id, uint32_t trampoline_addr)
 	// === STEP 2: Wait 10ms for INIT to take effect ===
 	printk("Step 2: Waiting 10ms...\n");
 	for (volatile int i = 0; i < 10000000; i++)
-		asm volatile("pause");
+		cpu_pause();
 
 	// === STEP 3: First STARTUP IPI ===
 	printk("Step 3: Sending first SIPI...\n");
@@ -839,7 +841,7 @@ void apic_start_ap(uint8_t apic_id, uint32_t trampoline_addr)
 	// === STEP 4: Wait 200us ===
 	printk("Step 4: Waiting 200us...\n");
 	for (volatile int i = 0; i < 200000; i++)
-		asm volatile("pause");
+		cpu_pause();
 
 	// === STEP 5: Second STARTUP IPI (per Intel MP spec) ===
 	printk("Step 5: Sending second SIPI...\n");
