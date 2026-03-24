@@ -131,7 +131,7 @@ debug:
 PHONY += disk
 disk:
 	@mkdir -p out/disks
-	out/tools/dev/disk/disk out/disks/disk.img 64 out/usr
+	@python tools/dev/disk/main.py
 
 PHONY += run
 run: build
