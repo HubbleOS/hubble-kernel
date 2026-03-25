@@ -52,7 +52,9 @@ void tasks_init(void)
 	background_create(rgb(20, 20, 20));
 	// graph_app_init();
 	// geometry_app_init();
-	app_init();
+	// app_init();
+	geometry3d_app_init();
+
 	ui_editor_init(&g_editor, g_win_);
 }
 
@@ -60,7 +62,9 @@ void tasks_render(void)
 {
 	// graph_app_render();
 	// geometry_app_render();
-	app_render();
+	// app_render();
+	geometry3d_app_render();
+
 	if (g_editor.active)
 		ui_editor_render(&g_editor, g_cnv_);
 
@@ -133,7 +137,7 @@ void update_task(void)
 #endif
 }
 
-// ─── render ──────────────────────────────────────────────────────────────────
+//  render
 
 #ifdef GUI_DEMO
 static void *render_thread(void *arg)
@@ -161,7 +165,7 @@ void render_task(void)
 #endif
 }
 
-// ─── entry point ─────────────────────────────────────────────────────────────
+//  entry point
 
 #ifdef GUI_DEMO
 void kmain_thread(void)

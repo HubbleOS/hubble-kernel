@@ -1,4 +1,3 @@
-// arch/x86/kernel/gui/dev/keyboard/keyboard.c
 // #ifndef GUI_DEMO
 
 // #include "keyboard.h"

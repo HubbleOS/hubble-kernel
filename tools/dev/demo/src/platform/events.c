@@ -15,7 +15,7 @@ int events_process(void)
 		if (e.type == SDL_QUIT)
 			return 0;
 
-		// ── миша ────────────────────────────────────────────────
+		//  миша
 		if (e.type == SDL_MOUSEMOTION)
 		{
 			mouse->x = e.motion.x;
@@ -28,7 +28,7 @@ int events_process(void)
 		if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT)
 			mouse->left = 0;
 
-		// ── клавіатура ───────────────────────────────────────────
+		//  клавіатура
 		if (e.type == SDL_KEYDOWN)
 		{
 			SDL_Keycode key = e.key.keysym.sym;

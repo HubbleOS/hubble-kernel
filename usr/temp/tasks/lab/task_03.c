@@ -193,7 +193,7 @@ static void task3_draw(void)
 
 	if (n < 3)
 	{
-		label_set_text(t3_result_lbl, "Need >= 3 points");
+		element_set_text(t3_result_lbl, "Need >= 3 points");
 		return;
 	}
 
@@ -237,13 +237,13 @@ static void task3_draw(void)
 	}
 
 	if (pos > 0 && neg > 0)
-		label_set_text(t3_result_lbl, "non-convex");
+		element_set_text(t3_result_lbl, "non-convex");
 	else if (pos > 0)
-		label_set_text(t3_result_lbl, "counter-clockwise");
+		element_set_text(t3_result_lbl, "counter-clockwise");
 	else if (neg > 0)
-		label_set_text(t3_result_lbl, "clockwise");
+		element_set_text(t3_result_lbl, "clockwise");
 	else
-		label_set_text(t3_result_lbl, "Degenerate polygon");
+		element_set_text(t3_result_lbl, "Degenerate polygon");
 
 	element_redraw(t3_result_lbl);
 }
