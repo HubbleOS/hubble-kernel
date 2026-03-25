@@ -127,8 +127,12 @@ static void element_on_down(element_t *el)
 	if (el->style_set)
 		element_apply_style(el, el->style_set->pressed);
 
-	// if (el->type == UI_TEXTBOX)
-	// g_keyboard.focused_el = el;
+#ifdef GUI_DEMO
+
+	if (el->type == UI_TEXTBOX)
+		g_keyboard.focused_el = el;
+
+#endif
 
 	element_redraw(el);
 }
@@ -225,4 +229,10 @@ void element_destroy(element_t *el)
 	free(el->buffer);
 	free(el->text);
 	free(el);
+}
+
+void element_set_text(element_t *el, const char *text)
+{
+	el->text = strdup(text);
+	el->needs_redraw = true;
 }

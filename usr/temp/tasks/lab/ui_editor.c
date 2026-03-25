@@ -7,7 +7,7 @@
 #include <gui/core/compositor/compositor.h>
 #include <gui/utils/color/color.h>
 
-/* ── overlay colours ─────────────────────────────────────────── */
+/*  overlay colours  */
 #define COL_BORDER rgb(255, 220, 0)    /* всі елементи          */
 #define COL_SELECTED rgb(50, 200, 255) /* вибраний елемент      */
 #define COL_HANDLE rgb(255, 255, 255)  /* ручки resize          */
@@ -15,7 +15,7 @@
 
 #define HANDLE_SZ 6
 
-/* ── draw helpers ────────────────────────────────────────────── */
+/*  draw helpers  */
 
 static void draw_rect_outline(canvas_t *cnv,
 			      int x, int y, int w, int h,
@@ -53,7 +53,7 @@ static const char *type_name(element_type_t t)
 	}
 }
 
-/* ── init / toggle ───────────────────────────────────────────── */
+/*  init / toggle  */
 
 void ui_editor_init(ui_editor_t *ed, window_t *win)
 {
@@ -69,7 +69,7 @@ void ui_editor_toggle(ui_editor_t *ed)
 	printf("[editor] %s\n", ed->active ? "ON" : "OFF");
 }
 
-/* ── update (викликати з main loop) ──────────────────────────── */
+/*  update (викликати з main loop)  */
 
 void ui_editor_update(ui_editor_t *ed, local_mouse_t *mouse)
 {
@@ -121,7 +121,7 @@ void ui_editor_update(ui_editor_t *ed, local_mouse_t *mouse)
 	ed->prev_left = mouse->left;
 }
 
-/* ── overlay render ──────────────────────────────────────────── */
+/*  overlay render  */
 
 void ui_editor_render(ui_editor_t *ed, canvas_t *cnv)
 {
@@ -171,7 +171,7 @@ void ui_editor_render(ui_editor_t *ed, canvas_t *cnv)
  *  JSON  (без залежностей)
  * ══════════════════════════════════════════════════════════════ */
 
-/* ── save ────────────────────────────────────────────────────── */
+/*  save  */
 
 void ui_editor_save(ui_editor_t *ed, const char *path)
 {
@@ -222,7 +222,7 @@ void ui_editor_save(ui_editor_t *ed, const char *path)
 	printf("[editor] saved %d elements → %s\n", obj->element_count, path);
 }
 
-/* ── мінімальний JSON parser ─────────────────────────────────── */
+/*  мінімальний JSON parser  */
 
 static const char *js_skip(const char *p)
 {
@@ -283,7 +283,7 @@ static element_type_t parse_type(const char *s)
 	return UI_LABEL;
 }
 
-/* ── load ────────────────────────────────────────────────────── */
+/*  load  */
 
 void ui_editor_load(ui_editor_t *ed, const char *path)
 {

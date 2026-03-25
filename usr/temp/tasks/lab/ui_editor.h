@@ -18,7 +18,7 @@ typedef struct
 	element_t *selected; /* поточно вибраний елемент      */
 } ui_editor_t;
 
-/* ── API ─────────────────────────────────────────────────────── */
+/*  API  */
 
 void ui_editor_init(ui_editor_t *ed, window_t *win);
 void ui_editor_toggle(ui_editor_t *ed);
