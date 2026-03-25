@@ -120,10 +120,6 @@ PHONY += demo
 demo:
 	@${MAKE} -C tools/dev/demo run
 
-PHONY += stats
-stats:
-	out/tools/dev/stats/stats
-
 PHONY += debug
 debug:
 	out/tools/dev/debug/debug

@@ -3,6 +3,7 @@
 
 # Configuration files
 *.config
+*.toml
 
 # Compiled binaries and images
 *.elf
