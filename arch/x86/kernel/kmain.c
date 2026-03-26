@@ -13,6 +13,9 @@
 #include <dev/ps2.h>
 #include "io.h"
 
+#include <net/e1000/e1000.h>
+#include <string.h>
+
 #include <fs/vfs/dev.h>
 
 #include <asm.h>
@@ -52,7 +55,18 @@ kernel_entry(BootInfo *bi)
 
 	smp_init();
 
-	scheduler_init();
+	e1000_init();
+
+	uint8_t buf[64];
+	strcpy(buf, "Hello VM");
+
+	e1000_send(buf, strlen(buf));
+	uint16_t len;
+	if (e1000_recv(buf, &len) == 0)
+	{
+		buf[len] = 0;
+		printk("Got back: %s\n", buf);
+	}
 
 	while (1)
 	{
@@ -65,34 +79,16 @@ void kernel_main(BootInfo *bi) __attribute__((alias("kernel_entry")));
 void kmain_thread(void)
 {
 	printk("kmain thread\n");
+
 	// task_t *task1 = task_create(render_task, 255);
 	// scheduler_add_task(task1);
-	uint64_t entry;
-	elf_load("/usr/bin/user.elf", &entry);
-	task_t *task1 = task_create((void *)entry, 255, 1);
-	scheduler_add_task(task1);
+	// uint64_t entry;
+	// elf_load("/usr/bin/user.elf", &entry);
+	// task_t *task1 = task_create((void *)entry, 255, 1);
+	// scheduler_add_task(task1);
 
 	while (1)
 	{
-		// char c = keyboard_get_char();
-		// printk("key: %c\n", c);
 		hlt();
 	}
-
-	// uint8_t counter = 0;
-
-	// // mouse_init();
-	// mouse_t *m = get_mouse_info();
-	// uint32_t old_x = m->x;
-	// uint32_t old_y = m->y;
-	// while (1)
-	// {
-	// 	if (old_x != m->x || old_y != m->y)
-	// 	{
-	// 		printk("x: %d y: %d l:%d r:%d \n", m->x, m->y, m->left_clicked, m->right_clicked);
-	// 		old_x = m->x;
-	// 		old_y = m->y;
-	// 	}
-	// 	hlt();
-	// }
 }

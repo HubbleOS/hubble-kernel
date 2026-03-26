@@ -7,17 +7,16 @@
 
 #include <io.h>
 
-#define PCI_CONFIG_ADDRESS 0xCF8
-#define PCI_CONFIG_DATA 0xCFC
-
-// Читання 32-біт з конфігураційного простору PCI
-static inline uint32_t pci_read_config(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset)
+uint32_t pci_read_config(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset)
 {
-	uint32_t addr = (1U << 31) | ((uint32_t)bus << 16) |
-			((uint32_t)slot << 11) | ((uint32_t)func << 8) |
+	uint32_t addr = (1U << 31) |
+			((uint32_t)bus << 16) |
+			((uint32_t)slot << 11) |
+			((uint32_t)func << 8) |
 			(offset & 0xFC);
-	*(volatile uint32_t *)PCI_CONFIG_ADDRESS = addr;
-	return *(volatile uint32_t *)PCI_CONFIG_DATA;
+
+	outl(0xCF8, addr);
+	return inl(0xCFC);
 }
 
 // Алокація структури pci_device
