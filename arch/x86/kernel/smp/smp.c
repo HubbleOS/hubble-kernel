@@ -210,7 +210,7 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx)
 
 	if (data->ap_ready)
 	{
-		printk("✓ AP %u started successfully!\n", apic_id);
+		printk("AP %u started successfully!\n", apic_id);
 	}
 	else
 	{
@@ -269,7 +269,7 @@ int smp_init(void)
 	printk("  First bytes at 0x%lx: %02x %02x %02x %02x\n",
 	       (uint64_t)verify, verify[0], verify[1], verify[2], verify[3]);
 
-	printk("  ✓ Trampoline initialized\n");
+	printk("Trampoline initialized\n");
 
 	// Enumerate and start all APs
 	printk("\nStarting Application Processors:\n");
