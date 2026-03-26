@@ -100,10 +100,6 @@ export ISO_DIR
 
 BUILD_TOOL_FLAGS := --log-file $(LOG_FILE) -v
 
-PHONY += all
-all:
-	@$(MAKE) -C tools/dev/shell run
-
 PHONY += build-tool
 build-tool:
 	@$(MAKE) -C $(DEV_TOOLS_DIR)/build build
@@ -120,10 +116,6 @@ PHONY += demo
 demo:
 	@${MAKE} -C tools/dev/demo run
 
-PHONY += debug
-debug:
-	out/tools/dev/debug/debug
-
 PHONY += disk
 disk:
 	@mkdir -p out/disks
@@ -131,7 +123,7 @@ disk:
 
 PHONY += run
 run: build
-	out/tools/dev/qemu/qemu
+	@python tools/dev/qemu/main.py
 
 PHONY += clean
 clean:
