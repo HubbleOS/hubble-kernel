@@ -5,6 +5,16 @@
 		"desc": "Build kernel"
 	},
 	{
+		"name": "Qemu",
+		"cmd": "python tools/dev/qemu/main.py {ARCH} {MEM} {ISO_PATH}",
+		"args": {
+			"ARCH": "--arch {ARCH}",
+			"MEM": "--mem {MEM}",
+			"ISO_PATH": "--iso {ISO_PATH}"
+		},
+		"desc": "Runs the system in the QEMU emulator"
+	},
+	{
 		"name": "Run kernel (QEMU)",
 		"cmd": "make run",
 		"desc": "Runs the system in the QEMU emulator",
@@ -35,6 +45,11 @@
 	{
 		"name": "Exit",
 		"cmd": null,
+		"desc": "Exit menu"
+	},
+	{
+		"name": "test",
+		"cmd": "echo {TEXT} > test.txt",
 		"desc": "Exit menu"
 	}
 ]
