@@ -3,9 +3,9 @@
 #include "mouse.h"
 
 #include <stdlib.h>
-#include <gui/core/screen/screen.h>
-#include <gui/dev/mouse/mouse.h>
-#include <gui/utils/color/color.h>
+#include <core/screen/screen.h>
+#include <dev/mouse/mouse.h>
+#include <utils/color/color.h>
 #include <tasks/task.h>
 
 demo_ctx_t demo_init(uint32_t w, uint32_t h, uint8_t bpp)
@@ -15,18 +15,18 @@ demo_ctx_t demo_init(uint32_t w, uint32_t h, uint8_t bpp)
 	SDL_Init(SDL_INIT_VIDEO);
 
 	ctx.window = SDL_CreateWindow(
-	    "Kernel FB Simulator",
-	    SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-	    w, h, 0);
+		"Kernel FB Simulator",
+		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+		w, h, 0);
 
 	ctx.renderer = SDL_CreateRenderer(ctx.window, -1,
-					  SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+									  SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
 	ctx.texture = SDL_CreateTexture(
-	    ctx.renderer,
-	    SDL_PIXELFORMAT_ARGB8888,
-	    SDL_TEXTUREACCESS_STREAMING,
-	    w, h);
+		ctx.renderer,
+		SDL_PIXELFORMAT_ARGB8888,
+		SDL_TEXTUREACCESS_STREAMING,
+		w, h);
 
 	ctx.fb = fb_create(w, h, bpp);
 	screen_init(ctx.fb);

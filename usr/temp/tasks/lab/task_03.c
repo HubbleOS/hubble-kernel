@@ -1,16 +1,8 @@
 #include "tasks.h"
 
-#include <gui/core/compositor/compositor.h>
-#include <gui/core/object/object.h>
-
-#include <gui/ui/button/button.h>
-#include <gui/ui/input/input.h>
-#include <gui/ui/label/label.h>
-#include <gui/ui/canvas/canvas.h>
-#include <gui/ui/window/window.h>
-#include <gui/ui/background/background.h>
-
-#include <gui/utils/color/color.h>
+#include <libgui/core.h>
+#include <libgui/ui.h>
+#include <libgui/utils.h>
 
 #include <stdlib.h>
 #include <string.h>

@@ -2,12 +2,12 @@
 
 #include <stdbool.h>
 
-#include <gui/core/element/element.h>
-#include <gui/core/object/object.h>
-#include <gui/ui/window/window.h>
-#include <gui/ui/canvas/canvas.h>
+#include <core/element/element.h>
+#include <core/object/object.h>
+#include <ui/window/window.h>
+#include <ui/canvas/canvas.h>
 
-#include <gui/dev/mouse/mouse.h>
+#include <dev/mouse/mouse.h>
 
 typedef struct
 {

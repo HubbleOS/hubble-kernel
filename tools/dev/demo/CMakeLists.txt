@@ -10,11 +10,11 @@ endif()
 find_package(SDL2 REQUIRED)
 
 if(NOT DEFINED LIB_DIR)
-    set(LIB_DIR "${CMAKE_SOURCE_DIR}/../../../usr/lib/gui")
+    set(LIB_DIR "${CMAKE_SOURCE_DIR}/../../../usr/lib/libgui")
 endif()
 
 file(GLOB_RECURSE GUI_SRC
-    ${LIB_DIR}/gui/*.c
+    ${LIB_DIR}/*.c
 )
 
 file(GLOB_RECURSE DEMO_SRC
@@ -33,15 +33,12 @@ target_link_libraries(demo
     m
 )
 
-# target_link_libraries(demo PRIVATE
-#     m
-# )
-
 target_include_directories(demo PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
     ${SDL2_INCLUDE_DIRS}
-    ${LIB_DIR}
+    ${LIB_DIR}/src
+    ${LIB_DIR}/include
     ${CMAKE_SOURCE_DIR}/../../../usr/temp
 )
 

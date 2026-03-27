@@ -4,11 +4,11 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <gui/core/compositor/compositor.h>
-#include <gui/utils/color/color.h>
+#include <core/compositor/compositor.h>
+#include <utils/color/color.h>
 
 /*  overlay colours  */
-#define COL_BORDER rgb(255, 220, 0)    /* всі елементи          */
+#define COL_BORDER rgb(255, 220, 0)	   /* всі елементи          */
 #define COL_SELECTED rgb(50, 200, 255) /* вибраний елемент      */
 #define COL_HANDLE rgb(255, 255, 255)  /* ручки resize          */
 #define COL_HANDLE_BG rgb(50, 200, 255)
@@ -18,8 +18,8 @@
 /*  draw helpers  */
 
 static void draw_rect_outline(canvas_t *cnv,
-			      int x, int y, int w, int h,
-			      uint32_t col)
+							  int x, int y, int w, int h,
+							  uint32_t col)
 {
 	canvas_draw_line(cnv, x, y, x + w - 1, y, col);
 	canvas_draw_line(cnv, x, y + h - 1, x + w - 1, y + h - 1, col);
@@ -80,10 +80,10 @@ void ui_editor_update(ui_editor_t *ed, local_mouse_t *mouse)
 		{
 			ed->selected = mouse->hover_el;
 			printf("[editor] selected: %s \"%s\" x=%d y=%d w=%d h=%d\n",
-			       type_name(ed->selected->type),
-			       ed->selected->text ? ed->selected->text : "",
-			       ed->selected->x, ed->selected->y,
-			       ed->selected->width, ed->selected->height);
+				   type_name(ed->selected->type),
+				   ed->selected->text ? ed->selected->text : "",
+				   ed->selected->x, ed->selected->y,
+				   ed->selected->width, ed->selected->height);
 		}
 		else
 		{
@@ -97,8 +97,8 @@ void ui_editor_update(ui_editor_t *ed, local_mouse_t *mouse)
 		int drag_x = mouse->x - mouse->drag_offset_x;
 		int drag_y = mouse->y - mouse->drag_offset_y;
 		object_move_element(mouse->drag_obj, mouse->drag_el,
-				    drag_x - mouse->drag_obj->x,
-				    drag_y - mouse->drag_obj->y);
+							drag_x - mouse->drag_obj->x,
+							drag_y - mouse->drag_obj->y);
 	}
 	/* drag самого вікна — лишаємо як завжди */
 	else if (mouse->drag_obj && !mouse->drag_el)
@@ -113,9 +113,9 @@ void ui_editor_update(ui_editor_t *ed, local_mouse_t *mouse)
 	if (!mouse->left && ed->prev_left && ed->selected)
 	{
 		printf("[editor] placed: %s x=%d y=%d w=%d h=%d\n",
-		       type_name(ed->selected->type),
-		       ed->selected->x, ed->selected->y,
-		       ed->selected->width, ed->selected->height);
+			   type_name(ed->selected->type),
+			   ed->selected->x, ed->selected->y,
+			   ed->selected->width, ed->selected->height);
 	}
 
 	ed->prev_left = mouse->left;
@@ -141,8 +141,8 @@ void ui_editor_render(ui_editor_t *ed, canvas_t *cnv)
 		bool sel = (el == ed->selected);
 
 		draw_rect_outline(cnv,
-				  el->x, el->y, el->width, el->height,
-				  sel ? COL_SELECTED : COL_BORDER);
+						  el->x, el->y, el->width, el->height,
+						  sel ? COL_SELECTED : COL_BORDER);
 	}
 
 	/* ручки і хрест тільки для вибраного */
@@ -153,9 +153,9 @@ void ui_editor_render(ui_editor_t *ed, canvas_t *cnv)
 		int b = el->y + el->height;
 
 		draw_handle(cnv, el->x, el->y); /* top-left     */
-		draw_handle(cnv, r, el->y);	/* top-right    */
-		draw_handle(cnv, el->x, b);	/* bottom-left  */
-		draw_handle(cnv, r, b);		/* bottom-right */
+		draw_handle(cnv, r, el->y);		/* top-right    */
+		draw_handle(cnv, el->x, b);		/* bottom-left  */
+		draw_handle(cnv, r, b);			/* bottom-right */
 
 		/* центральний хрест */
 		int cx = el->x + el->width / 2;
@@ -186,7 +186,7 @@ void ui_editor_save(ui_editor_t *ed, const char *path)
 
 	fprintf(f, "{\n");
 	fprintf(f, "  \"window\": { \"x\":%d, \"y\":%d, \"w\":%d, \"h\":%d },\n",
-		obj->x, obj->y, obj->width, obj->height);
+			obj->x, obj->y, obj->width, obj->height);
 	fprintf(f, "  \"elements\": [\n");
 
 	for (int i = 0; i < obj->element_count; i++)
@@ -209,12 +209,12 @@ void ui_editor_save(ui_editor_t *ed, const char *path)
 		}
 
 		fprintf(f,
-			"    { \"type\":\"%s\", \"x\":%d, \"y\":%d,"
-			" \"w\":%d, \"h\":%d, \"text\":\"%s\" }%s\n",
-			type_name(el->type),
-			el->x, el->y, el->width, el->height,
-			safe,
-			last ? "" : ",");
+				"    { \"type\":\"%s\", \"x\":%d, \"y\":%d,"
+				" \"w\":%d, \"h\":%d, \"text\":\"%s\" }%s\n",
+				type_name(el->type),
+				el->x, el->y, el->width, el->height,
+				safe,
+				last ? "" : ",");
 	}
 
 	fprintf(f, "  ]\n}\n");

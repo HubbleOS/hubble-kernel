@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// #include <gui/core/element/element.h>
+// #include <core/element/element.h>
 struct element;
 
 typedef enum
