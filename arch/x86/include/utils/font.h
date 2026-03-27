@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <io.h>
 #include <bootinfo/framebuffer.h>
-// #include <gui/utils/color/color.h>
+// #include <utils/color/color.h>
 
 typedef uint32_t color_t;
 

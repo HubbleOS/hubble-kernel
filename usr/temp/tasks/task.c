@@ -1,21 +1,21 @@
 #include <stdint.h>
 #include "lab/tasks.h"
 
-#include <gui/core/screen/screen.h>
-#include <gui/core/object/object.h>
-#include <gui/core/compositor/compositor.h>
+#include <core/screen/screen.h>
+#include <core/object/object.h>
+#include <core/compositor/compositor.h>
 
-#include <gui/ui/button/button.h>
-#include <gui/ui/сursor/cursor.h>
-#include <gui/ui/window/window.h>
-#include <gui/ui/text/text.h>
-#include <gui/ui/canvas/canvas.h>
-#include <gui/ui/background/background.h>
+#include <ui/button/button.h>
+#include <ui/сursor/cursor.h>
+#include <ui/window/window.h>
+#include <ui/text/text.h>
+#include <ui/canvas/canvas.h>
+#include <ui/background/background.h>
 
-#include <gui/dev/mouse/mouse.h>
-#include <gui/dev/keyboard/keyboard.h>
+#include <dev/mouse/mouse.h>
+#include <dev/keyboard/keyboard.h>
 
-#include <gui/utils/color/color.h>
+#include <utils/color/color.h>
 
 #ifdef GUI_DEMO
 #include <SDL2/SDL.h>
@@ -115,8 +115,8 @@ void update_task(void)
 
 				if (g_mouse.drag_el)
 					object_move_element(g_mouse.drag_obj, g_mouse.drag_el,
-							    drag_x - g_mouse.drag_obj->x,
-							    drag_y - g_mouse.drag_obj->y);
+										drag_x - g_mouse.drag_obj->x,
+										drag_y - g_mouse.drag_obj->y);
 				else
 				{
 					compositor_move_object(g_mouse.drag_obj, drag_x, drag_y);

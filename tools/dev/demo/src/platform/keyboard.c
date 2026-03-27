@@ -1,6 +1,6 @@
 #include "keyboard.h"
 
-#include <gui/core/element/element.h>
+#include <core/element/element.h>
 
 local_keyboard_t g_keyboard = {0};
 

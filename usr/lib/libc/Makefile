@@ -16,6 +16,3 @@ $(LIBC_OUT): $(BUILD_TOOL)
 		--ar $(AR) \
 		--output $@ \
 		--type archive
-
-	@mkdir -p $(USR_DIR)/include/libc
-	@cp include/*.h $(USR_DIR)/include/libc/

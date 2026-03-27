@@ -1,0 +1,42 @@
+#pragma once
+
+#include <core/object/object.h>
+#include <utils/rect/rect.h>
+
+#define MAX_OBJECTS 256
+#define MAX_DIRTY 64
+
+#define LAYER_BG 0
+#define LAYER_WINDOWS 1
+#define LAYER_CURSOR 2
+#define LAYER_EFFECTS 3
+
+#define MAX_LAYERS 4
+
+typedef struct
+{
+	object_t *objects[MAX_OBJECTS];
+	int count;
+} layer_t;
+
+typedef struct
+{
+	layer_t layers[MAX_LAYERS];
+	rect_t dirty[MAX_DIRTY];
+	int dirty_count;
+} compositor_t;
+
+extern compositor_t compositor;
+
+void compositor_init();
+void compositor_add(object_t *obj, int layer);
+void compositor_remove(object_t *obj, int layer);
+void compositor_render();
+
+void compositor_add_damage(int layer, int x, int y, int w, int h);
+void compositor_bring_to_front(object_t *obj, int layer);
+void compositor_move_object(object_t *obj, int new_x, int new_y);
+void compositor_change_size_object(object_t *obj, int new_w, int new_h);
+
+void object_maximize(object_t *obj, int screen_w, int screen_h);
+void object_restore(object_t *obj);
