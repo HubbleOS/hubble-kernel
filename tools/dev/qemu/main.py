@@ -71,6 +71,11 @@ def build_qemu_command(opts: QemuOptions):
 
         # Serial
         "-serial", "stdio",
+
+        # Internet
+        "-netdev user,id=net0,hostfwd=udp::4444-:7777",
+        "-device e1000,netdev=net0",
+
         # Debugging
         # "-S", "-s", "-d", "cpu_reset", "-no-reboot", "-no-shutdown"
     ]

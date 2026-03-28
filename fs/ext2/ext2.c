@@ -5,9 +5,10 @@
 
 #include <fs/gpt/gpt_struct.h>
 
-#include <fs/ata/ata.h>
 #include <fs/vfs/vfs.h>
 #include <fs/vfs/vfs_standart_struct.h>
+
+#include <drivers/storage/ata/ata.h>
 
 #include "ext2.h"
 #include "ext2_struct.h"

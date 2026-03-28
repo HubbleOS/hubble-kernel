@@ -13,6 +13,14 @@
 #include <dev/ps2.h>
 #include "io.h"
 
+#include <drivers/net/e1000/e1000.h>
+
+#include <net/eth.h>
+#include <net/arp.h>
+#include <net/ipv4.h>
+#include <net/udp.h>
+#include <string.h>
+
 #include <fs/vfs/dev.h>
 
 #include <asm.h>
@@ -52,7 +60,50 @@ kernel_entry(BootInfo *bi)
 
 	smp_init();
 
-	scheduler_init();
+	e1000_init();
+	e1000_netdev_register();
+	// 1. ARP — дізнатись MAC gateway
+	arp_request(ARP_IP(10, 0, 2, 2));
+
+	// Чекаємо відповідь
+	uint8_t gw_mac[6];
+
+	uint8_t buf[1500];
+	uint16_t len;
+	while (arp_lookup(ARP_IP(10, 0, 2, 2), gw_mac) != 0)
+		eth_recv(buf, &len, NULL);
+
+	// 2. Перевіряємо
+	if (arp_lookup(ARP_IP(10, 0, 2, 2), gw_mac) != 0)
+	{
+		printk("[net] ARP failed\n");
+	}
+	else
+	{
+		printk("[net] ARP ok, sending UDP\n");
+
+		// 3. UDP на хост порт 4444
+		char msg[] = "Hello from kernel!";
+		// udp_send(ARP_IP(10, 0, 2, 2), 12345, 4444, msg, sizeof(msg));
+		printk("[net] UDP sent\n");
+	}
+
+	printk("[net] listening on port 7777...\n");
+
+	uint8_t rbuf[1500];
+	uint16_t rlen;
+
+	while (1)
+	{
+
+		while (udp_recv(7777, rbuf, &rlen) != 0)
+			;
+
+		rbuf[rlen] = 0; // null terminate
+		printk("[net] received: %s\n", rbuf);
+	}
+
+	// scheduler_init();
 
 	while (1)
 	{
@@ -65,6 +116,7 @@ void kernel_main(BootInfo *bi) __attribute__((alias("kernel_entry")));
 void kmain_thread(void)
 {
 	printk("kmain thread\n");
+
 	// task_t *task1 = task_create(render_task, 255);
 	// scheduler_add_task(task1);
 	uint64_t entry;
@@ -74,25 +126,6 @@ void kmain_thread(void)
 
 	while (1)
 	{
-		// char c = keyboard_get_char();
-		// printk("key: %c\n", c);
 		hlt();
 	}
-
-	// uint8_t counter = 0;
-
-	// // mouse_init();
-	// mouse_t *m = get_mouse_info();
-	// uint32_t old_x = m->x;
-	// uint32_t old_y = m->y;
-	// while (1)
-	// {
-	// 	if (old_x != m->x || old_y != m->y)
-	// 	{
-	// 		printk("x: %d y: %d l:%d r:%d \n", m->x, m->y, m->left_clicked, m->right_clicked);
-	// 		old_x = m->x;
-	// 		old_y = m->y;
-	// 	}
-	// 	hlt();
-	// }
 }

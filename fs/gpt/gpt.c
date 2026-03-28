@@ -1,10 +1,11 @@
 #include "gpt.h"
 #include "gpt_struct.h"
 #include "printk.h"
-#include <fs/ata/ata.h>
 #include <mm/kmalloc.h>
 #include <mm/pmm.h>
 #include "higher_half.h"
+
+#include <drivers/storage/ata/ata.h>
 
 #include <stdint.h>
 #include <string.h>
