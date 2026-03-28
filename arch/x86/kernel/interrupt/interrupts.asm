@@ -41,8 +41,19 @@ isr%1:
 ; Макрос для IRQ
 %macro IRQ 2
 irq%1:
-    push qword 0            ; Dummy error code
-    push qword %2           ; Номер прерывания (32 + IRQ number)
+    push qword 0
+    push qword %2
+
+    ; Check CS to see if we came from userspace
+    ; Stack at this point:
+    ; [rsp+0]  = dummy error code (just pushed)
+    ; [rsp+8]  = irq number (just pushed)  
+    ; [rsp+16] = RIP  (CPU pushed)
+    ; [rsp+24] = CS   (CPU pushed) ← check this
+    cmp qword [rsp+24], 0x08
+    je .skip_swapgs_%1
+    swapgs
+.skip_swapgs_%1:
     jmp irq_common_stub
 %endmacro
 

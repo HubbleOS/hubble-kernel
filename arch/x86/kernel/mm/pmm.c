@@ -79,6 +79,8 @@ static int find_consecutive_free_pages(uint64_t count, uint64_t *start_index)
 	return -1;
 }
 
+#include <printk.h>
+
 uint64_t pmm_alloc_pages(size_t count)
 {
 	if (count == 0)
@@ -98,7 +100,7 @@ uint64_t pmm_alloc_pages(size_t count)
 		mark_pages(start_index, count, false);
 		return 0;
 	}
-
+	// printk("Allocated %d pages at 0x%lx\n", count, phys_addr);
 	return phys_addr;
 }
 

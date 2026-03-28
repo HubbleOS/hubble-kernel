@@ -8,13 +8,16 @@
 #define MSR_LSTAR 0xC0000082
 #define MSR_SFMASK 0xC0000084
 #define EFER_SCE (1 << 0)
-
+#define MSR_KERNEL_GS_BASE 0xC0000102
+#define MSR_GS_BASE 0xC0000101
 extern void syscall_entry(void);
+
+cpu_local_t cpu_locals[MAX_CPUS];
 
 // Отдельный стек для syscall (16 KB)
 #define MAX_CPUS 8
-static uint8_t syscall_stacks[MAX_CPUS][16384] __attribute__((aligned(16)));
-uint64_t syscall_rsp0 = 0;
+static uint8_t syscall_stacks[MAX_CPUS][64 * 1024] __attribute__((aligned(16)));
+// uint64_t syscall_rsp0[MAX_CPUS];
 
 static inline void wrmsr(uint32_t msr, uint64_t value)
 {
@@ -38,9 +41,9 @@ void syscall_init(void)
 	uint8_t cpu_id = lapic_get_id();
 
 	// per-CPU stack
-	syscall_rsp0 = (uint64_t)(syscall_stacks[cpu_id] + sizeof(syscall_stacks[cpu_id]));
-
-	printk("  Syscall stack at 0x%016llx\n", syscall_rsp0);
+	cpu_locals[cpu_id].rsp0 = (uint64_t)(syscall_stacks[cpu_id] + sizeof(syscall_stacks[cpu_id]));
+	cpu_locals[cpu_id].cpu_id = cpu_id;
+	printk("  Syscall stack at 0x%016llx\n", cpu_locals[cpu_id].rsp0);
 
 	// 1. Включаем SYSCALL Extension
 	uint64_t efer = rdmsr(MSR_EFER);
@@ -65,6 +68,10 @@ void syscall_init(void)
 	// 4. SFMASK
 	wrmsr(MSR_SFMASK, 0x100 | 0x200 | 0x400); // IF | DF | TF
 	printk("  SFMASK = 0x%llx\n", 0x700ULL);
+
+	// wrmsr(MSR_GS_BASE, (uint64_t)&cpu_locals[cpu_id]);
+	wrmsr(MSR_GS_BASE, 0);
+	wrmsr(MSR_KERNEL_GS_BASE, (uint64_t)&cpu_locals[cpu_id]);
 
 	printk("SYSCALL/SYSRET initialized successfully\n");
 }

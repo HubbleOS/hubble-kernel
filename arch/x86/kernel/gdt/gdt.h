@@ -130,3 +130,4 @@ void idt_load();
 extern void gdt_flush(uint64_t gdt_ptr_addr);
 extern void tss_flush(uint16_t tss_selector);
 extern void idt_flush(uint64_t idt_ptr_addr);
+void tss_set_rsp0(uint64_t rsp0);
