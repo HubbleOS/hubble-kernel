@@ -5,8 +5,9 @@
 
 #include <mm/kmalloc.h>
 
-#include <fs/ata/ata.h>
 #include <fs/vfs/vfs.h>
+
+#include <drivers/storage/ata/ata.h>
 
 #include <string.h>
 #include <errno.h>

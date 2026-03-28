@@ -2,8 +2,9 @@
 #include "printk.h"
 #include "fat_structs.h"
 #include "fat_utils.h"
-#include <fs/ata/ata.h>
 #include <mm/kmalloc.h>
+
+#include <drivers/storage/ata/ata.h>
 
 #include <string.h>
 

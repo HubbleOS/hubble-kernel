@@ -66,7 +66,7 @@ void qemu_build_command(const QemuOptions *opts, char *cmd, size_t len)
 	pos += snprintf(cmd + pos, len - pos, "-serial stdio ");
 
 	// Internet
-	pos += snprintf(cmd + pos, len - pos, "-netdev user,id=net0,hostfwd=udp::5555-:5555 ");
+	pos += snprintf(cmd + pos, len - pos, "-netdev user,id=net0,hostfwd=udp::4444-:7777 ");
 	pos += snprintf(cmd + pos, len - pos, "-device e1000,netdev=net0 ");
 
 	// Debug
