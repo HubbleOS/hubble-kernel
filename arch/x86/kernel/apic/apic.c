@@ -766,7 +766,7 @@ int apic_init(void)
 		return -1;
 	}
 
-	printk("✓ I/O APIC is accessible\n");
+	printk("I/O APIC is accessible\n");
 
 	apic_state.ioapic_max_redirect = ((ver >> 16) & 0xFF) + 1;
 	printk("I/O APIC version: 0x%x, max redirects: %u\n",

@@ -1,7 +1,8 @@
 #include "init.h"
 #include <printk.h>
 
-#include <fs/ata/ata.h>
+#include <drivers/storage/ata/ata.h>
+
 #include <fs/gpt/gpt.h>
 #include <fs/vfs/vfs.h>
 
