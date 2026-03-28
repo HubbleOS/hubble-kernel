@@ -5,8 +5,9 @@
 #include "fat_utils.h"
 #include <fs/vfs/vfs_standart_struct.h>
 
-#include <fs/ata/ata.h>
 #include <mm/kmalloc.h>
+
+#include <drivers/storage/ata/ata.h>
 
 #include <string.h>
 #include <stdbool.h>

@@ -19,6 +19,18 @@ uint32_t pci_read_config(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset
 	return inl(0xCFC);
 }
 
+void pci_write_config(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset, uint32_t val)
+{
+	uint32_t addr = (1U << 31) |
+			((uint32_t)bus << 16) |
+			((uint32_t)slot << 11) |
+			((uint32_t)func << 8) |
+			(offset & 0xFC);
+
+	outl(0xCF8, addr);
+	outl(0xCFC, val);
+}
+
 // Алокація структури pci_device
 static struct pci_device *allocate_pci_device_struct(uint8_t bus, uint8_t slot, uint8_t func)
 {
@@ -34,6 +46,7 @@ static struct pci_device *allocate_pci_device_struct(uint8_t bus, uint8_t slot, 
 	dev->bar0 = bar0 & ~0xF; // відкидаємо флаги
 	return dev;
 }
+
 uint16_t pciConfigReadWord(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset)
 {
 	uint32_t address;

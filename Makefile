@@ -57,6 +57,7 @@ export LD CC AS AR OBJCOPY ASM
 export CFLAGS ASMFLAGS
 export ARCH OUT_DIR BUILD_DIR ARCH_DIR CONFIG_MK TOOLS_DIR BUILD_TOOL
 
+INCLUDES += -I$(abspath .)
 INCLUDES += -I$(abspath include)
 INCLUDES += -I$(ARCH_DIR)/include
 INCLUDES += -I$(ARCH_DIR)/kernel
@@ -79,6 +80,30 @@ define kbuild-subdir
 endef
 
 subdirs :=
+
+# Kernel modules
+
+# Network
+NET_DIR := $(abspath net)
+NET_BUILD_DIR := $(BUILD_DIR)/net
+NET_LIB := $(NET_BUILD_DIR)/libnet.a
+export NET_DIR NET_BUILD_DIR NET_LIB
+
+# Filesystem
+FS_DIR := $(abspath fs)
+FS_BUILD_DIR := $(BUILD_DIR)/fs
+FS_LIB := $(FS_BUILD_DIR)/libfs.a
+export FS_DIR FS_BUILD_DIR FS_LIB
+
+# Drivers
+DRIVERS_DIR := $(abspath drivers)
+DRIVERS_BUILD_DIR := $(BUILD_DIR)/drivers
+DRIVERS_LIB := $(DRIVERS_BUILD_DIR)/libdrivers.a
+export DRIVERS_DIR DRIVERS_BUILD_DIR DRIVERS_LIB
+
+subdirs += net
+subdirs += fs
+subdirs += drivers
 
 # Architecture-specific directories
 $(eval $(call kbuild-subdir,arch/$(ARCH)))

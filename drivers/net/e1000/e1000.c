@@ -1,8 +1,10 @@
 #include "e1000.h"
 #include <printk.h>
 #include <mm/kmalloc.h>
-#include <fs/pci/pci.h>
+#include <drivers/pci/pci.h>
 #include <string.h>
+
+#include <mm/vmm.h>
 
 #include <higher_half.h>
 
@@ -28,6 +30,9 @@ static uint32_t tx_tail = 0;
 static uint8_t mac_addr[6];
 
 // PCI find e1000
+// Global coordinates of the PCI device
+static uint8_t e1000_pci_bus, e1000_pci_slot, e1000_pci_func;
+
 static uint64_t find_e1000_bar0(void)
 {
 	for (uint16_t bus = 0; bus < 256; bus++)
@@ -44,14 +49,14 @@ static uint64_t find_e1000_bar0(void)
 
 				uint16_t device = (val >> 16) & 0xFFFF;
 
-				printk("[pci] %02x:%02x.%d vendor=%04x device=%04x\n",
-				       bus, slot, func, vendor, device);
-
-				if (vendor == E1000_VENDOR_ID &&
-				    device == E1000_DEVICE_ID)
+				if (vendor == E1000_VENDOR_ID && device == E1000_DEVICE_ID)
 				{
-					printk("[e1000] FOUND at %02x:%02x.%d\n",
-					       bus, slot, func);
+					printk("[e1000] FOUND at %02x:%02x.%d\n", bus, slot, func);
+
+					// We save the coordinates
+					e1000_pci_bus = bus;
+					e1000_pci_slot = slot;
+					e1000_pci_func = func;
 
 					uint32_t bar0 = pci_read_config(bus, slot, func, 0x10);
 					return (uint64_t)(bar0 & ~0xFU);
@@ -64,18 +69,21 @@ static uint64_t find_e1000_bar0(void)
 
 static void e1000_rx_init(void)
 {
-	rx_descs = kmalloc(sizeof(struct e1000_rx_desc) * E1000_RX_DESC_COUNT, GFP_KERNEL);
+	rx_descs = kmalloc(sizeof(struct e1000_rx_desc) * E1000_RX_DESC_COUNT + 16, GFP_KERNEL);
+
+	// Align manually
+	rx_descs = (struct e1000_rx_desc *)(((uint64_t)rx_descs + 15) & ~15ULL);
+
 	memset(rx_descs, 0, sizeof(struct e1000_rx_desc) * E1000_RX_DESC_COUNT);
 
 	for (int i = 0; i < E1000_RX_DESC_COUNT; i++)
 	{
 		rx_buffers[i] = kmalloc(E1000_BUFFER_SIZE, GFP_KERNEL);
-		rx_descs[i].addr = (uint64_t)rx_buffers[i];
+		rx_descs[i].addr = VIRT_TO_PHYS(rx_buffers[i]);
 		rx_descs[i].status = 0;
 	}
 
-	// uint64_t phys = (uint64_t)rx_descs;
-	uint64_t phys = VIRT_TO_PHYS(tx_descs);
+	uint64_t phys = VIRT_TO_PHYS(rx_descs);
 	e1000_write(E1000_RDBAL, (uint32_t)(phys & 0xFFFFFFFF));
 	e1000_write(E1000_RDBAH, (uint32_t)(phys >> 32));
 	e1000_write(E1000_RDLEN, E1000_RX_DESC_COUNT * sizeof(struct e1000_rx_desc));
@@ -88,10 +96,13 @@ static void e1000_rx_init(void)
 
 static void e1000_tx_init(void)
 {
-	tx_descs = kmalloc(sizeof(struct e1000_tx_desc) * E1000_TX_DESC_COUNT, GFP_KERNEL);
+	tx_descs = kmalloc(sizeof(struct e1000_tx_desc) * E1000_TX_DESC_COUNT + 16, GFP_KERNEL);
+	// Align manually
+	tx_descs = (struct e1000_tx_desc *)(((uint64_t)tx_descs + 15) & ~15ULL);
+
 	memset(tx_descs, 0, sizeof(struct e1000_tx_desc) * E1000_TX_DESC_COUNT);
 
-	uint64_t phys = (uint64_t)tx_descs;
+	uint64_t phys = VIRT_TO_PHYS(tx_descs);
 	e1000_write(E1000_TDBAL, (uint32_t)(phys & 0xFFFFFFFF));
 	e1000_write(E1000_TDBAH, (uint32_t)(phys >> 32));
 	e1000_write(E1000_TDLEN, E1000_TX_DESC_COUNT * sizeof(struct e1000_tx_desc));
@@ -99,7 +110,7 @@ static void e1000_tx_init(void)
 	e1000_write(E1000_TDT, 0);
 	tx_tail = 0;
 
-	e1000_write(E1000_TCTL, E1000_TCTL_EN | E1000_TCTL_PSP);
+	e1000_write(E1000_TCTL, E1000_TCTL_EN | E1000_TCTL_PSP | E1000_TCTL_CT | E1000_TCTL_COLD);
 }
 
 static void e1000_read_mac(void)
@@ -119,6 +130,8 @@ static void e1000_read_mac(void)
 	       mac_addr[3], mac_addr[4], mac_addr[5]);
 }
 
+#define E1000_MMIO_SIZE 0x20000 // 128KB
+
 int e1000_init(void)
 {
 	uint64_t bar0 = find_e1000_bar0();
@@ -128,20 +141,38 @@ int e1000_init(void)
 		return -1;
 	}
 
-	e1000_base = (volatile uint32_t *)bar0;
+	// Enable PCI Bus Mastering + Memory Space
+	uint32_t pci_cmd = pci_read_config(e1000_pci_bus, e1000_pci_slot, e1000_pci_func, 0x04);
+	pci_cmd |= (1 << 2) | (1 << 1); // Bus Master | Memory Space
+	pci_write_config(e1000_pci_bus, e1000_pci_slot, e1000_pci_func, 0x04, pci_cmd);
+	printk("[e1000] PCI CMD = %04x\n", pci_read_config(e1000_pci_bus, e1000_pci_slot, e1000_pci_func, 0x04));
 
-	// Сброс
+	uint64_t mmio_virt = (uint64_t)PHYS_TO_VIRT_MMIO(bar0);
+
+	for (uint64_t off = 0; off < E1000_MMIO_SIZE; off += 0x1000)
+	{
+		vmm_map_page(mmio_virt + off, bar0 + off,
+			     PTE_PRESENT | PTE_WRITE | VMM_MAP_NO_CACHE);
+	}
+
+	e1000_base = (volatile uint32_t *)mmio_virt;
+
+	printk("[e1000] bar0 phys=%llx virt=%p\n", bar0, e1000_base);
+	printk("[e1000] CTRL = %08x\n", e1000_read(E1000_CTRL));
+
+	// Reset
 	e1000_write(E1000_CTRL, e1000_read(E1000_CTRL) | E1000_CTRL_RST);
-	// Небольшая задержка (спин)
-	for (volatile int i = 0; i < 100000; i++)
+	for (volatile int i = 0; i < 1000000; i++)
 		;
 
-	// Set link up
+	// Set link up + loopback
 	e1000_write(E1000_CTRL, e1000_read(E1000_CTRL) | E1000_CTRL_SLU);
 
+	printk("[e1000] CTRL after = %08x\n", e1000_read(E1000_CTRL));
+
 	e1000_read_mac();
-	e1000_rx_init();
 	e1000_tx_init();
+	e1000_rx_init();
 
 	printk("[e1000] init OK\n");
 	return 0;
@@ -157,7 +188,12 @@ int e1000_send(const void *data, uint16_t len)
 {
 	uint32_t idx = tx_tail % E1000_TX_DESC_COUNT;
 
-	tx_descs[idx].addr = (uint64_t)data;
+	uint64_t phys = VIRT_TO_PHYS(data);
+	printk("[tx] idx=%d phys=%llx len=%d\n", idx, phys, len);
+	printk("[tx] TDH=%d TDT=%d\n", e1000_read(E1000_TDH), e1000_read(E1000_TDT));
+	printk("[tx] STATUS before=%02x\n", tx_descs[idx].status);
+
+	tx_descs[idx].addr = phys;
 	tx_descs[idx].length = len;
 	tx_descs[idx].cmd = E1000_TX_CMD_EOP | E1000_TX_CMD_RS;
 	tx_descs[idx].status = 0;
@@ -165,10 +201,19 @@ int e1000_send(const void *data, uint16_t len)
 	tx_tail = (tx_tail + 1) % E1000_TX_DESC_COUNT;
 	e1000_write(E1000_TDT, tx_tail);
 
-	// Polling: ждём пока карта не отправит
+	printk("[tx] TDT written=%d\n", tx_tail);
+	printk("[tx] TCTL=%08x TDBAL=%08x TDBAH=%08x TDLEN=%08x\n",
+	       e1000_read(E1000_TCTL),
+	       e1000_read(E1000_TDBAL),
+	       e1000_read(E1000_TDBAH),
+	       e1000_read(E1000_TDLEN));
+
+	for (volatile int i = 0; i < 10000000; i++)
+		;
+	printk("[tx] STATUS after wait=%02x\n", tx_descs[idx].status);
+
 	while (!(tx_descs[idx].status & E1000_TX_STAT_DD))
 		;
-
 	return 0;
 }
 
@@ -176,17 +221,35 @@ int e1000_recv(void *buf, uint16_t *len_out)
 {
 	uint32_t idx = rx_tail % E1000_RX_DESC_COUNT;
 
-	if (!(rx_descs[idx].status & E1000_RX_STAT_DD))
-		return -1; // нет пакета
+	static int first = 0;
+	if (!first)
+	{
+		first = 1;
+		printk("[rx] FIRST CALL: idx=%d status=%02x RDH=%d RDT=%d RDBAL=%08x\n",
+		       idx,
+		       rx_descs[idx].status,
+		       e1000_read(E1000_RDH),
+		       e1000_read(E1000_RDT),
+		       e1000_read(E1000_RDBAL));
+	}
+
+	uint8_t st = rx_descs[idx].status;
+	if (st != 0)
+		printk("[rx] idx=%d status=%02x RDH=%d\n",
+		       idx, st, e1000_read(E1000_RDH));
+
+	if (!(st & E1000_RX_STAT_DD))
+		return -1;
 
 	uint16_t len = rx_descs[idx].length;
 	memcpy(buf, rx_buffers[idx], len);
 	*len_out = len;
 
-	// Возвращаем дескриптор карте
 	rx_descs[idx].status = 0;
+
+	// We return the NIC descriptor - we write the CURRENT idx, not the next one
+	e1000_write(E1000_RDT, idx);
 	rx_tail = (rx_tail + 1) % E1000_RX_DESC_COUNT;
-	e1000_write(E1000_RDT, rx_tail);
 
 	return 0;
 }
