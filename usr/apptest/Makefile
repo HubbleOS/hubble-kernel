@@ -1,7 +1,7 @@
 # usr/apps/Makefile
 SRC_DIR := src
-USR_BUILD_DIR := $(OUT_DIR)/build/apps
-OUTPUT := $(OUT_DIR)/usr/user.elf
+USR_BUILD_DIR := $(OUT_DIR)/build/apptest
+OUTPUT := $(OUT_DIR)/usr/user1.elf
 LDSCRIPT := $(SRC_DIR)/user.ld
 
 # CFLAGS для userland

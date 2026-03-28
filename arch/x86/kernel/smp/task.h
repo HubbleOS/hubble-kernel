@@ -66,6 +66,10 @@ typedef struct task
 	// CPU context
 	cpu_context_t context;
 
+	// Syscall stack
+	uint32_t rsp0_size;
+	uint64_t rsp0;
+
 	// Function to run
 	void (*entry_point)(void *arg);
 	void *entry_arg;

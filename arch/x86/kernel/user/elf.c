@@ -28,7 +28,7 @@
  * through kernel higher-half mapping (PHYS_TO_VIRT).
  * This works because bootloader identity-mapped first 4GB.
  */
-int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr)
+int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 {
 	if (phdr->p_type != PT_LOAD)
 		return 0;
@@ -52,11 +52,11 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr)
 	// --- 1) Allocate and map all pages ---
 	for (uint64_t addr = map_start; addr < map_end; addr += PAGE_SIZE)
 	{
-		if (vmm_is_mapped(addr))
-		{
-			printk("[ELF] WARNING: 0x%llx already mapped, skipping\n", addr);
-			continue; // або unmap і замапити нову
-		}
+		// if (vmm_is_mapped(addr))
+		// {
+		// 	printk("[ELF] WARNING: 0x%llx already mapped, skipping\n", addr);
+		// 	vmm_unmap_page(addr);
+		// }
 
 		uint64_t phys = pmm_alloc_page();
 		if (!phys)
@@ -70,14 +70,14 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr)
 			flags |= PTE_WRITE;
 		if (!(phdr->p_flags & PF_X))
 			flags |= PTE_NX;
-		vmm_unmap_user_page(addr);
-		if (vmm_map_page(addr, phys, flags) < 0)
+		// vmm_unmap_user_page(addr);
+		if (vmm_map_page_into(target_pm, addr, phys, flags) < 0)
 		{
 			printk("[ELF] ERROR: Failed to map 0x%llx -> 0x%llx\n", addr, phys);
 			pmm_free_page(phys);
 			return -1;
 		}
-		make_pd_entry_user(phys);
+		// make_pd_entry_user(phys, (uint64_t)target_pm);
 		uint8_t *kptr = PHYS_TO_VIRT_PTR(uint8_t, phys);
 		kptr[0] = 0xAA;
 		uint8_t val = kptr[0];
@@ -134,7 +134,7 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr)
 			}
 
 			// Get physical address of the user page
-			uint64_t phys = vmm_get_phys(page_base);
+			uint64_t phys = vmm_get_phys_from(target_pm, page_base);
 			if (!phys)
 			{
 				printk("[ELF] ERROR: Page 0x%llx not mapped!\n",
@@ -154,18 +154,33 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr)
 		kfree(kbuf);
 	}
 
+	printk("0x40a000 -> 0x%llx\n", vmm_get_phys_from(target_pm, 0x40a000));
+	printk("0x409000 -> 0x%llx\n", vmm_get_phys_from(target_pm, 0x409000));
+	printk("0x408000 -> 0x%llx\n", vmm_get_phys_from(target_pm, 0x408000));
+	debug_dump_mapping(target_pm, 0x40a000);
+	debug_dump_mapping(target_pm, 0x409000);
+	debug_dump_mapping(target_pm, 0x408000);
 	printk("[ELF] Segment loaded successfully\n");
 	return 0;
 }
 
-int elf_load(const char *path, uint64_t *entry_out)
+int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm)
 {
+
 	VFS_File *f = vfs_open(path, VFS_O_RDONLY);
+	printk("[ELF] Trying to open %s\n", path);
 	if (!f)
 	{
 		printk("[ELF] ERROR: Failed to open %s\n", path);
 		return -1;
 	}
+
+	// uint64_t *new_pm = vmm_create_user_pagemap();
+	// if (!new_pm)
+	// {
+	// 	printk("Failed to create pagemap\n");
+	// 	return -1;
+	// }
 
 	Elf64_Ehdr ehdr;
 	if (vfs_read(f, &ehdr, sizeof(ehdr)) != sizeof(ehdr))
@@ -226,7 +241,7 @@ int elf_load(const char *path, uint64_t *entry_out)
 			       (unsigned long long)p->p_memsz,
 			       p->p_flags);
 
-			if (elf_load_segment(f, p) < 0)
+			if (elf_load_segment(f, p, pm) < 0)
 			{
 				printk("[ELF] ERROR: Failed to load segment %u\n", i);
 				kfree(phdrs);
@@ -360,13 +375,100 @@ int elf_run(uint64_t entry)
 	return -1;
 }
 
+// int elf_load_sep(const char *path, uint64_t *entry_out, uint64_t *pm)
+// {
+// 	VFS_File *f = vfs_open(path, VFS_O_RDONLY);
+// 	printk("[ELF] Trying to open %s\n", path);
+// 	if (!f)
+// 	{
+// 		printk("[ELF] ERROR: Failed to open %s\n", path);
+// 		return -1;
+// 	}
+
+// 	Elf64_Ehdr ehdr;
+// 	if (vfs_read(f, &ehdr, sizeof(ehdr)) != sizeof(ehdr))
+// 	{
+// 		printk("[ELF] ERROR: Failed to read ELF header\n");
+// 		vfs_close(f);
+// 		return -1;
+// 	}
+
+// 	// Verify ELF magic
+// 	uint32_t magic = *(uint32_t *)ehdr.e_ident;
+// 	if (magic != ELF_MAGIC)
+// 	{
+// 		printk("[ELF] ERROR: Invalid ELF magic: 0x%x\n", magic);
+// 		vfs_close(f);
+// 		return -1;
+// 	}
+
+// 	printk("[ELF] Loading %s (entry=0x%llx, phnum=%u)\n",
+// 	       path, (unsigned long long)ehdr.e_entry, ehdr.e_phnum);
+
+// 	// Read program headers
+// 	size_t ph_size = (size_t)ehdr.e_phnum * sizeof(Elf64_Phdr);
+// 	Elf64_Phdr *phdrs = kmalloc(ph_size, GFP_KERNEL);
+// 	if (!phdrs)
+// 	{
+// 		printk("[ELF] ERROR: Failed to allocate phdrs\n");
+// 		vfs_close(f);
+// 		return -1;
+// 	}
+
+// 	if (vfs_lseek(f, ehdr.e_phoff, SEEK_SET) < 0)
+// 	{
+// 		printk("[ELF] ERROR: Failed to seek to phdrs\n");
+// 		kfree(phdrs);
+// 		vfs_close(f);
+// 		return -1;
+// 	}
+
+// 	if (vfs_read(f, phdrs, ph_size) != (size_t)ph_size)
+// 	{
+// 		printk("[ELF] ERROR: Failed to read phdrs\n");
+// 		kfree(phdrs);
+// 		vfs_close(f);
+// 		return -1;
+// 	}
+
+// 	// Load all PT_LOAD segments
+// 	for (uint16_t i = 0; i < ehdr.e_phnum; ++i)
+// 	{
+// 		Elf64_Phdr *p = &phdrs[i];
+// 		if (p->p_type == PT_LOAD)
+// 		{
+// 			printk("[ELF] HERE loading PHDR[%u]: vaddr=0x%llx filesz=0x%llx memsz=0x%llx flags=0x%x\n",
+// 			       i,
+// 			       (unsigned long long)p->p_vaddr,
+// 			       (unsigned long long)p->p_filesz,
+// 			       (unsigned long long)p->p_memsz,
+// 			       p->p_flags);
+
+// 			if (elf_load_segment(f, p) < 0)
+// 			{
+// 				printk("[ELF] ERROR: Failed to load segment %u\n", i);
+// 				kfree(phdrs);
+// 				vfs_close(f);
+// 				return -1;
+// 			}
+// 		}
+// 	}
+
+// 	kfree(phdrs);
+// 	vfs_close(f);
+
+// 	*entry_out = ehdr.e_entry;
+// 	printk("[ELF] Load complete, entry=0x%llx\n", (unsigned long long)*entry_out);
+// 	return 0;
+// }
+
 #include <gdt/gdt.h>
 
-int load_elf_and_run(const char *path)
-{
-	uint64_t entry;
-	if (elf_load(path, &entry) < 0)
-		return -1;
+// int load_elf_and_run(const char *path)
+// {
+// 	uint64_t entry;
+// 	if (elf_load(path, &entry) < 0)
+// 		return -1;
 
-	return elf_run(entry);
-}
+// 	return elf_run(entry);
+// }

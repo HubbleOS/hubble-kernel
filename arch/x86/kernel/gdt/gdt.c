@@ -109,6 +109,12 @@ uint64_t get_gdt_base(void)
 	return gdt_ptr.base;
 }
 
+void tss_set_rsp0(uint64_t rsp0)
+{
+	uint8_t cpu_id = lapic_get_id();
+	tss[cpu_id].rsp0 = rsp0;
+}
+
 uint16_t get_gdt_limit(void) { return gdt_ptr.limit; }
 
 // ============================================================================

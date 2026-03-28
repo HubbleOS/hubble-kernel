@@ -124,6 +124,7 @@ static const char *exception_messages[] = {
 // ============================================================================
 
 #include "higher_half.h"
+#include <asm.h>
 
 void isr_handler(registers_t *regs)
 {
@@ -152,6 +153,15 @@ void isr_handler(registers_t *regs)
 	if (regs->int_no == 8 || regs->int_no == 13 || regs->int_no == 14)
 	{
 		printk("\nFATAL ERROR - System Halted\n");
+
+		if (regs->int_no == 14)
+		{
+			// cr2
+			uint64_t addr;
+			asm volatile("mov %%cr2, %0" : "=r"(addr));
+
+			debug_dump_mapping((uint64_t *)get_cr3(), addr);
+		}
 		while (1)
 		{
 			asm volatile("cli; hlt");
@@ -212,7 +222,9 @@ syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [3] = (syscall_fn_t)sys_mmap,
     [4] = (syscall_fn_t)sys_open,
     [5] = (syscall_fn_t)sys_close,
-    [6] = (syscall_fn_t)sys_spawn};
+    [6] = (syscall_fn_t)sys_spawn,
+    [7] = (syscall_fn_t)sys_spawn_file,
+};
 
 uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
 			 uint64_t a4, uint64_t a5, uint64_t a6)

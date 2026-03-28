@@ -13,12 +13,20 @@
 #include <hpet/hpet.h>
 #include "io.h"
 
+#include <gdt/gdt.h>
+
+#include <syscalls/syscall_entry.h>
+
 #include <smp/smp.h>
+
+#define CANARY 0xDEADBEEFCAFEBABEULL
 
 static task_t *current_task[MAX_CPUS];
 
 static cpu_runqueue_t runqueues[MAX_CPUS];
 static bool initialized = false;
+
+static __thread bool dirty_queue = false;
 
 bool is_scheduler_initialized(void)
 {
@@ -28,9 +36,10 @@ bool is_scheduler_initialized(void)
 task_t *get_next_task(uint8_t cpu_id);
 void scheduler_add_task(task_t *task);
 void task_wrapper(void);
-void schedule(void);
+void schedule(registers_t *regs);
 void save_context(task_t *current, registers_t *regs);
 void free_context(task_t *task);
+static void task_state_load(task_t *task, registers_t *regs);
 
 static slab_cache_t *fpu_cache = NULL;
 
@@ -81,9 +90,9 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	{
 		uint64_t stack_base = alloc_user_stack();
 		task->kernel_stack = stack_base;
-		task->stack_size = 65536; // 8 is holly (dont touch) temp
+		task->stack_size = 65536;
 
-		for (uint64_t i = 0; i < task->stack_size; i += PAGE_SIZE)
+		for (uint64_t i = 0; i < task->stack_size + PAGE_SIZE; i += PAGE_SIZE)
 		{
 			uint64_t phys = pmm_alloc_page();
 
@@ -94,6 +103,19 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 			vmm_map_page(stack_base + i, phys, PTE_PRESENT | PTE_USER | PTE_WRITE);
 		}
 	}
+	// Set-up syscall stack
+
+	task->rsp0_size = 64 * 1024;
+	task->rsp0 = (uint64_t)kmalloc(task->rsp0_size, GFP_KERNEL);
+	if (!task->rsp0)
+	{
+		kfree((void *)task->kernel_stack);
+		kfree(task);
+		return NULL;
+	}
+
+	*(uint64_t *)(task->rsp0 + task->rsp0_size - 8) = CANARY;
+	*(uint64_t *)(task->rsp0) = CANARY;
 
 	// Set up initial stack
 	printk("Setting up initial stack\n");
@@ -189,6 +211,32 @@ task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority, bool u
 	return _task_create_with_arg((void (*)(void *))entry_point, NULL, priority, userspace);
 }
 
+static void task_state_load(task_t *task, registers_t *regs)
+{
+	if (!task)
+		return;
+	regs->rax = task->context.rax;
+	regs->rbx = task->context.rbx;
+	regs->rcx = task->context.rcx;
+	regs->rdx = task->context.rdx;
+	regs->rsi = task->context.rsi;
+	regs->rdi = task->context.rdi;
+	regs->rbp = task->context.rbp;
+	regs->rsp = task->context.rsp;
+	regs->r8 = task->context.r8;
+	regs->r9 = task->context.r9;
+	regs->r10 = task->context.r10;
+	regs->r11 = task->context.r11;
+	regs->r12 = task->context.r12;
+	regs->r13 = task->context.r13;
+	regs->r14 = task->context.r14;
+	regs->r15 = task->context.r15;
+	regs->rip = task->context.rip;
+	regs->rflags = task->context.rflags;
+	regs->cs = (uint16_t)task->context.cs;
+	regs->ss = (uint16_t)task->context.ss;
+}
+
 void task_exit(int exit_code)
 {
 	uint8_t cpu_id = lapic_get_id();
@@ -228,7 +276,9 @@ void task_exit(int exit_code)
 	current_task[cpu_id] = NULL;
 
 	// Force immediate reschedule to idle or another task
-	schedule();
+	// schedule();
+
+	asm volatile("int $32");
 
 	// Should never reach here
 	while (1)
@@ -281,7 +331,7 @@ void task_kill_by_pid(uint32_t pid)
 }
 
 // Schedule next task on current CPU
-void schedule(void)
+void schedule(registers_t *regs)
 {
 	uint8_t cpu_id = lapic_get_id();
 	task_t *old_task = get_current_task();
@@ -305,11 +355,26 @@ void schedule(void)
 	new_task->cpu = cpu_id;
 	current_task[cpu_id] = new_task;
 
-	if (new_task->page_table != (old_task ? old_task->page_table : NULL))
-		asm volatile("mov %0, %%cr3" ::"r"(new_task->page_table));
+	extern cpu_local_t cpu_locals[];
+	// if (old_task)
+	// {
+	// 	cpu_locals[cpu_id].rsp0 = old_task->rsp0 + old_task->rsp0_size;
+	// }
 
-	extern void switch_to_task(cpu_context_t * old, cpu_context_t * new);
-	switch_to_task(old_task ? &old_task->context : NULL, &new_task->context);
+	// flush cache
+
+	if (new_task->page_table != (old_task ? old_task->page_table : NULL))
+	{
+
+		asm volatile("mov %0, %%cr3" ::"r"(new_task->page_table) : "memory");
+	}
+	cpu_locals[cpu_id].rsp0 = new_task->rsp0 + new_task->rsp0_size;
+
+	task_state_load(new_task, regs);
+	return;
+
+	// extern void switch_to_task(cpu_context_t * old, cpu_context_t * new);
+	// switch_to_task(old_task ? &old_task->context : NULL, &new_task->context);
 }
 
 void lapic_timer_handler(registers_t *regs)
@@ -324,32 +389,47 @@ void lapic_timer_handler(registers_t *regs)
 	if (current)
 	{
 		save_context(current, regs);
+
 		if (current->time_slice > 0)
 			current->time_slice--;
+	}
 
-		if (current->state == TASK_UNINTERRUPTIBLE)
+	if (current && current->rsp0)
+	{
+		uint64_t *canary = (uint64_t *)(current->rsp0 + current->rsp0_size - 8);
+		if (*canary != CANARY)
 		{
-			if (current->time_slice < 30)
-			{
-				outb(0x3f8, 'W');
-			}
-			if (current->time_slice < 60)
-			{
-				outb(0x3f8, 'K');
-				task_exit(-1);
-			}
-			return;
+			printk("STACK OVERFLOW on task pid=%d rsp0=0x%llx\n",
+			       current->pid, current->rsp0);
+			*canary = CANARY; // reset so we only print once
+		}
+		if (*(uint64_t *)(current->rsp0) != CANARY)
+		{
+			printk("STACK UNDERFLOW on task pid=%d\n", current->pid);
+			*(uint64_t *)(current->rsp0) = CANARY;
 		}
 	}
 
 	if (!current || current->time_slice <= 0)
 	{
 		if (current)
+		{
 			current->time_slice = 10;
+		}
 
-		schedule();
+		schedule(regs);
+	}
+	current = get_current_task();
 
-		// __builtin_unreachable();
+	if (!current)
+	{
+		while (1)
+		{
+			asm volatile("pause");
+			asm volatile("hlt");
+		}
+
+		return;
 	}
 
 	if (current->state == TASK_ZOMBIE)
