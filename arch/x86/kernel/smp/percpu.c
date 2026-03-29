@@ -1,7 +1,7 @@
 #include "percpu.h"
 #include <apic/apic.h>
 #include <printk.h>
-#include <string.h>
+#include <hubble/string.h>
 
 cpu_info_t cpu_data[MAX_CPUS];
 volatile uint32_t num_cpus_online = 0;

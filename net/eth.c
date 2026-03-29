@@ -2,7 +2,7 @@
 #include "netdev.h"
 #include <net/arp.h>
 #include <mm/kmalloc.h>
-#include <string.h>
+#include <hubble/string.h>
 
 struct eth_hdr
 {

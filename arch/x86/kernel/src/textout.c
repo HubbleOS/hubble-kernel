@@ -1,12 +1,13 @@
 #include <bootinfo/framebuffer.h>
-#include <utils/font.h>
+#include <utils/textout.h>
 #include <utils/color.h>
-// #include <utils/color/color.h>
+
+#include <hubble/font.h>
 
 static uint8_t *get_glyph(char c)
 {
 	if ((unsigned char)c >= 128)
-		return 0;				   // Перевірка межі
+		return 0;	       // Перевірка межі
 	return font[(unsigned char)c]; // Повертаємо гліф для символу
 }
 
@@ -29,7 +30,7 @@ color_t color_blend(color_t src, color_t dst)
 }
 
 static void draw_pixel_array_scaled(uint8_t *glyph, int pitch, framebuffer_info_t *fb,
-									int x, int y, int w, int h, int scale_x, int scale_y, color_t font_color)
+				    int x, int y, int w, int h, int scale_x, int scale_y, color_t font_color)
 {
 	for (int row = 0; row < h; ++row)
 	{
@@ -63,6 +64,6 @@ void draw_char(framebuffer_info_t *fb, char c, int x, int y, int w, int h, color
 		glyph = (uint8_t *)get_glyph('!');
 
 	int pitch = fb->pitch / 4; // Вираховуємо ширину рядка в пікселях (з
-							   // урахуванням 32 біт на піксель)
+				   // урахуванням 32 біт на піксель)
 	draw_pixel_array_scaled(glyph, pitch, fb, x, y, w, h, 1, 1, font_color);
 }

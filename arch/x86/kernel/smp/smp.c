@@ -15,7 +15,7 @@
 #include "percpu.h"
 #include "higher_half.h"
 #include <printk.h>
-#include <string.h>
+#include <hubble/string.h>
 
 #include <syscalls/syscall_entry.h>
 
@@ -30,7 +30,7 @@ static volatile uint64_t *g_trampoline_stack = NULL;
 static volatile uint64_t *g_trampoline_entry = NULL;
 
 #define AP_TRAMPOLINE_ADDR 0x8000
-#define AP_STACK_SIZE (64 * 1024)			  // 64KB per CPU
+#define AP_STACK_SIZE (64 * 1024)						  // 64KB per CPU
 #define AP_STACK_PAGES ((AP_STACK_SIZE + 0xFFF) / 0x1000) // 16 pages
 
 extern uint8_t ap_trampoline_start[];
@@ -44,11 +44,11 @@ static spinlock_t smp_lock = SPINLOCK_INIT("smp");
 
 struct ap_startup_data
 {
-	uint64_t pml4_phys;	    // Offset 0
-	uint16_t gdt_limit;	    // Offset 8
-	uint64_t gdt_base;	    // Offset 10 (note: misaligned, but packed)
-	uint64_t stack_top;	    // Offset 18
-	uint64_t entry_point;	    // Offset 26
+	uint64_t pml4_phys;			// Offset 0
+	uint16_t gdt_limit;			// Offset 8
+	uint64_t gdt_base;			// Offset 10 (note: misaligned, but packed)
+	uint64_t stack_top;			// Offset 18
+	uint64_t entry_point;		// Offset 26
 	volatile uint32_t ap_ready; // Offset 34
 } __attribute__((packed));
 
@@ -133,7 +133,7 @@ void ap_entry(void)
 	uint64_t rflags;
 	asm volatile("pushfq; pop %0" : "=r"(rflags));
 	printk("AP %u: RFLAGS=0x%lx, IF=%d\n",
-	       lapic_get_id(), rflags, (rflags >> 9) & 1);
+		   lapic_get_id(), rflags, (rflags >> 9) & 1);
 	sti();
 	printk("\nAP %u online!\nHello from AP %u \n\n", apic_id, apic_id);
 	lapic_timer_init(100);
@@ -163,7 +163,7 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx)
 
 	// Get pointer to data structure at end of trampoline
 	volatile struct ap_startup_data *data =
-	    (volatile struct ap_startup_data *)(AP_TRAMPOLINE_ADDR + 512);
+		(volatile struct ap_startup_data *)(AP_TRAMPOLINE_ADDR + 512);
 
 	uint64_t cr3;
 	asm volatile("mov %%cr3, %0" : "=r"(cr3));
@@ -242,13 +242,13 @@ int smp_init(void)
 	void *trampoline_dest = (void *)AP_TRAMPOLINE_ADDR;
 
 	printk("  Using identity mapping: virt 0x%lx = phys 0x%x\n",
-	       (uint64_t)trampoline_dest, AP_TRAMPOLINE_ADDR);
+		   (uint64_t)trampoline_dest, AP_TRAMPOLINE_ADDR);
 
 	// Ensure identity mapping exists
 	printk("  Creating identity mapping for trampoline...\n");
 
 	g_trampoline_size =
-	    ap_trampoline_end - ap_trampoline_start;
+		ap_trampoline_end - ap_trampoline_start;
 
 	printk("  Trampoline size: %u bytes (0x%x)\n", g_trampoline_size, g_trampoline_size);
 
@@ -261,13 +261,13 @@ int smp_init(void)
 	// Copy trampoline to identity-mapped location
 	printk("  Copying trampoline code...\n");
 	memcpy(trampoline_dest,
-	       ap_trampoline_start,
-	       g_trampoline_size);
+		   ap_trampoline_start,
+		   g_trampoline_size);
 
 	// Verify the copy worked
 	uint8_t *verify = (uint8_t *)trampoline_dest;
 	printk("  First bytes at 0x%lx: %02x %02x %02x %02x\n",
-	       (uint64_t)verify, verify[0], verify[1], verify[2], verify[3]);
+		   (uint64_t)verify, verify[0], verify[1], verify[2], verify[3]);
 
 	printk("Trampoline initialized\n");
 

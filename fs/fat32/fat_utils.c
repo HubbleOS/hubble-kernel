@@ -9,11 +9,11 @@
 
 #include <drivers/storage/ata/ata.h>
 
-#include <string.h>
+#include <hubble/string.h>
 #include <errno.h>
 
-#include <ctype.h>
-#include <string.h>
+#include <hubble/ctype.h>
+#include <hubble/string.h>
 
 void itos(int num, char *str);
 void stoi(char *str, int *num);

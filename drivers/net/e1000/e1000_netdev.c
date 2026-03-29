@@ -1,6 +1,6 @@
 #include "e1000.h"
 #include <net/netdev.h>
-#include <string.h>
+#include <hubble/string.h>
 
 static void e1000_netdev_send(const void *data, uint16_t len)
 {

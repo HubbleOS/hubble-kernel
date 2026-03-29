@@ -1,7 +1,7 @@
 #include "vfs.h"
 #include "vfs_standart_struct.h"
 
-#include <string.h>
+#include <hubble/string.h>
 #include <stdarg.h>
 #include <errno.h>
 // #include "gpt.h" // Список змонтованих ФС (поки що 1)

@@ -5,7 +5,7 @@
 #include <fs/fat32/fat.h>
 #include <mm/kmalloc.h>
 
-#include <string.h>
+#include <hubble/string.h>
 
 #define FAT32_ATTR_READ_ONLY 0x01
 #define FAT32_ATTR_HIDDEN 0x02

@@ -4,7 +4,7 @@
 #include <fs/vfs/dev.h>
 #include <fs/vfs/vfs.h>
 #include "higher_half.h"
-#include <string.h>
+#include <hubble/string.h>
 
 #include "syscall_entry.h"
 

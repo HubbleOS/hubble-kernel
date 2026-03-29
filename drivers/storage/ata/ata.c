@@ -2,7 +2,7 @@
 
 #include "ata.h"
 #include <stdint.h>
-#include <string.h>
+#include <hubble/string.h>
 #include <io.h>
 #include <fs/fat32/fat_structs.h>
 

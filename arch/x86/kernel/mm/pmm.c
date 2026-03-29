@@ -1,5 +1,5 @@
 #include "pmm.h"
-#include <string.h>
+#include <hubble/string.h>
 #include <stdbool.h>
 #include "higher_half.h"
 #include "lib/bitmap.h"

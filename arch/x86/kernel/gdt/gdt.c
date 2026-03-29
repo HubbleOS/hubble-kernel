@@ -1,5 +1,5 @@
 #include "gdt.h"
-#include <string.h>
+#include <hubble/string.h>
 #include <printk.h>
 
 #include <apic/apic.h>
@@ -12,7 +12,7 @@
 // Об'єднана таблиця: 5 GDT дескрипторів + 1 TSS дескриптор (16 байт)
 static struct
 {
-	gdt_entry_t entries[5];	    // 40 bytes
+	gdt_entry_t entries[5];		// 40 bytes
 	tss_entry_t tss_descriptor; // 16 bytes
 } __attribute__((packed, aligned(16))) gdt_table;
 
@@ -75,26 +75,26 @@ void gdt_init(void)
 
 	// Kernel Code Segment (0x08)
 	gdt_set_gate(1, 0, 0xFFFFF,
-		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING0 | GDT_ACCESS_SYSTEM |
-			 GDT_ACCESS_EXECUTABLE | GDT_ACCESS_RW,
-		     GDT_GRAN_4K | GDT_GRAN_64BIT);
+				 GDT_ACCESS_PRESENT | GDT_ACCESS_RING0 | GDT_ACCESS_SYSTEM |
+					 GDT_ACCESS_EXECUTABLE | GDT_ACCESS_RW,
+				 GDT_GRAN_4K | GDT_GRAN_64BIT);
 
 	// Kernel Data Segment (0x10)
 	gdt_set_gate(2, 0, 0xFFFFF,
-		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING0 | GDT_ACCESS_SYSTEM |
-			 GDT_ACCESS_RW,
-		     GDT_GRAN_4K | GDT_GRAN_64BIT);
+				 GDT_ACCESS_PRESENT | GDT_ACCESS_RING0 | GDT_ACCESS_SYSTEM |
+					 GDT_ACCESS_RW,
+				 GDT_GRAN_4K | GDT_GRAN_64BIT);
 
 	// User Data (index 3 = 0x18 -> selector 0x1B)
 	gdt_set_gate(3, 0, 0xFFFFF,
-		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM | GDT_ACCESS_RW,
-		     GDT_GRAN_4K | GDT_GRAN_64BIT);
+				 GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM | GDT_ACCESS_RW,
+				 GDT_GRAN_4K | GDT_GRAN_64BIT);
 
 	// User Code (index 4 = 0x20 -> selector 0x23)
 	gdt_set_gate(4, 0, 0xFFFFF,
-		     GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
-			 GDT_ACCESS_EXECUTABLE | GDT_ACCESS_RW,
-		     GDT_GRAN_4K | GDT_GRAN_64BIT);
+				 GDT_ACCESS_PRESENT | GDT_ACCESS_RING3 | GDT_ACCESS_SYSTEM |
+					 GDT_ACCESS_EXECUTABLE | GDT_ACCESS_RW,
+				 GDT_GRAN_4K | GDT_GRAN_64BIT);
 
 	// TSS Descriptor (0x28) - без изменений
 	tss_set_descriptor((uint64_t)&tss, sizeof(tss) - 1);

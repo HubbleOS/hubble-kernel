@@ -1,5 +1,5 @@
 #include <stddef.h>
-#include <string.h>
+#include <hubble/string.h>
 
 #include <sys/syscall.h>
 #include "io.h"
@@ -38,7 +38,7 @@ VFS_File *task_get_fd(task_t *task, int fd)
 }
 
 long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
-	      int fd, uint64_t offset)
+			  int fd, uint64_t offset)
 {
 	if (length == 0)
 	{

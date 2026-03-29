@@ -2,7 +2,7 @@
 #include <printk.h>
 #include <mm/kmalloc.h>
 #include <drivers/pci/pci.h>
-#include <string.h>
+#include <hubble/string.h>
 
 #include <mm/vmm.h>
 
@@ -126,8 +126,8 @@ static void e1000_read_mac(void)
 	mac_addr[5] = (high >> 8) & 0xFF;
 
 	printk("[e1000] MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
-	       mac_addr[0], mac_addr[1], mac_addr[2],
-	       mac_addr[3], mac_addr[4], mac_addr[5]);
+		   mac_addr[0], mac_addr[1], mac_addr[2],
+		   mac_addr[3], mac_addr[4], mac_addr[5]);
 }
 
 #define E1000_MMIO_SIZE 0x20000 // 128KB
@@ -152,7 +152,7 @@ int e1000_init(void)
 	for (uint64_t off = 0; off < E1000_MMIO_SIZE; off += 0x1000)
 	{
 		vmm_map_page(mmio_virt + off, bar0 + off,
-			     PTE_PRESENT | PTE_WRITE | VMM_MAP_NO_CACHE);
+					 PTE_PRESENT | PTE_WRITE | VMM_MAP_NO_CACHE);
 	}
 
 	e1000_base = (volatile uint32_t *)mmio_virt;
@@ -203,10 +203,10 @@ int e1000_send(const void *data, uint16_t len)
 
 	printk("[tx] TDT written=%d\n", tx_tail);
 	printk("[tx] TCTL=%08x TDBAL=%08x TDBAH=%08x TDLEN=%08x\n",
-	       e1000_read(E1000_TCTL),
-	       e1000_read(E1000_TDBAL),
-	       e1000_read(E1000_TDBAH),
-	       e1000_read(E1000_TDLEN));
+		   e1000_read(E1000_TCTL),
+		   e1000_read(E1000_TDBAL),
+		   e1000_read(E1000_TDBAH),
+		   e1000_read(E1000_TDLEN));
 
 	for (volatile int i = 0; i < 10000000; i++)
 		;
@@ -226,17 +226,17 @@ int e1000_recv(void *buf, uint16_t *len_out)
 	{
 		first = 1;
 		printk("[rx] FIRST CALL: idx=%d status=%02x RDH=%d RDT=%d RDBAL=%08x\n",
-		       idx,
-		       rx_descs[idx].status,
-		       e1000_read(E1000_RDH),
-		       e1000_read(E1000_RDT),
-		       e1000_read(E1000_RDBAL));
+			   idx,
+			   rx_descs[idx].status,
+			   e1000_read(E1000_RDH),
+			   e1000_read(E1000_RDT),
+			   e1000_read(E1000_RDBAL));
 	}
 
 	uint8_t st = rx_descs[idx].status;
 	if (st != 0)
 		printk("[rx] idx=%d status=%02x RDH=%d\n",
-		       idx, st, e1000_read(E1000_RDH));
+			   idx, st, e1000_read(E1000_RDH));
 
 	if (!(st & E1000_RX_STAT_DD))
 		return -1;

@@ -25,7 +25,7 @@ build: $(BUILD_TOOL)
 		--type exe \
 		--ld $(LD) \
 		--ldflags "-nostdlib -T $(KERNEL_DIR)/kernel.ld" \
-		--libs "$(NET_LIB) $(FS_LIB) $(DRIVERS_LIB)" 
+		--libs "$(NET_LIB) $(FS_LIB) $(DRIVERS_LIB) $(FONT_LIB) $(STRING_LIB) $(CTYPE_LIB)" 
 
 # kernel.elf to kernel.bin for ISO
 iso: $(ISO)

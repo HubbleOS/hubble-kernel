@@ -8,7 +8,7 @@
 #include <drivers/storage/ata/ata.h>
 
 #include <stdint.h>
-#include <string.h>
+#include <hubble/string.h>
 
 uint32_t first_usable_lba = 0;
 uint32_t last_usable_lba = 0;

@@ -6,7 +6,7 @@
 #include <fs/ext2/ext2_struct.h>
 #include <mm/kmalloc.h>
 
-#include <string.h>
+#include <hubble/string.h>
 
 #define EXT2_ATTR_READ_ONLY 0x01
 #define EXT2_ATTR_HIDDEN 0x02

@@ -10,7 +10,7 @@
 #include <mm/vmm.h>
 #include <mm/pmm.h>
 #include "higher_half.h"
-#include <string.h>
+#include <hubble/string.h>
 
 static mouse_t *mouse_g = NULL;
 static uint8_t mouse_packet[3];

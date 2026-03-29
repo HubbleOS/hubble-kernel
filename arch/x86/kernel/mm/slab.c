@@ -1,7 +1,7 @@
 #include "slab.h"
 #include "pmm.h"
 #include "higher_half.h"
-#include <string.h>
+#include <hubble/string.h>
 #include "printk.h"
 
 // ============================================================================
