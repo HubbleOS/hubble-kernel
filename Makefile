@@ -176,11 +176,11 @@ demo:
 PHONY += disk
 disk:
 	@mkdir -p out/disks
-	@python tools/dev/disk/main.py
+	@python3 tools/dev/disk/main.py
 
 PHONY += run
 run: build
-	@python tools/dev/qemu/main.py
+	@python3 tools/dev/qemu/main.py
 
 PHONY += clean
 clean:
