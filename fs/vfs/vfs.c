@@ -3,11 +3,11 @@
 
 #include <hubble/string.h>
 #include <stdarg.h>
-#include <errno.h>
+#include <hubble/errno.h>
 // #include "gpt.h" // Список змонтованих ФС (поки що 1)
 #include <fs/gpt/gpt.h>
 #include <mm/kmalloc.h>
-#include "printk.h"
+#include <hubble/printk.h>
 
 typedef struct VFS_Mount
 {

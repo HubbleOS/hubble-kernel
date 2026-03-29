@@ -1,6 +1,6 @@
 #include <hubble/string.h>
 
-#include "printk.h"
+#include <hubble/printk.h>
 #include "fat.h"
 #include "fat_structs.h"
 #include "fat_utils.h"

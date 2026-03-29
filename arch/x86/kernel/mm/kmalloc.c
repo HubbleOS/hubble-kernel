@@ -4,7 +4,7 @@
 #include "higher_half.h"
 #include <hubble/string.h>
 #include <smp/spinlock.h>
-#include "printk.h"
+#include <hubble/printk.h>
 
 typedef struct big_alloc_header
 {

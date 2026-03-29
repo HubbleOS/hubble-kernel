@@ -1,5 +1,5 @@
 #include "syscall_entry.h"
-#include "printk.h"
+#include <hubble/printk.h>
 #include <apic/apic.h>
 #include <stdint.h>
 

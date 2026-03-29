@@ -1,4 +1,4 @@
-#include "printk.h"
+#include <hubble/printk.h>
 
 #include "ata.h"
 #include <stdint.h>
@@ -100,11 +100,11 @@ int ata_write_sector(void *device, uint32_t lba, const void *buffer)
 	ata_wait(dev);
 
 	outb(dev->io_base + 6, 0xE0 | ((lba >> 24) & 0x0F)); // Drive/Head
-	outb(dev->io_base + 2, 1);			     // Sector count
-	outb(dev->io_base + 3, lba & 0xFF);		     // LBA low
-	outb(dev->io_base + 4, (lba >> 8) & 0xFF);	     // LBA mid
-	outb(dev->io_base + 5, (lba >> 16) & 0xFF);	     // LBA high
-	outb(dev->io_base + 7, ATA_WRITE_SECTORS);	     // Command
+	outb(dev->io_base + 2, 1);							 // Sector count
+	outb(dev->io_base + 3, lba & 0xFF);					 // LBA low
+	outb(dev->io_base + 4, (lba >> 8) & 0xFF);			 // LBA mid
+	outb(dev->io_base + 5, (lba >> 16) & 0xFF);			 // LBA high
+	outb(dev->io_base + 7, ATA_WRITE_SECTORS);			 // Command
 
 	if (ata_wait_drq(dev) < 0)
 	{

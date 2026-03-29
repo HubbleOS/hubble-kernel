@@ -1,7 +1,7 @@
 #include "udp.h"
 #include "ipv4.h"
 #include <hubble/string.h>
-#include <printk.h>
+#include <hubble/printk.h>
 #include <mm/kmalloc.h>
 
 #include <net/eth.h>

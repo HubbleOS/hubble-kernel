@@ -5,7 +5,7 @@
 #include "mm/kmalloc.h"
 #include "fs/vfs/vfs.h"
 #include "higher_half.h"
-#include "printk.h"
+#include <hubble/printk.h>
 #include <stdint.h>
 #include <hubble/string.h>
 #include <smp/scheduler.h>

@@ -19,6 +19,7 @@ void print_usage(const char *prog)
 	printf("  --ldflags <flags>    Linker flags\n");
 	printf("  --includes <paths>   Include paths\n");
 	printf("  --libs <libraries>   Libraries to link (e.g., -lm -lpthread)\n");
+	printf("  --obj-files <files>  Extra object files to pass directly to linker\n");
 	printf("  --ldscript <file>    Linker script file\n");
 	printf("  --output <file>      Output file (archive or executable)\n");
 	printf("  --type <type>        Output type: archive, exe (default: archive)\n");
@@ -80,6 +81,10 @@ int parse_arguments(int argc, char **argv, BuildConfig *cfg, char *cxx_compiler,
 		else if (strcmp(argv[i], "--libs") == 0 && i + 1 < argc)
 		{
 			strncpy(cfg->libs, argv[++i], sizeof(cfg->libs) - 1);
+		}
+		else if (strcmp(argv[i], "--obj-files") == 0 && i + 1 < argc)
+		{
+			strncpy(cfg->obj_files, argv[++i], sizeof(cfg->obj_files) - 1);
 		}
 		else if (strcmp(argv[i], "--ldscript") == 0 && i + 1 < argc)
 		{

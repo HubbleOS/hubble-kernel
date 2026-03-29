@@ -2,7 +2,7 @@
 #include <syscalls/syscall_entry.h>
 #include <sys/syscall.h>
 #include <stdint.h>
-#include "printk.h"
+#include <hubble/printk.h>
 #include <io.h>
 #include <apic/apic.h>
 #include <smp/scheduler.h>
@@ -124,28 +124,28 @@ void irq_uninstall_handler(uint8_t irq)
 
 // Exception messages
 static const char *exception_messages[] = {
-    "Division By Zero",
-    "Debug",
-    "Non Maskable Interrupt",
-    "Breakpoint",
-    "Overflow",
-    "Bound Range Exceeded",
-    "Invalid Opcode",
-    "Device Not Available",
-    "Double Fault",
-    "Coprocessor Segment Overrun",
-    "Invalid TSS",
-    "Segment Not Present",
-    "Stack-Segment Fault",
-    "General Protection Fault",
-    "Page Fault",
-    "Reserved",
-    "x87 Floating-Point Exception",
-    "Alignment Check",
-    "Machine Check",
-    "SIMD Floating-Point Exception",
-    "Virtualization Exception",
-    "Control Protection Exception",
+	"Division By Zero",
+	"Debug",
+	"Non Maskable Interrupt",
+	"Breakpoint",
+	"Overflow",
+	"Bound Range Exceeded",
+	"Invalid Opcode",
+	"Device Not Available",
+	"Double Fault",
+	"Coprocessor Segment Overrun",
+	"Invalid TSS",
+	"Segment Not Present",
+	"Stack-Segment Fault",
+	"General Protection Fault",
+	"Page Fault",
+	"Reserved",
+	"x87 Floating-Point Exception",
+	"Alignment Check",
+	"Machine Check",
+	"SIMD Floating-Point Exception",
+	"Virtualization Exception",
+	"Control Protection Exception",
 };
 
 // Handlers
@@ -162,8 +162,8 @@ void isr_handler(registers_t *regs)
 	printk("\n\tEXCEPTION OCCURRED\n");
 
 	printk("Exception: %s (%lu)\n",
-	       regs->int_no < 22 ? exception_messages[regs->int_no] : "Unknown",
-	       regs->int_no);
+		   regs->int_no < 22 ? exception_messages[regs->int_no] : "Unknown",
+		   regs->int_no);
 	printk("Error code: 0x%lx\n", regs->err_code);
 
 	printk("\n=== Registers ===\n");
@@ -279,7 +279,7 @@ void interrupts_init(void)
 		irq_install_handler(1, keyboard_irq);
 
 		// Optional: Setup LAPIC timer for preemptive multitasking
-		lapic_timer_init(100);			     // 100 Hz timer
+		lapic_timer_init(100);						 // 100 Hz timer
 		irq_install_handler(0, lapic_timer_handler); // Timer on vector 32
 	}
 	else

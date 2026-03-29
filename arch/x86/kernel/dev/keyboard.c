@@ -10,69 +10,69 @@
 
 // Existing keymap (keep as is)
 const keymap_entry_t keymap[] = {
-    {.id = {KEY_A, false}, 'a', 'A'},
-    {.id = {KEY_B, false}, 'b', 'B'},
-    {.id = {KEY_C, false}, 'c', 'C'},
-    {.id = {KEY_D, false}, 'd', 'D'},
-    {.id = {KEY_E, false}, 'e', 'E'},
-    {.id = {KEY_F, false}, 'f', 'F'},
-    {.id = {KEY_G, false}, 'g', 'G'},
-    {.id = {KEY_H, false}, 'h', 'H'},
-    {.id = {KEY_I, false}, 'i', 'I'},
-    {.id = {KEY_J, false}, 'j', 'J'},
-    {.id = {KEY_K, false}, 'k', 'K'},
-    {.id = {KEY_L, false}, 'l', 'L'},
-    {.id = {KEY_M, false}, 'm', 'M'},
-    {.id = {KEY_N, false}, 'n', 'N'},
-    {.id = {KEY_O, false}, 'o', 'O'},
-    {.id = {KEY_P, false}, 'p', 'P'},
-    {.id = {KEY_Q, false}, 'q', 'Q'},
-    {.id = {KEY_R, false}, 'r', 'R'},
-    {.id = {KEY_S, false}, 's', 'S'},
-    {.id = {KEY_T, false}, 't', 'T'},
-    {.id = {KEY_U, false}, 'u', 'U'},
-    {.id = {KEY_V, false}, 'v', 'V'},
-    {.id = {KEY_W, false}, 'w', 'W'},
-    {.id = {KEY_X, false}, 'x', 'X'},
-    {.id = {KEY_Y, false}, 'y', 'Y'},
-    {.id = {KEY_Z, false}, 'z', 'Z'},
+	{.id = {KEY_A, false}, 'a', 'A'},
+	{.id = {KEY_B, false}, 'b', 'B'},
+	{.id = {KEY_C, false}, 'c', 'C'},
+	{.id = {KEY_D, false}, 'd', 'D'},
+	{.id = {KEY_E, false}, 'e', 'E'},
+	{.id = {KEY_F, false}, 'f', 'F'},
+	{.id = {KEY_G, false}, 'g', 'G'},
+	{.id = {KEY_H, false}, 'h', 'H'},
+	{.id = {KEY_I, false}, 'i', 'I'},
+	{.id = {KEY_J, false}, 'j', 'J'},
+	{.id = {KEY_K, false}, 'k', 'K'},
+	{.id = {KEY_L, false}, 'l', 'L'},
+	{.id = {KEY_M, false}, 'm', 'M'},
+	{.id = {KEY_N, false}, 'n', 'N'},
+	{.id = {KEY_O, false}, 'o', 'O'},
+	{.id = {KEY_P, false}, 'p', 'P'},
+	{.id = {KEY_Q, false}, 'q', 'Q'},
+	{.id = {KEY_R, false}, 'r', 'R'},
+	{.id = {KEY_S, false}, 's', 'S'},
+	{.id = {KEY_T, false}, 't', 'T'},
+	{.id = {KEY_U, false}, 'u', 'U'},
+	{.id = {KEY_V, false}, 'v', 'V'},
+	{.id = {KEY_W, false}, 'w', 'W'},
+	{.id = {KEY_X, false}, 'x', 'X'},
+	{.id = {KEY_Y, false}, 'y', 'Y'},
+	{.id = {KEY_Z, false}, 'z', 'Z'},
 
-    {.id = {KEY_1, false}, '1', '!'},
-    {.id = {KEY_2, false}, '2', '@'},
-    {.id = {KEY_3, false}, '3', '#'},
-    {.id = {KEY_4, false}, '4', '$'},
-    {.id = {KEY_5, false}, '5', '%'},
-    {.id = {KEY_6, false}, '6', '^'},
-    {.id = {KEY_7, false}, '7', '&'},
-    {.id = {KEY_8, false}, '8', '*'},
-    {.id = {KEY_9, false}, '9', '('},
-    {.id = {KEY_0, false}, '0', ')'},
+	{.id = {KEY_1, false}, '1', '!'},
+	{.id = {KEY_2, false}, '2', '@'},
+	{.id = {KEY_3, false}, '3', '#'},
+	{.id = {KEY_4, false}, '4', '$'},
+	{.id = {KEY_5, false}, '5', '%'},
+	{.id = {KEY_6, false}, '6', '^'},
+	{.id = {KEY_7, false}, '7', '&'},
+	{.id = {KEY_8, false}, '8', '*'},
+	{.id = {KEY_9, false}, '9', '('},
+	{.id = {KEY_0, false}, '0', ')'},
 
-    {.id = {KEY_SPACE, false}, ' ', ' '},
-    {.id = {KEY_ENTER, false}, '\n', '\n'},
-    {.id = {KEY_TAB, false}, '\t', '\t'},
-    {.id = {KEY_ESC, false}, 27, 27},
-    {.id = {KEY_BACKSPACE, false}, '\b', '\b'},
+	{.id = {KEY_SPACE, false}, ' ', ' '},
+	{.id = {KEY_ENTER, false}, '\n', '\n'},
+	{.id = {KEY_TAB, false}, '\t', '\t'},
+	{.id = {KEY_ESC, false}, 27, 27},
+	{.id = {KEY_BACKSPACE, false}, '\b', '\b'},
 
-    {.id = {KEY_MINUS, false}, '-', '_'},
-    {.id = {KEY_EQUAL, false}, '=', '+'},
-    {.id = {KEY_LEFT_BRACKET, false}, '[', '{'},
-    {.id = {KEY_RIGHT_BRACKET, false}, ']', '}'},
-    {.id = {KEY_BACKSLASH, false}, '\\', '|'},
-    {.id = {KEY_SEMICOLON, false}, ';', ':'},
-    {.id = {KEY_APOSTROPHE, false}, '\'', '\"'},
-    {.id = {KEY_COMMA, false}, ',', '<'},
-    {.id = {KEY_PERIOD, false}, '.', '>'},
-    {.id = {KEY_SLASH, false}, '/', '?'},
-    {.id = {KEY_CAPS_LOCK, false}, 0, 0},
-    {.id = {KEY_GRAVE, false}, '`', '~'},
+	{.id = {KEY_MINUS, false}, '-', '_'},
+	{.id = {KEY_EQUAL, false}, '=', '+'},
+	{.id = {KEY_LEFT_BRACKET, false}, '[', '{'},
+	{.id = {KEY_RIGHT_BRACKET, false}, ']', '}'},
+	{.id = {KEY_BACKSLASH, false}, '\\', '|'},
+	{.id = {KEY_SEMICOLON, false}, ';', ':'},
+	{.id = {KEY_APOSTROPHE, false}, '\'', '\"'},
+	{.id = {KEY_COMMA, false}, ',', '<'},
+	{.id = {KEY_PERIOD, false}, '.', '>'},
+	{.id = {KEY_SLASH, false}, '/', '?'},
+	{.id = {KEY_CAPS_LOCK, false}, 0, 0},
+	{.id = {KEY_GRAVE, false}, '`', '~'},
 
-    {.id = {KEY_LEFT_SHIFT, false}, 0, 0},
-    {.id = {KEY_RIGHT_SHIFT, false}, 0, 0},
-    {.id = {KEY_LEFT_CTRL, false}, 0, 0},
-    {.id = {KEY_RIGHT_CTRL, true}, 0, 0},
-    {.id = {KEY_LEFT_ALT, false}, 0, 0},
-    {.id = {KEY_RIGHT_ALT, true}, 0, 0},
+	{.id = {KEY_LEFT_SHIFT, false}, 0, 0},
+	{.id = {KEY_RIGHT_SHIFT, false}, 0, 0},
+	{.id = {KEY_LEFT_CTRL, false}, 0, 0},
+	{.id = {KEY_RIGHT_CTRL, true}, 0, 0},
+	{.id = {KEY_LEFT_ALT, false}, 0, 0},
+	{.id = {KEY_RIGHT_ALT, true}, 0, 0},
 };
 
 const size_t keymap_size = SIZEOF_ARRAY(keymap);
@@ -102,21 +102,21 @@ input_event_t keyboard_get_input(void)
 		// input_event_t input = {0};
 
 		input_event_t input = {
-		    .type = KEY_TYPE_UNKNOWN,
-		    .shift = evt.is_shift,
-		    .ctrl = evt.is_ctrl,
-		    .alt = evt.is_alt,
-		    .character = 0,
-		    .action = KEY_ACTION_NONE};
+			.type = KEY_TYPE_UNKNOWN,
+			.shift = evt.is_shift,
+			.ctrl = evt.is_ctrl,
+			.alt = evt.is_alt,
+			.character = 0,
+			.action = KEY_ACTION_NONE};
 
 		// Skip modifier keys themselves
 		if (evt.id.scancode == KEY_LEFT_SHIFT ||
-		    evt.id.scancode == KEY_RIGHT_SHIFT ||
-		    evt.id.scancode == KEY_LEFT_CTRL ||
-		    (evt.id.scancode == KEY_RIGHT_CTRL && evt.id.extended) ||
-		    evt.id.scancode == KEY_LEFT_ALT ||
-		    (evt.id.scancode == KEY_RIGHT_ALT && evt.id.extended) ||
-		    evt.id.scancode == KEY_CAPS_LOCK)
+			evt.id.scancode == KEY_RIGHT_SHIFT ||
+			evt.id.scancode == KEY_LEFT_CTRL ||
+			(evt.id.scancode == KEY_RIGHT_CTRL && evt.id.extended) ||
+			evt.id.scancode == KEY_LEFT_ALT ||
+			(evt.id.scancode == KEY_RIGHT_ALT && evt.id.extended) ||
+			evt.id.scancode == KEY_CAPS_LOCK)
 		{
 			input.type = KEY_TYPE_MODIFIER;
 			continue;
@@ -178,7 +178,7 @@ input_event_t keyboard_get_input(void)
 
 		// Try to get a character from keymap
 		char c = keymap_lookup_char(evt.id.scancode, evt.id.extended,
-					    evt.is_shift, evt.is_caps_lock);
+									evt.is_shift, evt.is_caps_lock);
 
 		if (c != 0)
 		{
@@ -307,7 +307,7 @@ static inline uint8_t kbd_read_scancode_irq(void)
 	// extern uint8_t inb(uint16_t port);
 	return inb(0x60);
 }
-#include "printk.h"
+#include <hubble/printk.h>
 #include <smp/scheduler.h>
 
 #define KBD_BUF_SIZE 128
@@ -359,7 +359,7 @@ char keyboard_get_char(void)
 			// 					ev.is_shift, ev.is_caps_lock));
 
 			return keymap_lookup_char(ev.id.scancode, ev.id.extended,
-						  ev.is_shift, ev.is_caps_lock);
+									  ev.is_shift, ev.is_caps_lock);
 		}
 		kbd_stream.waiting = get_current_task();
 		task_sleep();
@@ -393,7 +393,7 @@ key_event_t keyboard_get_event(void)
 }
 
 #include <dev/ps2.h>
-#include <printk.h>
+#include <hubble/printk.h>
 
 static void keyboard_write(uint8_t cmd)
 {

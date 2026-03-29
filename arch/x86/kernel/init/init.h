@@ -5,5 +5,3 @@
 void init_cpu(void);
 
 void init_memory(BootInfo *bi);
-
-void init_filesystems(void);

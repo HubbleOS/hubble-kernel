@@ -107,6 +107,11 @@ FONT_BUILD_DIR := $(BUILD_DIR)/lib/fonts
 FONT_LIB := $(FONT_BUILD_DIR)/libfonts.a
 export FONT_DIR FONT_BUILD_DIR FONT_LIB
 
+# lib/color
+COLOR_DIR := $(abspath lib/color)
+COLOR_BUILD_DIR := $(BUILD_DIR)/lib/color
+COLOR_LIB := $(COLOR_BUILD_DIR)/libcolor.a
+export COLOR_DIR COLOR_BUILD_DIR COLOR_LIB
 
 # lib/string
 STRING_DIR := $(abspath lib/string)
@@ -125,10 +130,14 @@ subdirs += fs
 subdirs += drivers
 
 subdirs += lib/fonts
+subdirs += lib/color
 subdirs += lib/string
 subdirs += lib/ctype
 
+subdirs += kernel
+
 # Architecture-specific directories
+# $(eval $(call kbuild-subdir,kernel))
 $(eval $(call kbuild-subdir,arch/$(ARCH)))
 
 # Core subsystems

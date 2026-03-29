@@ -2,7 +2,7 @@
 #include "pmm.h"
 #include "higher_half.h"
 #include <hubble/string.h>
-#include "printk.h"
+#include <hubble/printk.h>
 
 // ============================================================================
 // Global State

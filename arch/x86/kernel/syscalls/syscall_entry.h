@@ -8,7 +8,7 @@
 #include <mm/vmm.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
-#include <errno.h>
+#include <hubble/errno.h>
 
 #include <interrupt/interrupt.h> // for registers_t
 

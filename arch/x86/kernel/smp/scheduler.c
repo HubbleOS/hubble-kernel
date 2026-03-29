@@ -9,7 +9,7 @@
 #include <hubble/string.h>
 #include <apic/apic.h>
 #include <interrupt/interrupt.h>
-#include <printk.h>
+#include <hubble/printk.h>
 #include <hpet/hpet.h>
 #include "io.h"
 

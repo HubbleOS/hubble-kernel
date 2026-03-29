@@ -150,6 +150,10 @@ int main(int argc, char **argv)
 				return 1;
 			}
 		}
+		else if (strcmp(output_type, "objects") == 0)
+		{
+			printf("Objects compiled to: %s\n", cfg.build_dir);
+		}
 		else
 		{
 			fprintf(stderr, "Error: Unknown output type '%s'. Use 'archive' or 'exe'\n", output_type);

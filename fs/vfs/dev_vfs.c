@@ -3,7 +3,7 @@
 #include "dev.h"
 #include <stdbool.h>
 #include <hubble/string.h>
-#include <printk.h>
+#include <hubble/printk.h>
 #include "higher_half.h"
 
 VFS_Node *dev_vfs_open_device(VFS_FS *fs, const char *path);
@@ -86,8 +86,8 @@ VFS_Node *dev_vfs_create_device(VFS_FS *fs, const char *path)
 }
 
 void dev_vfs_register(const char *name,
-		      uint64_t (*mmap)(uint64_t, size_t),
-		      uint64_t (*read)(uint64_t, size_t, void *))
+					  uint64_t (*mmap)(uint64_t, size_t),
+					  uint64_t (*read)(uint64_t, size_t, void *))
 {
 	VFS_device_reg *dev = kmalloc(sizeof(VFS_device_reg), GFP_KERNEL);
 	memset(dev, 0, sizeof(VFS_device_reg));

@@ -1,7 +1,7 @@
 #include "syscall_entry.h"
 #include <dev/io/input_device.h>
 
-#include "printk.h"
+#include <hubble/printk.h>
 
 long sys_read(int fd, char *buffer, size_t len)
 {
