@@ -1,9 +1,9 @@
 #include <stddef.h>
-#include <ctype.h>
+#include <hubble/ctype.h>
 #include "keyboard.h"
 #include "keymap.h"
 #include <lib/misc.k.h>
-#include <utils/font.h>
+#include <utils/textout.h>
 #include <io.h>
 
 #include <asm.h>
@@ -299,7 +299,7 @@ static bool process_scancode_once(uint8_t raw, key_event_t *out_evt)
 	return true;
 }
 
-#include <utils/font.h>
+#include <utils/textout.h>
 
 // для IRQ — читаем без ожидания
 static inline uint8_t kbd_read_scancode_irq(void)
@@ -366,7 +366,7 @@ char keyboard_get_char(void)
 	}
 }
 
-#include <string.h>
+#include <hubble/string.h>
 
 uint64_t kbd_read(uint64_t offset, size_t size, void *buf)
 {

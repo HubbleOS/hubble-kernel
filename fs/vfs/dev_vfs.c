@@ -2,7 +2,7 @@
 #include "vfs_standart_struct.h"
 #include "dev.h"
 #include <stdbool.h>
-#include <string.h>
+#include <hubble/string.h>
 #include <printk.h>
 #include "higher_half.h"
 

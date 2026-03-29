@@ -9,7 +9,7 @@
 
 #include <drivers/storage/ata/ata.h>
 
-#include <string.h>
+#include <hubble/string.h>
 #include <stdbool.h>
 
 void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr)
@@ -78,9 +78,9 @@ uint32_t get_fat_entry(FAT32_FS *fs, uint32_t cluster)
 	fs->read_sector(fs->device, fat_sector, sector);
 
 	uint32_t entry = sector[offset] |
-			 (sector[offset + 1] << 8) |
-			 (sector[offset + 2] << 16) |
-			 (sector[offset + 3] << 24);
+					 (sector[offset + 1] << 8) |
+					 (sector[offset + 2] << 16) |
+					 (sector[offset + 3] << 24);
 
 	kfree(sector);
 

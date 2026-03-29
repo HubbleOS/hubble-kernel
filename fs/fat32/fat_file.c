@@ -6,7 +6,7 @@
 
 #include <drivers/storage/ata/ata.h>
 
-#include <string.h>
+#include <hubble/string.h>
 
 #include <stdbool.h>
 

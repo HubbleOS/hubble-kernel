@@ -5,7 +5,7 @@
 #include "vmm.h"
 #include "pmm.h"
 #include "asm.h"
-#include <string.h>
+#include <hubble/string.h>
 #include "higher_half.h"
 
 #include "printk.h"
@@ -117,8 +117,8 @@ int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags)
 
 	// Use huge pages ONLY for kernel mappings (not userspace)
 	if ((flags & PTE_USER) == 0 && !is_mmio(pa) &&
-	    (pa % VMM_HUGE_PAGE_SIZE == 0) &&
-	    (va % VMM_HUGE_PAGE_SIZE == 0))
+		(pa % VMM_HUGE_PAGE_SIZE == 0) &&
+		(va % VMM_HUGE_PAGE_SIZE == 0))
 	{
 		pd[PD_INDEX(va)] = pte_make(pa, flags | PTE_HUGE);
 		g_vmm.total_mapped_pages += VMM_HUGE_PAGE_SIZE / VMM_PAGE_SIZE;
@@ -234,10 +234,10 @@ void dump_page_flags(uint64_t va)
 	printk("VA 0x%llx -> PTE 0x%llx\n", va, pte);
 
 	printk("Flags: PRESENT=%d USER=%d WRITE=%d NX=%d\n",
-	       !!(pte & PTE_PRESENT),
-	       !!(pte & PTE_USER),
-	       !!(pte & PTE_WRITE),
-	       !!(pte & PTE_NX));
+		   !!(pte & PTE_PRESENT),
+		   !!(pte & PTE_USER),
+		   !!(pte & PTE_WRITE),
+		   !!(pte & PTE_NX));
 	// set nx to 0
 	// pt[PT_INDEX(va)] = pte & ~PTE_NX;
 	// invlpg((void *)va);

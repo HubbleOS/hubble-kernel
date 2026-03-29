@@ -19,7 +19,7 @@
 #include <net/arp.h>
 #include <net/ipv4.h>
 #include <net/udp.h>
-#include <string.h>
+#include <hubble/string.h>
 
 #include <fs/vfs/dev.h>
 

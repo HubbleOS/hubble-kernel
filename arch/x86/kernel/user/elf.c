@@ -7,7 +7,7 @@
 #include "higher_half.h"
 #include "printk.h"
 #include <stdint.h>
-#include <string.h>
+#include <hubble/string.h>
 #include <smp/scheduler.h>
 
 #define ELF_MAGIC 0x464c457fUL
@@ -45,9 +45,9 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr)
 	uint64_t map_end = (vaddr + memsz + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 
 	printk("[ELF] Loading segment: vaddr=0x%llx size=0x%llx filesz=0x%llx\n",
-	       (unsigned long long)vaddr,
-	       (unsigned long long)memsz,
-	       (unsigned long long)filesz);
+		   (unsigned long long)vaddr,
+		   (unsigned long long)memsz,
+		   (unsigned long long)filesz);
 
 	// --- 1) Allocate and map all pages ---
 	for (uint64_t addr = map_start; addr < map_end; addr += PAGE_SIZE)
@@ -119,7 +119,7 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr)
 			if (vfs_lseek(f, offset + file_offset, SEEK_SET) < 0)
 			{
 				printk("[ELF] ERROR: Failed to seek to offset 0x%llx\n",
-				       (unsigned long long)(offset + file_offset));
+					   (unsigned long long)(offset + file_offset));
 				kfree(kbuf);
 				return -1;
 			}
@@ -138,7 +138,7 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr)
 			if (!phys)
 			{
 				printk("[ELF] ERROR: Page 0x%llx not mapped!\n",
-				       (unsigned long long)page_base);
+					   (unsigned long long)page_base);
 				kfree(kbuf);
 				return -1;
 			}
@@ -185,7 +185,7 @@ int elf_load(const char *path, uint64_t *entry_out)
 	}
 
 	printk("[ELF] Loading %s (entry=0x%llx, phnum=%u)\n",
-	       path, (unsigned long long)ehdr.e_entry, ehdr.e_phnum);
+		   path, (unsigned long long)ehdr.e_entry, ehdr.e_phnum);
 
 	// Read program headers
 	size_t ph_size = (size_t)ehdr.e_phnum * sizeof(Elf64_Phdr);
@@ -220,11 +220,11 @@ int elf_load(const char *path, uint64_t *entry_out)
 		if (p->p_type == PT_LOAD)
 		{
 			printk("[ELF] HERE loading PHDR[%u]: vaddr=0x%llx filesz=0x%llx memsz=0x%llx flags=0x%x\n",
-			       i,
-			       (unsigned long long)p->p_vaddr,
-			       (unsigned long long)p->p_filesz,
-			       (unsigned long long)p->p_memsz,
-			       p->p_flags);
+				   i,
+				   (unsigned long long)p->p_vaddr,
+				   (unsigned long long)p->p_filesz,
+				   (unsigned long long)p->p_memsz,
+				   p->p_flags);
 
 			if (elf_load_segment(f, p) < 0)
 			{
@@ -249,7 +249,7 @@ extern void user_enter(uint64_t entry, uint64_t stack);
 int elf_run(uint64_t entry)
 {
 	printk("[ELF] Setting up user stack at 0x%llx\n",
-	       (unsigned long long)USER_STACK_TOP);
+		   (unsigned long long)USER_STACK_TOP);
 
 	uint64_t stack_base = USER_STACK_TOP - USER_STACK_PAGES * PAGE_SIZE;
 
@@ -287,7 +287,7 @@ int elf_run(uint64_t entry)
 	}
 
 	printk("[ELF] Entering userspace at 0x%llx with stack 0x%llx\n",
-	       (unsigned long long)entry, (unsigned long long)USER_STACK_TOP);
+		   (unsigned long long)entry, (unsigned long long)USER_STACK_TOP);
 
 	printk("address of user_enter: %x\n", VIRT_TO_PHYS(entry));
 
@@ -319,8 +319,8 @@ int elf_run(uint64_t entry)
 	// Read via physical address
 	uint8_t *phys_ptr = PHYS_TO_VIRT_PTR(uint8_t, entry_phys);
 	printk("  Code via phys: %02x %02x %02x %02x %02x %02x %02x %02x\n",
-	       phys_ptr[0], phys_ptr[1], phys_ptr[2], phys_ptr[3],
-	       phys_ptr[4], phys_ptr[5], phys_ptr[6], phys_ptr[7]);
+		   phys_ptr[0], phys_ptr[1], phys_ptr[2], phys_ptr[3],
+		   phys_ptr[4], phys_ptr[5], phys_ptr[6], phys_ptr[7]);
 
 	printk("[ELF] Flushing TLB before userspace entry...\n");
 	asm volatile("invlpg (%0)" : : "r"(entry));

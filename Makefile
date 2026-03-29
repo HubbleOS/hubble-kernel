@@ -101,9 +101,32 @@ DRIVERS_BUILD_DIR := $(BUILD_DIR)/drivers
 DRIVERS_LIB := $(DRIVERS_BUILD_DIR)/libdrivers.a
 export DRIVERS_DIR DRIVERS_BUILD_DIR DRIVERS_LIB
 
+# lib/fonts
+FONT_DIR := $(abspath lib/fonts)
+FONT_BUILD_DIR := $(BUILD_DIR)/lib/fonts
+FONT_LIB := $(FONT_BUILD_DIR)/libfonts.a
+export FONT_DIR FONT_BUILD_DIR FONT_LIB
+
+
+# lib/string
+STRING_DIR := $(abspath lib/string)
+STRING_BUILD_DIR := $(BUILD_DIR)/lib/string
+STRING_LIB := $(STRING_BUILD_DIR)/libstring.a
+export STRING_DIR STRING_BUILD_DIR STRING_LIB
+
+# lib/ctype
+CTYPE_DIR := $(abspath lib/ctype)
+CTYPE_BUILD_DIR := $(BUILD_DIR)/lib/ctype
+CTYPE_LIB := $(CTYPE_BUILD_DIR)/libctype.a
+export CTYPE_DIR CTYPE_BUILD_DIR CTYPE_LIB
+
 subdirs += net
 subdirs += fs
 subdirs += drivers
+
+subdirs += lib/fonts
+subdirs += lib/string
+subdirs += lib/ctype
 
 # Architecture-specific directories
 $(eval $(call kbuild-subdir,arch/$(ARCH)))

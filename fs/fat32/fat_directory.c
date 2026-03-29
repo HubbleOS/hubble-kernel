@@ -1,4 +1,4 @@
-#include <string.h>
+#include <hubble/string.h>
 
 #include "printk.h"
 #include "fat.h"

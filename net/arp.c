@@ -2,7 +2,7 @@
 
 #include <drivers/net/e1000/e1000.h>
 #include <net/eth.h>
-#include <string.h>
+#include <hubble/string.h>
 #include <printk.h>
 
 #define ARP_CACHE_SIZE 16

@@ -6,7 +6,7 @@
 #include <mm/pmm.h>
 #include <mm/slab.h>
 
-#include <string.h>
+#include <hubble/string.h>
 #include <apic/apic.h>
 #include <interrupt/interrupt.h>
 #include <printk.h>

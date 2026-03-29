@@ -1,6 +1,6 @@
 #include "acpi.h"
 #include <printk.h>
-#include <string.h>
+#include <hubble/string.h>
 #include <io.h>
 #include "higher_half.h"
 
@@ -290,7 +290,7 @@ void acpi_reboot(void)
 	}
 
 	// Fallback methods
-	outb(0x64, 0xFE);	      // Keyboard controller
+	outb(0x64, 0xFE);			  // Keyboard controller
 	asm volatile("lidt 0; int3"); // Triple fault
 	while (1)
 		hlt();
@@ -373,7 +373,7 @@ void acpi_enum_ioapics(acpi_ioapic_callback_t callback, void *ctx)
 		{
 			MADT_IOAPIC *ioapic = (MADT_IOAPIC *)entry;
 			callback(ioapic->IOAPIC_ID, ioapic->IOAPIC_Address,
-				 ioapic->GlobalSystemInterruptBase, ctx);
+					 ioapic->GlobalSystemInterruptBase, ctx);
 		}
 
 		ptr += entry->Length;
@@ -400,7 +400,7 @@ void acpi_enum_isos(acpi_iso_callback_t callback, void *ctx)
 		{
 			MADT_ISO *iso = (MADT_ISO *)entry;
 			callback(iso->IRQSource, iso->GlobalSystemInterrupt,
-				 iso->Flags, ctx);
+					 iso->Flags, ctx);
 		}
 
 		ptr += entry->Length;
@@ -440,6 +440,6 @@ void acpi_enum_mcfg(acpi_mcfg_callback_t callback, void *ctx)
 	{
 		MCFG_Entry *entry = &acpi_state.mcfg->Entries[i];
 		callback(entry->BaseAddress, entry->SegmentGroup,
-			 entry->StartBus, entry->EndBus, ctx);
+				 entry->StartBus, entry->EndBus, ctx);
 	}
 }

@@ -1,7 +1,7 @@
 #include "printk.h"
-#include "utils/font.h"
+#include <utils/textout.h>
 #include <utils/color.h>
-#include <string.h>
+#include <hubble/string.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdbool.h>
