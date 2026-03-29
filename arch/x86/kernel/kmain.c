@@ -28,8 +28,7 @@ uint64_t fb_mmap(uint64_t offset, size_t size)
 
 #include <src/early_console.h>
 
-__attribute__((section(".text.boot")))
-__attribute__((used)) void
+__attribute__((section(".text.boot"))) void
 kernel_entry(BootInfo *bi)
 {
 	clear_bss();

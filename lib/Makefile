@@ -1,5 +1,6 @@
 # lib/Makefile
 
-subdir-y += fonts/
-subdir-y += string/
-subdir-y += ctype/
+subdir-y += lib/fonts
+subdir-y += lib/color
+subdir-y += lib/string
+subdir-y += lib/ctype
