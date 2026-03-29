@@ -15,6 +15,7 @@ all: build iso
 KCOMMON_OBJS := $(BUILD_DIR)/kernel_common/main.o
 KCOMMON_OBJS += $(BUILD_DIR)/kernel_common/init/fs.o
 KCOMMON_OBJS += $(BUILD_DIR)/kernel_common/printk.o
+KCOMMON_OBJS += $(BUILD_DIR)/kernel_common/syscalls/syscall.o
 
 build: $(BUILD_TOOL)
 	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \

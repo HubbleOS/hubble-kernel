@@ -21,9 +21,9 @@ void *mmap_(uint64_t addr, size_t length, int prot, int flags,
 	return (uint64_t *)syscall6(3, addr, length, prot, flags, fd, offset);
 }
 
-int read_file(int fd, void *buf, size_t size) { return syscall3(0, fd, (long)buf, size); }
+int read_file(int fd, void *buf, size_t size) { return syscall3(SYS_read, fd, (long)buf, size); }
 
-int spawn(void *entry_point, void *arg, uint32_t priority) { return syscall3(6, (long)entry_point, (long)arg, priority); }
+int spawn(void *entry_point, void *arg, uint32_t priority) { return syscall3(SYS_spawn, (long)entry_point, (long)arg, priority); }
 
 typedef struct
 {
@@ -33,7 +33,7 @@ typedef struct
 	bool right_clicked;
 } mouse_t;
 
-uint32_t open(const char *path, int flags) { return syscall2(4, (long)path, flags); }
+uint32_t open(const char *path, int flags) { return syscall2(SYS_open, (long)path, flags); }
 
 void test(void);
 

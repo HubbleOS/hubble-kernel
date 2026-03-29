@@ -1,4 +1,5 @@
 #include "syscall_entry.h"
+#include <hubble/syscalls.h>
 #include <dev/io/output_device.h>
 
 #include <hubble/printk.h>

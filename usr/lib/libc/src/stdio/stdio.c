@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stddef.h>
 
-#include "sys/syscall.h"
+#include <sys/syscall.h>
 
 FILE *__stdoutp;
 FILE *__stdinp;

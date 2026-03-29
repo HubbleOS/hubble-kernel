@@ -1,5 +1,4 @@
 #include <smp/scheduler.h>
-#include <sys/syscall.h>
 #include <smp/task.h>
 #include <fs/vfs/dev.h>
 #include <fs/vfs/vfs.h>
@@ -9,6 +8,7 @@
 #include <user/elf.h>
 
 #include "syscall_entry.h"
+#include <hubble/syscalls.h>
 
 long sys_spawn(void *entry_point, void *arg, uint32_t priority)
 {
