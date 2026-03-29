@@ -1,5 +1,5 @@
 #include "acpi.h"
-#include <printk.h>
+#include <hubble/printk.h>
 #include <hubble/string.h>
 #include <io.h>
 #include "higher_half.h"

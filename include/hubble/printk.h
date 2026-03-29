@@ -1,12 +1,9 @@
 #pragma once
 
 #include <_cheader.h>
-
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdbool.h>
-
-#include <bootinfo/framebuffer.h>
 
 // Log levels
 #define KERN_EMERG "<0>"   // System is unusable
@@ -18,14 +15,14 @@
 #define KERN_INFO "<6>"	   // Informational
 #define KERN_DEBUG "<7>"   // Debug-level messages
 
-// Log buffer size (16KB by default)
 #define PRINTK_BUFFER_SIZE (16 * 1024)
 
 _Begin_C_Header;
 
-void early_printk_init(framebuffer_info_t *fb);
-void printk_init(framebuffer_info_t *fb);
+// Регистрация output функции (вызывается из arch-специфичного кода)
+void printk_set_output(void (*fn)(char c));
 
+// Регистрация консоли (после того как поднялась полноценная подсистема вывода)
 void printk_register_console(void (*write_fn)(const char *buf, size_t len, void *data), void *user_data);
 void printk_unregister_console(void);
 
@@ -35,8 +32,5 @@ void vprintk(const char *fmt, va_list args);
 size_t printk_get_log_buffer(char *dest, size_t max_len);
 void printk_clear_log_buffer(void);
 size_t printk_get_log_size(void);
-
-void printk_set_early_mode(bool enable);
-bool printk_is_early_mode(void);
 
 _End_C_Header;

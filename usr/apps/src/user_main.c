@@ -16,7 +16,7 @@
 #include <dev/mouse/mouse.h>
 
 void *mmap_(uint64_t addr, size_t length, int prot, int flags,
-			int fd, uint64_t offset)
+	    int fd, uint64_t offset)
 {
 	return (uint64_t *)syscall6(3, addr, length, prot, flags, fd, offset);
 }
@@ -29,7 +29,7 @@ typedef struct
 {
 	int32_t x, y;
 	bool left, right, middle; // current held state
-	bool left_clicked;		  // set on press, you clear it after handling
+	bool left_clicked;	  // set on press, you clear it after handling
 	bool right_clicked;
 } mouse_t;
 
@@ -47,8 +47,6 @@ void _start(void)
 
 	int mouse_file = open("/dev/mouse", 0);
 	mouse_t *mouse = (mouse_t *)mmap_(0, sizeof(mouse_t), 3, 1, mouse_file, 0);
-
-	int kbd_file = open("/dev/kbd", 0);
 
 	int width = 1280;
 	int height = 800;
@@ -84,8 +82,8 @@ void _start(void)
 			int drag_y = g_mouse.y - g_mouse.drag_offset_y;
 			if (g_mouse.drag_el)
 				object_move_element(g_mouse.drag_obj, g_mouse.drag_el,
-									drag_x - g_mouse.drag_obj->x,
-									drag_y - g_mouse.drag_obj->y);
+						    drag_x - g_mouse.drag_obj->x,
+						    drag_y - g_mouse.drag_obj->y);
 			else
 			{
 				compositor_move_object(g_mouse.drag_obj, drag_x, drag_y);

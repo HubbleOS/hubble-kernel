@@ -1,7 +1,7 @@
 #include "apic.h"
 #include <acpi/acpi.h>
 #include "higher_half.h"
-#include <printk.h>
+#include <hubble/printk.h>
 #include <io.h>
 #include <hubble/string.h>
 #include <mm/vmm.h>

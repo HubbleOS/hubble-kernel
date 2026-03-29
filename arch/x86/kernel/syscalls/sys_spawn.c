@@ -5,7 +5,7 @@
 #include <fs/vfs/vfs.h>
 #include "higher_half.h"
 #include <hubble/string.h>
-#include <printk.h>
+#include <hubble/printk.h>
 #include <user/elf.h>
 
 #include "syscall_entry.h"

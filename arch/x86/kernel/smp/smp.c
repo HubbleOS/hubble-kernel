@@ -14,7 +14,7 @@
 
 #include "percpu.h"
 #include "higher_half.h"
-#include <printk.h>
+#include <hubble/printk.h>
 #include <hubble/string.h>
 
 #include <syscalls/syscall_entry.h>

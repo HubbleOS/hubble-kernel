@@ -3,7 +3,7 @@
 
 #include <sys/syscall.h>
 #include "io.h"
-#include "printk.h"
+#include <hubble/printk.h>
 #include <mm/map/vm_map.h>
 #include <mm/vmm.h>
 #include <mm/map/vm_map.h>

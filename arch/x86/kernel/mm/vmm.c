@@ -8,7 +8,7 @@
 #include <hubble/string.h>
 #include "higher_half.h"
 
-#include "printk.h"
+#include <hubble/printk.h>
 
 vmm_info_t g_vmm = {0};
 

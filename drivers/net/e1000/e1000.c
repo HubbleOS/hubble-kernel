@@ -1,5 +1,5 @@
 #include "e1000.h"
-#include <printk.h>
+#include <hubble/printk.h>
 #include <mm/kmalloc.h>
 #include <drivers/pci/pci.h>
 #include <hubble/string.h>

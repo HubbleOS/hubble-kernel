@@ -5,7 +5,7 @@
 #define MAX_NAME 256
 #define MAX_FILES 2048
 #define MAX_ARGS 128
-#define MAX_CMD 8192
+#define MAX_CMD 65536
 
 typedef struct
 {
@@ -20,6 +20,7 @@ typedef struct
 	char ldflags[2048];
 	char includes[2048];
 	char libs[2048];
+	char obj_files[MAX_CMD];
 	char output[MAX_PATH];
 	char ldscript[MAX_PATH];
 	char log_dir[MAX_PATH];

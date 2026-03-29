@@ -1,6 +1,6 @@
 #include "gpt.h"
 #include "gpt_struct.h"
-#include "printk.h"
+#include <hubble/printk.h>
 #include <mm/kmalloc.h>
 #include <mm/pmm.h>
 #include "higher_half.h"

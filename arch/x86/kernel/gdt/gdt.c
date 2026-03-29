@@ -1,6 +1,6 @@
 #include "gdt.h"
 #include <hubble/string.h>
-#include <printk.h>
+#include <hubble/printk.h>
 
 #include <apic/apic.h>
 

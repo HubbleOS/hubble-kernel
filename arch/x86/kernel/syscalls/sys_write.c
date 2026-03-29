@@ -1,7 +1,7 @@
 #include "syscall_entry.h"
 #include <dev/io/output_device.h>
 
-#include "printk.h"
+#include <hubble/printk.h>
 
 long sys_write(int fd, const char *buffer, size_t len)
 {
