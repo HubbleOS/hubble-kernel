@@ -1,5 +1,6 @@
 #include <hubble/kernel.h>
 #include <hubble/platform.h>
+#include <hubble/printk.h>
 
 #include "init/init.h"
 
@@ -15,7 +16,6 @@
 #include <dev/ps2.h>
 #include <io.h>
 #include <asm.h>
-#include <hubble/printk.h>
 
 platform_info_t g_platform;
 
