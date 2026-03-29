@@ -58,7 +58,7 @@ kernel_entry(BootInfo *bi)
 
 	kernel_main();
 
-	// scheduler_init();
+	scheduler_init();
 
 	while (1)
 	{

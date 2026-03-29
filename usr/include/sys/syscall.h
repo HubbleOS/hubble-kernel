@@ -4,9 +4,12 @@
 
 #define SYS_write 1
 #define SYS_read 2
-#define SYS_fb 42
+#define SYS_mmap 3
+#define SYS_open 4
+#define SYS_close 5
+#define SYS_spawn 6
 
-#define SYSCALL_COUNT 3
+#define SYSCALL_COUNT 256
 
 // Using SYSCALL instruction (faster)
 static inline long do_syscall_fast(long num, long arg1, long arg2, long arg3,

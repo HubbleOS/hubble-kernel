@@ -29,6 +29,8 @@ void kernel_main(void)
 	dev_vfs_register("mouse", mouse_mmap, mouse_read_file);
 	dev_vfs_register("kbd", NULL, kbd_read);
 
+	return;
+
 	e1000_init();
 	e1000_netdev_register();
 

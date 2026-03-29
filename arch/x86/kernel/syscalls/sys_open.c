@@ -1,5 +1,4 @@
 #include <smp/scheduler.h>
-#include <sys/syscall.h>
 #include <smp/task.h>
 #include <fs/vfs/dev.h>
 #include <fs/vfs/vfs.h>
@@ -7,6 +6,7 @@
 #include <hubble/string.h>
 
 #include "syscall_entry.h"
+#include <hubble/syscalls.h>
 
 // sys_open - returns fd integer
 long sys_open(const char *path, int flags)

@@ -1,7 +1,7 @@
 # usr/lib/libc/Makefile
 LIBC_SRC := src
 LIBC_OUT := $(USR_DIR)/lib/libc.a
-INCLUDES := -Iinclude
+INCLUDES := -Iinclude -I../../include
 
 .PHONY: all
 all: $(LIBC_OUT)
