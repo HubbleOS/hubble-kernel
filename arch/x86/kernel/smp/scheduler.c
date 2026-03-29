@@ -73,6 +73,8 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	task->state = TASK_READY;
 	task->priority = priority;
 	task->time_slice = 10; // 10 ticks
+	task->context_saved = false;
+	task->in_syscall = false;
 
 	// Allocate kernel stack
 	if (!userspace)
@@ -100,7 +102,19 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 
 			if (!phys)
 				return NULL;
-			vmm_map_page(stack_base + i, phys, PTE_PRESENT | PTE_USER | PTE_WRITE);
+			if (vmm_map_page(stack_base + i, phys, PTE_PRESENT | PTE_USER | PTE_WRITE) < 0)
+			{
+				printk("Failed to map page 0x%llx\n", stack_base + i);
+				return NULL;
+			}
+
+			uint64_t va = stack_base + i;
+			phys = vmm_get_phys(va);
+			// Also check flags directly
+			uint64_t *pt = pt_table(va);
+			uint64_t pte = pt[PT_INDEX(va)];
+			printk("  0x%llx -> phys=0x%llx PTE=0x%llx USER=%d\n",
+			       va, phys, pte, !!(pte & PTE_USER));
 		}
 	}
 	// Set-up syscall stack
@@ -120,7 +134,9 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	// Set up initial stack
 	printk("Setting up initial stack\n");
 	uint64_t *stack_top = (uint64_t *)(((task->kernel_stack + task->stack_size) & ~0xFULL) - 8);
-
+	printk("stack_base=0x%llx faulting=0x6fedcfd0 PT_INDEX=0x%x\n",
+	       task->kernel_stack, PT_INDEX(task->kernel_stack));
+	printk("mapped up to: 0x%llx\n", task->kernel_stack + task->stack_size + PAGE_SIZE);
 	// Push initial values onto stack
 	printk("Pushing initial values onto stack\n");
 	// *(--stack_top) = 0x202;			 // RFLAGS (interrupts enabled)
@@ -287,19 +303,34 @@ void task_exit(int exit_code)
 
 void task_sleep(void)
 {
-	uint8_t cpu_id = lapic_get_id();
-	task_t *current = current_task[cpu_id];
-
+	task_t *current = get_current_task();
 	if (!current)
 		return;
 
-	outb(0x3f8, 'S');
+	uint64_t user_rsp, user_rip, user_rflags;
+	asm volatile("mov %%gs:8, %0" : "=r"(user_rsp));
+	asm volatile("mov %%rcx,  %0" : "=r"(user_rip));
+	asm volatile("mov %%r11,  %0" : "=r"(user_rflags));
+
+	// // Set flag FIRST so save_context skips immediately
+	// current->context_saved = true;
+
+	// // Then write context — save_context won't overwrite these
+	// current->context.rsp = user_rsp;
+	// current->context.rip = user_rip;
+	// current->context.rflags = user_rflags;
+	// current->context.cs = 0x23;
+	// current->context.ss = 0x1B;
+	// current->context.rax = (uint64_t)-1;
 
 	current->state = TASK_BLOCKED;
 	current->time_slice = 0;
-
-	// printk("Task sleeping: %p\n", current);
+	current->in_syscall = true;
+	current->in_syscall_rsp = user_rsp;
+	// printk("Sleeping rsp=0x%llx\n", user_rsp);
+	asm volatile("swapgs");
 	asm volatile("int $32");
+	asm volatile("swapgs");
 }
 
 void task_wake(task_t *task)
@@ -368,8 +399,12 @@ void schedule(registers_t *regs)
 
 		asm volatile("mov %0, %%cr3" ::"r"(new_task->page_table) : "memory");
 	}
+	if (new_task->in_syscall)
+	{
+		cpu_locals[cpu_id].cpu_id = new_task->in_syscall_rsp;
+	}
 	cpu_locals[cpu_id].rsp0 = new_task->rsp0 + new_task->rsp0_size;
-
+	tss_set_rsp0(new_task->rsp0 + new_task->rsp0_size);
 	task_state_load(new_task, regs);
 	return;
 
@@ -396,16 +431,16 @@ void lapic_timer_handler(registers_t *regs)
 
 	if (current && current->rsp0)
 	{
-		uint64_t *canary = (uint64_t *)(current->rsp0 + current->rsp0_size - 8);
+		uint64_t *canary = (uint64_t *)(current->rsp0);
+		// if (*canary != CANARY)
+		// {
+		// 	printk("STACK OVERFLOW on task pid=%d rsp0=0x%llx, data=0x%llx, canary=0x%llx\n",
+		// 	       current->pid, current->rsp0, *canary, (uint64_t)canary);
+		// 	*canary = CANARY; // reset so we only print once
+		// } no sense to do this here syscall can rewrite it when return regs
 		if (*canary != CANARY)
 		{
-			printk("STACK OVERFLOW on task pid=%d rsp0=0x%llx\n",
-			       current->pid, current->rsp0);
-			*canary = CANARY; // reset so we only print once
-		}
-		if (*(uint64_t *)(current->rsp0) != CANARY)
-		{
-			printk("STACK UNDERFLOW on task pid=%d\n", current->pid);
+			printk("STACK UNDERFLOW on task pid=%d, data=0x%llx\n", current->pid, *(uint64_t *)(current->rsp0));
 			*(uint64_t *)(current->rsp0) = CANARY;
 		}
 	}
@@ -447,6 +482,10 @@ void lapic_timer_handler(registers_t *regs)
 void save_context(task_t *current, registers_t *regs)
 {
 	if (!current)
+	{
+		return;
+	}
+	if (current->context_saved)
 	{
 		return;
 	}

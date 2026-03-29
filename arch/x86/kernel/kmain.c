@@ -95,12 +95,17 @@ void kmain_thread(void)
 	{
 		uint64_t phys = pmm_alloc_page();
 		if (!phys)
+		{
+			printk("failed to alloc page\n");
 			break;
+		}
 		vmm_map_page_into(task1->page_table, stack_base + i, phys,
 				  PTE_PRESENT | PTE_USER | PTE_WRITE);
 	}
 
 	task1->page_table = pml4;
+
+	printk("user at cr3: 0x%016lx\n", task1->page_table);
 	scheduler_add_task(task1);
 
 	while (1)

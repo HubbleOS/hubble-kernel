@@ -113,7 +113,7 @@ void test(void)
 	while (1)
 	{
 		read_file(kbd_file, &c, 1);
-		printf("key: %c\n", c);
+		printf("key 1: %c\n", c);
 	}
 	// printf("Test task!\n");
 }

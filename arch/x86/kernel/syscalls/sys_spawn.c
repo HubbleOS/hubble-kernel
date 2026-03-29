@@ -24,7 +24,6 @@ long sys_spawn(void *entry_point, void *arg, uint32_t priority)
 	if (!task)
 		return -1;
 
-	printk("spawn task %p\n", task);
 	scheduler_add_task(task);
 	return (long)task->pid;
 }
@@ -33,6 +32,8 @@ long sys_spawn_file(const char *path, void *arg, uint32_t priority)
 	uint64_t *new_pm = vmm_create_user_pagemap();
 	if (!new_pm)
 		return -1;
+
+	printk("Spawning at 0x%016lx\n", new_pm);
 
 	uint64_t entry_point = 0;
 	if (elf_load(path, &entry_point, new_pm) < 0)
@@ -49,7 +50,10 @@ long sys_spawn_file(const char *path, void *arg, uint32_t priority)
 		// Get phys from kernel CR3 where task_create mapped it
 		uint64_t phys = vmm_get_phys(stack_base + i);
 		if (!phys)
+		{
+			printk("Failed to get phys for stack page 0x%016lx\n", stack_base + i);
 			continue;
+		}
 
 		vmm_map_page_into(new_pm, stack_base + i, phys,
 				  PTE_PRESENT | PTE_USER | PTE_WRITE);

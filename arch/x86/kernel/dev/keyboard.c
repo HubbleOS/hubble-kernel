@@ -5,6 +5,9 @@
 #include <lib/misc.k.h>
 #include <utils/font.h>
 #include <io.h>
+#include <smp/waitqueue.h>
+
+static wait_queue_t kbd_queue = {0};
 
 // Existing keymap (keep as is)
 const keymap_entry_t keymap[] = {
@@ -332,11 +335,7 @@ void keyboard_irq(registers_t *r)
 	if (process_scancode_once(raw, &evt))
 	{
 		kbd_push(evt);
-		if (kbd_stream.waiting != NULL)
-		{
-			task_wake(kbd_stream.waiting);
-			kbd_stream.waiting = NULL;
-		}
+		waitqueue_wake_all(&kbd_queue);
 	}
 }
 
@@ -359,8 +358,7 @@ char keyboard_get_char(void)
 			return keymap_lookup_char(ev.id.scancode, ev.id.extended,
 						  ev.is_shift, ev.is_caps_lock);
 		}
-		kbd_stream.waiting = get_current_task();
-		task_sleep();
+		waitqueue_sleep(&kbd_queue);
 	}
 }
 
@@ -418,6 +416,8 @@ void keyboard_init()
 	keyboard_write(0x01);
 	act = keyboard_read();
 	printk("Keyboard active: %02x\n", act);
+
+	waitqueue_init(&kbd_queue);
 
 	__asm__ volatile("sti");
 	printk("Keyboard initialized\n");

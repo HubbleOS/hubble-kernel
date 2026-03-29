@@ -161,6 +161,12 @@ void isr_handler(registers_t *regs)
 			asm volatile("mov %%cr2, %0" : "=r"(addr));
 
 			debug_dump_mapping((uint64_t *)get_cr3(), addr);
+
+			uint64_t cr3;
+			asm volatile("mov %%cr3, %0" : "=r"(cr3));
+			task_t *t = get_current_task();
+			printk("Fault: active CR3=0x%llx task->page_table=0x%llx match=%d\n",
+			       cr3, (uint64_t)t->page_table, cr3 == (uint64_t)t->page_table);
 		}
 		while (1)
 		{

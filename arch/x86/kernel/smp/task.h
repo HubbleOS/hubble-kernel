@@ -65,7 +65,9 @@ typedef struct task
 
 	// CPU context
 	cpu_context_t context;
-
+	bool context_saved;
+	bool in_syscall;
+	uint64_t in_syscall_rsp;
 	// Syscall stack
 	uint32_t rsp0_size;
 	uint64_t rsp0;
