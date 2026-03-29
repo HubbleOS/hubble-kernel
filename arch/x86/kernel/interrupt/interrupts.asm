@@ -41,19 +41,13 @@ isr%1:
 ; Макрос для IRQ
 %macro IRQ 2
 irq%1:
-    push qword 0
-    push qword %2
+    push qword 0            ; Dummy error code
+    push qword %2           ; Номер прерывания (32 + IRQ number)
 
-    ; Check CS to see if we came from userspace
-    ; Stack at this point:
-    ; [rsp+0]  = dummy error code (just pushed)
-    ; [rsp+8]  = irq number (just pushed)  
-    ; [rsp+16] = RIP  (CPU pushed)
-    ; [rsp+24] = CS   (CPU pushed) ← check this
-    cmp qword [rsp+24], 0x08
-    je .skip_swapgs_%1
-    swapgs
-.skip_swapgs_%1:
+    ; cmp qword [rsp+8], 0x08   ; check CS on interrupt frame
+    ; je irq_common_stub
+    ; swapgs                     ; only swap if from userspace
+
     jmp irq_common_stub
 %endmacro
 
@@ -141,7 +135,7 @@ isr_common_stub:
     mov ds, ax
     mov es, ax
     mov fs, ax
-    mov gs, ax
+    ; mov gs, ax
     
     ; Вирівнюємо стек по 16 байт для ABI
     mov rbp, rsp        ; Зберігаємо оригінальний RSP
@@ -204,7 +198,7 @@ irq_common_stub:
     mov ds, ax
     mov es, ax
     mov fs, ax
-    mov gs, ax
+    ; mov gs, ax
     
     ; Вирівнюємо стек по 16 байт для ABI
     mov rbp, rsp        ; Зберігаємо оригінальний RSP
