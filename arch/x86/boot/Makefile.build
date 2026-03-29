@@ -1,0 +1,18 @@
+BOOT_SO := $(BUILD_DIR)/boot/boot.so
+EFI_OUT := $(ISO_DIR)/EFI/BOOT/BOOTx64.EFI
+EFI_OUT_DIR := $(ISO_DIR)/EFI/BOOT
+
+EFI_SECTIONS = -j .text -j .sdata -j .data -j .rodata \
+	-j .dynamic -j .dynsym -j .rel -j .rela \
+	-j .rel.* -j .rela.* -j .reloc
+
+.PHONY: all 
+
+all: bootloader
+
+# EFI bootloader
+.PHONY: bootloader
+bootloader: $(EFI_OUT)
+$(EFI_OUT): $(BOOT_SO)
+	@mkdir -p $(EFI_OUT_DIR)
+	objcopy $(EFI_SECTIONS) --output-target=efi-app-x86_64 --subsystem=10 $< $@

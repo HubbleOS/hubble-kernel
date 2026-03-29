@@ -8,7 +8,6 @@
 #include <dev/keyboard.h>
 #include <dev/mouse.h>
 #include <fs/vfs/dev.h>
-////
 
 #include <drivers/net/e1000/e1000.h>
 
@@ -34,10 +33,8 @@ void kernel_main(void)
 	e1000_init();
 	e1000_netdev_register();
 
-	// 1. ARP — дізнатись MAC gateway
 	arp_request(ARP_IP(10, 0, 2, 2));
 
-	// Чекаємо відповідь
 	uint8_t gw_mac[6];
 
 	uint8_t buf[1500];
@@ -45,7 +42,6 @@ void kernel_main(void)
 	while (arp_lookup(ARP_IP(10, 0, 2, 2), gw_mac) != 0)
 		eth_recv(buf, &len, NULL);
 
-	// 2. Перевіряємо
 	if (arp_lookup(ARP_IP(10, 0, 2, 2), gw_mac) != 0)
 	{
 		printk("[net] ARP failed\n");
@@ -54,9 +50,8 @@ void kernel_main(void)
 	{
 		printk("[net] ARP ok, sending UDP\n");
 
-		// 3. UDP на хост порт 4444
 		char msg[] = "Hello from kernel!";
-		// udp_send(ARP_IP(10, 0, 2, 2), 12345, 4444, msg, sizeof(msg));
+
 		printk("[net] UDP sent\n");
 	}
 
@@ -71,7 +66,7 @@ void kernel_main(void)
 		while (udp_recv(7777, rbuf, &rlen) != 0)
 			;
 
-		rbuf[rlen] = 0; // null terminate
+		rbuf[rlen] = 0;
 		printk("[net] received: %s\n", rbuf);
 	}
 }

@@ -42,9 +42,8 @@ int run_command(const char *cmd, int verbose)
 	// объединяем stderr -> stdout
 	snprintf(full_cmd, sizeof(full_cmd), "%s 2>&1", cmd);
 
-	LOG_INFO("Executing: %s", cmd);
 	if (verbose)
-		printf("%s\n", cmd);
+		LOG_INFO("Executing: %s", cmd);
 
 	FILE *pipe = popen(full_cmd, "r");
 	if (!pipe)

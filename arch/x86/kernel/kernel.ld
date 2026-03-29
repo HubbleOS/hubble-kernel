@@ -23,7 +23,7 @@ SECTIONS
     /* Code */
     .text : ALIGN(4K)
     {
-        *(.text.boot)     /* Entry point должен быть первым */
+        *(.text.boot)     /* Entry point must be first */
         *(.text*)
         *(.text.ap_trampoline)  
     } AT > PHYS

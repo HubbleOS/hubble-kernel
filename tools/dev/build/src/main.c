@@ -58,7 +58,6 @@ int main(int argc, char **argv)
 	mkdir_p(cfg.build_dir);
 
 	// Сканируем исходники
-	printf("Scanning source files in: %s\n", cfg.src_dir);
 	LOG_INFO("Scanning source files in: %s", cfg.src_dir);
 
 	scan_directory(cfg.src_dir, ".c", c_files, &c_count, MAX_FILES);
@@ -66,8 +65,6 @@ int main(int argc, char **argv)
 	scan_directory(cfg.src_dir, ".asm", asm_files, &asm_count, MAX_FILES);
 	scan_directory(cfg.src_dir, ".tbl", tbl_files, &tbl_count, MAX_FILES);
 
-	printf("Found: %d C files, %d C++ files, %d ASM files, %d TBL files\n",
-	       c_count, cpp_count, asm_count, tbl_count);
 	LOG_INFO("Found: %d C files, %d C++ files, %d ASM files, %d TBL files",
 		 c_count, cpp_count, asm_count, tbl_count);
 
@@ -163,7 +160,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	printf("Build completed successfully\n");
 	LOG_SUCCESS("Build completed successfully");
 	LOG_INFO("Total object files created: %d", obj_count);
 

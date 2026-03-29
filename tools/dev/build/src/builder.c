@@ -21,8 +21,7 @@ int build_file(const char *src, const char *obj, SourceLang lang, const BuildCon
 	if (!cfg->force_rebuild && !needs_rebuild(src, obj))
 	{
 		if (cfg->verbose)
-			printf("Skipping %s (up to date)\n", src);
-		LOG_INFO("Skipping %s (up to date)", src);
+			LOG_INFO("Skipping %s (up to date)", src);
 		return 0;
 	}
 
@@ -30,21 +29,18 @@ int build_file(const char *src, const char *obj, SourceLang lang, const BuildCon
 	switch (lang)
 	{
 	case LANG_C:
-		printf("Compiling: %s\n", src);
 		LOG_INFO("Compiling: %s -> %s", src, obj);
 		snprintf(cmd, sizeof(cmd), "%s -MMD -MP -fdiagnostics-color=always %s %s -c %s -o %s",
 			 cfg->compiler, cfg->cflags, cfg->includes, src, obj);
 		ret = run_command(cmd, cfg->verbose);
 		break;
 	case LANG_CPP:
-		printf("Compiling C++: %s\n", src);
 		LOG_INFO("Compiling C++: %s -> %s", src, obj);
 		snprintf(cmd, sizeof(cmd), "%s -MMD -MP -fdiagnostics-color=always %s %s -c %s -o %s",
 			 cxx_compiler, cfg->cflags, cfg->includes, src, obj);
 		ret = run_command(cmd, cfg->verbose);
 		break;
 	case LANG_ASM:
-		printf("Assembling: %s\n", src);
 		LOG_INFO("Assembling: %s -> %s", src, obj);
 		snprintf(cmd, sizeof(cmd), "%s %s %s -o %s",
 			 cfg->assembler, cfg->asmflags, src, obj);
@@ -52,7 +48,6 @@ int build_file(const char *src, const char *obj, SourceLang lang, const BuildCon
 		break;
 	case LANG_TBL:
 	{
-		printf("Generating header from TBL: %s\n", src);
 		LOG_INFO("Generating header from TBL: %s", src);
 
 		char header_path[MAX_PATH];
@@ -93,7 +88,6 @@ int create_archive(const char *output, char obj_files[][MAX_PATH], int obj_count
 	int use_response_file = 0;
 	char response_file[MAX_PATH];
 
-	printf("Creating archive: %s\n", output);
 	LOG_INFO("Creating archive: %s (%d object files)", output, obj_count);
 
 	char output_dir[MAX_PATH];
@@ -168,7 +162,6 @@ int link_executable(const char *output, char obj_files[][MAX_PATH], int obj_coun
 	int use_response_file = 0;
 	char response_file[MAX_PATH];
 
-	printf("Linking executable: %s\n", output);
 	LOG_INFO("Linking executable: %s (%d object files)", output, obj_count);
 
 	char output_dir[MAX_PATH];

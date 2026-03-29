@@ -1,4 +1,4 @@
 # arch/x86/Makefile
 
-subdir-y += kernel/
-subdir-y += boot/
+subdir-y += arch/x86/kernel/
+subdir-y += arch/x86/boot/
