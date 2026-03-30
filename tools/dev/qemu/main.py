@@ -38,8 +38,16 @@ def parse_arguments():
 
 
 def get_exe_dir():
-    # Current working directory
     return Path(__file__).resolve().parent
+
+
+def get_audiodev():
+    if sys.platform == "darwin":
+        return "coreaudio,id=audio0"
+    elif sys.platform == "win32":
+        return "dsound,id=audio0"
+    else:
+        return "pa,id=audio0"  # PulseAudio on Linux
 
 
 def build_qemu_command(opts: QemuOptions):
@@ -48,10 +56,11 @@ def build_qemu_command(opts: QemuOptions):
     if not ovmf_path.exists():
         raise FileNotFoundError(f"OVMF_CODE.fd not found in {ovmf_path}")
 
+    audiodev = get_audiodev()
+
     cmd = [
         f"qemu-system-{opts.arch}",
         "-M", "pc",
-        # "-M ", "q35",
         "-cpu", "Haswell",
         "-m", str(opts.mem),
         "-smp", str(opts.smp),
@@ -60,10 +69,6 @@ def build_qemu_command(opts: QemuOptions):
         "-drive", "file=out/disks/disk.img,format=raw,index=0,media=disk,cache=none",
 
         # ISO
-        # // pos += snprintf(cmd + pos, len - pos,
-        #                    // "-drive file=fat:rw:%s,if=none,id=nvm-1 "
-        #                    // "-device nvme,drive=nvm-1,serial=nvme-test ",
-        #                    // opts -> iso_path)
         "-drive", f"file=fat:rw:{opts.iso_path},format=raw,index=1,media=disk",
 
         # OVMF
@@ -72,12 +77,17 @@ def build_qemu_command(opts: QemuOptions):
         # Serial
         "-serial", "stdio",
 
-        # Internet
+        # Sound
+        "-audiodev", audiodev,
+        "-device", "sb16,audiodev=audio0",
+        "-machine", "pcspk-audiodev=audio0",
+
+        # Network
         "-netdev user,id=net0,hostfwd=udp::4444-:7777",
         "-device e1000,netdev=net0",
 
-        # Debugging
-        "-S", "-s", "-d", "cpu_reset", "-no-reboot", "-no-shutdown"
+        # Debug
+        # "-S", "-s", "-d", "cpu_reset", "-no-reboot", "-no-shutdown"
     ]
     return " ".join(cmd) + " | sed 's/\\x1b\\[[0-9;]*m//g'"
 

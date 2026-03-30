@@ -16,10 +16,68 @@
 #include <net/ipv4.h>
 #include <net/udp.h>
 
+#include <sound/sounddev.h>
+
 static uint64_t fb_mmap(uint64_t offset, size_t size)
 {
 	return g_platform.fb_base;
 }
+
+static const struct
+{
+	uint32_t freq;
+	uint32_t ms;
+} melody[] = {
+    {660, 100},
+    {0, 50},
+    {660, 100},
+    {0, 100},
+    {660, 100},
+    {0, 100},
+    {510, 100},
+    {0, 50},
+    {660, 100},
+    {0, 100},
+    {770, 100},
+    {0, 300},
+    {380, 100},
+    {0, 300},
+
+    {510, 100},
+    {0, 150},
+    {380, 100},
+    {0, 200},
+    {320, 100},
+    {0, 200},
+    {440, 100},
+    {0, 100},
+    {480, 80},
+    {0, 80},
+    {450, 100},
+    {0, 50},
+    {430, 100},
+    {0, 50},
+    {380, 100},
+    {0, 50},
+    {660, 80},
+    {0, 80},
+    {760, 50},
+    {0, 50},
+    {860, 100},
+    {0, 100},
+    {700, 80},
+    {0, 80},
+    {760, 50},
+    {0, 50},
+    {660, 80},
+    {0, 80},
+    {520, 80},
+    {0, 80},
+    {580, 80},
+    {0, 80},
+    {480, 80},
+    {0, 80},
+};
 
 void kernel_main(void)
 {
@@ -27,6 +85,14 @@ void kernel_main(void)
 	dev_vfs_register("fb0", fb_mmap, NULL);
 	dev_vfs_register("mouse", mouse_mmap, mouse_read_file);
 	dev_vfs_register("kbd", NULL, kbd_read);
+
+	sound_init();
+
+	while (1)
+	{
+		for (int i = 0; i < (int)(sizeof(melody) / sizeof(melody[0])); i++)
+			sound_play(melody[i].freq, melody[i].ms);
+	}
 
 	return;
 

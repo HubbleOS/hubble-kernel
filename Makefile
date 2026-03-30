@@ -76,6 +76,7 @@ endef
 NET_LIB     := $(call lib-path,net)
 FS_LIB      := $(call lib-path,fs)
 DRIVERS_LIB := $(call lib-path,drivers)
+SOUND_LIB   := $(call lib-path,sound)
 FONT_LIB    := $(call lib-path,lib/fonts)
 COLOR_LIB   := $(call lib-path,lib/color)
 STRING_LIB  := $(call lib-path,lib/string)
@@ -83,7 +84,7 @@ CTYPE_LIB   := $(call lib-path,lib/ctype)
 
 export NET_LIB FS_LIB DRIVERS_LIB FONT_LIB COLOR_LIB STRING_LIB CTYPE_LIB
 
-LIBS := $(NET_LIB) $(FS_LIB) $(DRIVERS_LIB) $(FONT_LIB) $(COLOR_LIB) $(STRING_LIB) $(CTYPE_LIB)
+LIBS := $(NET_LIB) $(FS_LIB) $(SOUND_LIB) $(DRIVERS_LIB) $(FONT_LIB) $(COLOR_LIB) $(STRING_LIB) $(CTYPE_LIB)
 export LIBS
 
 # kernel/ common objects
@@ -197,6 +198,7 @@ MODULES += net
 MODULES += fs
 MODULES += drivers
 MODULES += lib
+MODULES += sound
 MODULES += kernel
 MODULES += arch/$(ARCH)
 
