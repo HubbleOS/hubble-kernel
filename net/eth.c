@@ -1,5 +1,6 @@
 #include "eth.h"
-#include "netdev.h"
+#include <hubble/device.h>
+#include <net/netdev.h>
 #include <net/arp.h>
 #include <mm/kmalloc.h>
 #include <hubble/string.h>
@@ -11,14 +12,22 @@ struct eth_hdr
 	uint16_t type;
 } __attribute__((packed));
 
+static struct device *eth_dev(void)
+{
+	return device_find_by_type(DEV_NET);
+}
+
 void eth_send(uint8_t dst[6], uint16_t type, const void *payload, uint16_t len)
 {
-	struct netdev *dev = netdev_get();
+	struct device *dev = eth_dev();
+	struct netdev_ops *ops = dev->ops;
+	struct netdev_data *data = dev->priv;
+
 	uint8_t *buf = kmalloc(1518, GFP_KERNEL);
 
 	struct eth_hdr *hdr = (struct eth_hdr *)buf;
 	memcpy(hdr->dst, dst, 6);
-	memcpy(hdr->src, dev->mac, 6);
+	memcpy(hdr->src, data->mac, 6);
 	hdr->type = __builtin_bswap16(type);
 	memcpy(buf + sizeof(struct eth_hdr), payload, len);
 
@@ -26,27 +35,29 @@ void eth_send(uint8_t dst[6], uint16_t type, const void *payload, uint16_t len)
 	if (total < 64)
 		total = 64;
 
-	dev->send(buf, total);
+	ops->send(buf, total);
 	kfree(buf);
 }
 
 int eth_recv(uint8_t *payload_out, uint16_t *len_out, uint16_t *type_out)
 {
-	struct netdev *dev = netdev_get();
+	struct device *dev = eth_dev();
+	struct netdev_ops *ops = dev->ops;
+
 	uint8_t buf[2048];
 	uint16_t len;
 
-	if (dev->recv(buf, &len) != 0)
+	if (ops->recv(buf, &len) != 0)
 		return -1;
 
 	struct eth_hdr *hdr = (struct eth_hdr *)buf;
 	uint16_t type = __builtin_bswap16(hdr->type);
 	uint8_t *payload = buf + sizeof(struct eth_hdr);
-	uint16_t payload_len = len - sizeof(struct eth_hdr);
+	uint16_t plen = len - sizeof(struct eth_hdr);
 
 	if (type == ETH_TYPE_ARP)
 	{
-		arp_handle(payload, payload_len);
+		arp_handle(payload, plen);
 		return -1;
 	}
 
@@ -54,8 +65,8 @@ int eth_recv(uint8_t *payload_out, uint16_t *len_out, uint16_t *type_out)
 	{
 		if (type_out)
 			*type_out = type;
-		memcpy(payload_out, payload, payload_len);
-		*len_out = payload_len;
+		memcpy(payload_out, payload, plen);
+		*len_out = plen;
 		return 0;
 	}
 

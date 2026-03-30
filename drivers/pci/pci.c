@@ -10,10 +10,10 @@
 uint32_t pci_read_config(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset)
 {
 	uint32_t addr = (1U << 31) |
-					((uint32_t)bus << 16) |
-					((uint32_t)slot << 11) |
-					((uint32_t)func << 8) |
-					(offset & 0xFC);
+			((uint32_t)bus << 16) |
+			((uint32_t)slot << 11) |
+			((uint32_t)func << 8) |
+			(offset & 0xFC);
 
 	outl(0xCF8, addr);
 	return inl(0xCFC);
@@ -22,10 +22,10 @@ uint32_t pci_read_config(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset
 void pci_write_config(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset, uint32_t val)
 {
 	uint32_t addr = (1U << 31) |
-					((uint32_t)bus << 16) |
-					((uint32_t)slot << 11) |
-					((uint32_t)func << 8) |
-					(offset & 0xFC);
+			((uint32_t)bus << 16) |
+			((uint32_t)slot << 11) |
+			((uint32_t)func << 8) |
+			(offset & 0xFC);
 
 	outl(0xCF8, addr);
 	outl(0xCFC, val);
@@ -57,7 +57,7 @@ uint16_t pciConfigReadWord(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offs
 
 	// Create configuration address as per Figure 1
 	address = (uint32_t)((lbus << 16) | (lslot << 11) |
-						 (lfunc << 8) | (offset & 0xFC) | ((uint32_t)0x80000000));
+			     (lfunc << 8) | (offset & 0xFC) | ((uint32_t)0x80000000));
 
 	// Write out the address
 	outl(0xCF8, address);
@@ -90,4 +90,32 @@ struct pci_device *find_nvme_qemu()
 uint64_t pci_map_bar(struct pci_device *dev)
 {
 	return dev->bar0;
+}
+
+int pci_register_driver(struct pci_driver *drv)
+{
+	printk("[pci] registering driver: %s\n", drv->name);
+	for (uint16_t bus = 0; bus < 256; bus++)
+		for (uint8_t slot = 0; slot < 32; slot++)
+			for (uint8_t func = 0; func < 8; func++)
+			{
+				uint32_t val = pci_read_config(bus, slot, func, 0x00);
+				uint16_t vendor = val & 0xFFFF;
+				if (vendor == 0xFFFF || vendor == 0x0000)
+					continue;
+
+				uint16_t device = (val >> 16) & 0xFFFF;
+
+				for (const struct pci_device_id *id = drv->id_table; id->vendor; id++)
+				{
+					if (id->vendor != vendor || id->device != device)
+						continue;
+
+					struct pci_device *dev = allocate_pci_device_struct(bus, slot, func);
+					printk("[pci] %s matched at %02x:%02x.%d\n",
+					       drv->name, bus, slot, func);
+					drv->probe(dev);
+				}
+			}
+	return 0;
 }

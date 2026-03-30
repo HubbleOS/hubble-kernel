@@ -76,9 +76,6 @@ struct e1000_tx_desc
 #define E1000_RX_STAT_DD (1 << 0)  // descriptor done
 #define E1000_RX_STAT_EOP (1 << 1) // end of packet
 
-int e1000_init(void);
 int e1000_send(const void *data, uint16_t len);
 int e1000_recv(void *buf, uint16_t *len_out);
 void e1000_get_mac(uint8_t mac[6]);
-
-void e1000_netdev_register(void);

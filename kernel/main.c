@@ -9,14 +9,13 @@
 #include <dev/mouse.h>
 #include <fs/vfs/dev.h>
 
-#include <drivers/net/e1000/e1000.h>
-
 #include <net/eth.h>
 #include <net/arp.h>
 #include <net/ipv4.h>
 #include <net/udp.h>
 
-#include <sound/sounddev.h>
+#include <sound/core/dev.h>
+#include <hubble/device.h>
 
 static uint64_t fb_mmap(uint64_t offset, size_t size)
 {
@@ -79,6 +78,23 @@ static const struct
     {0, 80},
 };
 
+#include <hubble/init.h>
+
+extern initcall_t __initcalls_start[];
+extern initcall_t __initcalls_end[];
+
+void do_initcalls(void)
+{
+	printk("[init] start=%p end=%p\n", __initcalls_start, __initcalls_end);
+	for (initcall_t *fn = __initcalls_start; fn < __initcalls_end; fn++)
+	{
+		printk("[init] calling initcall %p\n", fn);
+		int ret = (*fn)();
+		if (ret != 0)
+			printk("[init] initcall %p failed: %d\n", fn, ret);
+	}
+}
+
 void kernel_main(void)
 {
 	init_filesystems();
@@ -86,7 +102,9 @@ void kernel_main(void)
 	dev_vfs_register("mouse", mouse_mmap, mouse_read_file);
 	dev_vfs_register("kbd", NULL, kbd_read);
 
-	sound_init();
+	do_initcalls();
+
+	// sound_init();
 
 	while (1)
 	{
@@ -94,10 +112,12 @@ void kernel_main(void)
 			sound_play(melody[i].freq, melody[i].ms);
 	}
 
-	return;
+	// return;
 
-	e1000_init();
-	e1000_netdev_register();
+	if (!device_find_by_type(DEV_NET))
+	{
+		printk("[net] no network device\n");
+	}
 
 	arp_request(ARP_IP(10, 0, 2, 2));
 
