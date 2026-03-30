@@ -106,11 +106,11 @@ void kernel_main(void)
 
 	// sound_init();
 
-	while (1)
-	{
-		for (int i = 0; i < (int)(sizeof(melody) / sizeof(melody[0])); i++)
-			sound_play(melody[i].freq, melody[i].ms);
-	}
+	// while (1)
+	// {
+	// 	for (int i = 0; i < (int)(sizeof(melody) / sizeof(melody[0])); i++)
+	// 		sound_play(melody[i].freq, melody[i].ms);
+	// }
 
 	// return;
 

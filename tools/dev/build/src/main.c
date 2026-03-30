@@ -70,7 +70,6 @@ int main(int argc, char **argv)
 
 	if (c_count == 0 && cpp_count == 0 && asm_count == 0)
 	{
-		fprintf(stderr, "Warning: No source files found\n");
 		LOG_WARN("No source files found in %s", cfg.src_dir);
 		log_close();
 		return 0;

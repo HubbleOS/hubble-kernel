@@ -22,30 +22,39 @@ endif
 
 # Compiler flags
 
-CFLAGS = -ffreestanding -O2 -Wall -Wextra -mcmodel=kernel -g
-ASMFLAGS := -f elf64 -F dwarf -g
+CFLAGS = -ffreestanding -O2 -Wall -Wextra -g
+
+ifeq ($(ARCH),x86)
+    CFLAGS += -mcmodel=kernel -m64 -mno-mmx -mno-sse -mno-sse2 -mno-sse3 -mno-avx -mno-avx2 -mno-red-zone
+endif
+
+ifeq ($(ARCH),arm64)
+    CFLAGS += -march=armv8-a
+endif
 
 ifeq ($(ARCH),x86)
 	CROSS   = x86_64-elf-
+	CC      = $(CROSS)gcc
+	AS      = $(CROSS)as
+	LD      = $(CROSS)ld
+	AR      = $(CROSS)ar
+	OBJCOPY = $(CROSS)objcopy
+	
 	ASM     = nasm
 	CFLAGS += -m64
-endif
-ifeq ($(ARCH),x86_64)
-	CROSS   = x86_64-elf-
-	ASM     = nasm
-	CFLAGS += -m64
+	ASMFLAGS := -g -f elf64
 endif
 ifeq ($(ARCH),arm64)
-	CROSS = aarch64-elf-
+    CROSS = aarch64-elf-
+    CC    = $(CROSS)gcc
+    AS    = $(CROSS)as
+    LD    = $(CROSS)ld
+    AR    = $(CROSS)ar
+    OBJCOPY = $(CROSS)objcopy
+    ASMFLAGS := -g -march=armv8-a
+    ASM := $(AS)
 endif
 
-CFLAGS += -mno-mmx -mno-sse -mno-sse2 -mno-sse3 -mno-avx -mno-avx2 -mno-red-zone
-
-LD      = $(CROSS)ld
-CC      = $(CROSS)gcc
-AS      = $(CROSS)as
-AR      = $(CROSS)ar
-OBJCOPY = $(CROSS)objcopy
 
 export LD CC AS AR OBJCOPY ASM CFLAGS ASMFLAGS
 export ARCH OUT_DIR BUILD_DIR ARCH_DIR TOOLS_DIR BUILD_TOOL
@@ -65,6 +74,16 @@ export LOG_DIR LOG_FILE
 
 ISO_DIR := $(BUILD_DIR)/iso
 export ISO_DIR
+
+ifeq ($(ARCH),x86)
+EFI_NAME := BOOTx64.EFI
+EFI_TARGET := efi-app-x86_64
+endif
+
+ifeq ($(ARCH),arm64)
+EFI_NAME := BOOTAA64.EFI
+EFI_TARGET := efi-app-aarch64
+endif
 
 # Libraries
 # The path is displayed automatically: $(BUILD_DIR)/<relpath>/lib<name>.a
@@ -90,11 +109,15 @@ export LIBS
 # kernel/ common objects
 
 KCOMMON_BUILD_DIR := $(BUILD_DIR)/kernel
-KCOMMON_OBJS := $(KCOMMON_BUILD_DIR)/main.o
-KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/device/device.o
-KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/init/fs.o
-KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/printk.o
-KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/syscalls/syscall.o
+
+ifeq ($(ARCH),x86)
+    KCOMMON_OBJS := $(KCOMMON_BUILD_DIR)/main.o
+    KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/device/device.o
+    KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/init/fs.o
+    KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/printk.o
+    KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/syscalls/syscall.o
+endif
+
 export KCOMMON_BUILD_DIR KCOMMON_OBJS
 
 # Build tool flags
@@ -195,13 +218,18 @@ endef
 # Module list
 
 MODULES :=
-MODULES += net
-MODULES += fs
-MODULES += drivers
-MODULES += lib
-MODULES += sound
-MODULES += kernel
-MODULES += arch/$(ARCH)
+
+ifeq ($(ARCH),arm64)
+    MODULES += arch/arm64
+else
+    MODULES += net
+    MODULES += fs
+    MODULES += drivers
+    MODULES += lib
+    MODULES += sound
+    MODULES += kernel
+    MODULES += arch/$(ARCH)
+endif
 
 # arch subdirs (boot etc.)
 
@@ -219,6 +247,11 @@ $(eval $(call kbuild-subdir,tools/dev))
 USR_DIR := $(abspath usr)
 export USR_DIR
 
+USR_BUILD :=
+ifneq ($(ARCH),arm64)
+USR_BUILD := $(MAKE) -C usr
+endif
+
 # Targets
 
 PHONY += build-tool
@@ -229,9 +262,10 @@ PHONY += build
 build: build-tool
 	@mkdir -p $(LOG_DIR)
 	$(foreach mod,$(MODULES),$(call load-module,$(mod)))
-	$(Q)set -e; for dir in $(filter-out arch/$(ARCH)/kernel,$(subdirs)) usr; do \
+	$(Q)set -e; for dir in $(filter-out arch/$(ARCH)/kernel,$(subdirs)); do \
 		$(MAKE) -C $$dir; \
 	done
+	$(USR_BUILD)
 	@echo "Build complete"
 
 OUTPUT := $(BUILD_DIR)/kernel.elf
