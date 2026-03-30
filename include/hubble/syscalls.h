@@ -14,3 +14,5 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
 long sys_open(const char *path, int flags);
 long sys_close(int fd);
 long sys_spawn(void *entry_point, void *arg, uint32_t priority);
+
+long sys_spawn_file(const char *path, void *arg, uint32_t priority);

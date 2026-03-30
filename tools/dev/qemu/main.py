@@ -77,7 +77,7 @@ def build_qemu_command(opts: QemuOptions):
         "-device e1000,netdev=net0",
 
         # Debugging
-        # "-S", "-s", "-d", "cpu_reset", "-no-reboot", "-no-shutdown"
+        "-S", "-s", "-d", "cpu_reset", "-no-reboot", "-no-shutdown"
     ]
     return " ".join(cmd) + " | sed 's/\\x1b\\[[0-9;]*m//g'"
 

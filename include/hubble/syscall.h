@@ -6,5 +6,6 @@
 #define SYS_open 4
 #define SYS_close 5
 #define SYS_spawn 6
+#define SYS_spawn_file 7
 
 #define SYSCALL_COUNT 256

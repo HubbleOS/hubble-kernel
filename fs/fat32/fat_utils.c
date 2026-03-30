@@ -109,7 +109,7 @@ bool fat32_unmount(FAT32_FS *fs)
 	kfree(fs);
 	return true;
 }
-
+#include "io.h"
 FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 {
 	if (!fs)
@@ -147,9 +147,11 @@ FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 
 		if (memcmp(entry->name, parts.parts[parts.count - 1].sfn, 11) == 0)
 		{
+			printk("File found\n");
 			FAT32_File *file = kmalloc(sizeof(FAT32_File), GFP_KERNEL);
 			if (!file)
 			{
+				printk("File not found 1\n");
 				kfree(buf);
 				return NULL;
 			}
@@ -157,10 +159,14 @@ FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 			file->entry = kmalloc(sizeof(FAT32_DirectoryEntry), GFP_KERNEL);
 			if (!file->entry)
 			{
+				printk("File not found 2\n");
 				kfree(buf);
 				kfree(file);
 				return NULL;
 			}
+			printk("Entry: ");
+			for (int i = 0; i < 256; i++)
+				outb(0x3f8, entry->name[i]);
 
 			*(file->entry) = *entry; // копіюємо структуру
 			file->cluster = cluster;

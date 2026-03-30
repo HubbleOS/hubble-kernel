@@ -117,8 +117,8 @@ int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags)
 
 	// Use huge pages ONLY for kernel mappings (not userspace)
 	if ((flags & PTE_USER) == 0 && !is_mmio(pa) &&
-		(pa % VMM_HUGE_PAGE_SIZE == 0) &&
-		(va % VMM_HUGE_PAGE_SIZE == 0))
+	    (pa % VMM_HUGE_PAGE_SIZE == 0) &&
+	    (va % VMM_HUGE_PAGE_SIZE == 0))
 	{
 		pd[PD_INDEX(va)] = pte_make(pa, flags | PTE_HUGE);
 		g_vmm.total_mapped_pages += VMM_HUGE_PAGE_SIZE / VMM_PAGE_SIZE;
@@ -234,13 +234,10 @@ void dump_page_flags(uint64_t va)
 	printk("VA 0x%llx -> PTE 0x%llx\n", va, pte);
 
 	printk("Flags: PRESENT=%d USER=%d WRITE=%d NX=%d\n",
-		   !!(pte & PTE_PRESENT),
-		   !!(pte & PTE_USER),
-		   !!(pte & PTE_WRITE),
-		   !!(pte & PTE_NX));
-	// set nx to 0
-	// pt[PT_INDEX(va)] = pte & ~PTE_NX;
-	// invlpg((void *)va);
+	       !!(pte & PTE_PRESENT),
+	       !!(pte & PTE_USER),
+	       !!(pte & PTE_WRITE),
+	       !!(pte & PTE_NX));
 }
 
 void dump_page(uint64_t va, size_t len)
@@ -265,7 +262,7 @@ void dump_page(uint64_t va, size_t len)
 }
 
 // make only when 2MB page is user only
-int make_pd_entry_user(uint64_t va)
+int make_pd_entry_user(uint64_t va, uint64_t pm)
 {
 	uint64_t cr3 = get_cr3();
 	uint64_t pml4_idx = (va >> 39) & 0x1FF;
@@ -296,6 +293,218 @@ int make_pd_entry_user(uint64_t va)
 
 	invlpg((void *)va);
 	return 0;
+}
+
+#include <mm/pmm.h>
+uint64_t *vmm_create_user_pagemap(void)
+{
+	uint64_t *pml4 = PHYS_TO_VIRT_PTR(uint64_t, pmm_alloc_page());
+	memset(pml4, 0, PAGE_SIZE);
+
+	uint64_t *current_pml4 = (uint64_t *)g_vmm.pml4_phys;
+	current_pml4 = PHYS_TO_VIRT_PTR(uint64_t, (uint64_t)current_pml4 & ~0xFFFULL);
+
+	for (int i = 256; i < 512; i++)
+	{
+		if (i == RECURSIVE_PML4_INDEX)
+			continue;
+		if (current_pml4[i] & PTE_PRESENT)
+			pml4[i] = current_pml4[i];
+	}
+
+	for (int i = 0; i < 256; i++)
+	{
+		if (!(current_pml4[i] & PTE_PRESENT))
+			continue;
+
+		// Allocate a private PDPT
+		uint64_t *new_pdpt = vmm_alloc_table();
+		uint64_t *old_pdpt = PHYS_TO_VIRT_PTR(uint64_t, pte_addr(current_pml4[i]));
+
+		for (int j = 0; j < 512; j++)
+		{
+			if (!(old_pdpt[j] & PTE_PRESENT))
+				continue;
+			if (old_pdpt[j] & PTE_HUGE)
+			{
+				// 1GB huge page — copy as-is, safe to share (read-only kernel mapping)
+				new_pdpt[j] = old_pdpt[j];
+				continue;
+			}
+
+			// Allocate a private PD
+			uint64_t *new_pd = vmm_alloc_table();
+			uint64_t *old_pd = PHYS_TO_VIRT_PTR(uint64_t, pte_addr(old_pdpt[j]));
+
+			// Copy PD entries — huge pages are kernel identity map, safe to share
+			// 4KB PT entries would need deep copy too, but kernel has none here
+			for (int k = 0; k < 512; k++)
+				new_pd[k] = old_pd[k];
+
+			new_pdpt[j] = pte_make(VIRT_TO_PHYS(new_pd),
+					       old_pdpt[j] & 0xFFF);
+		}
+
+		pml4[i] = pte_make(VIRT_TO_PHYS(new_pdpt),
+				   current_pml4[i] & 0xFFF);
+	}
+
+	uint64_t new_phys = VIRT_TO_PHYS(pml4);
+	pml4[RECURSIVE_PML4_INDEX] = pte_make(new_phys, PTE_PRESENT | PTE_WRITE);
+
+	return (uint64_t *)new_phys;
+}
+int vmm_map_page_into(uint64_t *pml4_phys, uint64_t va, uint64_t pa, uint64_t flags)
+{
+	uint64_t *pml4 = PHYS_TO_VIRT_PTR(uint64_t, (uint64_t)pml4_phys);
+	uint64_t tf = PTE_PRESENT | PTE_WRITE | (flags & PTE_USER ? PTE_USER : 0);
+
+	if (!pte_present(pml4[PML4_INDEX(va)]))
+	{
+		uint64_t *t = vmm_alloc_table();
+		pml4[PML4_INDEX(va)] = pte_make(VIRT_TO_PHYS(t), tf);
+	}
+	else if (flags & PTE_USER)
+	{
+		pml4[PML4_INDEX(va)] |= PTE_USER; // patch existing entry
+	}
+
+	uint64_t *pdpt = PHYS_TO_VIRT_PTR(uint64_t, pte_addr(pml4[PML4_INDEX(va)]));
+
+	if (!pte_present(pdpt[PDPT_INDEX(va)]))
+	{
+		uint64_t *t = vmm_alloc_table();
+		pdpt[PDPT_INDEX(va)] = pte_make(VIRT_TO_PHYS(t), tf);
+	}
+	else if (flags & PTE_USER)
+	{
+		pdpt[PDPT_INDEX(va)] |= PTE_USER;
+	}
+	uint64_t *pd = PHYS_TO_VIRT_PTR(uint64_t, pte_addr(pdpt[PDPT_INDEX(va)]));
+
+	if (!pte_present(pd[PD_INDEX(va)]))
+	{
+		uint64_t *t = vmm_alloc_table();
+		pd[PD_INDEX(va)] = pte_make(VIRT_TO_PHYS(t), tf);
+	}
+	else if (pd[PD_INDEX(va)] & PTE_HUGE)
+	{
+		// Split huge page into 4KB pages
+		uint64_t huge_phys = pte_addr(pd[PD_INDEX(va)]);
+		uint64_t huge_flags = pd[PD_INDEX(va)] & 0xFFF & ~PTE_HUGE;
+
+		uint64_t *new_pt = vmm_alloc_table();
+
+		// Fill PT with 512 4KB mappings covering the same 2MB region
+		for (int i = 0; i < 512; i++)
+			new_pt[i] = pte_make(huge_phys + i * PAGE_SIZE, huge_flags | PTE_PRESENT | PTE_WRITE);
+
+		pd[PD_INDEX(va)] = pte_make(VIRT_TO_PHYS(new_pt), tf);
+	}
+	else if (flags & PTE_USER)
+	{
+		pd[PD_INDEX(va)] |= PTE_USER;
+	}
+	uint64_t *pt = PHYS_TO_VIRT_PTR(uint64_t, pte_addr(pd[PD_INDEX(va)]));
+
+	pt[PT_INDEX(va)] = pte_make(pa, flags | PTE_PRESENT);
+
+	uint64_t cr3;
+	asm volatile("mov %%cr3, %0" : "=r"(cr3));
+	if ((cr3 & ~0xFFFULL) == (uint64_t)pml4_phys)
+		invlpg((void *)va);
+	return 0;
+}
+
+uint64_t vmm_get_phys_from(uint64_t *pml4_phys, uint64_t va)
+{
+	uint64_t *pml4 = PHYS_TO_VIRT_PTR(uint64_t, (uint64_t)pml4_phys);
+
+	if (!pte_present(pml4[PML4_INDEX(va)]))
+		return 0;
+	uint64_t *pdpt = PHYS_TO_VIRT_PTR(uint64_t, pte_addr(pml4[PML4_INDEX(va)]));
+
+	if (!pte_present(pdpt[PDPT_INDEX(va)]))
+		return 0;
+	uint64_t *pd = PHYS_TO_VIRT_PTR(uint64_t, pte_addr(pdpt[PDPT_INDEX(va)]));
+
+	if (!pte_present(pd[PD_INDEX(va)]))
+		return 0;
+	uint64_t *pt = PHYS_TO_VIRT_PTR(uint64_t, pte_addr(pd[PD_INDEX(va)]));
+
+	if (!pte_present(pt[PT_INDEX(va)]))
+		return 0;
+	return pte_addr(pt[PT_INDEX(va)]);
+}
+
+void debug_dump_mapping(uint64_t *pml4_phys, uint64_t va)
+{
+	uint64_t *pml4 = PHYS_TO_VIRT_PTR(uint64_t, (uint64_t)pml4_phys);
+
+	uint64_t pml4e = pml4[PML4_INDEX(va)];
+	printk("PML4[%d] = 0x%llx  USER=%d WRITE=%d PRESENT=%d\n",
+	       PML4_INDEX(va), pml4e,
+	       !!(pml4e & PTE_USER), !!(pml4e & PTE_WRITE), !!(pml4e & PTE_PRESENT));
+	if (!pte_present(pml4e))
+		return;
+
+	uint64_t *pdpt = PHYS_TO_VIRT_PTR(uint64_t, pte_addr(pml4e));
+	uint64_t pdpte = pdpt[PDPT_INDEX(va)];
+	printk("PDPT[%d] = 0x%llx  USER=%d WRITE=%d PRESENT=%d\n",
+	       PDPT_INDEX(va), pdpte,
+	       !!(pdpte & PTE_USER), !!(pdpte & PTE_WRITE), !!(pdpte & PTE_PRESENT));
+	if (!pte_present(pdpte))
+		return;
+
+	uint64_t *pd = PHYS_TO_VIRT_PTR(uint64_t, pte_addr(pdpte));
+	uint64_t pde = pd[PD_INDEX(va)];
+	printk("PD  [%d] = 0x%llx  USER=%d WRITE=%d PRESENT=%d\n",
+	       PD_INDEX(va), pde,
+	       !!(pde & PTE_USER), !!(pde & PTE_WRITE), !!(pde & PTE_PRESENT));
+	if (!pte_present(pde))
+		return;
+
+	uint64_t *pt = PHYS_TO_VIRT_PTR(uint64_t, pte_addr(pde));
+	uint64_t pte = pt[PT_INDEX(va)];
+	printk("PT  [%d] = 0x%llx  USER=%d WRITE=%d PRESENT=%d NX=%d\n",
+	       PT_INDEX(va), pte,
+	       !!(pte & PTE_USER), !!(pte & PTE_WRITE), !!(pte & PTE_PRESENT),
+	       !!(pte & PTE_NX));
+}
+
+void dump_kernel_pagemap(void)
+{
+	uint64_t *current_pml4;
+	asm volatile("mov %%cr3, %0" : "=r"(current_pml4));
+	current_pml4 = PHYS_TO_VIRT_PTR(uint64_t, (uint64_t)current_pml4 & ~0xFFFULL);
+
+	printk("[VMM] === KERNEL PAGEMAP DUMP ===\n");
+	for (int i = 0; i < 512; i++)
+	{
+		if (!(current_pml4[i] & PTE_PRESENT))
+			continue;
+		printk("[VMM] PML4[%d] = 0x%llx\n", i, current_pml4[i]);
+
+		uint64_t *pdpt = PHYS_TO_VIRT_PTR(uint64_t, pte_addr(current_pml4[i]));
+		for (int j = 0; j < 512; j++)
+		{
+			if (!(pdpt[j] & PTE_PRESENT))
+				continue;
+			printk("[VMM]   PDPT[%d] = 0x%llx\n", j, pdpt[j]);
+
+			if (pdpt[j] & PTE_HUGE)
+				continue; // 1GB page, skip
+
+			uint64_t *pd = PHYS_TO_VIRT_PTR(uint64_t, pte_addr(pdpt[j]));
+			for (int k = 0; k < 512; k++)
+			{
+				if (!(pd[k] & PTE_PRESENT))
+					continue;
+				printk("[VMM]     PD[%d] = 0x%llx  HUGE=%d\n", k, pd[k], !!(pd[k] & PTE_HUGE));
+			}
+		}
+	}
+	printk("[VMM] === END DUMP ===\n");
 }
 
 void flush_tlb(void)

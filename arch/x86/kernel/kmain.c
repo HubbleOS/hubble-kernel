@@ -19,7 +19,9 @@
 
 platform_info_t g_platform;
 
-extern int elf_load(const char *path, uint64_t *entry_out);
+#include <user/exec.h>
+
+extern int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm);
 
 uint64_t fb_mmap(uint64_t offset, size_t size)
 {
@@ -69,11 +71,8 @@ void kmain_thread(void)
 {
 	printk("kmain thread\n");
 
-	// task_t *task1 = task_create(render_task, 255);
-	// scheduler_add_task(task1);
-	uint64_t entry;
-	elf_load("/usr/bin/user.elf", &entry);
-	task_t *task1 = task_create((void *)entry, 255, 1);
+	task_t *task1 = exec("/usr/bin/user.elf");
+	printk("user at cr3: 0x%016lx\n", task1->page_table);
 	scheduler_add_task(task1);
 
 	while (1)

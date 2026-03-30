@@ -514,7 +514,7 @@ void printk(const char *fmt, ...)
 	va_start(args, fmt);
 
 	uint64_t flags;
-	asm volatile("pushfq; pop %0; cli" : "=r"(flags));
+	// asm volatile("pushfq; pop %0; cli" : "=r"(flags));
 
 	spinlock_acquire(&printk_lock);
 	vprintk(fmt, args);
