@@ -28,10 +28,17 @@ SECTIONS
         *(.text.ap_trampoline)  
     } AT > PHYS
 
-    /* Read-only data */
+   /* Read-only data */
     .rodata : ALIGN(4K)
     {
         *(.rodata*)
+    } AT > PHYS
+
+    /* Section for initcalls */
+    .initcalls ALIGN(8) : {
+        __initcalls_start = .;
+        KEEP(*(.initcalls))
+        __initcalls_end = .;
     } AT > PHYS
 
 

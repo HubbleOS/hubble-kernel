@@ -309,3 +309,14 @@ const struct sound_driver sb16_driver = {
     .play = sb16_play,
     .stop = sb16_stop,
 };
+
+static int sb16_module_init(void)
+{
+	printk("[sound] registering SB16 driver\n");
+	sound_register_driver(&sb16_driver);
+	return 0;
+}
+
+#include <hubble/init.h>
+
+module_init(sb16_module_init);

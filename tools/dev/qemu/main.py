@@ -1,3 +1,4 @@
+import re
 import os
 import sys
 import argparse
@@ -85,11 +86,14 @@ def build_qemu_command(opts: QemuOptions):
         # Network
         "-netdev user,id=net0,hostfwd=udp::4444-:7777",
         "-device e1000,netdev=net0",
+        # "-net none",
+
 
         # Debug
         # "-S", "-s", "-d", "cpu_reset", "-no-reboot", "-no-shutdown"
     ]
-    return " ".join(cmd) + " | sed 's/\\x1b\\[[0-9;]*m//g'"
+    cmd_str = " \\\n    ".join(cmd)
+    return cmd_str
 
 
 def run_qemu(opts: QemuOptions):
@@ -98,7 +102,21 @@ def run_qemu(opts: QemuOptions):
         sys.exit(1)
     cmd = build_qemu_command(opts)
     print(f"Running: {cmd}")
-    return subprocess.call(cmd, shell=True)
+
+    process = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    ansi_escape = re.compile(rb'\x1b\[[0-9;]*m')
+
+    while True:
+        line = process.stdout.readline()
+        if not line:
+            break
+        # Убираем ANSI escape последовательности
+        clean_line = ansi_escape.sub(b'', line)
+        sys.stdout.buffer.write(clean_line)
+        sys.stdout.flush()
+
+    return process.wait()
 
 
 if __name__ == "__main__":

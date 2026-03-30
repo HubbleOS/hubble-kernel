@@ -1,6 +1,7 @@
 #include "dev.h"
 
 #include <stddef.h>
+#include <hubble/printk.h>
 
 static const struct sound_driver *active_driver = NULL;
 
@@ -11,6 +12,8 @@ int sound_register_driver(const struct sound_driver *drv)
 
 	if (drv->init() != 0)
 		return -1;
+
+	printk("[sound] driver %s registered\n", drv->name);
 
 	active_driver = drv;
 	return 0;
@@ -28,10 +31,10 @@ void sound_stop(void)
 		active_driver->stop();
 }
 
-void sound_init(void)
-{
-	// extern const struct sound_driver pcspk_driver;
-	// sound_register_driver(&pcspk_driver);
-	extern const struct sound_driver sb16_driver;
-	sound_register_driver(&sb16_driver);
-}
+// void sound_init(void)
+// {
+// 	// extern const struct sound_driver pcspk_driver;
+// 	// sound_register_driver(&pcspk_driver);
+// 	extern const struct sound_driver sb16_driver;
+// 	sound_register_driver(&sb16_driver);
+// }
