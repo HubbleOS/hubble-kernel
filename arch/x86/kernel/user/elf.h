@@ -37,4 +37,5 @@ typedef struct
 	uint64_t p_align;
 } __attribute__((packed)) Elf64_Phdr;
 
-int elf_load(const char *path, uint64_t *entry_out);
+int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm);
+int elf_load_sep(const char *path, uint64_t *entry_out, uint64_t *pm);

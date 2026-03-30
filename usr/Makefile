@@ -19,7 +19,7 @@ BUILD_TOOL_FLAGS := --log-file $(OUT_DIR)/logs/usr_build.log -v
 export BUILD_TOOL BUILD_TOOL_FLAGS
 
 # Подкаталоги для сборки: сначала lib, потом apps
-subdirs := lib apps
+subdirs := lib apps apptest
 
 .PHONY: all build clean rebuild
 

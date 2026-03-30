@@ -22,4 +22,10 @@ uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
 
 VFS_File *task_get_fd(task_t *task, int fd);
 
+typedef struct
+{
+	uint64_t rsp0;
+	uint64_t cpu_id;
+} cpu_local_t;
+
 _End_C_Header;

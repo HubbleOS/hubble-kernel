@@ -155,6 +155,11 @@ static const char *exception_messages[] = {
  *
  * @param regs Pointer to register snapshot
  */
+// ============================================================================
+
+#include "higher_half.h"
+#include <asm.h>
+
 void isr_handler(registers_t *regs)
 {
 	printk("\n\tEXCEPTION OCCURRED\n");
@@ -182,6 +187,21 @@ void isr_handler(registers_t *regs)
 	if (regs->int_no == 8 || regs->int_no == 13 || regs->int_no == 14)
 	{
 		printk("\nFATAL ERROR - System Halted\n");
+
+		if (regs->int_no == 14)
+		{
+			// cr2
+			uint64_t addr;
+			asm volatile("mov %%cr2, %0" : "=r"(addr));
+
+			debug_dump_mapping((uint64_t *)get_cr3(), addr);
+
+			uint64_t cr3;
+			asm volatile("mov %%cr3, %0" : "=r"(cr3));
+			task_t *t = get_current_task();
+			printk("Fault: active CR3=0x%llx task->page_table=0x%llx match=%d\n",
+			       cr3, (uint64_t)t->page_table, cr3 == (uint64_t)t->page_table);
+		}
 		while (1)
 		{
 			asm volatile("cli; hlt");

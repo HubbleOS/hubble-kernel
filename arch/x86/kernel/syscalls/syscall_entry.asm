@@ -5,24 +5,23 @@ extern syscall_rsp0
 
 section .text
 
+[BITS 64]
+global syscall_entry
+extern syscall_handler_wrapper
+
+section .text
+
 syscall_entry:
     swapgs
-    mov [gs:0], rsp
-    mov rsp, [syscall_rsp0]
 
-    ; === Эмулировать автоматическое сохранение процессором ===
-    push qword 0x1b         ; SS
-    push qword [gs:0]       ; user RSP
-    push r11                ; RFLAGS
-    push qword 0x23         ; CS
-    push rcx                ; RIP
+    ; save user RSP
+    mov [gs:8], rsp
 
-    ; === err_code и int_no ===
-    push qword 0            ; err_code
-    push qword 0x80         ; int_no
+    ; switch to kernel stack
+    mov rsp, [gs:0]
 
-    ; === Регистры в ОБРАТНОМ порядке (соответствует структуре) ===
-    push rax    ; последний в структуре
+    ; save registers
+    push rax
     push rbx
     push rcx
     push rdx
@@ -36,21 +35,19 @@ syscall_entry:
     push r12
     push r13
     push r14
-    push r15    ; первый в структуре
+    push r15
 
-    mov ax, 0x10
-    mov ds, ax
-    mov es, ax
-
+    ; align stack
     mov rbp, rsp
-    and rsp, ~0xF
+    sub rsp, 8
 
     mov rdi, rbp
     call syscall_handler_wrapper
 
+    add rsp, 8
     mov rsp, rbp
 
-    ; === Восстановить в том же порядке ===
+    ; restore registers
     pop r15
     pop r14
     pop r13
@@ -65,16 +62,11 @@ syscall_entry:
     pop rdx
     pop rcx
     pop rbx
-    pop rax     ; результат syscall (ИЗМЕНЕН wrapper'ом)
+    pop rax
 
-    add rsp, 16 ; int_no и err_code
+    ; restore user stack
+    mov rsp, [gs:8]
 
-    pop rcx     ; RIP
-    add rsp, 8  ; CS
-    pop r11     ; RFLAGS
-    add rsp, 16 ; RSP + SS
-
-    mov rsp, [gs:0]
     swapgs
-    
+
     o64 sysret

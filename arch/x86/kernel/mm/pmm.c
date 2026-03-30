@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include "higher_half.h"
 #include "lib/bitmap.h"
+#include <hubble/printk.h>
 
 static pmm_info_t g_pmm_info = {0};
 static uint64_t g_heap_phys_start = 0;
@@ -98,7 +99,7 @@ uint64_t pmm_alloc_pages(size_t count)
 		mark_pages(start_index, count, false);
 		return 0;
 	}
-
+	// printk("Allocated %d pages at 0x%lx\n", count, phys_addr);
 	return phys_addr;
 }
 

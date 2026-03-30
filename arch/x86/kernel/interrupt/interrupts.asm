@@ -114,7 +114,7 @@ isr_common_stub:
     mov ds, ax
     mov es, ax
     mov fs, ax
-    mov gs, ax
+    ; mov gs, ax
     
     ; We align the stack by 16 bytes for the ABI
     mov rbp, rsp        ; We keep the original RSP
@@ -174,7 +174,7 @@ irq_common_stub:
     mov ds, ax
     mov es, ax
     mov fs, ax
-    mov gs, ax
+    ; mov gs, ax
     
     ; Align the stack to 16 bytes for ABI
     mov rbp, rsp        ; We keep the original RSP

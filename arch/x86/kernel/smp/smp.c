@@ -113,6 +113,17 @@ static void *allocate_ap_stack(void)
 	return stack_top;
 }
 
+void enable_nxe(void)
+{
+	uint64_t efer;
+	asm volatile(
+	    "mov $0xC0000080, %%ecx\n"
+	    "rdmsr\n"
+	    "or $(1 << 11), %%eax\n"
+	    "wrmsr\n"
+	    : : : "eax", "ecx", "edx");
+}
+
 // AP kernel entry point (called by trampoline in long mode)
 void ap_entry(void)
 {
@@ -124,12 +135,14 @@ void ap_entry(void)
 	percpu_init_ap(apic_id);
 
 	// Signal that we're ready
-	ap_ready = true;
 	hpet_init();
 
 	idt_load();
 	tss_init();
 	syscall_init();
+	enable_nxe();
+	ap_ready = true;
+
 	uint64_t rflags;
 	asm volatile("pushfq; pop %0" : "=r"(rflags));
 	printk("AP %u: RFLAGS=0x%lx, IF=%d\n",
