@@ -88,7 +88,6 @@ def build_qemu_command(opts: QemuOptions):
         "-device e1000,netdev=net0",
         # "-net none",
 
-
         # Debug
         # "-S", "-s", "-d", "cpu_reset", "-no-reboot", "-no-shutdown"
     ]

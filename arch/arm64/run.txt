@@ -1,0 +1,18 @@
+qemu-system-aarch64 \
+    -machine virt \
+    -cpu cortex-a53 \
+    -m 512M \
+    -nographic \
+    -kernel out/build/arm64/kernel.elf \
+    -S -s
+
+gdb ~/Documents/work/Hubble/Kernel/out/build/arm64/kernel.elf
+target remote :1234      
+break _start             
+continue                 
+info registers           
+stepi                    
+x/16x $sp                
+
+display /x $x0   
+stepi
