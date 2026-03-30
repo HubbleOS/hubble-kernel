@@ -304,7 +304,6 @@ uint64_t *vmm_create_user_pagemap(void)
 	uint64_t *current_pml4 = (uint64_t *)g_vmm.pml4_phys;
 	current_pml4 = PHYS_TO_VIRT_PTR(uint64_t, (uint64_t)current_pml4 & ~0xFFFULL);
 
-	// Upper half: shared kernel entries (safe to shallow copy — kernel never splits these)
 	for (int i = 256; i < 512; i++)
 	{
 		if (i == RECURSIVE_PML4_INDEX)
@@ -313,7 +312,6 @@ uint64_t *vmm_create_user_pagemap(void)
 			pml4[i] = current_pml4[i];
 	}
 
-	// Lower half: deep copy PDPT so each process gets its own PD/PT chain
 	for (int i = 0; i < 256; i++)
 	{
 		if (!(current_pml4[i] & PTE_PRESENT))
