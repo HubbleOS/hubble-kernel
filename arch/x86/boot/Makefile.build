@@ -1,18 +1,48 @@
-BOOT_SO := $(BUILD_DIR)/boot/boot.so
+BOOT_CC  := x86_64-w64-mingw32-gcc
+BOOT_ASM := nasm
+
+BOOT_SRC_DIR := $(ROOT_DIR)/arch/x86/boot
+BOOT_BUILD   := $(BUILD_DIR)/boot
+
+BOOT_CFLAGS := -ffreestanding -O2 -Wall -Wextra \
+	-fno-stack-protector -fshort-wchar \
+	-m64 -mno-red-zone \
+	-I$(ROOT_DIR)/include \
+	-I$(BOOT_SRC_DIR)/include \
+	-I$(ROOT_DIR)/arch/x86/include 
+
+BOOT_LDFLAGS := -nostdlib \
+	-Wl,-dll \
+	-Wl,--subsystem,10 \
+	-Wl,-e,_start
+
 EFI_OUT := $(ISO_DIR)/EFI/BOOT/BOOTx64.EFI
-EFI_OUT_DIR := $(ISO_DIR)/EFI/BOOT
+EFI_BIN := $(BOOT_BUILD)/BOOTx64.EFI
+CRT0_OBJ := $(BOOT_BUILD)/crt0.o
 
-EFI_SECTIONS = -j .text -j .sdata -j .data -j .rodata \
-	-j .dynamic -j .dynsym -j .rel -j .rela \
-	-j .rel.* -j .rela.* -j .reloc
+# Все .c файлы в arch/x86/boot/
+BOOT_SRCS := $(wildcard $(BOOT_SRC_DIR)/*.c)
+BOOT_OBJS := $(patsubst $(BOOT_SRC_DIR)/%.c,$(BOOT_BUILD)/%.o,$(BOOT_SRCS))
 
-.PHONY: all 
+.PHONY: all bootloader
 
 all: bootloader
 
-# EFI bootloader
-.PHONY: bootloader
-bootloader: $(EFI_OUT)
-$(EFI_OUT): $(BOOT_SO)
-	@mkdir -p $(EFI_OUT_DIR)
-	objcopy $(EFI_SECTIONS) --output-target=efi-app-x86_64 --subsystem=10 $< $@
+# crt0.asm -> crt0.o
+$(CRT0_OBJ): $(BOOT_SRC_DIR)/crt0.asm
+	@mkdir -p $(BOOT_BUILD)
+	$(BOOT_ASM) -f win64 $< -o $@
+
+# .c -> .o
+$(BOOT_BUILD)/%.o: $(BOOT_SRC_DIR)/%.c
+	@mkdir -p $(BOOT_BUILD)
+	$(BOOT_CC) $(BOOT_CFLAGS) -c $< -o $@
+
+# линкуем всё в EFI
+$(EFI_BIN): $(CRT0_OBJ) $(BOOT_OBJS)
+	$(BOOT_CC) $(BOOT_LDFLAGS) $^ -o $@
+
+# копируем на место
+bootloader: $(EFI_BIN)
+	@mkdir -p $(dir $(EFI_OUT))
+	cp $(EFI_BIN) $(EFI_OUT)
