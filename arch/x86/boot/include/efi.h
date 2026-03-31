@@ -35,14 +35,6 @@ typedef struct
 	UINT8 Data4[8];
 } EFI_GUID;
 
-static inline int efi_guid_equal(EFI_GUID *a, EFI_GUID *b)
-{
-	return a->Data1 == b->Data1 &&
-	       a->Data2 == b->Data2 &&
-	       a->Data3 == b->Data3 &&
-	       ((UINT64 *)a->Data4)[0] == ((UINT64 *)b->Data4)[0];
-}
-
 // Memory
 typedef enum
 {
