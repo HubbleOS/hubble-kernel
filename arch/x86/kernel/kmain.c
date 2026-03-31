@@ -21,33 +21,25 @@ platform_info_t g_platform;
 
 #include <user/exec.h>
 
-extern int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm);
-
-uint64_t fb_mmap(uint64_t offset, size_t size)
-{
-	return (uint64_t)g_boot_info->framebuffer->base;
-};
-
 #include <src/early_console.h>
 
-__attribute__((section(".text.boot"))) void
-kernel_entry(BootInfo *bi)
+void kmain(BootInfo *bi)
 {
 	clear_bss();
-	relocate_boot_info(bi);
 	g_boot_info = bi;
 
-	g_platform.fb_base = (uint64_t)g_boot_info->framebuffer->base;
-	g_platform.fb_width = g_boot_info->framebuffer->width;
-	g_platform.fb_height = g_boot_info->framebuffer->height;
-	g_platform.fb_pitch = g_boot_info->framebuffer->pitch;
+	g_platform.fb_base = (uint64_t)g_boot_info->framebuffer.base;
+	g_platform.fb_width = g_boot_info->framebuffer.width;
+	g_platform.fb_height = g_boot_info->framebuffer.height;
+	g_platform.fb_pitch = g_boot_info->framebuffer.pitch;
 
-	early_printk_init(g_boot_info->framebuffer);
+	early_printk_init(&g_boot_info->framebuffer);
 
-	acpi_init(g_boot_info->rsdp);
-	init_memory(g_boot_info);
+	init_cpu();	     // GDT, IDT, TSS, PIC remap
+	acpi_init(bi->rsdp); // parses MADT, learns LAPIC/IOAPIC addresses
+	init_memory(bi);
+	apic_init_bsp(); // now the LAPIC address is known
 	hpet_init();
-	init_cpu();
 
 	//
 	apic_debug_check();

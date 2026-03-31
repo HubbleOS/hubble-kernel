@@ -68,4 +68,6 @@ void apic_debug_check(void);
 
 void apic_init_ap(void);
 
+void apic_init_bsp(void);
+
 #endif // APIC_H

@@ -72,16 +72,18 @@ void boot_main(loader_context_t *ctx)
 
 	// BootInfo
 	BootInfo *boot_info = (BootInfo *)arena;
-	arena += 0x1000;
+	arena += sizeof(BootInfo);
+	// arena += 0x1000;
 
 	boot_info->rsdp = rsdp;
-	boot_info->framebuffer_data = *(framebuffer_info_t *)&fb;
-	boot_info->framebuffer = &boot_info->framebuffer_data;
-
-	boot_info->memory_data.heap_start = arena;
-	boot_info->memory_data.heap_size = free_size - (arena - free_base);
-	boot_info->memory_data.pml4_phys = (uint64_t)pml4;
-	boot_info->memory_map = &boot_info->memory_data;
+	boot_info->framebuffer.base = fb.base;
+	boot_info->framebuffer.width = fb.width;
+	boot_info->framebuffer.height = fb.height;
+	boot_info->framebuffer.pitch = fb.pitch;
+	boot_info->framebuffer.bpp = fb.bpp;
+	boot_info->memory_map.heap_start = arena;
+	boot_info->memory_map.heap_size = free_size - (arena - free_base);
+	boot_info->memory_map.pml4_phys = (uint64_t)pml4;
 
 	set_cr3((uint64_t)pml4);
 

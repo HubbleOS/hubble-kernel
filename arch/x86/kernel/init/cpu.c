@@ -11,9 +11,9 @@ static inline void check_nx_support(void)
 
 	// CPUID function 0x80000001
 	asm volatile(
-		"mov $0x80000001, %%eax\n"
-		"cpuid"
-		: "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx));
+	    "mov $0x80000001, %%eax\n"
+	    "cpuid"
+	    : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx));
 
 	if (edx & (1 << 20))
 	{
@@ -49,7 +49,7 @@ static void enable_sse(void)
 	// Проверяем что реально записалось
 	asm volatile("mov %%cr4, %0" : "=r"(cr4));
 	printk("[CPU] CR4 after SSE init: 0x%llx, OSFXSR=%d OSXMMEXCPT=%d\n",
-		   cr4, !!(cr4 & (1 << 9)), !!(cr4 & (1 << 10)));
+	       cr4, !!(cr4 & (1 << 9)), !!(cr4 & (1 << 10)));
 }
 
 void init_cpu(void)

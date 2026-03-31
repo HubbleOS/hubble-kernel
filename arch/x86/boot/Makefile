@@ -10,7 +10,7 @@ BOOT_CFLAGS := -ffreestanding -O2 -Wall -Wextra \
 	-I$(ROOT_DIR)/include \
 	-I$(BOOT_SRC_DIR)/include \
 	-I$(BOOT_SRC_DIR)/ \
-	-I$(ROOT_DIR)/arch/x86/include # temporary for bootinfo.h
+	-I$(ROOT_DIR)/arch/x86/include
 
 BOOT_LDFLAGS := -nostdlib \
 	-Wl,-dll \
@@ -19,32 +19,35 @@ BOOT_LDFLAGS := -nostdlib \
 
 EFI_OUT := $(ISO_DIR)/EFI/BOOT/BOOTx64.EFI
 EFI_BIN := $(BOOT_BUILD)/BOOTx64.EFI
-CRT0_OBJ := $(BOOT_BUILD)/crt0.o
 
-# Все .c файлы в arch/x86/boot/
-# BOOT_SRCS := $(shell find $(BOOT_SRC_DIR) -name "*.c")
-BOOT_SRCS := $(wildcard $(BOOT_SRC_DIR)/*.c) # только корневые .c файлы
-BOOT_OBJS := $(patsubst $(BOOT_SRC_DIR)/%.c,$(BOOT_BUILD)/%.o,$(BOOT_SRCS))
+# Всі .c і .asm рекурсивно
+BOOT_SRCS     := $(shell find $(BOOT_SRC_DIR) -name "*.c")
+BOOT_ASM_SRCS := $(shell find $(BOOT_SRC_DIR) -name "*.asm")
+
+# Зберігаємо структуру підпапок в build/
+BOOT_OBJS     := $(patsubst $(BOOT_SRC_DIR)/%,$(BOOT_BUILD)/%.o,$(BOOT_SRCS))
+BOOT_ASM_OBJS := $(patsubst $(BOOT_SRC_DIR)/%,$(BOOT_BUILD)/%.o,$(BOOT_ASM_SRCS))
 
 .PHONY: all bootloader
 
 all: bootloader
 
-# crt0.asm -> crt0.o
-$(CRT0_OBJ): $(BOOT_SRC_DIR)/crt0.asm
-	@mkdir -p $(BOOT_BUILD)
+# .asm -> .o
+$(BOOT_BUILD)/%.asm.o: $(BOOT_SRC_DIR)/%.asm
+	@mkdir -p $(dir $@)
 	$(BOOT_ASM) -f win64 $< -o $@
 
 # .c -> .o
-$(BOOT_BUILD)/%.o: $(BOOT_SRC_DIR)/%.c
+$(BOOT_BUILD)/%.c.o: $(BOOT_SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(BOOT_CC) $(BOOT_CFLAGS) -c $< -o $@
 
-# линкуем всё в EFI
-$(EFI_BIN): $(CRT0_OBJ) $(BOOT_OBJS)
+# лінкуємо всё в EFI
+$(EFI_BIN): $(BOOT_ASM_OBJS) $(BOOT_OBJS)
+	@mkdir -p $(dir $@)
 	$(BOOT_CC) $(BOOT_LDFLAGS) $^ -o $@
 
-# копируем на место
+# копіюємо на місце
 bootloader: $(EFI_BIN)
 	@mkdir -p $(dir $(EFI_OUT))
 	cp $(EFI_BIN) $(EFI_OUT)
