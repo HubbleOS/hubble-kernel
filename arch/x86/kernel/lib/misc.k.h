@@ -22,7 +22,7 @@
  *   int x = 5, y = 10;
  *   int m = MIN(x++, y); // m = 5, x becomes 6
  */
-#define MIN(A, B) ({                   \
+#define MIN(A, B) ({               \
 	__auto_type MIN_a = A;         \
 	__auto_type MIN_b = B;         \
 	MIN_a < MIN_b ? MIN_a : MIN_b; \
@@ -42,7 +42,7 @@
  *   int a = 3, b = 7;
  *   int max_val = MAX(a, b); // 7
  */
-#define MAX(A, B) ({                   \
+#define MAX(A, B) ({               \
 	__auto_type MAX_a = A;         \
 	__auto_type MAX_b = B;         \
 	MAX_a > MAX_b ? MAX_a : MAX_b; \
@@ -60,9 +60,9 @@
  * required to store a given size.
  *
  * Example:
- *   size_t pages = DIV_ROUNDUP(5000, 4096); // → 2
+ *   size_t pages = DIV_ROUNDUP(5000, 4096); // -> 2
  */
-#define DIV_ROUNDUP(VALUE, DIV) ({                                     \
+#define DIV_ROUNDUP(VALUE, DIV) ({                                 \
 	__auto_type DIV_ROUNDUP_value = VALUE;                         \
 	__auto_type DIV_ROUNDUP_div = DIV;                             \
 	(DIV_ROUNDUP_value + (DIV_ROUNDUP_div - 1)) / DIV_ROUNDUP_div; \
@@ -79,9 +79,9 @@
  * Commonly used to align addresses or sizes to page or sector boundaries.
  *
  * Example:
- *   size_t aligned = ALIGN_UP(5000, 4096); // → 8192
+ *   size_t aligned = ALIGN_UP(5000, 4096); // -> 8192
  */
-#define ALIGN_UP(VALUE, ALIGN) ({                                     \
+#define ALIGN_UP(VALUE, ALIGN) ({                                 \
 	__auto_type ALIGN_UP_value = VALUE;                           \
 	__auto_type ALIGN_UP_align = ALIGN;                           \
 	DIV_ROUNDUP(ALIGN_UP_value, ALIGN_UP_align) * ALIGN_UP_align; \
@@ -98,9 +98,9 @@
  * e.g. to get the base page address for a given pointer.
  *
  * Example:
- *   size_t aligned = ALIGN_DOWN(5000, 4096); // → 4096
+ *   size_t aligned = ALIGN_DOWN(5000, 4096); // -> 4096
  */
-#define ALIGN_DOWN(VALUE, ALIGN) ({                               \
+#define ALIGN_DOWN(VALUE, ALIGN) ({                           \
 	__auto_type ALIGN_DOWN_value = VALUE;                     \
 	__auto_type ALIGN_DOWN_align = ALIGN;                     \
 	(ALIGN_DOWN_value / ALIGN_DOWN_align) * ALIGN_DOWN_align; \
@@ -117,6 +117,6 @@
  *
  * Example:
  *   int arr[5];
- *   size_t count = SIZEOF_ARRAY(arr); // → 5
+ *   size_t count = SIZEOF_ARRAY(arr); // -> 5
  */
 #define SIZEOF_ARRAY(ARRAY) (sizeof(ARRAY) / sizeof(ARRAY[0]))

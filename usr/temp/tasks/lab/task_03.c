@@ -73,12 +73,12 @@ static void draw_arrow(canvas_t *c, int x1, int y1, int x2, int y2, uint32_t col
 	int al = 10;
 	float a1 = ang + 2.5f, a2 = ang - 2.5f;
 	canvas_draw_line(c, x2, y2,
-			 x2 - (int)(al * cosf(a1)), y2 - (int)(al * sinf(a1)), col);
+					 x2 - (int)(al * cosf(a1)), y2 - (int)(al * sinf(a1)), col);
 	canvas_draw_line(c, x2, y2,
-			 x2 - (int)(al * cosf(a2)), y2 - (int)(al * sinf(a2)), col);
+					 x2 - (int)(al * cosf(a2)), y2 - (int)(al * sinf(a2)), col);
 }
 
-// World→canvas coordinate mapping (canvas coords, y flipped)
+// World->canvas coordinate mapping (canvas coords, y flipped)
 static int wx(float world) { return CNV_CX + (int)(world); }
 static int wy(float world) { return CNV_CY - (int)(world); }
 
@@ -88,7 +88,7 @@ typedef struct
 	float x, y;
 } pt2_t;
 
-// Parse "x1,y1;x2,y2;…" → array, returns count
+// Parse "x1,y1;x2,y2;…" -> array, returns count
 static int parse_points(const char *s, pt2_t *out, int max_pts)
 {
 	int n = 0;
@@ -123,7 +123,7 @@ static void task1_draw(void)
 	draw_axes(g_cnv_);
 
 	canvas_draw_line(g_cnv_, wx(px), wy(py), wx(rx), wy(ry),
-			 rgb(120, 120, 180));
+					 rgb(120, 120, 180));
 
 	// Centre dot
 	int ccx = wx(cx), ccy = wy(cy);
@@ -194,9 +194,9 @@ static void task3_draw(void)
 	{
 		int j = (i + 1) % n;
 		canvas_draw_line(g_cnv_,
-				 wx(pts[i].x), wy(pts[i].y),
-				 wx(pts[j].x), wy(pts[j].y),
-				 COL_POLYGON);
+						 wx(pts[i].x), wy(pts[i].y),
+						 wx(pts[j].x), wy(pts[j].y),
+						 COL_POLYGON);
 	}
 
 	// Draw vertices
@@ -307,9 +307,9 @@ static void task4_draw(void)
 	{
 		int j = (i + 1) % hn;
 		canvas_draw_line(g_cnv_,
-				 wx(hull[i].x), wy(hull[i].y),
-				 wx(hull[j].x), wy(hull[j].y),
-				 COL_HULL);
+						 wx(hull[i].x), wy(hull[i].y),
+						 wx(hull[j].x), wy(hull[j].y),
+						 COL_HULL);
 	}
 
 	// Hull vertices
@@ -391,12 +391,12 @@ void app_init(void)
 
 	// Menu
 	const char *menu_labels[] = {"1.Centre Sym", "2.Axis Sym",
-				     "3.Convexity", "4.Hull"};
+								 "3.Convexity", "4.Hull"};
 	void (*menu_cbs[])(void) = {on_menu1, on_menu2, on_menu3, on_menu4};
 	for (int i = 0; i < 4; i++)
 	{
 		menu_btn[i] = button_create(PANEL_X, 10 + i * 38, 175, 30,
-					    (char *)menu_labels[i]);
+									(char *)menu_labels[i]);
 		menu_btn[i]->on_click = menu_cbs[i];
 		window_addElement(g_win_, menu_btn[i]);
 	}
@@ -460,7 +460,7 @@ void app_init(void)
 	window_addElement(g_win_, t3_lbl_pts);
 	py += 22;
 	t3_pts_input = input_create(PANEL_X - 75, py, 175 + 75, 22,
-				    "0,80;80,-40;-80,-40");
+								"0,80;80,-40;-80,-40");
 	window_addElement(g_win_, t3_pts_input);
 	py += 28;
 	t3_btn = button_create(PANEL_X, py, 175, 28, "Check");

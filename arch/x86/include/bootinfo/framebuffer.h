@@ -5,8 +5,8 @@
 typedef struct
 {
 	void *base;
-	unsigned int width;
-	unsigned int height;
-	unsigned int pitch;
-	unsigned int bpp;
+	uint32_t width;
+	uint32_t height;
+	uint32_t pitch;
+	uint32_t bpp;
 } framebuffer_info_t;
