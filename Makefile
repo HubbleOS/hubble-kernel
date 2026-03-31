@@ -273,7 +273,7 @@ ISO := $(ISO_DIR)/kernel.bin
 
 PHONY += run
 run: build $(ISO)
-	$(MAKE) -C arch/$(ARCH)/boot -f Makefile.build
+	$(MAKE) -C arch/$(ARCH)/boot
 	@python3 tools/dev/qemu/main.py
 
 $(ISO): $(OUTPUT)

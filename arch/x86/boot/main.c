@@ -56,7 +56,94 @@ static void *find_rsdp(EFI_SYSTEM_TABLE *SystemTable)
 	return NULL;
 }
 
-void jump_to_kernel(void *boot_info, void *entry, uint64_t stack);
+EFI_STATUS init_framebuffer(EFI_SYSTEM_TABLE *systab, framebuffer_info_t *fb_info)
+{
+	EFI_GUID gop_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+	EFI_GRAPHICS_OUTPUT_PROTOCOL *gop;
+	EFI_STATUS status;
+
+	status = systab->BootServices->LocateProtocol(&gop_guid, NULL, (void **)&gop);
+	if (EFI_ERROR(status))
+		return status;
+
+	fb_info->base = (void *)gop->Mode->FrameBufferBase;
+	fb_info->width = gop->Mode->Info->HorizontalResolution;
+	fb_info->height = gop->Mode->Info->VerticalResolution;
+	fb_info->pitch = gop->Mode->Info->PixelsPerScanLine * 4;
+	fb_info->bpp = 32;
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS open_file(EFI_SYSTEM_TABLE *systab, const CHAR16 *path, EFI_FILE_HANDLE *file)
+{
+	EFI_GUID fs_guid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
+	EFI_HANDLE *handle_buffer = NULL;
+	UINTN handle_count = 0;
+	EFI_STATUS status;
+
+	*file = NULL;
+
+	status = systab->BootServices->LocateHandleBuffer(ByProtocol, &fs_guid, NULL, &handle_count, &handle_buffer);
+	if (EFI_ERROR(status))
+		return status;
+
+	for (UINTN i = 0; i < handle_count; i++)
+	{
+		EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fs;
+		EFI_FILE_HANDLE root;
+
+		status = systab->BootServices->HandleProtocol(handle_buffer[i], &fs_guid, (void **)&fs);
+		if (EFI_ERROR(status))
+			continue;
+
+		status = fs->OpenVolume(fs, &root);
+		if (EFI_ERROR(status))
+			continue;
+
+		status = root->Open(root, file, path, EFI_FILE_MODE_READ, 0);
+		if (!EFI_ERROR(status))
+		{
+			root->Close(root);
+			break;
+		}
+
+		root->Close(root);
+	}
+
+	if (handle_buffer)
+		systab->BootServices->FreePool(handle_buffer);
+
+	return (*file != NULL) ? EFI_SUCCESS : EFI_NOT_FOUND;
+}
+
+EFI_STATUS get_file_size(EFI_FILE_HANDLE file, EFI_SYSTEM_TABLE *systab, UINTN *size)
+{
+	EFI_STATUS status;
+	EFI_GUID FileInfoGuid = EFI_FILE_INFO_ID;
+	EFI_FILE_INFO *file_info = NULL;
+	UINTN info_size = 0;
+
+	// The first call is to get the size of the structure
+	status = file->GetInfo(file, &FileInfoGuid, &info_size, NULL);
+	if (status != EFI_BUFFER_TOO_SMALL)
+		return status;
+
+	// Allocating memory for the structure
+	status = systab->BootServices->AllocatePool(EfiLoaderData, info_size, (void **)&file_info);
+	if (EFI_ERROR(status))
+		return status;
+
+	// Getting the structure itself
+	status = file->GetInfo(file, &FileInfoGuid, &info_size, file_info);
+	if (!EFI_ERROR(status))
+		*size = file_info->FileSize;
+
+	systab->BootServices->FreePool(file_info);
+	return status;
+}
+
+extern void jump_to_kernel(void *boot_info, void *entry, uint64_t stack);
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 {
@@ -65,74 +152,17 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	EFI_STATUS status;
 
-	// === [1] GOP (Graphics Output Protocol) ===
-	EFI_GUID gop_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
-	EFI_GRAPHICS_OUTPUT_PROTOCOL *gop;
-
-	status = systab->BootServices->LocateProtocol(&gop_guid, NULL, (void **)&gop);
-
+	// Open kernel file
+	EFI_FILE_HANDLE KernelFile;
+	status = open_file(systab, L"\\kernel.bin", &KernelFile);
 	if (EFI_ERROR(status))
 		return status;
 
-	// === [2] Locate filesystem and open kernel ===
-	EFI_GUID fs_guid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
-	EFI_HANDLE *HandleBuffer = NULL;
-	UINTN HandleCount = 0;
-
-	status = systab->BootServices->LocateHandleBuffer(ByProtocol, &fs_guid, NULL, &HandleCount, &HandleBuffer);
-
+	// Get kernel size
+	UINTN kernel_size;
+	status = get_file_size(KernelFile, systab, &kernel_size);
 	if (EFI_ERROR(status))
 		return status;
-
-	EFI_FILE_HANDLE KernelFile = NULL;
-	EFI_FILE_HANDLE RootFS = NULL;
-
-	for (UINTN i = 0; i < HandleCount; i++)
-	{
-		EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *FileIO;
-		status = systab->BootServices->HandleProtocol(HandleBuffer[i], &fs_guid, (void **)&FileIO);
-		if (EFI_ERROR(status))
-			continue;
-
-		status = FileIO->OpenVolume(FileIO, &RootFS);
-		if (EFI_ERROR(status))
-			continue;
-
-		status = RootFS->Open(RootFS, &KernelFile, L"\\kernel.bin", EFI_FILE_MODE_READ, 0);
-		if (!EFI_ERROR(status))
-		{
-			break;
-		}
-	}
-
-	if (HandleBuffer)
-		systab->BootServices->FreePool(HandleBuffer);
-
-	if (KernelFile == NULL)
-		return EFI_NOT_FOUND;
-
-	// === [3] Get kernel file size ===
-	EFI_GUID FileInfoGuid = EFI_FILE_INFO_ID;
-	EFI_FILE_INFO *KernelFileInfo = NULL;
-	UINTN FileInfoSize = 0;
-
-	status = KernelFile->GetInfo(KernelFile, &FileInfoGuid, &FileInfoSize, NULL);
-	if (status != EFI_BUFFER_TOO_SMALL)
-		return status;
-
-	status = systab->BootServices->AllocatePool(EfiLoaderData, FileInfoSize, (void **)&KernelFileInfo);
-
-	if (EFI_ERROR(status))
-		return status;
-
-	status = KernelFile->GetInfo(KernelFile, &FileInfoGuid, &FileInfoSize, KernelFileInfo);
-
-	if (EFI_ERROR(status))
-		return status;
-
-	UINTN kernel_size = KernelFileInfo->FileSize;
-
-	systab->BootServices->FreePool(KernelFileInfo);
 
 	// === [4] Allocate kernel at PHYSICAL address ===
 	EFI_PHYSICAL_ADDRESS kernel_phys_addr = KERNEL_PHYS_BASE;
@@ -316,7 +346,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	// Это позволит ядру манипулировать page tables
 	pml4[510] = pml4_addr | 0x3;
 
-	RootFS->Close(RootFS);
 	systab->BootServices->FreePool(mem_map);
 
 	// === [9] Allocate and FILL boot info ===
@@ -342,16 +371,15 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	// === [11] fill boot info ===
 
 	BootInfo *boot_info = (BootInfo *)boot_info_addr;
+
 	framebuffer_info_t *fb_info = &boot_info->framebuffer_data;
+	status = init_framebuffer(systab, fb_info);
+	if (EFI_ERROR(status))
+		return status;
+
 	ram_info_t *ram_info = &boot_info->memory_data;
 
 	boot_info->rsdp = rsdp;
-
-	fb_info->base = (void *)gop->Mode->FrameBufferBase;
-	fb_info->width = gop->Mode->Info->HorizontalResolution;
-	fb_info->height = gop->Mode->Info->VerticalResolution;
-	fb_info->pitch = gop->Mode->Info->PixelsPerScanLine * 4;
-	fb_info->bpp = 32;
 
 	ram_info->heap_start = heap_phys;
 	ram_info->heap_size = heap_size;
