@@ -8,6 +8,7 @@
 #include "higher_half.h"
 
 #include <hubble/string.h>
+#include "string.h"
 
 EFI_HANDLE g_image;
 EFI_SYSTEM_TABLE *g_systab;
@@ -32,8 +33,7 @@ static void *find_rsdp(EFI_SYSTEM_TABLE *SystemTable)
 	{
 		EFI_CONFIGURATION_TABLE *tbl = &g_systab->ConfigurationTable[i];
 
-		if (efi_guid_equal(&tbl->VendorGuid, &Acpi20Guid))
-		// if (memcmp(&tbl->VendorGuid, &Acpi20Guid, sizeof(EFI_GUID)) == 0)
+		if (memcmp(&tbl->VendorGuid, &Acpi20Guid, sizeof(EFI_GUID)) == 0)
 		{
 			// VERIFY THE SIGNATURE HERE
 			char *sig = (char *)tbl->VendorTable;
@@ -42,8 +42,7 @@ static void *find_rsdp(EFI_SYSTEM_TABLE *SystemTable)
 				return tbl->VendorTable;
 		}
 
-		if (efi_guid_equal(&tbl->VendorGuid, &Acpi10Guid))
-		// if (memcmp(&tbl->VendorGuid, &Acpi10Guid, sizeof(EFI_GUID)) == 0)
+		if (memcmp(&tbl->VendorGuid, &Acpi10Guid, sizeof(EFI_GUID)) == 0)
 		{
 			// VERIFY THE SIGNATURE HERE
 			char *sig = (char *)tbl->VendorTable;
