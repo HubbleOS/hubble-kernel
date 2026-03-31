@@ -165,9 +165,6 @@ int vfs_write(VFS_File *file, const void *buf, uint32_t size)
 
 VFS_Node *vfs_create_file(const char *path)
 {
-	// if (!root_fs || !root_fs->create_file)
-	// 	return NULL;
-	// return root_fs->create_file(root_fs, path);
 	VFS_Mount *mnt = vfs_find_mount_for_path(path);
 	const char *relpath = vfs_get_relpath(path, mnt->mountpoint);
 	if (!mnt || !mnt->fs || !mnt->fs->create_file)
@@ -180,9 +177,6 @@ VFS_Node *vfs_create_file(const char *path)
 
 bool vfs_mkdir(const char *path)
 {
-	// if (!root_fs || !root_fs->mkdir)
-	// 	return false;
-	// return root_fs->mkdir(root_fs, path);
 	VFS_Mount *mnt = vfs_find_mount_for_path(path);
 	const char *relpath = vfs_get_relpath(path, mnt->mountpoint);
 	if (!mnt)
@@ -192,11 +186,6 @@ bool vfs_mkdir(const char *path)
 
 Directory vfs_readdir(const char *path)
 {
-
-	// if (!root_fs || !root_fs->readdir)
-	// 	return (Directory){0};
-	// printk("VFS: reading directory %s\n", path);
-	// return root_fs->readdir(root_fs, path);
 	VFS_Mount *mnt = vfs_find_mount_for_path(path);
 	const char *relpath = vfs_get_relpath(path, mnt->mountpoint);
 	if (!mnt)
@@ -208,9 +197,6 @@ Directory vfs_readdir(const char *path)
 
 bool vfs_unlink(const char *path)
 {
-	// if (!root_fs || !root_fs->unlink)
-	// 	return false;
-	// return root_fs->unlink(root_fs, path);
 	VFS_Mount *mnt = vfs_find_mount_for_path(path);
 	const char *relpath = vfs_get_relpath(path, mnt->mountpoint);
 	if (!mnt)
@@ -240,21 +226,6 @@ int vfs_lseek(VFS_File *file, int offset, int whence)
 
 	return 0;
 }
-
-// int vfs_close(VFS_File **pfile)
-// {
-// 	VFS_File *file = *pfile;
-// 	if (!file || !file->node->fs || !file->node->fs->close)
-// 		return -EIO;
-// 	file->node->fs->close(file);
-// 	// *pfile = NULL;
-// 	if (file)
-// 	{
-// 		// printk("%s\n", file->node->name);
-// 		printk("VFS: file was not closed in vfs %s\n", file->node->name);
-// 	}
-// 	return 0;
-// }
 
 int vfs_close(VFS_File *file)
 {

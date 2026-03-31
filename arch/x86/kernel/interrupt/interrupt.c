@@ -15,8 +15,6 @@
 #define PIC2_DATA 0xA1
 #define PIC_EOI 0x20
 
-static bool using_apic = false;
-
 /**
  * @brief Disable legacy PIC by masking all IRQ lines.
  *
@@ -251,67 +249,22 @@ void irq_handler(registers_t *regs)
 	if (irq_handlers[irq])
 		irq_handlers[irq](regs);
 
-	if (using_apic && apic_is_initialized())
+	if (apic_is_initialized())
 		lapic_eoi();
 	else
 		pic_send_eoi(irq);
 }
 
 // Init
-#include <dev/keyboard.h>
-#include <acpi/acpi.h>
 
-/**
- * @brief Initialize interrupt handling subsystem.
- *
- * Steps:
- * - Detect and initialize APIC (if available)
- * - Fallback to legacy PIC otherwise
- * - Setup IRQ routing (keyboard, timer, etc.)
- * - Enable CPU interrupts (STI)
- */
 void interrupts_init(void)
 {
 	printk("Initializing interrupt system...\n");
 
-	// Try to initialize APIC
-	if (acpi_is_initialized() && apic_init() == 0)
-	{
-		printk("Using APIC for interrupt handling\n");
-		using_apic = true;
-		// 1. Remap PIC away from CPU exception vectors FIRST
-		pic_remap();
+	// IDT і PIC remap
+	pic_remap();
+	pic_disable();
 
-		// 2. NOW disable (mask all) — safe, no vector collisions
-		pic_disable();
-		// Enable Local APIC on BSP
-		lapic_enable();
-
-		// Register keyboard handler on IRQ 1 (vector 33)
-		// irq_install_handler(1, keyboard_irq);
-
-		// Unmask keyboard interrupt in I/O APIC
-		ioapic_unmask_irq(1);
-		ioapic_unmask_irq(2);
-		ioapic_unmask_irq(12);
-		irq_install_handler(1, keyboard_irq);
-
-		// Optional: Setup LAPIC timer for preemptive multitasking
-		lapic_timer_init(100);			     // 100 Hz timer
-		irq_install_handler(0, lapic_timer_handler); // Timer on vector 32
-	}
-	else
-	{
-		printk("APIC not available, falling back to PIC\n");
-		using_apic = false;
-
-		// Use legacy PIC
-		pic_remap();
-		irq_clear_mask(1); // Enable keyboard IRQ
-		irq_install_handler(1, keyboard_irq);
-	}
-
-	// Enable interrupts
 	sti();
 	printk("Interrupts enabled\n");
 }

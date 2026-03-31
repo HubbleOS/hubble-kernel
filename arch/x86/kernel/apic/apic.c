@@ -848,3 +848,21 @@ void apic_start_ap(uint8_t apic_id, uint32_t trampoline_addr)
 
 	printk("=== AP startup sequence complete ===\n\n");
 }
+
+#include <dev/keyboard.h>
+#include <smp/scheduler.h>
+
+static bool using_apic = false;
+
+void apic_init_bsp(void)
+{
+	apic_init();
+	lapic_enable();
+	ioapic_unmask_irq(1);
+	ioapic_unmask_irq(2);
+	ioapic_unmask_irq(12);
+	irq_install_handler(1, keyboard_irq);
+	lapic_timer_init(100);
+	irq_install_handler(0, lapic_timer_handler);
+	using_apic = true;
+}
