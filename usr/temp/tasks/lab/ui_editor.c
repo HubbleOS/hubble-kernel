@@ -219,7 +219,7 @@ void ui_editor_save(ui_editor_t *ed, const char *path)
 
 	fprintf(f, "  ]\n}\n");
 	fclose(f);
-	printf("[editor] saved %d elements → %s\n", obj->element_count, path);
+	printf("[editor] saved %d elements -> %s\n", obj->element_count, path);
 }
 
 /*  мінімальний JSON parser  */

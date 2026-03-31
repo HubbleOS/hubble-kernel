@@ -25,7 +25,7 @@ void utf16_to_ascii(uint16_t *src, char *dest, size_t max_chars)
 		}
 		else if ((c & 0xFF) == 0 && (c >> 8) >= 0x20 && (c >> 8) <= 0x7F)
 		{
-			dest[i] = (char)(c >> 8); // Big endian → swap
+			dest[i] = (char)(c >> 8); // Big endian -> swap
 		}
 		else
 		{

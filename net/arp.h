@@ -20,7 +20,7 @@ struct arp_pkt
 	uint32_t tpa;	// target IP
 } __attribute__((packed));
 
-// IP format 10.0.2.15 → arp_ip(10,0,2,15)
+// IP format 10.0.2.15 -> arp_ip(10,0,2,15)
 #define ARP_IP(a, b, c, d) ((uint32_t)(a) | ((uint32_t)(b) << 8) | ((uint32_t)(c) << 16) | ((uint32_t)(d) << 24))
 
 int arp_request(uint32_t target_ip);

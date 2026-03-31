@@ -45,8 +45,8 @@ kernel_entry(BootInfo *bi)
 	early_printk_init(g_boot_info->framebuffer);
 
 	acpi_init(g_boot_info->rsdp);
-	hpet_init();
 	init_memory(g_boot_info);
+	hpet_init();
 	init_cpu();
 
 	//

@@ -27,7 +27,7 @@ static int formula_line(int x) { return x; }
 
 // sampling function in transform_object_t
 static transform_object_t *sample_formula(int (*formula)(int x),
-					  int cx, int width)
+										  int cx, int width)
 {
 	// we count how many points will actually get into the canvas
 	int count = 0;
@@ -74,7 +74,7 @@ static void set_formula(int (*formula)(int x), uint32_t color)
 	if (!g_graph)
 		return;
 
-	// color with uint32_t → float 0..1
+	// color with uint32_t -> float 0..1
 	g_graph->color_r = ((color >> 16) & 0xFF) / 255.0f;
 	g_graph->color_g = ((color >> 8) & 0xFF) / 255.0f;
 	g_graph->color_b = ((color) & 0xFF) / 255.0f;
@@ -115,9 +115,9 @@ static void graph_canvas_draw(element_t *el)
 		return;
 
 	uint32_t color = rgb(
-	    (int)(g_graph->color_r * 255.0f),
-	    (int)(g_graph->color_g * 255.0f),
-	    (int)(g_graph->color_b * 255.0f));
+		(int)(g_graph->color_r * 255.0f),
+		(int)(g_graph->color_g * 255.0f),
+		(int)(g_graph->color_b * 255.0f));
 
 	// we draw lines between adjacent points
 	int first = 1;

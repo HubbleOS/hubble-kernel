@@ -10,6 +10,8 @@ _start:
     hlt
     jmp .hang
 
+
+
 ; void jump_to_kernel(void *boot_info, void *entry, uint64_t stack)
 ; ms_abi: rcx = boot_info, rdx = entry, r8 = stack
 global jump_to_kernel

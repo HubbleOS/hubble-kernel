@@ -5,6 +5,8 @@
 #include <hubble/printk.h>
 #include <stddef.h>
 
+#include <mm/vmm.h>
+
 #include <asm.h>
 
 // HPET Register Offsets
@@ -22,11 +24,11 @@
 // Timer configuration bits
 #define HPET_Tn_INT_TYPE_CNF (1 << 1)	  // 1=level, 0=edge
 #define HPET_Tn_INT_ENB_CNF (1 << 2)	  // Enable interrupt
-#define HPET_Tn_TYPE_CNF (1 << 3)		  // 1=periodic, 0=one-shot
+#define HPET_Tn_TYPE_CNF (1 << 3)	  // 1=periodic, 0=one-shot
 #define HPET_Tn_PER_INT_CAP (1 << 4)	  // Periodic capable (RO)
-#define HPET_Tn_SIZE_CAP (1 << 5)		  // 64-bit capable (RO)
+#define HPET_Tn_SIZE_CAP (1 << 5)	  // 64-bit capable (RO)
 #define HPET_Tn_VAL_SET_CNF (1 << 6)	  // Set accumulator
-#define HPET_Tn_32MODE_CNF (1 << 8)		  // Force 32-bit mode
+#define HPET_Tn_32MODE_CNF (1 << 8)	  // Force 32-bit mode
 #define HPET_Tn_FSB_INT_DEL_CAP (1 << 15) // FSB interrupt capable (RO)
 
 // Global HPET state
@@ -130,7 +132,7 @@ int hpet_timer_oneshot(uint8_t timer_num, uint64_t ns, uint8_t vector)
 	hpet_write(HPET_TIMER_CONFIG(timer_num), config);
 
 	printk("HPET timer %u: one-shot in %lu ns (vector %u)\n",
-		   timer_num, ns, vector);
+	       timer_num, ns, vector);
 	return 0;
 }
 
@@ -162,7 +164,7 @@ int hpet_timer_periodic(uint8_t timer_num, uint64_t period_ns, uint8_t vector)
 
 	// Configure: periodic mode
 	config = (uint64_t)vector << 9; // Set interrupt vector
-	config |= HPET_Tn_TYPE_CNF;		// Periodic mode
+	config |= HPET_Tn_TYPE_CNF;	// Periodic mode
 	config |= HPET_Tn_VAL_SET_CNF;	// Set accumulator
 	config |= HPET_Tn_INT_ENB_CNF;	// Enable interrupt
 
@@ -172,7 +174,7 @@ int hpet_timer_periodic(uint8_t timer_num, uint64_t period_ns, uint8_t vector)
 	hpet_write(HPET_TIMER_COMPARATOR(timer_num), period_ticks);
 
 	printk("HPET timer %u: periodic every %lu ns (vector %u)\n",
-		   timer_num, period_ns, vector);
+	       timer_num, period_ns, vector);
 	return 0;
 }
 
@@ -210,7 +212,12 @@ int hpet_init(void)
 		return -1;
 	}
 
-	hpet_state.base = (volatile uint64_t *)PHYS_TO_VIRT(hpet_phys);
+	// hpet_state.base = (volatile uint64_t *)PHYS_TO_VIRT(hpet_phys);
+	uint64_t hpet_virt = PHYS_TO_VIRT_MMIO(hpet_phys);
+	vmm_map_page(hpet_virt, hpet_phys,
+		     VMM_FLAGS_PRESENT | VMM_FLAGS_WRITE | VMM_FLAGS_NO_CACHE);
+	hpet_state.base = (volatile uint64_t *)hpet_virt;
+
 	printk("HPET at phys=0x%lx virt=%p\n", hpet_phys, hpet_state.base);
 	// Verify page table mapping exists
 
@@ -232,13 +239,13 @@ int hpet_init(void)
 
 	printk("HPET Capabilities:\n");
 	printk("  Period: %lu fs (%lu.%03lu MHz)\n",
-		   hpet_state.period_fs,
-		   hpet_state.frequency / 1000000,
-		   (hpet_state.frequency % 1000000) / 1000);
+	       hpet_state.period_fs,
+	       hpet_state.frequency / 1000000,
+	       (hpet_state.frequency % 1000000) / 1000);
 	printk("  Timers: %u\n", hpet_state.num_timers);
 	printk("  Counter: %s-bit\n", is_64bit ? "64" : "32");
 	printk("  Legacy replacement: %s\n",
-		   (caps & (1 << 15)) ? "supported" : "not supported");
+	       (caps & (1 << 15)) ? "supported" : "not supported");
 
 	// Disable HPET before configuration
 	uint64_t config = hpet_read(HPET_GENERAL_CONFIG);
@@ -256,9 +263,9 @@ int hpet_init(void)
 		hpet_write(HPET_TIMER_CONFIG(i), timer_config);
 
 		printk("  Timer %u: %s-bit, %s periodic\n",
-			   i,
-			   (timer_config & HPET_Tn_SIZE_CAP) ? "64" : "32",
-			   (timer_config & HPET_Tn_PER_INT_CAP) ? "supports" : "no");
+		       i,
+		       (timer_config & HPET_Tn_SIZE_CAP) ? "64" : "32",
+		       (timer_config & HPET_Tn_PER_INT_CAP) ? "supports" : "no");
 	}
 
 	// Enable HPET

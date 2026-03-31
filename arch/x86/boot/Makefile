@@ -9,7 +9,8 @@ BOOT_CFLAGS := -ffreestanding -O2 -Wall -Wextra \
 	-m64 -mno-red-zone \
 	-I$(ROOT_DIR)/include \
 	-I$(BOOT_SRC_DIR)/include \
-	-I$(ROOT_DIR)/arch/x86/include 
+	-I$(BOOT_SRC_DIR)/ \
+	-I$(ROOT_DIR)/arch/x86/include # temporary for bootinfo.h
 
 BOOT_LDFLAGS := -nostdlib \
 	-Wl,-dll \
@@ -21,7 +22,8 @@ EFI_BIN := $(BOOT_BUILD)/BOOTx64.EFI
 CRT0_OBJ := $(BOOT_BUILD)/crt0.o
 
 # Все .c файлы в arch/x86/boot/
-BOOT_SRCS := $(wildcard $(BOOT_SRC_DIR)/*.c)
+# BOOT_SRCS := $(shell find $(BOOT_SRC_DIR) -name "*.c")
+BOOT_SRCS := $(wildcard $(BOOT_SRC_DIR)/*.c) # только корневые .c файлы
 BOOT_OBJS := $(patsubst $(BOOT_SRC_DIR)/%.c,$(BOOT_BUILD)/%.o,$(BOOT_SRCS))
 
 .PHONY: all bootloader
@@ -35,7 +37,7 @@ $(CRT0_OBJ): $(BOOT_SRC_DIR)/crt0.asm
 
 # .c -> .o
 $(BOOT_BUILD)/%.o: $(BOOT_SRC_DIR)/%.c
-	@mkdir -p $(BOOT_BUILD)
+	@mkdir -p $(dir $@)
 	$(BOOT_CC) $(BOOT_CFLAGS) -c $< -o $@
 
 # линкуем всё в EFI

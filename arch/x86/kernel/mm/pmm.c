@@ -140,16 +140,20 @@ void pmm_free_page(uint64_t phys_addr)
 
 void pmm_init(uint64_t heap_phys_start, uint64_t heap_size)
 {
-	// 1. Выравниваем начало и размер
 	heap_phys_start = PAGE_ALIGN_UP(heap_phys_start);
 	heap_size = PAGE_ALIGN_DOWN(heap_size);
 
 	uint64_t total_pages = heap_size / PAGE_SIZE;
-
-	// 2. Вычисляем размер bitmap
 	uint64_t bitmap_size_bytes = (total_pages + 7) / 8;
 	uint64_t bitmap_size = PAGE_ALIGN_UP(bitmap_size_bytes);
-	uint64_t bitmap_pages = bitmap_size / PAGE_SIZE;
+
+	printk("PMM: total_pages=%lu bitmap_size=%lu\n", total_pages, bitmap_size);
+	printk("PMM: bitmap virt=0x%lx\n", (uint64_t)PHYS_TO_VIRT(heap_phys_start));
+
+	// bitmap живе у вже замапленій пам'яті — перевіримо перший байт
+	volatile uint8_t *test = (volatile uint8_t *)PHYS_TO_VIRT(heap_phys_start);
+	*test = 0xAB;
+	printk("PMM: test write OK, read=0x%x\n", *test);
 
 	// 3. Размещаем bitmap в начале
 	g_pmm_info.bitmap = (uint8_t *)PHYS_TO_VIRT(heap_phys_start);
