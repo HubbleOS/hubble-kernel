@@ -31,91 +31,71 @@ void pci_write_config(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset, u
 	outl(0xCFC, val);
 }
 
-// Алокація структури pci_device
+void pci_set_command(struct pci_device *dev, uint16_t flags)
+{
+	uint32_t cmd = pci_read_config(dev->bus, dev->slot, dev->func, PCI_COMMAND);
+	cmd |= flags;
+	pci_write_config(dev->bus, dev->slot, dev->func, PCI_COMMAND, cmd);
+}
+
 static struct pci_device *allocate_pci_device_struct(uint8_t bus, uint8_t slot, uint8_t func)
 {
 	struct pci_device *dev = kmalloc(sizeof(struct pci_device), GFP_KERNEL);
+
 	dev->bus = bus;
 	dev->slot = slot;
 	dev->func = func;
 
-	uint32_t class_vendor = pci_read_config(bus, slot, func, 0x08); // class code
-	dev->class_code = ((class_vendor >> 8) & 0xFFFFFF);
+	/* Class / Subclass / ProgIF */
+	uint32_t reg = pci_read_config(bus, slot, func, PCI_REVISION_ID);
 
-	uint32_t bar0 = pci_read_config(bus, slot, func, 0x10);
-	dev->bar0 = bar0 & ~0xF; // відкидаємо флаги
+	dev->class_code =
+	    (PCI_GET_CLASS(reg) << 16) |
+	    (PCI_GET_SUBCLASS(reg) << 8) |
+	    PCI_GET_PROGIF(reg);
+
+	/* BAR0 */
+	uint32_t bar0 = pci_read_config(bus, slot, func, PCI_BAR0);
+
+	dev->bar0 = bar0 & PCI_BAR_ADDR_MASK;
+
 	return dev;
-}
-
-uint16_t pciConfigReadWord(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset)
-{
-	uint32_t address;
-	uint32_t lbus = (uint32_t)bus;
-	uint32_t lslot = (uint32_t)slot;
-	uint32_t lfunc = (uint32_t)func;
-	uint16_t tmp = 0;
-
-	// Create configuration address as per Figure 1
-	address = (uint32_t)((lbus << 16) | (lslot << 11) |
-			     (lfunc << 8) | (offset & 0xFC) | ((uint32_t)0x80000000));
-
-	// Write out the address
-	outl(0xCF8, address);
-	// Read in the data
-	// (offset & 2) * 8) = 0 will choose the first word of the 32-bit register
-	tmp = (uint16_t)((inl(0xCFC) >> ((offset & 2) * 8)) & 0xFFFF);
-	return tmp;
-}
-
-// Оптимізований пошук NVMe у QEMU
-struct pci_device *find_nvme_qemu()
-{
-	uint16_t vendor, device;
-	/* Try and read the first configuration register. Since there are no
-	 * vendors that == 0xFFFF, it must be a non-existent device. */
-	if ((vendor = pciConfigReadWord(0, 3, 0, 0)) != 0xFFFF)
-	{
-		printk("vendor: %x\n", vendor);
-		device = pciConfigReadWord(0, 3, 0, 2);
-		if (vendor == 0x1AF4 && device == 0x1)
-		{
-
-			return allocate_pci_device_struct(0, 3, 0);
-		}
-	}
-	return NULL;
-}
-
-// Мапінг BAR0
-uint64_t pci_map_bar(struct pci_device *dev)
-{
-	return dev->bar0;
 }
 
 int pci_register_driver(struct pci_driver *drv)
 {
 	printk("[pci] registering driver: %s\n", drv->name);
+
 	for (uint16_t bus = 0; bus < 256; bus++)
+	{
 		for (uint8_t slot = 0; slot < 32; slot++)
+		{
 			for (uint8_t func = 0; func < 8; func++)
 			{
-				uint32_t val = pci_read_config(bus, slot, func, 0x00);
-				uint16_t vendor = val & 0xFFFF;
+				uint32_t reg = pci_read_config(bus, slot, func, PCI_VENDOR_ID);
+
+				uint16_t vendor = PCI_GET_VENDOR(reg);
 				if (vendor == 0xFFFF || vendor == 0x0000)
 					continue;
 
-				uint16_t device = (val >> 16) & 0xFFFF;
+				uint16_t device = PCI_GET_DEVICE(reg);
 
 				for (const struct pci_device_id *id = drv->id_table; id->vendor; id++)
 				{
 					if (id->vendor != vendor || id->device != device)
 						continue;
 
-					struct pci_device *dev = allocate_pci_device_struct(bus, slot, func);
+					struct pci_device *dev =
+					    allocate_pci_device_struct(bus, slot, func);
+
 					printk("[pci] %s matched at %02x:%02x.%d\n",
 					       drv->name, bus, slot, func);
+
 					drv->probe(dev);
 				}
 			}
+		}
+	}
+
 	return 0;
 }

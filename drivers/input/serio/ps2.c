@@ -62,7 +62,7 @@ void ps2_init()
 	ps2_wait_output();
 	uint8_t ack = inb(PS2_DATA);
 
-	// 7. Re-enable IRQ1 in config  ← THIS WAS MISSING
+	// 7. Re-enable IRQ1 in config   THIS WAS MISSING
 	ps2_wait_input();
 	outb(PS2_COMMAND, 0x20);
 	ps2_wait_output();

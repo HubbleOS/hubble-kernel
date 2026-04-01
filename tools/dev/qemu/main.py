@@ -87,10 +87,27 @@ def build_qemu_command(opts: QemuOptions):
         "-netdev user,id=net0,hostfwd=udp::4444-:7777",
         "-device e1000,netdev=net0",
         # "-net none",
+    ]
 
-        # Debug
+    # USB controllers
+    cmd += [
+        "-device", "piix4-usb-uhci,id=uhci1",
+        "-device", "piix4-usb-uhci,id=uhci2",
+    ]
+
+    # USB devices
+    cmd += [
+        "-device", "usb-tablet,bus=uhci1.0,port=1",
+        "-device", "usb-kbd,bus=uhci1.0,port=2",
+        "-device", "usb-mouse,bus=uhci2.0,port=1",
+        # "-device", "usb-storage,bus=uhci2.0,port=2",
+    ]
+
+    # Debug
+    cmd += [
         # "-S", "-s", "-d", "cpu_reset", "-no-reboot", "-no-shutdown"
     ]
+
     cmd_str = " \\\n    ".join(cmd)
     return cmd_str
 
