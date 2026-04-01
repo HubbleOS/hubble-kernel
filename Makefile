@@ -111,6 +111,7 @@ export LIBS
 KCOMMON_BUILD_DIR := $(BUILD_DIR)/kernel
 
 ifeq ($(ARCH),x86)
+#     KCOMMON_OBJS += $(BUILD_DIR)/init/main.o
     KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/device/device.o
     KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/init/fs.o
     KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/printk.o
@@ -220,7 +221,8 @@ MODULES :=
 
 ifeq ($(ARCH),arm64)
     MODULES += arch/arm64
-else
+else 
+#     MODULES += init
     MODULES += net
     MODULES += fs
     MODULES += drivers
