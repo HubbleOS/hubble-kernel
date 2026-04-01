@@ -148,6 +148,11 @@ void start_kernel(void)
 
 	do_initcalls();
 
+	while (1)
+	{
+		/* code */
+	}
+
 	// sound_init();
 
 	// while (1)

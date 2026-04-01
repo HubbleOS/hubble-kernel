@@ -33,9 +33,9 @@ switch_to_task:
     mov ax, [rsi + 192]   ; gs
     mov gs, ax
 
-    push rsi          ; ← save before call
+    push rsi          ;  save before call
     call lapic_eoi
-    pop rsi           ; ← restore after call
+    pop rsi           ;  restore after call
     sti
     
     ; Restore general purpose registers
