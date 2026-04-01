@@ -2,9 +2,7 @@
 
 #include <_cheader.h>
 #include <stddef.h>
-// ###########################################################################
 #include <stdint.h>
-// ###########################################################################
 
 _Begin_C_Header;
 
@@ -21,30 +19,12 @@ char *strncpy(char *, const char *, size_t);
 char *strcat(char *, const char *);
 char *strncat(char *, const char *, size_t);
 char *strdup(const char *);
-// ###########################################################################
-size_t strxfrm(char *, const char *, size_t);
-// ###########################################################################
 
 // String examination
 size_t strlen(const char *);
 int strcmp(const char *, const char *);
 int strncmp(const char *, const char *, size_t);
-// ###########################################################################
-int strcoll(const char *, const char *);
-// ###########################################################################
 char *strchr(const char *, int);
 char *strrchr(const char *, int);
-// size_t strspn(const char *s1, const char *s2);
-// size_t strcspn(const char *s1, const char *s2);
-// char *strpbrk(const char *s1, const char *s2);
-// char *strstr(const char *s1, const char *s2);
-// char *strtok(char *str, const char *delim);
-
-// Miscellaneous
-// char *strerror(int errnum);
-
-// ###########################################################################
-size_t strnlen(const char *, size_t);
-// ###########################################################################
 
 _End_C_Header;

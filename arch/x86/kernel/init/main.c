@@ -1,7 +1,6 @@
 #include <hubble/platform.h>
 #include <hubble/printk.h>
 #include <hubble/init.h>
-
 #include <hubble/cpu.h>
 #include <hubble/memory.h>
 
@@ -12,9 +11,7 @@
 #include <smp/scheduler.h>
 #include <smp/spinlock.h>
 #include <smp/smp.h>
-#include <dev/mouse.h>
-#include <dev/keyboard.h>
-#include <dev/ps2.h>
+
 #include <io.h>
 #include <asm.h>
 
@@ -31,7 +28,7 @@ platform_info_t g_platform;
 
 #include <user/exec.h>
 
-#include <src/early_console.h>
+#include <src/console.h>
 
 static const struct
 {
@@ -137,19 +134,13 @@ void start_kernel(void)
 	g_platform.fb_height = g_boot_info->framebuffer.height;
 	g_platform.fb_pitch = g_boot_info->framebuffer.pitch;
 
-	early_printk_init(&g_boot_info->framebuffer);
+	printk_init(&g_boot_info->framebuffer);
 
 	boot_cpu_init();
 	acpi_init(g_boot_info->rsdp); // parses MADT, learns LAPIC/IOAPIC addresses
 	boot_memory_init();
 	apic_init_bsp(); // now the LAPIC address is known
 	hpet_init();
-
-	//
-	apic_debug_check();
-	ps2_init();
-	mouse_init();
-	keyboard_init();
 
 	smp_init();
 

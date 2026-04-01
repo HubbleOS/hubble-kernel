@@ -1,5 +1,6 @@
 #include <hubble/string.h>
 #include <hubble/printk.h>
+#include <hubble/init.h>
 
 #include <interrupt/interrupt.h>
 #include <stdint.h>
@@ -135,10 +136,22 @@ void mouse_init()
 	mouse_write(0xF4);
 	mouse_read();
 
-	irq_install_handler(12, mouse_handler);
-	uint64_t phys = pmm_alloc_page();
-	mouse_g = PHYS_TO_VIRT_PTR(mouse_t, phys);
-
 	__asm__ volatile("sti");
 	printk("Mouse initialized\n");
 }
+
+static int mouse_initcall(void)
+{
+	uint64_t phys = pmm_alloc_page();
+	mouse_g = PHYS_TO_VIRT_PTR(mouse_t, phys);
+
+	mouse_g->x = 0;
+	mouse_g->y = 0;
+
+	ps2_init();
+	mouse_init();
+	irq_install_handler(12, mouse_handler);
+	return 0;
+}
+
+device_initcall(mouse_initcall);

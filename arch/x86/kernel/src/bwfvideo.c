@@ -1,10 +1,11 @@
+#include "bwfvideo.h"
+
 #include <hubble/printk.h>
+#include <hubble/color.h>
 #include <stdint.h>
 
 #include <fs/vfs/vfs.h>
 #include <fs/vfs/vfs_standart_struct.h>
-#include <utils/bwfvideo.h>
-#include <hubble/color.h>
 
 #include <mm/kmalloc.h>
 
@@ -26,7 +27,7 @@ void sleep_ms(uint32_t ms)
 }
 
 static inline void putpixel(framebuffer_info_t *bi, int x, int y, color_t color,
-							uint32_t fb_pitch, uint32_t bpp)
+			    uint32_t fb_pitch, uint32_t bpp)
 {
 	uint8_t *ptr = bi->base + y * fb_pitch + x * (bpp / 8);
 	*(color_t *)ptr = color;
