@@ -98,12 +98,11 @@ DRIVERS_LIB := $(call lib-path,drivers)
 SOUND_LIB   := $(call lib-path,sound)
 FONT_LIB    := $(call lib-path,lib/fonts)
 COLOR_LIB   := $(call lib-path,lib/color)
-STRING_LIB  := $(call lib-path,lib/string)
-CTYPE_LIB   := $(call lib-path,lib/ctype)
+CORE_LIB    := $(call lib-path,lib/core)
 
-export NET_LIB FS_LIB DRIVERS_LIB FONT_LIB COLOR_LIB STRING_LIB CTYPE_LIB
+export NET_LIB FS_LIB DRIVERS_LIB FONT_LIB COLOR_LIB CORE_LIB
 
-LIBS := $(NET_LIB) $(FS_LIB) $(SOUND_LIB) $(DRIVERS_LIB) $(FONT_LIB) $(COLOR_LIB) $(STRING_LIB) $(CTYPE_LIB)
+LIBS := $(NET_LIB) $(FS_LIB) $(SOUND_LIB) $(DRIVERS_LIB) $(FONT_LIB) $(COLOR_LIB) $(CORE_LIB)
 export LIBS
 
 # kernel/ common objects

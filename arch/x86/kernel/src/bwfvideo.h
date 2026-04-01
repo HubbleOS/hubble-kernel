@@ -1,7 +1,7 @@
 #pragma once
 
 #include <_cheader.h>
-#include <bootinfo/framebuffer.h>
+#include <hubble/fb.h>
 #include <stdint.h>
 
 _Begin_C_Header;

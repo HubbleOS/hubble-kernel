@@ -1,4 +1,4 @@
-#include <dev/keyboard.h>
+#include <drivers/input/serio/keyboard.h>
 #include <fs/vfs/dev.h>
 #include <hubble/init.h>
 

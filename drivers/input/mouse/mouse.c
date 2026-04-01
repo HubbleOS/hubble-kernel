@@ -1,4 +1,4 @@
-#include <dev/mouse.h>
+#include <drivers/input/serio/mouse.h>
 #include <fs/vfs/dev.h>
 #include <hubble/init.h>
 

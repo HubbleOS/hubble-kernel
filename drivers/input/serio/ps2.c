@@ -1,8 +1,7 @@
-
-
+#include <stdbool.h>
 #include "io.h"
 #include "ps2.h"
-#include <hubble/printk.h>
+
 #define PS2_DATA 0x60
 #define PS2_STATUS 0x64
 #define PS2_COMMAND 0x64
@@ -19,8 +18,13 @@ void ps2_wait_output(void) // wait until we can read
 		;
 }
 
+static bool init_done = false;
+
 void ps2_init()
 {
+	if (init_done)
+		return;
+
 	__asm__ volatile("cli");
 
 	// 1. Disable devices
@@ -57,7 +61,6 @@ void ps2_init()
 	outb(PS2_DATA, 0xF4);
 	ps2_wait_output();
 	uint8_t ack = inb(PS2_DATA);
-	printk("PS2 ACK: 0x%x\n", ack);
 
 	// 7. Re-enable IRQ1 in config  ← THIS WAS MISSING
 	ps2_wait_input();
@@ -74,7 +77,7 @@ void ps2_init()
 	ps2_wait_input();
 	outb(PS2_DATA, config);
 
-	printk("PS2 config after: 0x%x\n", config);
+	init_done = true;
 
 	__asm__ volatile("sti");
 }

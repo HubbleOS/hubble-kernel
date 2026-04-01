@@ -4,7 +4,7 @@
  */
 #pragma once
 #include <SDL2/SDL.h>
-// #include <bootinfo/framebuffer.h>
+// #include <hubble/fb.h>
 
 #include "fb.h"
 

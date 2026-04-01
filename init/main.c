@@ -14,7 +14,7 @@
 // #include <smp/smp.h>
 // #include <dev/mouse.h>
 // #include <dev/keyboard.h>
-// #include <dev/ps2.h>
+// #include "ps2.h"
 // #include <io.h>
 // #include <asm.h>
 
@@ -137,7 +137,7 @@
 // 	g_platform.fb_height = g_boot_info->framebuffer.height;
 // 	g_platform.fb_pitch = g_boot_info->framebuffer.pitch;
 
-// 	early_printk_init(&g_boot_info->framebuffer);
+// 	printk_init(&g_boot_info->framebuffer);
 
 // 	boot_cpu_init();
 // 	acpi_init(g_boot_info->rsdp); // parses MADT, learns LAPIC/IOAPIC addresses

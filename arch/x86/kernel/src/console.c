@@ -1,9 +1,10 @@
+#include "textout.h"
+
 #include <hubble/string.h>
 #include <hubble/printk.h>
-#include <utils/textout.h>
 #include <hubble/color.h>
+#include <hubble/fb.h>
 
-#include <bootinfo/framebuffer.h>
 #include <io.h>
 
 #define CHAR_WIDTH 8
@@ -71,7 +72,7 @@ static void early_putchar(char c)
 	early_x += CHAR_WIDTH;
 }
 
-void early_printk_init(framebuffer_info_t *fb)
+void printk_init(framebuffer_info_t *fb)
 {
 	early_fb = fb;
 	early_x = 0;

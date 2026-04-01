@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bootinfo/framebuffer.h>
+#include <hubble/fb.h>
 #include <bootinfo/raminfo.h>
 #include <bootinfo/rsdp.h>
 
