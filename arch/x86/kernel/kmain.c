@@ -23,11 +23,10 @@ platform_info_t g_platform;
 
 #include <src/early_console.h>
 
-void kmain(BootInfo *bi)
-{
-	clear_bss();
-	g_boot_info = bi;
+BootInfo *g_boot_info;
 
+void kmain()
+{
 	g_platform.fb_base = (uint64_t)g_boot_info->framebuffer.base;
 	g_platform.fb_width = g_boot_info->framebuffer.width;
 	g_platform.fb_height = g_boot_info->framebuffer.height;
@@ -35,9 +34,9 @@ void kmain(BootInfo *bi)
 
 	early_printk_init(&g_boot_info->framebuffer);
 
-	init_cpu();	     // GDT, IDT, TSS, PIC remap
-	acpi_init(bi->rsdp); // parses MADT, learns LAPIC/IOAPIC addresses
-	init_memory(bi);
+	init_cpu();		      // GDT, IDT, TSS, PIC remap
+	acpi_init(g_boot_info->rsdp); // parses MADT, learns LAPIC/IOAPIC addresses
+	init_memory(g_boot_info);
 	apic_init_bsp(); // now the LAPIC address is known
 	hpet_init();
 

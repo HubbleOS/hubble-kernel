@@ -67,7 +67,6 @@ protected_mode_32:
 
 [BITS 64]
 long_mode_64:
-    mov dword [0x8000 + (ap_data_ready - ap_trampoline_start)], 0x1111
     xor eax, eax
     mov ds, ax
     mov es, ax
