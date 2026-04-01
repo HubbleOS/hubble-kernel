@@ -1,3 +1,5 @@
+#include <hubble/init.h>
+
 #include <sound/core/dev.h>
 #include <hubble/printk.h>
 #include <hpet/hpet.h>
@@ -319,4 +321,4 @@ static int sb16_module_init(void)
 
 #include <hubble/init.h>
 
-module_init(sb16_module_init);
+device_initcall(sb16_module_init);
