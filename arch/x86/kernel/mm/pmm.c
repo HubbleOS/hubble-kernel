@@ -5,6 +5,8 @@
 #include "lib/bitmap.h"
 #include <hubble/printk.h>
 
+#include <bootinfo/bootinfo.h>
+
 static pmm_info_t g_pmm_info = {0};
 static uint64_t g_heap_phys_start = 0;
 static uint64_t g_heap_phys_end = 0;
@@ -48,7 +50,7 @@ static void mark_pages(uint64_t start_index, size_t count, bool used)
 		g_last_search_index = start_index;
 }
 
-// ================= Allocation =================
+// Allocation
 
 static int find_consecutive_free_pages(uint64_t count, uint64_t *start_index)
 {
@@ -108,7 +110,7 @@ uint64_t pmm_alloc_page(void)
 	return pmm_alloc_pages(1);
 }
 
-// ================= Free =================
+// Free
 
 void pmm_free_pages(uint64_t phys_addr, size_t count)
 {
@@ -136,10 +138,13 @@ void pmm_free_page(uint64_t phys_addr)
 	pmm_free_pages(phys_addr, 1);
 }
 
-// ================= Initialization =================
+// Initialization
 
-void pmm_init(uint64_t heap_phys_start, uint64_t heap_size)
+void pmm_init()
 {
+	uint64_t heap_phys_start = g_boot_info->memory_map.heap_start;
+	uint64_t heap_size = g_boot_info->memory_map.heap_size;
+
 	heap_phys_start = PAGE_ALIGN_UP(heap_phys_start);
 	heap_size = PAGE_ALIGN_DOWN(heap_size);
 

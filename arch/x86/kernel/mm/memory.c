@@ -1,22 +1,17 @@
-#include "init.h"
-
 #include <mm/pmm.h>
 #include <mm/slab.h>
 #include <mm/vmm.h>
 
 #include <hubble/printk.h>
 
-void init_memory(BootInfo *bi)
-{
-	printk(KERN_INFO "\n=== Initializing Memory Management ===\n");
+#include <hubble/memory.h>
 
-	printk(KERN_DEBUG "Heap physical: 0x%lx - 0x%lx (%lu MB)\n",
-	       bi->memory_map.heap_start,
-	       bi->memory_map.heap_start + bi->memory_map.heap_size,
-	       bi->memory_map.heap_size / (1024 * 1024));
+void boot_memory_init()
+{
+	printk(KERN_INFO "Initializing Memory Management");
 
 	printk(KERN_DEBUG "Initializing PMM...\n");
-	pmm_init(bi->memory_map.heap_start, bi->memory_map.heap_size);
+	pmm_init();
 	printk(KERN_INFO "PMM initialized\n");
 
 	printk(KERN_DEBUG "Initializing Slab Allocator...\n");

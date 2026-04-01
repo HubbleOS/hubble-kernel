@@ -1,4 +1,3 @@
-#include "init.h"
 #include <hubble/printk.h>
 
 #include <gdt/gdt.h>
@@ -52,7 +51,7 @@ static void enable_sse(void)
 	       cr4, !!(cr4 & (1 << 9)), !!(cr4 & (1 << 10)));
 }
 
-void init_cpu(void)
+void boot_cpu_init(void)
 {
 	printk(KERN_INFO "Initializing CPU subsystems...\n");
 	check_nx_support();

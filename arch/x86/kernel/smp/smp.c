@@ -163,7 +163,7 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx)
 	if (apic_id == bsp_id)
 		return;
 
-	printk("\n=== Starting AP %u ===\n", apic_id);
+	printk("Starting AP %u", apic_id);
 
 	// Allocate stack for this AP
 	void *stack_top = allocate_ap_stack();
@@ -248,7 +248,7 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx)
 // Initialize SMP
 int smp_init(void)
 {
-	printk("=== SMP Initialization ===\n");
+	printk("SMP Initialization");
 
 	percpu_init_bsp();
 
@@ -296,7 +296,7 @@ int smp_init(void)
 	printk("\nStarting Application Processors:\n");
 	acpi_enum_lapics(start_ap_callback, NULL);
 
-	printk("\n=== SMP Initialization Complete ===\n");
+	printk("SMP Initialization Complete");
 	printk("Total CPUs online: %u\n", num_cpus_online);
 	return 0;
 }

@@ -120,28 +120,28 @@ void irq_uninstall_handler(uint8_t irq)
 
 // Exception messages
 static const char *exception_messages[] = {
-    "Division By Zero",
-    "Debug",
-    "Non Maskable Interrupt",
-    "Breakpoint",
-    "Overflow",
-    "Bound Range Exceeded",
-    "Invalid Opcode",
-    "Device Not Available",
-    "Double Fault",
-    "Coprocessor Segment Overrun",
-    "Invalid TSS",
-    "Segment Not Present",
-    "Stack-Segment Fault",
-    "General Protection Fault",
-    "Page Fault",
-    "Reserved",
-    "x87 Floating-Point Exception",
-    "Alignment Check",
-    "Machine Check",
-    "SIMD Floating-Point Exception",
-    "Virtualization Exception",
-    "Control Protection Exception",
+	"Division By Zero",
+	"Debug",
+	"Non Maskable Interrupt",
+	"Breakpoint",
+	"Overflow",
+	"Bound Range Exceeded",
+	"Invalid Opcode",
+	"Device Not Available",
+	"Double Fault",
+	"Coprocessor Segment Overrun",
+	"Invalid TSS",
+	"Segment Not Present",
+	"Stack-Segment Fault",
+	"General Protection Fault",
+	"Page Fault",
+	"Reserved",
+	"x87 Floating-Point Exception",
+	"Alignment Check",
+	"Machine Check",
+	"SIMD Floating-Point Exception",
+	"Virtualization Exception",
+	"Control Protection Exception",
 };
 
 // Handlers
@@ -163,11 +163,11 @@ void isr_handler(registers_t *regs)
 	printk("\n\tEXCEPTION OCCURRED\n");
 
 	printk("Exception: %s (%lu)\n",
-	       regs->int_no < 22 ? exception_messages[regs->int_no] : "Unknown",
-	       regs->int_no);
+		   regs->int_no < 22 ? exception_messages[regs->int_no] : "Unknown",
+		   regs->int_no);
 	printk("Error code: 0x%lx\n", regs->err_code);
 
-	printk("\n=== Registers ===\n");
+	printk("Registers");
 	printk("RIP: 0x%016lx    RSP: 0x%016lx\n", regs->rip, regs->rsp);
 	printk("RAX: 0x%016lx    RBX: 0x%016lx\n", regs->rax, regs->rbx);
 	printk("RCX: 0x%016lx    RDX: 0x%016lx\n", regs->rcx, regs->rdx);
@@ -178,7 +178,7 @@ void isr_handler(registers_t *regs)
 	printk("R13: 0x%016lx    R14: 0x%016lx\n", regs->r13, regs->r14);
 	printk("R15: 0x%016lx\n", regs->r15);
 
-	printk("\n=== Segments ===\n");
+	printk("Segments");
 	printk("SS:  0x%04lx\n", regs->ss);
 	printk("RFLAGS: 0x%016lx\n", regs->rflags);
 
@@ -198,7 +198,7 @@ void isr_handler(registers_t *regs)
 			asm volatile("mov %%cr3, %0" : "=r"(cr3));
 			task_t *t = get_current_task();
 			printk("Fault: active CR3=0x%llx task->page_table=0x%llx match=%d\n",
-			       cr3, (uint64_t)t->page_table, cr3 == (uint64_t)t->page_table);
+				   cr3, (uint64_t)t->page_table, cr3 == (uint64_t)t->page_table);
 		}
 		while (1)
 		{

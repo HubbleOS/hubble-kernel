@@ -2,7 +2,8 @@
 #include <hubble/platform.h>
 #include <hubble/printk.h>
 
-#include "init/init.h"
+#include <hubble/cpu.h>
+#include <hubble/memory.h>
 
 #include <bootinfo/bootinfo.h>
 #include <acpi/acpi.h>
@@ -34,9 +35,9 @@ void kmain()
 
 	early_printk_init(&g_boot_info->framebuffer);
 
-	init_cpu();		      // GDT, IDT, TSS, PIC remap
+	boot_cpu_init();
 	acpi_init(g_boot_info->rsdp); // parses MADT, learns LAPIC/IOAPIC addresses
-	init_memory(g_boot_info);
+	boot_memory_init();
 	apic_init_bsp(); // now the LAPIC address is known
 	hpet_init();
 
