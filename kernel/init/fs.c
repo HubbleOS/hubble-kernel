@@ -1,5 +1,5 @@
-#include "init.h"
 #include <hubble/printk.h>
+#include <hubble/init.h>
 
 #include <drivers/storage/ata/ata.h>
 
@@ -10,12 +10,12 @@ extern VFS_FS *root_fs;
 
 // Static devices
 static ATA_Device ata_devices[2] = {
-	{.bus = 0, .device = 0, .io_base = 0x1F0, .ctrl_base = 0x3F6},
-	{.bus = 1, .device = 0, .io_base = 0x170, .ctrl_base = 0x376},
+    {.bus = 0, .device = 0, .io_base = 0x1F0, .ctrl_base = 0x3F6},
+    {.bus = 1, .device = 0, .io_base = 0x170, .ctrl_base = 0x376},
 };
 
 static VFS_Device devi[2] = {
-	{.device = &ata_devices[0], .read = &ata_read_sector, .write = &ata_write_sector},
+    {.device = &ata_devices[0], .read = &ata_read_sector, .write = &ata_write_sector},
 };
 
 static gpt_partition_t partitions[20] = {{.device = &devi[0]}};
@@ -48,3 +48,11 @@ void init_filesystems(void)
 	vfs_mount("/dev", NULL, FS_DEV);
 	printk(KERN_INFO "Filesystem mounted\n");
 }
+
+static int init_filesystems_call(void)
+{
+	init_filesystems();
+	return 0;
+}
+
+fs_initcall(init_filesystems_call);
