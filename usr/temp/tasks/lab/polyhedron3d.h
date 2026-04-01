@@ -44,3 +44,4 @@ void polyhedron3d_scale(polyhedron3d_t *poly, float sx, float sy, float sz);
 void polyhedron3d_rotate_x(polyhedron3d_t *poly, float angle_deg);
 void polyhedron3d_rotate_y(polyhedron3d_t *poly, float angle_deg);
 void polyhedron3d_rotate_z(polyhedron3d_t *poly, float angle_deg);
+void polyhedron3d_translate(polyhedron3d_t *poly, float tx, float ty, float tz);

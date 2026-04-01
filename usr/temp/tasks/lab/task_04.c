@@ -237,6 +237,9 @@ static input_t *g_inp_ax = NULL;
 static input_t *g_inp_ay = NULL;
 static input_t *g_inp_az = NULL;
 static input_t *g_inp_speed = NULL;
+static input_t *g_inp_tx = NULL;
+static input_t *g_inp_ty = NULL;
+static input_t *g_inp_tz = NULL;
 
 // animation
 static int g_animating = 0;
@@ -257,7 +260,8 @@ static ipoint_t project(const point3d_t *p)
 	// Z -> up
 	// X -> forward
 
-	const float k = 0.5f;
+	// const float k = 0.5f;
+	const float k = 0;
 
 	out.x = (int)(p->y - p->x * k);
 	out.y = (int)(-p->z + p->x * k);
@@ -473,10 +477,21 @@ static void on_rotate(void)
 	g_dirty = 1;
 }
 
+static void on_translate(void)
+{
+	if (!g_poly)
+		return;
+	float tx = atof(g_inp_tx->text);
+	float ty = atof(g_inp_ty->text);
+	float tz = atof(g_inp_tz->text);
+	polyhedron3d_translate(g_poly, tx, ty, tz);
+	g_dirty = 1;
+}
+
 // Init
 void geometry3d_app_init(void)
 {
-	g_win = window_create(60, 40, 820, 580);
+	g_win = window_create(60, 40, 820, 720);
 
 	// canvas: 580×480
 	g_cnv = canvas_create(10, 10, 580, 480);
@@ -566,6 +581,28 @@ void geometry3d_app_init(void)
 	button_t *btn_rotate = button_create(648, iy + 84, 77, 26, "Rotate");
 	btn_rotate->on_click = on_rotate;
 	window_addElement(g_win, btn_rotate);
+
+	iy += 120;
+	label_t *lbl_tr = label_create(610, iy, 100, 18, "Translate");
+	window_addElement(g_win, lbl_tr);
+	iy += 20;
+
+	label_t *lbl_tx = label_create(610, iy, 35, 18, "X:");
+	label_t *lbl_ty = label_create(610, iy + 28, 35, 18, "Y:");
+	label_t *lbl_tz = label_create(610, iy + 56, 35, 18, "Z:");
+	g_inp_tx = input_create(648, iy, 77, 24, "0");
+	g_inp_ty = input_create(648, iy + 28, 77, 24, "0");
+	g_inp_tz = input_create(648, iy + 56, 77, 24, "0");
+	window_addElement(g_win, lbl_tx);
+	window_addElement(g_win, g_inp_tx);
+	window_addElement(g_win, lbl_ty);
+	window_addElement(g_win, g_inp_ty);
+	window_addElement(g_win, lbl_tz);
+	window_addElement(g_win, g_inp_tz);
+
+	button_t *btn_translate = button_create(648, iy + 84, 77, 26, "Translate");
+	btn_translate->on_click = on_translate;
+	window_addElement(g_win, btn_translate);
 
 	// default shape
 	on_cube();
