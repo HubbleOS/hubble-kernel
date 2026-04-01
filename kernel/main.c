@@ -1,13 +1,7 @@
 #include <hubble/kernel.h>
 #include <hubble/platform.h>
-
 #include <hubble/printk.h>
-
-#include "init/init.h"
-
-#include <dev/keyboard.h>
-#include <dev/mouse.h>
-#include <fs/vfs/dev.h>
+#include <hubble/device.h>
 
 #include <net/eth.h>
 #include <net/arp.h>
@@ -15,12 +9,6 @@
 #include <net/udp.h>
 
 #include <sound/core/dev.h>
-#include <hubble/device.h>
-
-static uint64_t fb_mmap(uint64_t offset, size_t size)
-{
-	return g_platform.fb_base;
-}
 
 static const struct
 {
@@ -83,27 +71,44 @@ static const struct
 extern initcall_t __initcalls_start[];
 extern initcall_t __initcalls_end[];
 
-void do_initcalls(void)
+static void do_initcalls_range(initcall_t *start, initcall_t *end)
 {
-	printk("[init] start=%p end=%p\n", __initcalls_start, __initcalls_end);
-	for (initcall_t *fn = __initcalls_start; fn < __initcalls_end; fn++)
+	for (initcall_t *fn = start; fn < end; fn++)
 	{
-		printk("[init] calling initcall %p\n", fn);
 		int ret = (*fn)();
 		if (ret != 0)
 			printk("[init] initcall %p failed: %d\n", fn, ret);
 	}
 }
 
+extern initcall_t __start___initcalls_early[];
+extern initcall_t __stop___initcalls_early[];
+
+extern initcall_t __start___initcalls_core[];
+extern initcall_t __stop___initcalls_core[];
+
+extern initcall_t __start___initcalls_fs[];
+extern initcall_t __stop___initcalls_fs[];
+
+extern initcall_t __start___initcalls_device[];
+extern initcall_t __stop___initcalls_device[];
+
+extern initcall_t __start___initcalls_late[];
+extern initcall_t __stop___initcalls_late[];
+
+void do_initcalls(void)
+{
+	do_initcalls_range(__start___initcalls_early, __stop___initcalls_early);
+	do_initcalls_range(__start___initcalls_core, __stop___initcalls_core);
+	do_initcalls_range(__start___initcalls_fs, __stop___initcalls_fs);
+	do_initcalls_range(__start___initcalls_device, __stop___initcalls_device);
+	do_initcalls_range(__start___initcalls_late, __stop___initcalls_late);
+}
+
 void kernel_main(void)
 {
-	init_filesystems();
-	dev_vfs_register("fb0", fb_mmap, NULL);
-	dev_vfs_register("mouse", mouse_mmap, mouse_read_file);
-	dev_vfs_register("kbd", NULL, kbd_read);
-
-	return;
 	do_initcalls();
+	return;
 
 	// sound_init();
 

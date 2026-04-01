@@ -26,7 +26,7 @@ platform_info_t g_platform;
 
 BootInfo *g_boot_info;
 
-void kmain()
+void start_kernel(void)
 {
 	g_platform.fb_base = (uint64_t)g_boot_info->framebuffer.base;
 	g_platform.fb_width = g_boot_info->framebuffer.width;

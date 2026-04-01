@@ -241,4 +241,4 @@ __init int e1000_module_init(void)
 	return pci_register_driver(&e1000_driver);
 }
 
-module_init(e1000_module_init);
+device_initcall(e1000_module_init);

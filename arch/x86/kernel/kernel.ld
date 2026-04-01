@@ -5,7 +5,6 @@ KERNEL_PHYS_BASE = 0x100000;
 
 MEMORY
 {
-    /* Physical download addresses */
     PHYS (rwx) : ORIGIN = KERNEL_PHYS_BASE, LENGTH = 16M
 }
 
@@ -13,7 +12,6 @@ ENTRY(kernel_entry)
 
 SECTIONS
 {
-    /* All sections use virtual addresses, but are loaded using physical addresses */
     . = KERNEL_VIRT_BASE + KERNEL_PHYS_BASE;
 
     /* Start of the kernel */
@@ -28,20 +26,42 @@ SECTIONS
         *(.text.ap_trampoline)  
     } AT > PHYS
 
-   /* Read-only data */
+    /* Read-only data */
     .rodata : ALIGN(4K)
     {
         *(.rodata*)
     } AT > PHYS
 
-    /* Section for initcalls */
-    .initcalls ALIGN(8) : {
-        __initcalls_start = .;
-        KEEP(*(.initcalls))
-        __initcalls_end = .;
+    /* Initcalls sections */
+    /* Separating the levels initcalls */
+    .initcalls ALIGN(8) :
+    {
+        /* Early initcalls */
+        __start___initcalls_early = .;
+        KEEP(*(.initcalls.early))
+        __stop___initcalls_early = .;
+
+        /* Core initcalls */
+        __start___initcalls_core = .;
+        KEEP(*(.initcalls.core))
+        __stop___initcalls_core = .;
+
+        /* FS initcalls */
+        __start___initcalls_fs = .;
+        KEEP(*(.initcalls.fs))
+        __stop___initcalls_fs = .;
+
+        /* Device initcalls */
+        __start___initcalls_device = .;
+        KEEP(*(.initcalls.device))
+        __stop___initcalls_device = .;
+
+        /* Late initcalls */
+        __start___initcalls_late = .;
+        KEEP(*(.initcalls.late))
+        __stop___initcalls_late = .;
+
     } AT > PHYS
-
-
 
     /* Initialized data */
     .data : ALIGN(4K)
@@ -49,11 +69,7 @@ SECTIONS
         *(.data*)
     } AT > PHYS
 
-    /* 
-        BSS 
-    In a linker, BSS (Block Started by Symbol) is the section 
-    that holds uninitialized global and static variables. 
-    */
+    /* BSS */
     .bss : ALIGN(4K)
     {
         _bss_start = .;
@@ -68,7 +84,7 @@ SECTIONS
     _kernel_phys_end = . - KERNEL_VIRT_BASE;
     _kernel_size = _kernel_end - _kernel_start;
 
-    /* Discarding unnecessary sections */
+    /* Discard unnecessary sections */
     /DISCARD/ :
     {
         *(.comment)

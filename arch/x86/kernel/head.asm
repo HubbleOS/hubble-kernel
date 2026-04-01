@@ -1,6 +1,6 @@
 section .text.boot
 
-extern kmain
+extern start_kernel
 extern g_boot_info
 
 extern _bss_start
@@ -19,7 +19,7 @@ kernel_entry:
 
     pop rdi                         ; restore BootInfo*
     mov qword [rel g_boot_info], rdi
-    call kmain
+    call start_kernel
 
 .hang:
     cli
