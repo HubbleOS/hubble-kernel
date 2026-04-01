@@ -6,8 +6,6 @@
 
 #include <hubble/printk.h>
 
-extern BootInfo *g_boot_info;
-
 void init_memory(BootInfo *bi)
 {
 	printk(KERN_INFO "\n=== Initializing Memory Management ===\n");
