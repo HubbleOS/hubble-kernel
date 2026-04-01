@@ -1,5 +1,6 @@
-
+#include <hubble/string.h>
 #include <hubble/printk.h>
+
 #include <interrupt/interrupt.h>
 #include <stdint.h>
 #include <io.h>
@@ -10,20 +11,17 @@
 #include <mm/vmm.h>
 #include <mm/pmm.h>
 #include "higher_half.h"
-#include <hubble/string.h>
 
 static mouse_t *mouse_g = NULL;
 static uint8_t mouse_packet[3];
 static uint8_t mouse_cycle = 0;
 mouse_t *get_mouse_info(void)
 {
-
 	return mouse_g;
 }
 
 uint64_t mouse_mmap(uint64_t offset, size_t size)
 {
-	// printk("mouse mmap %p\n", VIRT_TO_PHYS(mouse_g));
 	return (uint64_t)VIRT_TO_PHYS(mouse_g);
 }
 uint64_t mouse_read_file(uint64_t offset, size_t size, void *buf)
@@ -37,7 +35,6 @@ void mouse_handler(registers_t *regs)
 	if (!(inb(PS2_COMMAND) & 0x20))
 		return;
 
-	// outb(0x3f8, 'M');
 	mouse_packet[mouse_cycle++] = inb(PS2_DATA);
 
 	if (mouse_cycle < 3)
@@ -82,16 +79,6 @@ void mouse_handler(registers_t *regs)
 		mouse_g->right_clicked = false; // right just released
 
 	prev_buttons = curr_buttons;
-
-	if (mouse_g->x < 0)
-		mouse_g->x = 0;
-	if (mouse_g->y < 0)
-		mouse_g->y = 0;
-	if (mouse_g->x > 1920)
-		mouse_g->x = 1920;
-	if (mouse_g->y > 1080)
-		mouse_g->y = 1080;
-	// outb(0x3f8, 'M');
 }
 
 static void mouse_write(uint8_t cmd)
@@ -151,8 +138,6 @@ void mouse_init()
 	irq_install_handler(12, mouse_handler);
 	uint64_t phys = pmm_alloc_page();
 	mouse_g = PHYS_TO_VIRT_PTR(mouse_t, phys);
-	mouse_g->x = 1920 / 2;
-	mouse_g->y = 1080 / 2;
 
 	__asm__ volatile("sti");
 	printk("Mouse initialized\n");
