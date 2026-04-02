@@ -6,6 +6,28 @@
 
 #include <hubble/memory.h>
 
+#include <higher_half.h>
+
+void check_virtual_memory()
+{
+	void *addr = (void *)check_virtual_memory;
+	uintptr_t phys = VIRT_TO_PHYS(addr);
+
+	printk(KERN_INFO "Virtual addr: %p\n", addr);
+	printk(KERN_INFO "Physical addr: 0x%lx\n", phys);
+
+	if ((uintptr_t)addr != phys)
+	{
+		printk(KERN_INFO "Kernel is running in virtual memory space!\n");
+	}
+	else
+	{
+		printk(KERN_WARNING "Kernel still in physical memory space!\n");
+	}
+	printk(KERN_INFO "Physical addr: 0x%lx\n", phys);
+	printk(KERN_INFO "Virtual addr: %p\n", addr);
+}
+
 void boot_memory_init()
 {
 	printk(KERN_INFO "Initializing Memory Management");
@@ -21,4 +43,6 @@ void boot_memory_init()
 	printk(KERN_DEBUG "Initializing VMM...\n");
 	vmm_init();
 	printk(KERN_INFO "VMM initialized\n");
+
+	check_virtual_memory();
 }
