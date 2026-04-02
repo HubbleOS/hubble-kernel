@@ -8,17 +8,11 @@
 #define M_PI 3.14159265358979323846f
 #endif
 
-/* ---------------------------------------------------------------
- * Матриця 4×4 в однорідних координатах (row-major)
- * Точка: [x, y, z, 1]  →  результат = M * v
- * --------------------------------------------------------------- */
-
 typedef struct
 {
 	float m[4][4];
 } mat4_t;
 
-/* Одинична матриця */
 static mat4_t mat4_identity(void)
 {
 	mat4_t r = {{{0}}};
@@ -26,7 +20,6 @@ static mat4_t mat4_identity(void)
 	return r;
 }
 
-/* Множення матриць: C = A * B */
 static mat4_t mat4_mul(const mat4_t *a, const mat4_t *b)
 {
 	mat4_t c = {{{0}}};
@@ -37,7 +30,6 @@ static mat4_t mat4_mul(const mat4_t *a, const mat4_t *b)
 	return c;
 }
 
-/* Застосування матриці до точки (w=1) */
 static point3d_t mat4_apply(const mat4_t *m, point3d_t p)
 {
 	float x = m->m[0][0] * p.x + m->m[0][1] * p.y + m->m[0][2] * p.z + m->m[0][3];
@@ -53,7 +45,6 @@ static point3d_t mat4_apply(const mat4_t *m, point3d_t p)
 	return (point3d_t){x, y, z};
 }
 
-/* Матриця перенесення */
 static mat4_t mat4_translate(float tx, float ty, float tz)
 {
 	mat4_t m = mat4_identity();
@@ -63,7 +54,6 @@ static mat4_t mat4_translate(float tx, float ty, float tz)
 	return m;
 }
 
-/* Матриця масштабування (відносно початку) */
 static mat4_t mat4_scale(float sx, float sy, float sz)
 {
 	mat4_t m = mat4_identity();
@@ -73,7 +63,6 @@ static mat4_t mat4_scale(float sx, float sy, float sz)
 	return m;
 }
 
-/* Матриці обертання навколо осей */
 static mat4_t mat4_rot_x(float rad)
 {
 	mat4_t m = mat4_identity();
@@ -107,16 +96,11 @@ static mat4_t mat4_rot_z(float rad)
 	return m;
 }
 
-/* Застосувати матрицю до всіх вершин */
 static void apply_to_all(polyhedron3d_t *poly, const mat4_t *m)
 {
 	for (size_t i = 0; i < poly->count; i++)
 		poly->transformed[i] = mat4_apply(m, poly->transformed[i]);
 }
-
-/* ---------------------------------------------------------------
- * Lifecycle
- * --------------------------------------------------------------- */
 
 polyhedron3d_t *polyhedron3d_create(size_t count, size_t edge_count)
 {
@@ -175,13 +159,6 @@ point3d_t polyhedron3d_centroid(const polyhedron3d_t *poly)
 	return c;
 }
 
-/* ---------------------------------------------------------------
- * Геометричні перетворення через однорідні координати
- *
- * Загальна схема для перетворення відносно центроїда C:
- *   M = T(C) * Transform * T(-C)
- * --------------------------------------------------------------- */
-
 void polyhedron3d_scale(polyhedron3d_t *poly, float sx, float sy, float sz)
 {
 	if (!poly)
@@ -192,7 +169,6 @@ void polyhedron3d_scale(polyhedron3d_t *poly, float sx, float sy, float sz)
 	mat4_t t_neg = mat4_translate(-c.x, -c.y, -c.z);
 	mat4_t s = mat4_scale(sx, sy, sz);
 
-	/* M = T(C) * S * T(-C) */
 	mat4_t tmp = mat4_mul(&s, &t_neg);
 	mat4_t m = mat4_mul(&t_pos, &tmp);
 	apply_to_all(poly, &m);
@@ -209,7 +185,6 @@ void polyhedron3d_rotate_x(polyhedron3d_t *poly, float angle_deg)
 	mat4_t t_neg = mat4_translate(-c.x, -c.y, -c.z);
 	mat4_t r = mat4_rot_x(rad);
 
-	/* M = T(C) * Rx * T(-C) */
 	mat4_t tmp = mat4_mul(&r, &t_neg);
 	mat4_t m = mat4_mul(&t_pos, &tmp);
 	apply_to_all(poly, &m);
