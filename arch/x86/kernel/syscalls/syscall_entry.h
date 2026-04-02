@@ -20,7 +20,8 @@ uint64_t syscall_handler_wrapper(registers_t *regs);
 uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
 			 uint64_t a4, uint64_t a5, uint64_t a6);
 
-VFS_File *task_get_fd(task_t *task, int fd);
+fd_entry_t *task_get_fd(task_t *task, int fd);
+fd_entry_t *task_get_free_fd(task_t *task);
 
 typedef struct
 {

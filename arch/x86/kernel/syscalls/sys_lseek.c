@@ -4,25 +4,18 @@
 
 #include <hubble/printk.h>
 
-long sys_write(int fd, const char *buffer, size_t len)
+long sys_lseek(int fd, uint64_t offset, int whence)
 {
-	if (!buffer || len == 0)
-		return -1;
-	if (fd == 1)
-	{
-		printk("%.*s", (int)len, buffer);
-		return len;
-	}
+
 	task_t *task = get_current_task();
 
 	fd_entry_t *fd_entry = task_get_fd(task, fd);
-
 	VFS_File *file = fd_entry->data;
 	if (!file)
 		return -1;
 
-	size_t written = vfs_write(file, buffer, len);
-	return (long)written;
+	return (long)vfs_lseek(file, offset, whence);
+
 	// output_device_t *dev = get_stdout_device();
 	// if (!dev || !dev->write)
 	// 	return -1;

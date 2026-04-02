@@ -30,11 +30,21 @@
 #define PF_W 0x2
 #define PF_R 0x4
 
-VFS_File *task_get_fd(task_t *task, int fd)
+fd_entry_t *task_get_fd(task_t *task, int fd)
 {
 	if (fd < 0 || fd >= MAX_FDS)
 		return NULL;
-	return task->fds[fd];
+	return &task->fds[fd];
+}
+
+fd_entry_t *task_get_free_fd(task_t *task)
+{
+	for (int i = 2; i < MAX_FDS; i++)
+	{
+		if (!task->fds[i].data)
+			return &task->fds[i];
+	}
+	return NULL;
 }
 
 long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
@@ -115,7 +125,8 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
 	if (fd < 0)
 		return -1;
 
-	VFS_File *file = task_get_fd(current, fd);
+	fd_entry_t *fd_entry = task_get_fd(current, fd);
+	VFS_File *file = fd_entry->data;
 	if (!file)
 		return -1;
 	VFS_device_reg *dev = (VFS_device_reg *)(file->node->fs_node);

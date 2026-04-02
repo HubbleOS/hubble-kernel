@@ -21,6 +21,8 @@
 
 #include <asm.h>
 #define CANARY 0xDEADBEEFCAFEBABEULL
+#define MAX_PRIO 255
+#define BASE_SLICE 5
 
 static task_t *current_task[MAX_CPUS];
 
@@ -73,7 +75,8 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	printk("Setting state\n");
 	task->state = TASK_READY;
 	task->priority = priority;
-	task->time_slice = 10; // 10 ticks
+	task->time_slice_max = BASE_SLICE + priority;
+	task->time_slice = task->time_slice_max;
 	task->context_saved = false;
 	task->in_syscall = false;
 
@@ -93,9 +96,9 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	{
 		uint64_t stack_base = alloc_user_stack();
 		task->kernel_stack = stack_base;
-		task->stack_size = 65536;
+		task->stack_size = USER_STACK_SIZE;
 
-		for (uint64_t i = 0; i < task->stack_size + PAGE_SIZE; i += PAGE_SIZE)
+		for (uint64_t i = 0; i < task->stack_size; i += PAGE_SIZE)
 		{
 			uint64_t phys = pmm_alloc_page();
 
@@ -313,25 +316,17 @@ void task_sleep(void)
 	asm volatile("mov %%rcx,  %0" : "=r"(user_rip));
 	asm volatile("mov %%r11,  %0" : "=r"(user_rflags));
 
-	// // Set flag FIRST so save_context skips immediately
-	// current->context_saved = true;
-
-	// // Then write context — save_context won't overwrite these
-	// current->context.rsp = user_rsp;
-	// current->context.rip = user_rip;
-	// current->context.rflags = user_rflags;
-	// current->context.cs = 0x23;
-	// current->context.ss = 0x1B;
-	// current->context.rax = (uint64_t)-1;
-
 	current->state = TASK_BLOCKED;
 	current->time_slice = 0;
-	current->in_syscall = true;
-	current->in_syscall_rsp = user_rsp;
-	// printk("Sleeping rsp=0x%llx\n", user_rsp);
-	asm volatile("swapgs");
+
+	if (current->in_syscall)
+	{
+		current->in_syscall_rsp = user_rsp;
+		asm volatile("swapgs");
+	}
 	asm volatile("int $32");
-	asm volatile("swapgs");
+	if (current->in_syscall)
+		asm volatile("swapgs");
 }
 
 void task_wake(task_t *task)
@@ -339,7 +334,7 @@ void task_wake(task_t *task)
 	if (!task || task->state != TASK_BLOCKED)
 		return;
 
-	task->time_slice = 10;
+	task->time_slice = task->time_slice_max;
 	task->state = TASK_READY;
 }
 
@@ -388,12 +383,6 @@ void schedule(registers_t *regs)
 	current_task[cpu_id] = new_task;
 
 	extern cpu_local_t cpu_locals[];
-	// if (old_task)
-	// {
-	// 	cpu_locals[cpu_id].rsp0 = old_task->rsp0 + old_task->rsp0_size;
-	// }
-
-	// flush cache
 
 	if (new_task->page_table != (old_task ? old_task->page_table : NULL))
 	{
@@ -408,9 +397,6 @@ void schedule(registers_t *regs)
 	tss_set_rsp0(new_task->rsp0 + new_task->rsp0_size);
 	task_state_load(new_task, regs);
 	return;
-
-	// extern void switch_to_task(cpu_context_t * old, cpu_context_t * new);
-	// switch_to_task(old_task ? &old_task->context : NULL, &new_task->context);
 }
 
 void lapic_timer_handler(registers_t *regs)
@@ -433,12 +419,6 @@ void lapic_timer_handler(registers_t *regs)
 	if (current && current->rsp0)
 	{
 		uint64_t *canary = (uint64_t *)(current->rsp0);
-		// if (*canary != CANARY)
-		// {
-		// 	printk("STACK OVERFLOW on task pid=%d rsp0=0x%llx, data=0x%llx, canary=0x%llx\n",
-		// 	       current->pid, current->rsp0, *canary, (uint64_t)canary);
-		// 	*canary = CANARY; // reset so we only print once
-		// } no sense to do this here syscall can rewrite it when return regs
 		if (*canary != CANARY)
 		{
 			printk("STACK UNDERFLOW on task pid=%d, data=0x%llx\n", current->pid, *(uint64_t *)(current->rsp0));
@@ -450,7 +430,7 @@ void lapic_timer_handler(registers_t *regs)
 	{
 		if (current)
 		{
-			current->time_slice = 10;
+			current->time_slice = current->time_slice_max;
 		}
 
 		schedule(regs);
@@ -594,15 +574,14 @@ void scheduler_init(void)
 	{
 		printk("Initializing runqueue for CPU %d\n", i);
 		runqueues[i].count = 0;
-		runqueues[i].next_index = 0; // Initialize
-		// Create idle task for each CPU
-		task_t *idle = task_create(idle_task, 255, 0);
+		runqueues[i].next_index = 0;
+		task_t *idle = task_create(idle_task, 0, 0);
 		runqueues[i].idle_task = idle;
 		current_task[i] = NULL;
 	}
 
 	extern void kmain_thread(void);
-	task_t *kmain = task_create(kmain_thread, 255, 0);
+	task_t *kmain = task_create(kmain_thread, 5, 0);
 	scheduler_add_task(kmain);
 
 	initialized = true;

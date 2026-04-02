@@ -18,6 +18,10 @@ void *mmap_(uint64_t addr, size_t length, int prot, int flags,
 
 int read_file(int fd, void *buf, size_t size) { return syscall3(2, fd, (long)buf, size); }
 
+int write_file(int fd, void *buf, size_t size) { return syscall3(1, fd, (long)buf, size); }
+
+int lseek(int fd, uint64_t offset, int whence) { return syscall3(8, fd, offset, whence); }
+
 int spawn(void *entry_point, void *arg, uint32_t priority) { return syscall3(6, (long)entry_point, (long)arg, priority); }
 
 typedef struct
@@ -46,11 +50,19 @@ void test(void)
 {
 	printf("Test task 2!\n");
 	char c;
+	char buf[128];
+	int pos = 0;
 	int kbd_file = open("/dev/kbd", 0);
+	int pipe_file = open("/pipe/test", 0);
 	while (1)
 	{
 		read_file(kbd_file, &c, 1);
-		printf("key 2: %c\n", c);
+		buf[pos++] = c;
+		lseek(pipe_file, 0, 0);
+		write_file(pipe_file, buf, pos);
+		pos = 0;
+		// printf("%s", buf);
+		// printf("key 2: %c\n", c);
 	}
 	// printf("Test task!\n")
 }
