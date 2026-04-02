@@ -25,7 +25,7 @@ static int uhci_get_device_descriptor(struct uhci_hcd *hcd,
 				      int is_low_speed);
 static int uhci_set_configuration(struct uhci_hcd *hcd, uint8_t dev_addr, uint8_t config);
 static int uhci_interrupt_transfer(struct uhci_hcd *hcd, uint8_t dev_addr);
-
+static int uhci_wait_td(struct uhci_td *td, char *label);
 /* ────────────────────────────────────────────────────────
  * Reset
  * ──────────────────────────────────────────────────────── */
@@ -136,6 +136,226 @@ static int uhci_count_ports(uint16_t io_base)
 	return port;
 }
 
+/* ────────────────────────────────────────────────────────
+ * Descriptor structures
+ * ──────────────────────────────────────────────────────── */
+struct usb_config_descriptor
+{
+	uint8_t bLength;
+	uint8_t bDescriptorType; // 0x02
+	uint16_t wTotalLength;	 // повна довжина з усіма вкладеними
+	uint8_t bNumInterfaces;
+	uint8_t bConfigurationValue;
+	uint8_t iConfiguration;
+	uint8_t bmAttributes;
+	uint8_t bMaxPower;
+} __attribute__((packed));
+
+struct usb_interface_descriptor
+{
+	uint8_t bLength;
+	uint8_t bDescriptorType; // 0x04
+	uint8_t bInterfaceNumber;
+	uint8_t bAlternateSetting;
+	uint8_t bNumEndpoints;
+	uint8_t bInterfaceClass;    // 0x03 = HID
+	uint8_t bInterfaceSubClass; // 0x01 = Boot Interface
+	uint8_t bInterfaceProtocol; // 0x01 = keyboard, 0x02 = mouse
+	uint8_t iInterface;
+} __attribute__((packed));
+
+struct usb_endpoint_descriptor
+{
+	uint8_t bLength;
+	uint8_t bDescriptorType;  // 0x05
+	uint8_t bEndpointAddress; // біт 7: 0=OUT, 1=IN; біти 3:0 = номер EP
+	uint8_t bmAttributes;	  // біти 1:0: 0=Control,1=Iso,2=Bulk,3=Interrupt
+	uint16_t wMaxPacketSize;
+	uint8_t bInterval; // інтервал поллінгу в мс
+} __attribute__((packed));
+
+#define USB_DESC_CONFIGURATION 0x02
+#define USB_DESC_INTERFACE 0x04
+#define USB_DESC_ENDPOINT 0x05
+#define USB_CLASS_HID 0x03
+#define USB_PROTOCOL_KEYBOARD 0x01
+#define USB_PROTOCOL_MOUSE 0x02
+
+#define CONFIG_DESC_BUF_SIZE 255
+
+/* ────────────────────────────────────────────────────────
+ * GET_DESCRIPTOR (Configuration Descriptor)
+ * Повертає protocol: 1=keyboard, 2=mouse, 0=інший/невідомий
+ * ──────────────────────────────────────────────────────── */
+static int uhci_get_config_descriptor(struct uhci_hcd *hcd,
+				      uint8_t dev_addr,
+				      int is_low_speed,
+				      uint8_t *out_protocol,
+				      uint8_t *out_endpoint,
+				      uint16_t *out_max_packet)
+{
+	uint64_t setup_phys = pmm_alloc_page();
+	struct usb_setup_packet *pkt =
+	    PHYS_TO_VIRT_PTR(struct usb_setup_packet, setup_phys);
+	pkt->bmRequestType = 0x80;
+	pkt->bRequest = 0x06;			     // GET_DESCRIPTOR
+	pkt->wValue = (USB_DESC_CONFIGURATION << 8); // Config Descriptor, index 0
+	pkt->wIndex = 0;
+	pkt->wLength = CONFIG_DESC_BUF_SIZE;
+
+	uint64_t buf_phys = pmm_alloc_page();
+	uint8_t *buf = PHYS_TO_VIRT_PTR(uint8_t, buf_phys);
+
+	uint32_t ls = is_low_speed ? TD_STATUS_LS : 0;
+
+	uint64_t td_phys = pmm_alloc_page();
+	struct uhci_td *td = PHYS_TO_VIRT_PTR(struct uhci_td, td_phys);
+
+	/* td[0]: SETUP */
+	td[0].link = (uint32_t)(td_phys + sizeof(struct uhci_td)) | TD_LINK_DEPTH;
+	td[0].status = TD_STATUS_ERRCNT(3) | TD_STATUS_ACTIVE | ls;
+	td[0].token = TD_TOKEN(TD_PID_SETUP, dev_addr, 0, 0, 7);
+	td[0].buffer = (uint32_t)setup_phys;
+
+	/* td[1]: IN — читаємо дескриптор */
+	td[1].link = (uint32_t)(td_phys + 2 * sizeof(struct uhci_td)) | TD_LINK_DEPTH;
+	td[1].status = TD_STATUS_ERRCNT(3) | TD_STATUS_ACTIVE | ls;
+	td[1].token = TD_TOKEN(TD_PID_IN, dev_addr, 0, 1, CONFIG_DESC_BUF_SIZE - 1);
+	td[1].buffer = (uint32_t)buf_phys;
+
+	/* td[2]: STATUS */
+	td[2].link = TD_LINK_TERMINATE;
+	td[2].status = TD_STATUS_ERRCNT(3) | TD_STATUS_ACTIVE | ls;
+	td[2].token = TD_TOKEN(TD_PID_OUT, dev_addr, 0, 1, 0x7FF);
+	td[2].buffer = 0;
+
+	uint64_t qh_phys = pmm_alloc_page();
+	struct uhci_qh *qh = PHYS_TO_VIRT_PTR(struct uhci_qh, qh_phys);
+	qh->head_link = TD_LINK_TERMINATE;
+	qh->element_link = (uint32_t)td_phys;
+
+	for (int f = 0; f < FRAME_LIST_SIZE; f++)
+		hcd->frame_list_virt[f] = (uint32_t)qh_phys | TD_LINK_QH;
+
+	if (uhci_wait_td(&td[0], "GET_CFG td0") < 0)
+		return -1;
+	if (uhci_wait_td(&td[1], "GET_CFG td1") < 0)
+		return -1;
+	if (uhci_wait_td(&td[2], "GET_CFG td2") < 0)
+		return -1;
+
+	if (td[1].status & TD_STATUS_STALLED)
+	{
+		printk("[uhci] GET_CONFIG stalled!\n");
+		return -1;
+	}
+
+	/* парсимо дескриптори */
+	struct usb_config_descriptor *cfg = (struct usb_config_descriptor *)buf;
+	printk("[uhci] config: interfaces=%d total_len=%d\n",
+	       cfg->bNumInterfaces, cfg->wTotalLength);
+
+	*out_protocol = 0;
+	*out_endpoint = 1;   // дефолт
+	*out_max_packet = 8; // дефолт
+
+	uint8_t *p = buf + cfg->bLength;
+	uint8_t *end = buf + cfg->wTotalLength;
+
+	while (p < end && p[0] > 0)
+	{
+		uint8_t len = p[0];
+		uint8_t type = p[1];
+
+		if (type == USB_DESC_INTERFACE)
+		{
+			struct usb_interface_descriptor *iface =
+			    (struct usb_interface_descriptor *)p;
+			printk("[uhci] interface: class=0x%02x subclass=0x%02x proto=0x%02x\n",
+			       iface->bInterfaceClass,
+			       iface->bInterfaceSubClass,
+			       iface->bInterfaceProtocol);
+
+			if (iface->bInterfaceClass == USB_CLASS_HID)
+				*out_protocol = iface->bInterfaceProtocol;
+		}
+		else if (type == USB_DESC_ENDPOINT)
+		{
+			struct usb_endpoint_descriptor *ep =
+			    (struct usb_endpoint_descriptor *)p;
+			/* беремо перший IN endpoint */
+			if (ep->bEndpointAddress & 0x80)
+			{
+				*out_endpoint = ep->bEndpointAddress & 0x0F;
+				*out_max_packet = ep->wMaxPacketSize;
+				printk("[uhci] endpoint: addr=0x%02x maxpkt=%d interval=%d\n",
+				       ep->bEndpointAddress,
+				       ep->wMaxPacketSize,
+				       ep->bInterval);
+			}
+		}
+
+		p += len;
+	}
+
+	return 0;
+}
+
+#define KBD_REPORT_SIZE 8
+
+static int uhci_keyboard_transfer(struct uhci_hcd *hcd,
+				  uint8_t dev_addr,
+				  int is_low_speed)
+{
+	uint32_t ls = is_low_speed ? TD_STATUS_LS : 0;
+	uint64_t buf_phys = pmm_alloc_page();
+	uint8_t *buf = PHYS_TO_VIRT_PTR(uint8_t, buf_phys);
+
+	uint64_t td_phys = pmm_alloc_page();
+	struct uhci_td *td = PHYS_TO_VIRT_PTR(struct uhci_td, td_phys);
+
+	uint64_t qh_phys = pmm_alloc_page();
+	struct uhci_qh *qh = PHYS_TO_VIRT_PTR(struct uhci_qh, qh_phys);
+	qh->head_link = TD_LINK_TERMINATE;
+	qh->element_link = (uint32_t)td_phys;
+
+	for (int f = 0; f < FRAME_LIST_SIZE; f++)
+		hcd->frame_list_virt[f] = (uint32_t)qh_phys | TD_LINK_QH;
+
+	uint8_t toggle = 0;
+
+	while (1)
+	{
+		td->link = TD_LINK_TERMINATE;
+		td->status = TD_STATUS_ERRCNT(3) | TD_STATUS_ACTIVE | ls;
+		td->token = TD_TOKEN(TD_PID_IN, dev_addr, 1, toggle,
+				     KBD_REPORT_SIZE - 1);
+		td->buffer = (uint32_t)buf_phys;
+		qh->element_link = (uint32_t)td_phys;
+
+		int timeout = 100000;
+		while ((td->status & TD_STATUS_ACTIVE) && timeout--)
+			cpu_relax();
+
+		if (td->status & TD_STATUS_STALLED)
+		{
+			printk("[uhci] kbd stalled!\n");
+			break;
+		}
+
+		uint8_t mod = buf[0];
+		uint8_t key = buf[2]; // перший keycode
+
+		if (key)
+		{
+			printk("[uhci] key: mod=0x%02x keycode=0x%02x\n", mod, key);
+		}
+
+		toggle ^= 1;
+	}
+	return 0;
+}
+
 #define PORTSC_CSC (1 << 1)
 #define PORTSC_CS (1 << 0)
 #define PORTSC_PE (1 << 2)
@@ -195,9 +415,37 @@ static void uhci_check_ports(struct uhci_hcd *hcd)
 
 			uhci_set_address(hcd, i + 1);
 			hpet_delay_ms(10);
+			uint8_t protocol = 0, endpoint = 1;
+			uint16_t max_packet = 8;
+
+			if (uhci_get_config_descriptor(hcd, i + 1, is_low_speed,
+						       &protocol, &endpoint, &max_packet) < 0)
+			{
+				printk("[uhci] port %d: get_config failed\n", i + 1);
+				continue;
+			}
+
 			uhci_set_configuration(hcd, i + 1, 1);
 			hpet_delay_ms(10);
-			uhci_interrupt_transfer(hcd, i + 1);
+
+			if (protocol == USB_PROTOCOL_MOUSE)
+			{
+				printk("[uhci] -> mouse on port %d\n", i + 1);
+
+				uhci_interrupt_transfer(hcd, i + 1);
+
+				// uhci_mouse_transfer(hcd, i + 1, is_low_speed, endpoint, max_packet);
+			}
+			else if (protocol == USB_PROTOCOL_KEYBOARD)
+			{
+				printk("[uhci] -> keyboard on port %d\n", i + 1);
+				uhci_keyboard_transfer(hcd, i + 1, is_low_speed);
+				// uhci_keyboard_transfer(hcd, i + 1, is_low_speed, endpoint, max_packet);
+			}
+			else
+			{
+				printk("[uhci] -> unknown HID protocol %d\n", protocol);
+			}
 		}
 		else
 		{
@@ -464,7 +712,8 @@ static int uhci_interrupt_transfer(struct uhci_hcd *hcd, uint8_t dev_addr)
 	qh->head_link = TD_LINK_TERMINATE;
 	qh->element_link = (uint32_t)td_phys;
 
-	hcd->frame_list_virt[0] = (uint32_t)qh_phys | TD_LINK_QH;
+	for (int i = 0; i < FRAME_LIST_SIZE; i++)
+		hcd->frame_list_virt[i] = (uint32_t)qh_phys | TD_LINK_QH;
 
 	uint8_t toggle = 0;
 
