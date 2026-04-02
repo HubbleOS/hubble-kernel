@@ -98,8 +98,8 @@ def build_qemu_command(opts: QemuOptions):
     # USB devices
     cmd += [
         # "-device", "usb-tablet,bus=uhci1.0,port=1",
+        "-device", "usb-kbd,bus=uhci1.0,port=1",
         # "-device", "usb-kbd,bus=uhci1.0,port=2",
-        # "-device", "usb-kbd,bus=uhci1.0,port=1",
         # "-device", "usb-mouse,bus=uhci2.0,port=1",
         # "-device", "usb-mouse,bus=uhci2.0,port=2",
         # "-device", "usb-storage,bus=uhci2.0,port=2",
