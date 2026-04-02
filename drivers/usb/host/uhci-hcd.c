@@ -254,15 +254,18 @@ static int uhci_set_address(struct uhci_hcd *hcd, uint8_t new_addr)
 	uint64_t td_phys = pmm_alloc_page();
 	struct uhci_td *td = PHYS_TO_VIRT_PTR(struct uhci_td, td_phys);
 
-	td[0].link = (uint32_t)(td_phys + sizeof(struct uhci_td));
+	td[0].link = (uint32_t)(td_phys + sizeof(struct uhci_td)) | TD_LINK_DEPTH;
 	td[0].status = TD_STATUS_ERRCNT(3) | TD_STATUS_ACTIVE;
-	td[0].token = TD_TOKEN(TD_PID_SETUP, 0, 0, 0, 0x7FF);
+	td[0].token = TD_TOKEN(TD_PID_SETUP, 0, 0, 0, 0x7);
 	td[0].buffer = (uint32_t)setup_phys;
 
 	td[1].link = TD_LINK_TERMINATE;
 	td[1].status = TD_STATUS_ERRCNT(3) | TD_STATUS_ACTIVE;
 	td[1].token = TD_TOKEN(TD_PID_IN, 0, 0, 1, 0x7FF);
 	td[1].buffer = 0;
+
+	printk("[uhci] set_addr: td_phys=0x%llx td[0].link=0x%x td[1] addr=0x%llx\n",
+	       td_phys, td[0].link, td_phys + sizeof(struct uhci_td));
 
 	uint64_t qh_phys = pmm_alloc_page();
 	struct uhci_qh *qh = PHYS_TO_VIRT_PTR(struct uhci_qh, qh_phys);
@@ -337,13 +340,13 @@ static int uhci_get_device_descriptor(struct uhci_hcd *hcd,
 	struct uhci_td *td = PHYS_TO_VIRT_PTR(struct uhci_td, td_phys);
 
 	/* td[0]: SETUP */
-	td[0].link = (uint32_t)(td_phys + sizeof(struct uhci_td));
+	td[0].link = (uint32_t)(td_phys + sizeof(struct uhci_td)) | TD_LINK_DEPTH;
 	td[0].status = TD_STATUS_ERRCNT(3) | TD_STATUS_ACTIVE | ls;
 	td[0].token = TD_TOKEN(TD_PID_SETUP, dev_addr, 0, 0, 7);
 	td[0].buffer = (uint32_t)setup_phys;
 
 	/* td[1]: IN — читаємо 18 байт дескриптора */
-	td[1].link = (uint32_t)(td_phys + 2 * sizeof(struct uhci_td));
+	td[1].link = (uint32_t)(td_phys + 2 * sizeof(struct uhci_td)) | TD_LINK_DEPTH;
 	td[1].status = TD_STATUS_ERRCNT(3) | TD_STATUS_ACTIVE | ls;
 	td[1].token = TD_TOKEN(TD_PID_IN, dev_addr, 0, 1, USB_DEVICE_DESC_SIZE - 1);
 	td[1].buffer = (uint32_t)buf_phys;
@@ -410,9 +413,9 @@ static int uhci_set_configuration(struct uhci_hcd *hcd, uint8_t dev_addr, uint8_
 	uint64_t td_phys = pmm_alloc_page();
 	struct uhci_td *td = PHYS_TO_VIRT_PTR(struct uhci_td, td_phys);
 
-	td[0].link = (uint32_t)(td_phys + sizeof(struct uhci_td));
+	td[0].link = (uint32_t)(td_phys + sizeof(struct uhci_td)) | TD_LINK_DEPTH;
 	td[0].status = TD_STATUS_ERRCNT(3) | TD_STATUS_ACTIVE;
-	td[0].token = TD_TOKEN(TD_PID_SETUP, dev_addr, 0, 0, 0x7FF);
+	td[0].token = TD_TOKEN(TD_PID_SETUP, dev_addr, 0, 0, 0x7);
 	td[0].buffer = (uint32_t)setup_phys;
 
 	td[1].link = TD_LINK_TERMINATE;
