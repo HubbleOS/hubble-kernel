@@ -34,6 +34,9 @@ long sys_spawn_file(const char *path, void *arg, uint32_t priority)
 {
 
 	task_t *task = exec(path);
+	task->priority = priority;
+	task->time_slice_max = 5 + priority;
+	task->time_slice = task->time_slice_max;
 	scheduler_add_task(task);
 	return (long)task->pid;
 }
