@@ -567,6 +567,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	PrintInfo(L"Stack virtual: 0x%lx\n", stack_virt);
 
 	PrintInfo(L"Jump to kernel\n");
+
 	ClearConsole();
 
 	// === [10] ExitBootServices ===
