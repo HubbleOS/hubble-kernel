@@ -56,6 +56,7 @@ void test(void)
 	int pipe_file = open("/pipe/test", 0);
 	while (1)
 	{
+		;
 		read_file(kbd_file, &c, 1);
 		buf[pos++] = c;
 		lseek(pipe_file, 0, 0);
@@ -63,6 +64,6 @@ void test(void)
 		pos = 0;
 		// printf("%s", buf);
 		// printf("key 2: %c\n", c);
-	}
+	};
 	// printf("Test task!\n")
 }
