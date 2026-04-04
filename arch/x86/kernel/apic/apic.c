@@ -629,7 +629,7 @@ int lapic_init_xapic(void)
 
 	uint64_t lapic_phys = acpi_get_lapic_address();
 
-	apic_state.lapic_base = (volatile uint32_t *)(DIRECT_MAP_BASE + lapic_phys);
+	apic_state.lapic_base = (volatile uint32_t *)phys_to_virt(lapic_phys);
 	apic_mode = APIC_INIT_XAPIC;
 
 	lapic_write(LAPIC_SVR, 0x100 | 0xFF);
@@ -655,129 +655,6 @@ void find_ioapic(uint8_t id, uint32_t addr, uint32_t gsi, void *ctx)
 		printk("I/O APIC found: ID=%u addr=0x%x GSI_base=%u\n", id, addr, gsi);
 	}
 }
-
-// int apic_init(void)
-// {
-// 	if (!acpi_is_initialized())
-// 	{
-// 		printk("ACPI not initialized\n");
-// 		return -1;
-// 	}
-
-// 	// Get Local APIC address from ACPI
-// 	uint64_t lapic_phys = acpi_get_lapic_address();
-// 	if (!lapic_phys)
-// 	{
-// 		printk("Local APIC address not found\n");
-// 		return -1;
-// 	}
-
-// 	printk("Local APIC physical address: 0x%lx\n", lapic_phys);
-
-// 	// CRITICAL: LAPIC is MMIO at high address (typically 0xFEE00000)
-// 	// It needs explicit mapping with cache disabled
-// 	uint64_t lapic_virt = DIRECT_MAP_BASE + lapic_phys;
-
-// 	lapic_virt = IS_HIGH_MMIO(lapic_phys) ? PHYS_TO_VIRT_MMIO(lapic_phys) : phys_to_virt(lapic_phys);
-
-// 	if (cpu_has_x2apic())
-// 	{
-// 		printk("ERROR: x2APIC mode detected - MMIO won't work!\n");
-// 		lapic_init_x2apic();
-// 	}
-// 	else
-// 	{
-// 		lapic_init_xapic();
-// 	}
-
-// 	uint64_t apic_base = rdmsr(0x1B);
-
-// 	bool apic_enabled = apic_base & (1ULL << 11);
-// 	bool x2apic_enabled = apic_base & (1ULL << 10);
-
-// 	printk("APIC=%d x2APIC=%d\n", apic_enabled, x2apic_enabled);
-
-// 	// Get BSP (Bootstrap Processor) APIC ID
-// 	apic_state.bsp_id = lapic_get_id();
-// 	printk("BSP APIC ID: %u\n", apic_state.bsp_id);
-
-// 	lapic_enable();
-
-// 	// Find I/O APIC
-// 	struct
-// 	{
-// 		bool found;
-// 		uint32_t address;
-// 		uint32_t gsi_base;
-// 	} ioapic_ctx = {0};
-
-// 	acpi_enum_ioapics(find_ioapic, &ioapic_ctx);
-
-// 	if (!ioapic_ctx.found)
-// 	{
-// 		printk("No I/O APIC found\n");
-// 		return -1;
-// 	}
-
-// 	// Map I/O APIC similarly
-// 	uint64_t ioapic_phys = (uint64_t)ioapic_ctx.address;
-// 	uint64_t ioapic_virt;
-
-// 	if (IS_HIGH_MMIO(ioapic_phys))
-// 	{
-// 		printk("I/O APIC is high MMIO, mapping explicitly...\n");
-
-// 		ioapic_virt = PHYS_TO_VIRT_MMIO(ioapic_phys);
-
-// 		int map_result = vmm_map_page(ioapic_virt, ioapic_phys,
-// 					      VMM_FLAGS_PRESENT | VMM_FLAGS_WRITE |
-// 						  VMM_FLAGS_NO_CACHE | VMM_FLAGS_GLOBAL);
-
-// 		if (map_result != 0)
-// 		{
-// 			printk("ERROR: Failed to map I/O APIC page\n");
-// 			return -1;
-// 		}
-
-// 		printk("I/O APIC mapped: phys=0x%lx -> virt=0x%lx\n", ioapic_phys, ioapic_virt);
-// 	}
-// 	else
-// 	{
-// 		ioapic_virt = phys_to_virt(ioapic_phys);
-// 	}
-
-// 	apic_state.ioapic_base = (volatile uint32_t *)(DIRECT_MAP_BASE + ioapic_phys);
-// 	apic_state.ioapic_gsi_base = ioapic_ctx.gsi_base;
-
-// 	// Test I/O APIC access
-// 	printk("Testing I/O APIC access...\n");
-// 	uint32_t ver = ioapic_read(IOAPIC_REG_VER);
-
-// 	if (ver == 0 || ver == 0xFFFFFFFF)
-// 	{
-// 		printk("ERROR: I/O APIC not accessible!\n");
-// 		return -1;
-// 	}
-
-// 	printk("I/O APIC is accessible\n");
-
-// 	apic_state.ioapic_max_redirect = ((ver >> 16) & 0xFF) + 1;
-// 	printk("I/O APIC version: 0x%x, max redirects: %u\n",
-// 	       ver & 0xFF, apic_state.ioapic_max_redirect);
-
-// 	// Setup default redirects (IRQ -> Vector 32+IRQ, BSP)
-// 	for (uint32_t i = 0; i < apic_state.ioapic_max_redirect; i++)
-// 	{
-// 		ioapic_set_redirect(i, 32 + i, apic_state.bsp_id, true);
-// 	}
-
-// 	// Apply Interrupt Source Overrides from ACPI
-// 	acpi_enum_isos(setup_iso_callback, NULL);
-
-// 	apic_state.initialized = true;
-// 	printk("APIC initialized successfully\n");
-// 	return 0;
-// }
 
 int apic_init(void)
 {
@@ -834,7 +711,7 @@ int apic_init(void)
 
 	uint64_t ioapic_phys = (uint64_t)ioapic_ctx.address;
 
-	apic_state.ioapic_base = (volatile uint32_t *)(DIRECT_MAP_BASE + ioapic_phys);
+	apic_state.ioapic_base = (volatile uint32_t *)phys_to_virt(ioapic_phys);
 	apic_state.ioapic_gsi_base = ioapic_ctx.gsi_base;
 
 	printk("I/O APIC: phys=0x%lx virt=%p\n", ioapic_phys, apic_state.ioapic_base);

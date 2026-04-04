@@ -63,7 +63,7 @@ static int uhci_init_frame_list(struct uhci_hcd *hcd)
 		return -1;
 	}
 
-	hcd->frame_list_virt = (uint32_t *)(DIRECT_MAP_BASE + hcd->frame_list_phys);
+	hcd->frame_list_virt = (uint32_t *)phys_to_virt(hcd->frame_list_phys);
 
 	for (int i = 0; i < FRAME_LIST_SIZE; i++)
 		hcd->frame_list_virt[i] = 0x00000001;
@@ -195,7 +195,7 @@ static int uhci_get_config_descriptor(struct uhci_hcd *hcd,
 				      uint16_t *out_max_packet)
 {
 	uint64_t setup_phys = pmm_alloc_page();
-	struct usb_setup_packet *pkt = (struct usb_setup_packet *)(DIRECT_MAP_BASE + setup_phys);
+	struct usb_setup_packet *pkt = (struct usb_setup_packet *)phys_to_virt(setup_phys);
 	pkt->bmRequestType = 0x80;
 	pkt->bRequest = 0x06;			     // GET_DESCRIPTOR
 	pkt->wValue = (USB_DESC_CONFIGURATION << 8); // Config Descriptor, index 0
@@ -203,12 +203,12 @@ static int uhci_get_config_descriptor(struct uhci_hcd *hcd,
 	pkt->wLength = CONFIG_DESC_BUF_SIZE;
 
 	uint64_t buf_phys = pmm_alloc_page();
-	uint8_t *buf = (uint8_t *)(DIRECT_MAP_BASE + buf_phys);
+	uint8_t *buf = (uint8_t *)phys_to_virt(buf_phys);
 
 	uint32_t ls = is_low_speed ? TD_STATUS_LS : 0;
 
 	uint64_t td_phys = pmm_alloc_page();
-	struct uhci_td *td = (struct uhci_td *)(DIRECT_MAP_BASE + td_phys);
+	struct uhci_td *td = (struct uhci_td *)phys_to_virt(td_phys);
 
 	/* td[0]: SETUP */
 	td[0].link = (uint32_t)(td_phys + sizeof(struct uhci_td)) | TD_LINK_DEPTH;
@@ -229,7 +229,7 @@ static int uhci_get_config_descriptor(struct uhci_hcd *hcd,
 	td[2].buffer = 0;
 
 	uint64_t qh_phys = pmm_alloc_page();
-	struct uhci_qh *qh = (struct uhci_qh *)(DIRECT_MAP_BASE + qh_phys);
+	struct uhci_qh *qh = (struct uhci_qh *)phys_to_virt(qh_phys);
 	qh->head_link = TD_LINK_TERMINATE;
 	qh->element_link = (uint32_t)td_phys;
 
@@ -308,13 +308,13 @@ static int uhci_keyboard_transfer(struct uhci_hcd *hcd,
 {
 	uint32_t ls = is_low_speed ? TD_STATUS_LS : 0;
 	uint64_t buf_phys = pmm_alloc_page();
-	uint8_t *buf = (uint8_t *)(DIRECT_MAP_BASE + buf_phys);
+	uint8_t *buf = (uint8_t *)phys_to_virt(buf_phys);
 
 	uint64_t td_phys = pmm_alloc_page();
-	struct uhci_td *td = (struct uhci_td *)(DIRECT_MAP_BASE + td_phys);
+	struct uhci_td *td = (struct uhci_td *)phys_to_virt(td_phys);
 
 	uint64_t qh_phys = pmm_alloc_page();
-	struct uhci_qh *qh = (struct uhci_qh *)(DIRECT_MAP_BASE + qh_phys);
+	struct uhci_qh *qh = (struct uhci_qh *)phys_to_virt(qh_phys);
 	qh->head_link = TD_LINK_TERMINATE;
 	qh->element_link = (uint32_t)td_phys;
 
@@ -489,7 +489,7 @@ static int uhci_wait_td(struct uhci_td *td, char *label)
 static int uhci_set_address(struct uhci_hcd *hcd, uint8_t new_addr)
 {
 	uint64_t setup_phys = pmm_alloc_page();
-	struct usb_setup_packet *pkt = (struct usb_setup_packet *)(DIRECT_MAP_BASE + setup_phys);
+	struct usb_setup_packet *pkt = (struct usb_setup_packet *)phys_to_virt(setup_phys);
 	pkt->bmRequestType = 0x00;
 	pkt->bRequest = 0x05;
 	pkt->wValue = new_addr;
@@ -497,7 +497,7 @@ static int uhci_set_address(struct uhci_hcd *hcd, uint8_t new_addr)
 	pkt->wLength = 0;
 
 	uint64_t td_phys = pmm_alloc_page();
-	struct uhci_td *td = (struct uhci_td *)(DIRECT_MAP_BASE + td_phys);
+	struct uhci_td *td = (struct uhci_td *)phys_to_virt(td_phys);
 
 	td[0].link = (uint32_t)(td_phys + sizeof(struct uhci_td)) | TD_LINK_DEPTH;
 	td[0].status = TD_STATUS_ERRCNT(3) | TD_STATUS_ACTIVE;
@@ -513,7 +513,7 @@ static int uhci_set_address(struct uhci_hcd *hcd, uint8_t new_addr)
 	       td_phys, td[0].link, td_phys + sizeof(struct uhci_td));
 
 	uint64_t qh_phys = pmm_alloc_page();
-	struct uhci_qh *qh = (struct uhci_qh *)(DIRECT_MAP_BASE + qh_phys);
+	struct uhci_qh *qh = (struct uhci_qh *)phys_to_virt(qh_phys);
 	qh->head_link = TD_LINK_TERMINATE;
 	qh->element_link = (uint32_t)td_phys;
 
@@ -565,7 +565,7 @@ static int uhci_get_device_descriptor(struct uhci_hcd *hcd,
 {
 	/* setup packet */
 	uint64_t setup_phys = pmm_alloc_page();
-	struct usb_setup_packet *pkt = (struct usb_setup_packet *)(DIRECT_MAP_BASE + setup_phys);
+	struct usb_setup_packet *pkt = (struct usb_setup_packet *)phys_to_virt(setup_phys);
 	pkt->bmRequestType = 0x80; // Device→Host, Standard, Device
 	pkt->bRequest = 0x06;	   // GET_DESCRIPTOR
 	pkt->wValue = (USB_DESC_DEVICE << 8) | 0x00;
@@ -574,13 +574,13 @@ static int uhci_get_device_descriptor(struct uhci_hcd *hcd,
 
 	/* буфер для відповіді */
 	uint64_t buf_phys = pmm_alloc_page();
-	struct usb_device_descriptor *desc = (struct usb_device_descriptor *)(DIRECT_MAP_BASE + buf_phys);
+	struct usb_device_descriptor *desc = (struct usb_device_descriptor *)phys_to_virt(buf_phys);
 
 	uint32_t ls = is_low_speed ? TD_STATUS_LS : 0;
 
 	/* TD */
 	uint64_t td_phys = pmm_alloc_page();
-	struct uhci_td *td = (struct uhci_td *)(DIRECT_MAP_BASE + td_phys);
+	struct uhci_td *td = (struct uhci_td *)phys_to_virt(td_phys);
 
 	/* td[0]: SETUP */
 	td[0].link = (uint32_t)(td_phys + sizeof(struct uhci_td)) | TD_LINK_DEPTH;
@@ -602,7 +602,7 @@ static int uhci_get_device_descriptor(struct uhci_hcd *hcd,
 
 	/* QH */
 	uint64_t qh_phys = pmm_alloc_page();
-	struct uhci_qh *qh = (struct uhci_qh *)(DIRECT_MAP_BASE + qh_phys);
+	struct uhci_qh *qh = (struct uhci_qh *)phys_to_virt(qh_phys);
 	qh->head_link = TD_LINK_TERMINATE;
 	qh->element_link = (uint32_t)td_phys;
 
@@ -644,7 +644,7 @@ static int uhci_get_device_descriptor(struct uhci_hcd *hcd,
 static int uhci_set_configuration(struct uhci_hcd *hcd, uint8_t dev_addr, uint8_t config)
 {
 	uint64_t setup_phys = pmm_alloc_page();
-	struct usb_setup_packet *pkt = (struct usb_setup_packet *)(DIRECT_MAP_BASE + setup_phys);
+	struct usb_setup_packet *pkt = (struct usb_setup_packet *)phys_to_virt(setup_phys);
 
 	pkt->bmRequestType = 0x00;
 	pkt->bRequest = 0x09;
@@ -653,7 +653,7 @@ static int uhci_set_configuration(struct uhci_hcd *hcd, uint8_t dev_addr, uint8_
 	pkt->wLength = 0;
 
 	uint64_t td_phys = pmm_alloc_page();
-	struct uhci_td *td = (struct uhci_td *)(DIRECT_MAP_BASE + td_phys);
+	struct uhci_td *td = (struct uhci_td *)phys_to_virt(td_phys);
 
 	td[0].link = (uint32_t)(td_phys + sizeof(struct uhci_td)) | TD_LINK_DEPTH;
 	td[0].status = TD_STATUS_ERRCNT(3) | TD_STATUS_ACTIVE;
@@ -666,7 +666,7 @@ static int uhci_set_configuration(struct uhci_hcd *hcd, uint8_t dev_addr, uint8_
 	td[1].buffer = 0;
 
 	uint64_t qh_phys = pmm_alloc_page();
-	struct uhci_qh *qh = (struct uhci_qh *)(DIRECT_MAP_BASE + qh_phys);
+	struct uhci_qh *qh = (struct uhci_qh *)phys_to_virt(qh_phys);
 	qh->head_link = TD_LINK_TERMINATE;
 	qh->element_link = (uint32_t)td_phys;
 
@@ -696,13 +696,13 @@ static int uhci_set_configuration(struct uhci_hcd *hcd, uint8_t dev_addr, uint8_
 static int uhci_interrupt_transfer(struct uhci_hcd *hcd, uint8_t dev_addr)
 {
 	uint64_t buf_phys = pmm_alloc_page();
-	uint8_t *buf = (uint8_t *)(DIRECT_MAP_BASE + buf_phys);
+	uint8_t *buf = (uint8_t *)phys_to_virt(buf_phys);
 
 	uint64_t td_phys = pmm_alloc_page();
-	struct uhci_td *td = (struct uhci_td *)(DIRECT_MAP_BASE + td_phys);
+	struct uhci_td *td = (struct uhci_td *)phys_to_virt(td_phys);
 
 	uint64_t qh_phys = pmm_alloc_page();
-	struct uhci_qh *qh = (struct uhci_qh *)(DIRECT_MAP_BASE + qh_phys);
+	struct uhci_qh *qh = (struct uhci_qh *)phys_to_virt(qh_phys);
 	qh->head_link = TD_LINK_TERMINATE;
 	qh->element_link = (uint32_t)td_phys;
 

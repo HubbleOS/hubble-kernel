@@ -22,13 +22,13 @@ static slab_cache_t *g_standard_caches[8] = {NULL};
 void *slab_alloc_page(void)
 {
 	uint64_t phys = pmm_alloc_page();
-	return phys ? (void *)(DIRECT_MAP_BASE + phys) : NULL;
+	return phys ? (void *)phys_to_virt(phys) : NULL;
 }
 
 void slab_free_page(void *addr)
 {
 	if (addr)
-		pmm_free_page((uint64_t)addr - DIRECT_MAP_BASE);
+		pmm_free_page(virt_to_phys((uint64_t)addr));
 }
 
 static inline size_t align_up(size_t size, size_t align)

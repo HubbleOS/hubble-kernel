@@ -186,7 +186,7 @@ static int e1000_probe(struct pci_device *pci_dev)
 	pci_cmd |= (1 << 2) | (1 << 1);
 	pci_write_config(e1000_pci_bus, e1000_pci_slot, e1000_pci_func, 0x04, pci_cmd);
 
-	e1000_base = (volatile uint32_t *)(DIRECT_MAP_BASE + bar0);
+	e1000_base = (volatile uint32_t *)phys_to_virt(bar0);
 
 	printk("[e1000] bar0 phys=%llx virt=%p\n", bar0, e1000_base);
 

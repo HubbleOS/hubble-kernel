@@ -18,11 +18,13 @@ long sys_open(const char *path, int flags)
 		return -1;
 
 	// Find free fd slot
-	for (int i = 0; i < MAX_FDS; i++)
+	for (int i = 2; i < MAX_FDS; i++)
 	{
-		if (!current->fds[i])
+		if (!current->fds[i].data)
 		{
-			current->fds[i] = file;
+			current->fds[i].data = file;
+			current->fds[i].flags = flags;
+			current->fds[i].type = FD_FILE;
 			return i; // return fd number
 		}
 	}
@@ -34,10 +36,10 @@ long sys_open(const char *path, int flags)
 long sys_close(int fd)
 {
 	task_t *current = get_current_task();
-	if (fd < 0 || fd >= MAX_FDS || !current->fds[fd])
+	if (fd < 0 || fd >= MAX_FDS || !current->fds[fd].data)
 		return -1;
-	vfs_close(current->fds[fd]);
-	current->fds[fd] = NULL;
+	vfs_close(current->fds[fd].data);
+	current->fds[fd].data = NULL;
 	return 0;
 }
 

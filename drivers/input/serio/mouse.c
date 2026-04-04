@@ -143,7 +143,7 @@ void mouse_init()
 static int mouse_initcall(void)
 {
 	uint64_t phys = pmm_alloc_page();
-	mouse_g = (mouse_t *)(DIRECT_MAP_BASE + phys);
+	mouse_g = (mouse_t *)phys_to_virt(phys);
 
 	mouse_g->x = 0;
 	mouse_g->y = 0;

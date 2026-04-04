@@ -6,8 +6,7 @@ from backends.base import Backend
 
 def run(cmd):
     print(">>", " ".join(cmd))
-    subprocess.run(cmd, check=True)
-
+    return subprocess.run(cmd)
 
 class LinuxBackend(Backend):
 
@@ -53,7 +52,7 @@ class LinuxBackend(Backend):
                 for src, dst in p.files:
                     full_dst = os.path.join(mnt, dst.lstrip("/"))
                     os.makedirs(os.path.dirname(full_dst), exist_ok=True)
-                    run(["cp", "-r", src, full_dst])
+                    run(["cp", "-r", f"{src}/.", full_dst])
                 run(["umount", mnt])
 
     def detach(self):

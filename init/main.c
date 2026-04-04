@@ -227,16 +227,71 @@ void start_kernel(void)
 	}
 }
 
+// void kmain_thread(void)
+// {
+// 	printk("kmain thread\n");
+
+// 	task_t *task1 = exec("/usr/bin/user.elf");
+// 	printk("user at cr3: 0x%016lx\n", task1->page_table);
+// 	scheduler_add_task(task1);
+
+// 	while (1)
+// 	{
+// 		hlt();
+// 	}
+// }
+
+void pipe_test(void);
 void kmain_thread(void)
 {
 	printk("kmain thread\n");
-
+	VFS_File *pipe = vfs_open("/pipe/test", VFS_O_RDWR | VFS_O_CREAT);
+	if (pipe == NULL)
+	{
+		printk("failed to open pipe\n");
+		while (1)
+		{
+			hlt();
+		}
+	}
 	task_t *task1 = exec("/usr/bin/user.elf");
-	printk("user at cr3: 0x%016lx\n", task1->page_table);
-	scheduler_add_task(task1);
+	if (task1 != NULL)
+	{
 
+		scheduler_add_task(task1);
+	}
+
+	// task_t *task2 = task_create(pipe_test, 0, 0);
+	// scheduler_add_task(task2);
+	char buf[128];
 	while (1)
 	{
+		vfs_lseek(pipe, 0, SEEK_SET);
+		int readed = vfs_read(pipe, &buf, 128);
+		buf[readed] = '\0';
+		printk("%s", buf);
+		hlt();
+	}
+}
+
+void pipe_test(void)
+{
+	VFS_File *pipe = vfs_open("/pipe/test", VFS_O_RDWR | VFS_O_CREAT);
+	VFS_File *kbd_file = vfs_open("/dev/kbd", VFS_O_RDWR);
+	char buf[128];
+	int pos = 0;
+	while (1)
+	{
+		char c;
+		vfs_read(kbd_file, &c, 1);
+		buf[pos++] = c;
+
+		// buf[pos - 1] = '\0';
+		vfs_lseek(pipe, 0, SEEK_SET);
+		vfs_write(pipe, buf, pos);
+		pos = 0;
+
+		// vfs_write(pipe, "hello\n", 6);
 		hlt();
 	}
 }

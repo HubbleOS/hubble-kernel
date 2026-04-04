@@ -31,7 +31,7 @@ static void iterate_sdt_entries(sdt_callback_t callback, void *ctx)
 		uint32_t entries = (acpi_state.xsdt->Header.Length - sizeof(ACPI_SDTHeader)) / sizeof(uint64_t);
 		for (uint32_t i = 0; i < entries; i++)
 		{
-			ACPI_SDTHeader *tbl = (ACPI_SDTHeader *)(DIRECT_MAP_BASE + acpi_state.xsdt->TablePointers[i]);
+			ACPI_SDTHeader *tbl = (ACPI_SDTHeader *)phys_to_virt(acpi_state.xsdt->TablePointers[i]);
 
 			callback(tbl, ctx);
 		}
@@ -41,7 +41,7 @@ static void iterate_sdt_entries(sdt_callback_t callback, void *ctx)
 		uint32_t entries = (acpi_state.rsdt->Header.Length - sizeof(ACPI_SDTHeader)) / sizeof(uint32_t);
 		for (uint32_t i = 0; i < entries; i++)
 		{
-			ACPI_SDTHeader *tbl = (ACPI_SDTHeader *)(DIRECT_MAP_BASE + (uint64_t)acpi_state.rsdt->TablePointers[i]);
+			ACPI_SDTHeader *tbl = (ACPI_SDTHeader *)phys_to_virt(acpi_state.rsdt->TablePointers[i]);
 
 			callback(tbl, ctx);
 		}
@@ -100,7 +100,7 @@ static void process_fadt(ACPI_SDTHeader *tbl, void *ctx)
 		return;
 	}
 
-	ACPI_SDTHeader *dsdt = (ACPI_SDTHeader *)(DIRECT_MAP_BASE + dsdt_phys);
+	ACPI_SDTHeader *dsdt = (ACPI_SDTHeader *)phys_to_virt(dsdt_phys);
 
 	if (memcmp(dsdt->Signature, "DSDT", 4) != 0)
 	{
@@ -179,7 +179,7 @@ int acpi_init(void *rsdp_ptr)
 		return -1;
 	}
 
-	RSDP *rsdp = (RSDP *)(DIRECT_MAP_BASE + (uintptr_t)rsdp_ptr);
+	RSDP *rsdp = (RSDP *)phys_to_virt((uint64_t)rsdp_ptr);
 
 	// Verify RSDP signature
 	if (memcmp(rsdp->Signature, "RSD PTR ", 8) != 0)
@@ -193,7 +193,7 @@ int acpi_init(void *rsdp_ptr)
 	// Get XSDT or RSDT
 	if (rsdp->Revision >= 2 && rsdp->XsdtAddress)
 	{
-		acpi_state.xsdt = (XSDT *)(DIRECT_MAP_BASE + rsdp->XsdtAddress);
+		acpi_state.xsdt = (XSDT *)phys_to_virt(rsdp->XsdtAddress);
 
 		if (memcmp(acpi_state.xsdt->Header.Signature, "XSDT", 4) != 0)
 		{
@@ -204,7 +204,7 @@ int acpi_init(void *rsdp_ptr)
 	}
 	else
 	{
-		acpi_state.rsdt = (RSDT *)(DIRECT_MAP_BASE + (uint64_t)rsdp->RsdtAddress);
+		acpi_state.rsdt = (RSDT *)phys_to_virt(rsdp->RsdtAddress);
 
 		if (memcmp(acpi_state.rsdt->Header.Signature, "RSDT", 4) != 0)
 		{
@@ -286,7 +286,7 @@ void acpi_reboot(void)
 		switch (acpi_state.fadt->ResetReg.AddressSpace)
 		{
 		case 0: // System Memory
-			*(volatile uint8_t *)(DIRECT_MAP_BASE + addr) = reset_value;
+			*(volatile uint8_t *)phys_to_virt(addr) = reset_value;
 			break;
 		case 1: // System I/O
 			outb((uint16_t)addr, reset_value);

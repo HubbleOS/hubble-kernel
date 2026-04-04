@@ -28,6 +28,22 @@ typedef enum
 	SIG_IGNORED
 } signals_t;
 
+typedef enum
+{
+	FD_PIPE_READ,
+	FD_PIPE_WRITE,
+	FD_FILE,
+	FD_DEV,
+	FD_MAX
+} fd_type_t;
+
+typedef struct
+{
+	void *data; // pipe_t*, file_t*, etc
+	int type;   // FD_PIPE_READ, FD_PIPE_WRITE, FD_FILE
+	int flags;
+} fd_entry_t;
+
 // CPU context saved during context switch
 typedef struct __attribute__((packed))
 {
@@ -57,6 +73,7 @@ typedef struct task
 	uint8_t cpu;		 // Which CPU is running this
 	uint32_t priority;	 // 0 = highest
 	uint64_t time_slice;	 // Remaining time slice
+	uint64_t time_slice_max; // Maximum time slice
 	uint64_t total_runtime;	 // Total CPU time used
 	uint64_t last_scheduled; // Last time scheduled
 	uint16_t signal;	 // Pending signals
@@ -95,7 +112,8 @@ typedef struct task
 	struct task *sibling;
 
 	// File descriptors, signals, etc.
-	VFS_File *fds[MAX_FDS];
+	fd_entry_t fds[MAX_FDS];
+
 	void *signal_handlers;
 
 	uint8_t spinlocks;

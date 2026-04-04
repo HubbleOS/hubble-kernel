@@ -142,8 +142,8 @@ void pmm_free_page(uint64_t phys_addr)
 
 void pmm_init()
 {
-	uint64_t heap_virt_start = g_boot_info->memory_map.heap_start; // вже віртуальна
-	uint64_t heap_phys_start = heap_virt_start - DIRECT_MAP_BASE;  // фізична
+	uint64_t heap_virt_start = g_boot_info->memory_map.heap_start; // is already virtual
+	uint64_t heap_phys_start = virt_to_phys(heap_virt_start);      // physical
 	uint64_t heap_size = g_boot_info->memory_map.heap_size;
 
 	heap_virt_start = PAGE_ALIGN_UP(heap_virt_start);
