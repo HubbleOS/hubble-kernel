@@ -4,6 +4,26 @@ import sys
 import argparse
 import subprocess
 from pathlib import Path
+import signal
+import termios
+import atexit
+
+orig_settings = termios.tcgetattr(sys.stdin)
+
+
+def restore_terminal():
+    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, orig_settings)
+
+
+atexit.register(restore_terminal)
+
+
+def signal_handler(sig, frame):
+    restore_terminal()
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, signal_handler)
 
 
 class QemuOptions:
