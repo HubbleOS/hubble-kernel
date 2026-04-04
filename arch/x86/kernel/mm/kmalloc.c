@@ -58,7 +58,7 @@ void *kmalloc(size_t size, kmalloc_flags_t flags)
 		return NULL;
 	}
 
-	big_alloc_header_t *hdr = (big_alloc_header_t *)PHYS_TO_VIRT(phys);
+	big_alloc_header_t *hdr = (big_alloc_header_t *)phys_to_virt(phys);
 	hdr->pages = pages;
 	void *user_ptr = (void *)(hdr + 1);
 
@@ -86,7 +86,7 @@ void kfree(void *ptr)
 	big_alloc_header_t *hdr = (big_alloc_header_t *)ptr - 1;
 	if (hdr->pages > 0)
 	{
-		pmm_free_pages(VIRT_TO_PHYS(hdr), hdr->pages);
+		pmm_free_pages(virt_to_phys((uint64_t)hdr), hdr->pages);
 	}
 	else
 	{

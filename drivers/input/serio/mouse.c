@@ -23,7 +23,7 @@ mouse_t *get_mouse_info(void)
 
 uint64_t mouse_mmap(uint64_t offset, size_t size)
 {
-	return (uint64_t)VIRT_TO_PHYS(mouse_g);
+	return (uint64_t)virt_to_phys((uint64_t)mouse_g);
 }
 uint64_t mouse_read_file(uint64_t offset, size_t size, void *buf)
 {
@@ -143,7 +143,7 @@ void mouse_init()
 static int mouse_initcall(void)
 {
 	uint64_t phys = pmm_alloc_page();
-	mouse_g = PHYS_TO_VIRT_PTR(mouse_t, phys);
+	mouse_g = (mouse_t *)(DIRECT_MAP_BASE + phys);
 
 	mouse_g->x = 0;
 	mouse_g->y = 0;
@@ -154,4 +154,4 @@ static int mouse_initcall(void)
 	return 0;
 }
 
-// device_initcall(mouse_initcall);
+device_initcall(mouse_initcall);

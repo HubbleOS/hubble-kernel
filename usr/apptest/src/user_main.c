@@ -49,8 +49,8 @@ void test(void)
 	int kbd_file = open("/dev/kbd", 0);
 	while (1)
 	{
-		read_file(kbd_file, &c, 1);
-		printf("key 2: %c\n", c);
+		// read_file(kbd_file, &c, 1);
+		// printf("key 2: %c\n", c);
 	}
 	// printf("Test task!\n")
 }

@@ -198,7 +198,6 @@ int hpet_init(void)
 		return -1;
 	}
 
-	// Get HPET address from ACPI
 	uint64_t hpet_phys = acpi_get_hpet_address();
 	if (!hpet_phys)
 	{
@@ -208,67 +207,39 @@ int hpet_init(void)
 
 	if (hpet_phys >= 0x100000000ULL)
 	{
-		printk("ERROR: HPET above 4GB (0x%lx)! Need extended mapping\n", hpet_phys);
+		printk("ERROR: HPET above 4GB (0x%lx)!\n", hpet_phys);
 		return -1;
 	}
 
-	// hpet_state.base = (volatile uint64_t *)PHYS_TO_VIRT(hpet_phys);
-	uint64_t hpet_virt = PHYS_TO_VIRT_MMIO(hpet_phys);
-	vmm_map_page(hpet_virt, hpet_phys,
-		     VMM_FLAGS_PRESENT | VMM_FLAGS_WRITE | VMM_FLAGS_NO_CACHE);
-	hpet_state.base = (volatile uint64_t *)hpet_virt;
+	hpet_state.base = (volatile uint64_t *)(DIRECT_MAP_BASE + hpet_phys);
 
 	printk("HPET at phys=0x%lx virt=%p\n", hpet_phys, hpet_state.base);
-	// Verify page table mapping exists
 
-	// Read capabilities
-	printk("Reading HPET capabilities...\n");
 	uint64_t caps = hpet_read(HPET_GENERAL_CAPS);
-	printk("  General capabilities: 0x%016lx\n", caps);
-	// Period in femtoseconds (10^-15 seconds)
 	hpet_state.period_fs = caps >> 32;
-
-	// Frequency in Hz
-	printk("  Period: %lu fs, caps=0x%016lx\n", hpet_state.period_fs, caps);
 	hpet_state.frequency = 1000000000000000ULL / hpet_state.period_fs;
-	// Number of timers (bits 8-12)
 	hpet_state.num_timers = ((caps >> 8) & 0x1F) + 1;
-
-	// Check if 64-bit counter
 	bool is_64bit = caps & (1 << 13);
 
-	printk("HPET Capabilities:\n");
-	printk("  Period: %lu fs (%lu.%03lu MHz)\n",
+	printk("HPET: period=%lu fs, freq=%lu MHz, timers=%u, %s-bit\n",
 	       hpet_state.period_fs,
 	       hpet_state.frequency / 1000000,
-	       (hpet_state.frequency % 1000000) / 1000);
-	printk("  Timers: %u\n", hpet_state.num_timers);
-	printk("  Counter: %s-bit\n", is_64bit ? "64" : "32");
-	printk("  Legacy replacement: %s\n",
-	       (caps & (1 << 15)) ? "supported" : "not supported");
+	       hpet_state.num_timers,
+	       is_64bit ? "64" : "32");
 
-	// Disable HPET before configuration
 	uint64_t config = hpet_read(HPET_GENERAL_CONFIG);
 	config &= ~HPET_ENABLE_CNF;
 	hpet_write(HPET_GENERAL_CONFIG, config);
 
-	// Reset main counter to 0
 	hpet_write(HPET_MAIN_COUNTER, 0);
 
-	// Disable all timers
 	for (uint8_t i = 0; i < hpet_state.num_timers; i++)
 	{
-		uint64_t timer_config = hpet_read(HPET_TIMER_CONFIG(i));
-		timer_config &= ~HPET_Tn_INT_ENB_CNF;
-		hpet_write(HPET_TIMER_CONFIG(i), timer_config);
-
-		printk("  Timer %u: %s-bit, %s periodic\n",
-		       i,
-		       (timer_config & HPET_Tn_SIZE_CAP) ? "64" : "32",
-		       (timer_config & HPET_Tn_PER_INT_CAP) ? "supports" : "no");
+		uint64_t tc = hpet_read(HPET_TIMER_CONFIG(i));
+		tc &= ~HPET_Tn_INT_ENB_CNF;
+		hpet_write(HPET_TIMER_CONFIG(i), tc);
 	}
 
-	// Enable HPET
 	config = hpet_read(HPET_GENERAL_CONFIG);
 	config |= HPET_ENABLE_CNF;
 	hpet_write(HPET_GENERAL_CONFIG, config);

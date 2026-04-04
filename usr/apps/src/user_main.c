@@ -68,7 +68,7 @@ void _start(void)
 	window_t *win = window_create(0, 0, 400, 300);
 
 	int pid = spawn(test, NULL, 0);
-	// int pid_file = spawn_file("/usr/bin/user1.elf", NULL, 0);
+	int pid_file = spawn_file("/usr/bin/user1.elf", NULL, 0);
 	while (1)
 	{
 

@@ -268,17 +268,10 @@ build: build-tool
 	$(USR_BUILD)
 	@echo "Build complete"
 
-OUTPUT := $(BUILD_DIR)/kernel.elf
-ISO := $(ISO_DIR)/kernel.bin
-
 PHONY += run
-run: build $(ISO)
+run: build
 	$(MAKE) -C arch/$(ARCH)/boot
 	@python3 tools/dev/qemu/main.py
-
-$(ISO): $(OUTPUT)
-	@mkdir -p $(dir $@)
-	$(OBJCOPY) -O binary $< $@
 
 PHONY += disk
 disk:

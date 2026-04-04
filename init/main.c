@@ -127,6 +127,13 @@ void do_initcalls(void)
 
 BootInfo *g_boot_info;
 
+void test()
+{
+	printk("hello");
+}
+
+#include <higher_half.h>
+
 void start_kernel(void)
 {
 	g_platform.fb_base = (uint64_t)g_boot_info->framebuffer.base;
@@ -135,6 +142,10 @@ void start_kernel(void)
 	g_platform.fb_pitch = g_boot_info->framebuffer.pitch;
 
 	printk_init(&g_boot_info->framebuffer);
+	void *virt = (void *)test;
+	void *phys = (void *)virt_to_phys((uint64_t)virt);
+
+	printk("virt: %p\nphys: %p\n", virt, phys);
 
 	boot_cpu_init();
 	acpi_init(g_boot_info->rsdp); // parses MADT, learns LAPIC/IOAPIC addresses
@@ -144,14 +155,19 @@ void start_kernel(void)
 
 	smp_init();
 
+	// while (1)
+	// {
+	// 	/* code */
+	// }
+
 	//
 
 	do_initcalls();
 
-	while (1)
-	{
-		/* code */
-	}
+	// while (1)
+	// {
+	// 	/* code */
+	// }
 
 	// sound_init();
 

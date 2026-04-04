@@ -22,13 +22,13 @@ static slab_cache_t *g_standard_caches[8] = {NULL};
 void *slab_alloc_page(void)
 {
 	uint64_t phys = pmm_alloc_page();
-	return phys ? (void *)PHYS_TO_VIRT(phys) : NULL;
+	return phys ? (void *)(DIRECT_MAP_BASE + phys) : NULL;
 }
 
 void slab_free_page(void *addr)
 {
 	if (addr)
-		pmm_free_page(VIRT_TO_PHYS(addr));
+		pmm_free_page((uint64_t)addr - DIRECT_MAP_BASE);
 }
 
 static inline size_t align_up(size_t size, size_t align)
@@ -41,7 +41,7 @@ static inline bool is_power_of_2(size_t n) { return n && ((n & (n - 1)) == 0); }
 static inline bool is_valid_kernel_ptr(void *ptr)
 {
 	uint64_t addr = (uint64_t)ptr;
-	return IS_KERNEL_VIRT(addr) && addr != 0;
+	return addr >= DIRECT_MAP_BASE && addr != 0;
 }
 
 static inline bool ptr_in_slab_range(void *ptr, slab_t *slab)
