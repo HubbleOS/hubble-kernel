@@ -86,7 +86,7 @@ int gpt_init(gpt_partition_t *partitions)
 		return -1;
 	}
 
-	uint8_t *entry_buf = PHYS_TO_VIRT_PTR(uint8_t, entry_buf_phys);
+	uint8_t *entry_buf = (uint8_t *)(DIRECT_MAP_BASE + entry_buf_phys);
 
 	if (!entry_buf)
 	{

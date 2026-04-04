@@ -32,6 +32,10 @@ typedef struct
 // Всі ресурси, які efi_main передає boot_main
 typedef struct
 {
+	void *elf_buf;
+	// UINTN elf_size;
+	unsigned long long elf_size;
+
 	// Пам'ять
 	mem_descriptor_t *mem_map; // масив дескрипторів
 	uint64_t mem_map_count;

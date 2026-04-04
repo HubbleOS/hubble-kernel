@@ -14,16 +14,16 @@
 // Local APIC register offsets
 #define LAPIC_ID 0x020
 #define LAPIC_VERSION 0x030
-#define LAPIC_TPR 0x080		  // Task Priority Register
-#define LAPIC_EOI 0x0B0		  // End of Interrupt
-#define LAPIC_SVR 0x0F0		  // Spurious Interrupt Vector Register
-#define LAPIC_ESR 0x280		  // Error Status Register
-#define LAPIC_ICR_LOW 0x300	  // Interrupt Command Register (low)
+#define LAPIC_TPR 0x080	      // Task Priority Register
+#define LAPIC_EOI 0x0B0	      // End of Interrupt
+#define LAPIC_SVR 0x0F0	      // Spurious Interrupt Vector Register
+#define LAPIC_ESR 0x280	      // Error Status Register
+#define LAPIC_ICR_LOW 0x300   // Interrupt Command Register (low)
 #define LAPIC_ICR_HIGH 0x310  // Interrupt Command Register (high)
-#define LAPIC_TIMER 0x320	  // LVT Timer Register
-#define LAPIC_LINT0 0x350	  // LVT LINT0 Register
-#define LAPIC_LINT1 0x360	  // LVT LINT1 Register
-#define LAPIC_ERROR 0x370	  // LVT Error Register
+#define LAPIC_TIMER 0x320     // LVT Timer Register
+#define LAPIC_LINT0 0x350     // LVT LINT0 Register
+#define LAPIC_LINT1 0x360     // LVT LINT1 Register
+#define LAPIC_ERROR 0x370     // LVT Error Register
 #define LAPIC_TIMER_ICR 0x380 // Timer Initial Count
 #define LAPIC_TIMER_CCR 0x390 // Timer Current Count
 #define LAPIC_TIMER_DCR 0x3E0 // Timer Divide Configuration
@@ -70,8 +70,8 @@ static inline bool cpu_has_x2apic(void)
 {
 	uint32_t eax, ebx, ecx, edx;
 	__asm__ volatile("cpuid"
-					 : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
-					 : "a"(1));
+			 : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
+			 : "a"(1));
 	return ecx & (1 << 21);
 }
 
@@ -214,12 +214,12 @@ void lapic_timer_init(uint32_t frequency_hz)
 	// Verify it's configured correctly
 	uint32_t lvt = lapic_read(LAPIC_TIMER);
 	printk("LVT Timer: 0x%08x (Vector=%u, Periodic=%s, Masked=%s)\n",
-		   lvt, lvt & 0xFF,
-		   (lvt & (1 << 17)) ? "YES" : "NO",
-		   (lvt & (1 << 16)) ? "YES" : "NO");
+	       lvt, lvt & 0xFF,
+	       (lvt & (1 << 17)) ? "YES" : "NO",
+	       (lvt & (1 << 16)) ? "YES" : "NO");
 
 	printk("LAPIC timer initialized (%u Hz, %u ticks/int)\n",
-		   frequency_hz, ticks_per_interrupt);
+	       frequency_hz, ticks_per_interrupt);
 }
 
 void lapic_send_ipi(uint32_t dest, uint8_t vector)
@@ -234,9 +234,9 @@ void lapic_send_ipi(uint32_t dest, uint8_t vector)
 	{
 		// x2APIC: Fixed delivery mode
 		uint64_t icr = ((uint64_t)dest << 32) |
-					   (uint64_t)vector |
-					   (0 << 8) | // Delivery Mode: Fixed
-					   (1 << 14); // Level: Assert
+			       (uint64_t)vector |
+			       (0 << 8) | // Delivery Mode: Fixed
+			       (1 << 14); // Level: Assert
 		wrmsr(0x830, icr);
 	}
 	else
@@ -263,10 +263,10 @@ void lapic_send_init_ipi(uint8_t dest_apic_id)
 	{
 		// INIT ASSERT (level = 1, trigger = level)
 		uint64_t icr =
-			((uint64_t)dest_apic_id << 32) |
-			(5 << 8) |	// INIT
-			(1 << 14) | // Level = 1 (assert)
-			(1 << 15);	// Trigger = level
+		    ((uint64_t)dest_apic_id << 32) |
+		    (5 << 8) |	// INIT
+		    (1 << 14) | // Level = 1 (assert)
+		    (1 << 15);	// Trigger = level
 
 		wrmsr(IA32_X2APIC_ICR, icr);
 
@@ -274,9 +274,9 @@ void lapic_send_init_ipi(uint8_t dest_apic_id)
 
 		// INIT DEASSERT (level = 0, trigger = level)
 		icr =
-			((uint64_t)dest_apic_id << 32) |
-			(5 << 8) | // INIT
-			(1 << 15); // Trigger = level
+		    ((uint64_t)dest_apic_id << 32) |
+		    (5 << 8) | // INIT
+		    (1 << 15); // Trigger = level
 
 		wrmsr(IA32_X2APIC_ICR, icr);
 	}
@@ -316,7 +316,7 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 	// Check LAPIC is enabled
 	uint32_t svr = lapic_read(LAPIC_SVR);
 	printk("LAPIC SVR: 0x%08x %s\n", svr,
-		   (svr & 0x100) ? "[ENABLED]" : "[DISABLED!]");
+	       (svr & 0x100) ? "[ENABLED]" : "[DISABLED!]");
 
 	if (!(svr & 0x100))
 	{
@@ -334,11 +334,11 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 		// x2APIC: Single 64-bit MSR write to ICR (MSR 0x830)
 		// Format: [63:32] = destination, [31:0] = ICR_LOW fields
 		uint64_t icr = ((uint64_t)dest_apic_id << 32) | // Destination
-					   (vector & 0xFF) |				// Vector
-					   (6 << 8) |						// Delivery Mode: STARTUP (110b)
-					   (0 << 11) |						// Destination Mode: Physical
-					   (1 << 14) |						// Level: Assert
-					   (0 << 15);
+			       (vector & 0xFF) |		// Vector
+			       (6 << 8) |			// Delivery Mode: STARTUP (110b)
+			       (0 << 11) |			// Destination Mode: Physical
+			       (1 << 14) |			// Level: Assert
+			       (0 << 15);
 
 		printk("Writing x2APIC ICR (single 64-bit MSR):\n");
 		printk("  Destination (bits 63:32): 0x%08x\n", dest_apic_id);
@@ -362,7 +362,7 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 		// Verify write
 		uint32_t icr_high_read = lapic_read(LAPIC_ICR_HIGH);
 		printk("ICR_HIGH readback: 0x%08x %s\n", icr_high_read,
-			   (icr_high_read == icr_high) ? "[OK]" : "[MISMATCH!]");
+		       (icr_high_read == icr_high) ? "[OK]" : "[MISMATCH!]");
 
 		// Memory barrier
 		asm volatile("mfence" ::: "memory");
@@ -381,7 +381,7 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 		uint32_t icr_low_read = lapic_read(LAPIC_ICR_LOW);
 		printk("ICR_LOW readback: 0x%08x\n", icr_low_read);
 		printk("  Delivery Status (bit 12): %s\n",
-			   (icr_low_read & (1 << 12)) ? "Send Pending" : "Idle");
+		       (icr_low_read & (1 << 12)) ? "Send Pending" : "Idle");
 
 		// Wait for delivery to complete
 		int timeout = 100000;
@@ -439,7 +439,7 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 		uint64_t icr = rdmsr(0x830);
 		printk("ICR after delay: 0x%016llx\n", icr);
 		printk("  Delivery Status (bit 12): %s\n",
-			   (icr & (1ULL << 12)) ? "STILL PENDING (!)" : "Complete");
+		       (icr & (1ULL << 12)) ? "STILL PENDING (!)" : "Complete");
 
 		if (icr & (1ULL << 12))
 		{
@@ -477,7 +477,7 @@ void apic_debug_check(void)
 
 		uint64_t svr = rdmsr(0x80F);
 		printk("LAPIC SVR (MSR 0x80F): 0x%llx %s\n", svr,
-			   (svr & 0x100) ? "[ENABLED]" : "[DISABLED!]");
+		       (svr & 0x100) ? "[ENABLED]" : "[DISABLED!]");
 
 		printk("End LAPIC Debug\n");
 		return;
@@ -629,14 +629,7 @@ int lapic_init_xapic(void)
 
 	uint64_t lapic_phys = acpi_get_lapic_address();
 
-	apic_state.lapic_base =
-		(volatile uint32_t *)PHYS_TO_VIRT_MMIO(lapic_phys);
-
-	vmm_map_page(
-		(uint64_t)apic_state.lapic_base,
-		lapic_phys,
-		VMM_MAP_MMIO);
-
+	apic_state.lapic_base = (volatile uint32_t *)(DIRECT_MAP_BASE + lapic_phys);
 	apic_mode = APIC_INIT_XAPIC;
 
 	lapic_write(LAPIC_SVR, 0x100 | 0xFF);
@@ -663,6 +656,129 @@ void find_ioapic(uint8_t id, uint32_t addr, uint32_t gsi, void *ctx)
 	}
 }
 
+// int apic_init(void)
+// {
+// 	if (!acpi_is_initialized())
+// 	{
+// 		printk("ACPI not initialized\n");
+// 		return -1;
+// 	}
+
+// 	// Get Local APIC address from ACPI
+// 	uint64_t lapic_phys = acpi_get_lapic_address();
+// 	if (!lapic_phys)
+// 	{
+// 		printk("Local APIC address not found\n");
+// 		return -1;
+// 	}
+
+// 	printk("Local APIC physical address: 0x%lx\n", lapic_phys);
+
+// 	// CRITICAL: LAPIC is MMIO at high address (typically 0xFEE00000)
+// 	// It needs explicit mapping with cache disabled
+// 	uint64_t lapic_virt = DIRECT_MAP_BASE + lapic_phys;
+
+// 	lapic_virt = IS_HIGH_MMIO(lapic_phys) ? PHYS_TO_VIRT_MMIO(lapic_phys) : phys_to_virt(lapic_phys);
+
+// 	if (cpu_has_x2apic())
+// 	{
+// 		printk("ERROR: x2APIC mode detected - MMIO won't work!\n");
+// 		lapic_init_x2apic();
+// 	}
+// 	else
+// 	{
+// 		lapic_init_xapic();
+// 	}
+
+// 	uint64_t apic_base = rdmsr(0x1B);
+
+// 	bool apic_enabled = apic_base & (1ULL << 11);
+// 	bool x2apic_enabled = apic_base & (1ULL << 10);
+
+// 	printk("APIC=%d x2APIC=%d\n", apic_enabled, x2apic_enabled);
+
+// 	// Get BSP (Bootstrap Processor) APIC ID
+// 	apic_state.bsp_id = lapic_get_id();
+// 	printk("BSP APIC ID: %u\n", apic_state.bsp_id);
+
+// 	lapic_enable();
+
+// 	// Find I/O APIC
+// 	struct
+// 	{
+// 		bool found;
+// 		uint32_t address;
+// 		uint32_t gsi_base;
+// 	} ioapic_ctx = {0};
+
+// 	acpi_enum_ioapics(find_ioapic, &ioapic_ctx);
+
+// 	if (!ioapic_ctx.found)
+// 	{
+// 		printk("No I/O APIC found\n");
+// 		return -1;
+// 	}
+
+// 	// Map I/O APIC similarly
+// 	uint64_t ioapic_phys = (uint64_t)ioapic_ctx.address;
+// 	uint64_t ioapic_virt;
+
+// 	if (IS_HIGH_MMIO(ioapic_phys))
+// 	{
+// 		printk("I/O APIC is high MMIO, mapping explicitly...\n");
+
+// 		ioapic_virt = PHYS_TO_VIRT_MMIO(ioapic_phys);
+
+// 		int map_result = vmm_map_page(ioapic_virt, ioapic_phys,
+// 					      VMM_FLAGS_PRESENT | VMM_FLAGS_WRITE |
+// 						  VMM_FLAGS_NO_CACHE | VMM_FLAGS_GLOBAL);
+
+// 		if (map_result != 0)
+// 		{
+// 			printk("ERROR: Failed to map I/O APIC page\n");
+// 			return -1;
+// 		}
+
+// 		printk("I/O APIC mapped: phys=0x%lx -> virt=0x%lx\n", ioapic_phys, ioapic_virt);
+// 	}
+// 	else
+// 	{
+// 		ioapic_virt = phys_to_virt(ioapic_phys);
+// 	}
+
+// 	apic_state.ioapic_base = (volatile uint32_t *)(DIRECT_MAP_BASE + ioapic_phys);
+// 	apic_state.ioapic_gsi_base = ioapic_ctx.gsi_base;
+
+// 	// Test I/O APIC access
+// 	printk("Testing I/O APIC access...\n");
+// 	uint32_t ver = ioapic_read(IOAPIC_REG_VER);
+
+// 	if (ver == 0 || ver == 0xFFFFFFFF)
+// 	{
+// 		printk("ERROR: I/O APIC not accessible!\n");
+// 		return -1;
+// 	}
+
+// 	printk("I/O APIC is accessible\n");
+
+// 	apic_state.ioapic_max_redirect = ((ver >> 16) & 0xFF) + 1;
+// 	printk("I/O APIC version: 0x%x, max redirects: %u\n",
+// 	       ver & 0xFF, apic_state.ioapic_max_redirect);
+
+// 	// Setup default redirects (IRQ -> Vector 32+IRQ, BSP)
+// 	for (uint32_t i = 0; i < apic_state.ioapic_max_redirect; i++)
+// 	{
+// 		ioapic_set_redirect(i, 32 + i, apic_state.bsp_id, true);
+// 	}
+
+// 	// Apply Interrupt Source Overrides from ACPI
+// 	acpi_enum_isos(setup_iso_callback, NULL);
+
+// 	apic_state.initialized = true;
+// 	printk("APIC initialized successfully\n");
+// 	return 0;
+// }
+
 int apic_init(void)
 {
 	if (!acpi_is_initialized())
@@ -671,7 +787,6 @@ int apic_init(void)
 		return -1;
 	}
 
-	// Get Local APIC address from ACPI
 	uint64_t lapic_phys = acpi_get_lapic_address();
 	if (!lapic_phys)
 	{
@@ -681,15 +796,9 @@ int apic_init(void)
 
 	printk("Local APIC physical address: 0x%lx\n", lapic_phys);
 
-	// CRITICAL: LAPIC is MMIO at high address (typically 0xFEE00000)
-	// It needs explicit mapping with cache disabled
-	uint64_t lapic_virt;
-
-	lapic_virt = IS_HIGH_MMIO(lapic_phys) ? PHYS_TO_VIRT_MMIO(lapic_phys) : PHYS_TO_VIRT(lapic_phys);
-
 	if (cpu_has_x2apic())
 	{
-		printk("ERROR: x2APIC mode detected - MMIO won't work!\n");
+		printk("x2APIC mode detected\n");
 		lapic_init_x2apic();
 	}
 	else
@@ -698,13 +807,10 @@ int apic_init(void)
 	}
 
 	uint64_t apic_base = rdmsr(0x1B);
+	printk("APIC=%d x2APIC=%d\n",
+	       !!(apic_base & (1ULL << 11)),
+	       !!(apic_base & (1ULL << 10)));
 
-	bool apic_enabled = apic_base & (1ULL << 11);
-	bool x2apic_enabled = apic_base & (1ULL << 10);
-
-	printk("APIC=%d x2APIC=%d\n", apic_enabled, x2apic_enabled);
-
-	// Get BSP (Bootstrap Processor) APIC ID
 	apic_state.bsp_id = lapic_get_id();
 	printk("BSP APIC ID: %u\n", apic_state.bsp_id);
 
@@ -726,59 +832,27 @@ int apic_init(void)
 		return -1;
 	}
 
-	// Map I/O APIC similarly
 	uint64_t ioapic_phys = (uint64_t)ioapic_ctx.address;
-	uint64_t ioapic_virt;
 
-	if (IS_HIGH_MMIO(ioapic_phys))
-	{
-		printk("I/O APIC is high MMIO, mapping explicitly...\n");
-
-		ioapic_virt = PHYS_TO_VIRT_MMIO(ioapic_phys);
-
-		int map_result = vmm_map_page(ioapic_virt, ioapic_phys,
-									  VMM_FLAGS_PRESENT | VMM_FLAGS_WRITE |
-										  VMM_FLAGS_NO_CACHE | VMM_FLAGS_GLOBAL);
-
-		if (map_result != 0)
-		{
-			printk("ERROR: Failed to map I/O APIC page\n");
-			return -1;
-		}
-
-		printk("I/O APIC mapped: phys=0x%lx -> virt=0x%lx\n", ioapic_phys, ioapic_virt);
-	}
-	else
-	{
-		ioapic_virt = PHYS_TO_VIRT(ioapic_phys);
-	}
-
-	apic_state.ioapic_base = (volatile uint32_t *)ioapic_virt;
+	apic_state.ioapic_base = (volatile uint32_t *)(DIRECT_MAP_BASE + ioapic_phys);
 	apic_state.ioapic_gsi_base = ioapic_ctx.gsi_base;
 
-	// Test I/O APIC access
-	printk("Testing I/O APIC access...\n");
-	uint32_t ver = ioapic_read(IOAPIC_REG_VER);
+	printk("I/O APIC: phys=0x%lx virt=%p\n", ioapic_phys, apic_state.ioapic_base);
 
+	uint32_t ver = ioapic_read(IOAPIC_REG_VER);
 	if (ver == 0 || ver == 0xFFFFFFFF)
 	{
 		printk("ERROR: I/O APIC not accessible!\n");
 		return -1;
 	}
 
-	printk("I/O APIC is accessible\n");
-
 	apic_state.ioapic_max_redirect = ((ver >> 16) & 0xFF) + 1;
 	printk("I/O APIC version: 0x%x, max redirects: %u\n",
-		   ver & 0xFF, apic_state.ioapic_max_redirect);
+	       ver & 0xFF, apic_state.ioapic_max_redirect);
 
-	// Setup default redirects (IRQ -> Vector 32+IRQ, BSP)
 	for (uint32_t i = 0; i < apic_state.ioapic_max_redirect; i++)
-	{
 		ioapic_set_redirect(i, 32 + i, apic_state.bsp_id, true);
-	}
 
-	// Apply Interrupt Source Overrides from ACPI
 	acpi_enum_isos(setup_iso_callback, NULL);
 
 	apic_state.initialized = true;

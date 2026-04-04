@@ -1,90 +1,87 @@
-/* kernel.ld - Higher-Half Kernel Linker Script */
-
 KERNEL_VIRT_BASE = 0xffffffff80000000;
 KERNEL_PHYS_BASE = 0x100000;
 
 MEMORY
 {
     PHYS (rwx) : ORIGIN = KERNEL_PHYS_BASE, LENGTH = 16M
+    VIRT (rwx) : ORIGIN = KERNEL_VIRT_BASE, LENGTH = 16M
+}
+
+PHDRS
+{
+    text    PT_LOAD FLAGS(5);   /* R E */
+    rodata  PT_LOAD FLAGS(4);   /* R   */
+    data    PT_LOAD FLAGS(6);   /* RW  */
 }
 
 ENTRY(kernel_entry)
 
 SECTIONS
 {
-    . = KERNEL_VIRT_BASE + KERNEL_PHYS_BASE;
+    . = KERNEL_VIRT_BASE;
 
-    /* Start of the kernel */
     _kernel_start = .;
-    _kernel_phys_start = . - KERNEL_VIRT_BASE;
+    _kernel_phys_start = ORIGIN(PHYS);
 
-    /* Code */
-    .text : ALIGN(4K)
+    .text : ALIGN(4096)
     {
-        *(.text.boot)     /* Entry point must be first */
+        *(.text.boot)
         *(.text*)
-        *(.text.ap_trampoline)  
-    } AT > PHYS
+        *(.text.ap_trampoline)
+    } > VIRT AT > PHYS :text
 
-    /* Read-only data */
-    .rodata : ALIGN(4K)
+    .rodata : ALIGN(4096)
     {
         *(.rodata*)
-    } AT > PHYS
+    } > VIRT AT > PHYS :rodata
 
-    /* Initcalls sections */
-    /* Separating the levels initcalls */
     .initcalls ALIGN(8) :
     {
-        /* Early initcalls */
         __start___initcalls_early = .;
         KEEP(*(.initcalls.early))
         __stop___initcalls_early = .;
 
-        /* Core initcalls */
         __start___initcalls_core = .;
         KEEP(*(.initcalls.core))
         __stop___initcalls_core = .;
 
-        /* FS initcalls */
         __start___initcalls_fs = .;
         KEEP(*(.initcalls.fs))
         __stop___initcalls_fs = .;
 
-        /* Device initcalls */
         __start___initcalls_device = .;
         KEEP(*(.initcalls.device))
         __stop___initcalls_device = .;
 
-        /* Late initcalls */
         __start___initcalls_late = .;
         KEEP(*(.initcalls.late))
         __stop___initcalls_late = .;
+    } > VIRT AT > PHYS :rodata
 
-    } AT > PHYS
-
-    /* Initialized data */
-    .data : ALIGN(4K)
+    .data : ALIGN(4096)
     {
         *(.data*)
-    } AT > PHYS
+    } > VIRT AT > PHYS :data
 
-    /* BSS */
-    .bss : ALIGN(4K)
+    .bss (NOLOAD) : ALIGN(4096)
     {
         _bss_start = .;
         *(.bss*)
         *(COMMON)
         _bss_end = .;
-    } AT > PHYS
+    } > VIRT AT > PHYS :data
 
-    /* End of the kernel */
-    . = ALIGN(4K);
+    . = ALIGN(4096);
+
     _kernel_end = .;
-    _kernel_phys_end = . - KERNEL_VIRT_BASE;
     _kernel_size = _kernel_end - _kernel_start;
 
-    /* Discard unnecessary sections */
+    _kernel_phys_end = LOADADDR(.text)
+        + SIZEOF(.text)
+        + SIZEOF(.rodata)
+        + SIZEOF(.initcalls)
+        + SIZEOF(.data);
+
     /DISCARD/ :
     {
         *(.comment)

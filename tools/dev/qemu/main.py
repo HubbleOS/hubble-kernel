@@ -79,26 +79,26 @@ def build_qemu_command(opts: QemuOptions):
         "-serial", "stdio",
 
         # Sound
-        "-audiodev", audiodev,
-        "-device", "sb16,audiodev=audio0",
-        "-machine", "pcspk-audiodev=audio0",
+        # "-audiodev", audiodev,
+        # "-device", "sb16,audiodev=audio0",
+        # "-machine", "pcspk-audiodev=audio0",
 
-        # Network
-        "-netdev user,id=net0,hostfwd=udp::4444-:7777",
-        "-device e1000,netdev=net0",
+        # # Network
+        # "-netdev user,id=net0,hostfwd=udp::4444-:7777",
+        # "-device e1000,netdev=net0",
         # "-net none",
     ]
 
     # USB controllers
     cmd += [
-        "-device", "piix4-usb-uhci,id=uhci1",
-        "-device", "piix4-usb-uhci,id=uhci2",
+        # "-device", "piix4-usb-uhci,id=uhci1",
+        # "-device", "piix4-usb-uhci,id=uhci2",
     ]
 
     # USB devices
     cmd += [
         # "-device", "usb-tablet,bus=uhci1.0,port=1",
-        "-device", "usb-kbd,bus=uhci1.0,port=1",
+        # "-device", "usb-kbd,bus=uhci1.0,port=1",
         # "-device", "usb-kbd,bus=uhci1.0,port=2",
         # "-device", "usb-mouse,bus=uhci2.0,port=1",
         # "-device", "usb-mouse,bus=uhci2.0,port=2",
@@ -107,11 +107,19 @@ def build_qemu_command(opts: QemuOptions):
 
     # Debug
     cmd += [
-        # "-S", "-s", "-d", "cpu_reset", "-no-reboot", "-no-shutdown"
+        # "-S", "-s", "-d cpu_reset", "-no-reboot", "-no-shutdown"
+        # "-S -s -d int,cpu_reset -no-reboot -no-shutdown"
+        "-S", "-s"
     ]
 
-    cmd_str = " \\\n    ".join(cmd)
-    return cmd_str
+    #
+    cmd += [
+        # "-d", "int,cpu_reset",
+        # "-no-reboot", "-no-shutdown"
+    ]
+
+    # cmd_str = " \\\n    ".join(cmd)
+    return cmd
 
 
 def run_qemu(opts: QemuOptions):
@@ -122,17 +130,16 @@ def run_qemu(opts: QemuOptions):
     print(f"Running: {cmd}")
 
     process = subprocess.Popen(
-        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     ansi_escape = re.compile(rb'\x1b\[[0-9;]*m')
 
-    while True:
-        line = process.stdout.readline()
-        if not line:
-            break
-        # Убираем ANSI escape последовательности
+    for line in process.stdout:
         clean_line = ansi_escape.sub(b'', line)
         sys.stdout.buffer.write(clean_line)
-        sys.stdout.flush()
+        try:
+            sys.stdout.buffer.flush()
+        except BlockingIOError:
+            pass
 
     return process.wait()
 

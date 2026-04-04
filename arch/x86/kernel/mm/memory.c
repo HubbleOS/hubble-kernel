@@ -11,7 +11,7 @@
 void check_virtual_memory()
 {
 	void *addr = (void *)check_virtual_memory;
-	uintptr_t phys = VIRT_TO_PHYS(addr);
+	uintptr_t phys = virt_to_phys((uint64_t)addr);
 
 	printk(KERN_INFO "Virtual addr: %p\n", addr);
 	printk(KERN_INFO "Physical addr: 0x%lx\n", phys);

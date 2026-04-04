@@ -40,11 +40,11 @@ static void e1000_rx_init(void)
 	for (int i = 0; i < E1000_RX_DESC_COUNT; i++)
 	{
 		rx_buffers[i] = kmalloc(E1000_BUFFER_SIZE, GFP_KERNEL);
-		rx_descs[i].addr = VIRT_TO_PHYS(rx_buffers[i]);
+		rx_descs[i].addr = virt_to_phys((uint64_t)rx_buffers[i]);
 		rx_descs[i].status = 0;
 	}
 
-	uint64_t phys = VIRT_TO_PHYS(rx_descs);
+	uint64_t phys = virt_to_phys((uint64_t)rx_descs);
 	e1000_write(E1000_RDBAL, (uint32_t)(phys & 0xFFFFFFFF));
 	e1000_write(E1000_RDBAH, (uint32_t)(phys >> 32));
 	e1000_write(E1000_RDLEN, E1000_RX_DESC_COUNT * sizeof(struct e1000_rx_desc));
@@ -63,7 +63,7 @@ static void e1000_tx_init(void)
 
 	memset(tx_descs, 0, sizeof(struct e1000_tx_desc) * E1000_TX_DESC_COUNT);
 
-	uint64_t phys = VIRT_TO_PHYS(tx_descs);
+	uint64_t phys = virt_to_phys((uint64_t)tx_descs);
 	e1000_write(E1000_TDBAL, (uint32_t)(phys & 0xFFFFFFFF));
 	e1000_write(E1000_TDBAH, (uint32_t)(phys >> 32));
 	e1000_write(E1000_TDLEN, E1000_TX_DESC_COUNT * sizeof(struct e1000_tx_desc));
@@ -101,7 +101,7 @@ int e1000_send(const void *data, uint16_t len)
 {
 	uint32_t idx = tx_tail % E1000_TX_DESC_COUNT;
 
-	uint64_t phys = VIRT_TO_PHYS(data);
+	uint64_t phys = virt_to_phys((uint64_t)data);
 	printk("[tx] idx=%d phys=%llx len=%d\n", idx, phys, len);
 	printk("[tx] TDH=%d TDT=%d\n", e1000_read(E1000_TDH), e1000_read(E1000_TDT));
 	printk("[tx] STATUS before=%02x\n", tx_descs[idx].status);
@@ -182,17 +182,11 @@ static int e1000_probe(struct pci_device *pci_dev)
 		return -1;
 	}
 
-	// Enable PCI Bus Mastering + Memory Space
 	uint32_t pci_cmd = pci_read_config(e1000_pci_bus, e1000_pci_slot, e1000_pci_func, 0x04);
 	pci_cmd |= (1 << 2) | (1 << 1);
 	pci_write_config(e1000_pci_bus, e1000_pci_slot, e1000_pci_func, 0x04, pci_cmd);
 
-	uint64_t mmio_virt = (uint64_t)PHYS_TO_VIRT_MMIO(bar0);
-	for (uint64_t off = 0; off < E1000_MMIO_SIZE; off += 0x1000)
-		vmm_map_page(mmio_virt + off, bar0 + off,
-			     PTE_PRESENT | PTE_WRITE | VMM_MAP_NO_CACHE);
-
-	e1000_base = (volatile uint32_t *)mmio_virt;
+	e1000_base = (volatile uint32_t *)(DIRECT_MAP_BASE + bar0);
 
 	printk("[e1000] bar0 phys=%llx virt=%p\n", bar0, e1000_base);
 
@@ -205,7 +199,6 @@ static int e1000_probe(struct pci_device *pci_dev)
 	e1000_tx_init();
 	e1000_rx_init();
 
-	// register netdev
 	static struct netdev_ops ops = {
 	    .send = e1000_send,
 	    .recv = e1000_recv,

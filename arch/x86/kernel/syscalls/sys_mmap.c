@@ -89,7 +89,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags,
 				return -1;
 
 			// Zero the page
-			memset(PHYS_TO_VIRT_PTR(void, phys), 0, PAGE_SIZE);
+			memset((void *)(DIRECT_MAP_BASE + phys), 0, PAGE_SIZE);
 
 			if (vmm_map_page(vaddr + off, phys, pte_flags) < 0)
 			{

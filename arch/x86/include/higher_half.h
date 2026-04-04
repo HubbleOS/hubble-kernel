@@ -8,40 +8,24 @@
 #include <stdint.h>
 
 // Physical Memory Layout
-
-/** Kernel physical load address (1MB) */
-#define KERNEL_PHYS_BASE 0x100000ULL
+#define KERNEL_PHYS_BASE 0x100000ULL // Kernel physical load address
 
 // Virtual Memory Layout
+#define KERNEL_VIRT_BASE 0xFFFFFFFF80000000ULL // Higher-half kernel base address
+#define DIRECT_MAP_BASE 0xFFFF800000000000ULL  // Direct physical memory map base (for high addresses)
 
-/** Higher-half kernel base address */
-#define KERNEL_VIRT_BASE 0xFFFFFFFF80000000ULL
+static inline uint64_t phys_to_virt(uint64_t phys)
+{
+	return phys + DIRECT_MAP_BASE;
+}
 
-/** Alias for bootloader compatibility */
-#define HIGHER_HALF_BASE KERNEL_VIRT_BASE
+static inline uint64_t virt_to_phys(uint64_t virt)
+{
+	if (virt >= KERNEL_VIRT_BASE)
+		return virt - KERNEL_VIRT_BASE + KERNEL_PHYS_BASE;
 
-/** Direct physical memory map base (for high addresses) */
-#define DIRECT_MAP_BASE 0xFFFF800000000000ULL
+	if (virt >= DIRECT_MAP_BASE)
+		return virt - DIRECT_MAP_BASE;
 
-// Address Conversion Macros
-
-#define VIRT_TO_PHYS(addr) ((uint64_t)((uintptr_t)(addr) - KERNEL_VIRT_BASE))
-
-// Simple version for low memory (< 4GB)
-// Used by bootloader and for kernel image itself
-#define PHYS_TO_VIRT(addr) ((uint64_t)(addr) + KERNEL_VIRT_BASE)
-
-// For pointer types
-#define PHYS_TO_VIRT_PTR(type, addr) ((type *)((uintptr_t)(addr) + KERNEL_VIRT_BASE))
-
-// For high MMIO addresses (like LAPIC at 0xFEE00000)
-// Use direct map region
-#define PHYS_TO_VIRT_MMIO(addr) ((uint64_t)(addr) + DIRECT_MAP_BASE)
-#define PHYS_TO_VIRT_MMIO_PTR(type, addr) ((type *)((uintptr_t)(addr) + DIRECT_MAP_BASE))
-
-#define IS_KERNEL_VIRT(addr) ((uint64_t)(addr) >= KERNEL_VIRT_BASE)
-#define IS_PHYSICAL(addr) ((uint64_t)(addr) < KERNEL_VIRT_BASE)
-
-// Check if address is in high MMIO range (typically 0xFE000000-0xFFFFFFFF)
-#define IS_HIGH_MMIO(addr) ((uint64_t)(addr) >= 0xFE000000ULL && \
-			    (uint64_t)(addr) < 0x100000000ULL)
+	return virt;
+}

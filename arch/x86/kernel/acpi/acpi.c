@@ -31,7 +31,8 @@ static void iterate_sdt_entries(sdt_callback_t callback, void *ctx)
 		uint32_t entries = (acpi_state.xsdt->Header.Length - sizeof(ACPI_SDTHeader)) / sizeof(uint64_t);
 		for (uint32_t i = 0; i < entries; i++)
 		{
-			ACPI_SDTHeader *tbl = (ACPI_SDTHeader *)PHYS_TO_VIRT(acpi_state.xsdt->TablePointers[i]);
+			ACPI_SDTHeader *tbl = (ACPI_SDTHeader *)(DIRECT_MAP_BASE + acpi_state.xsdt->TablePointers[i]);
+
 			callback(tbl, ctx);
 		}
 	}
@@ -40,7 +41,8 @@ static void iterate_sdt_entries(sdt_callback_t callback, void *ctx)
 		uint32_t entries = (acpi_state.rsdt->Header.Length - sizeof(ACPI_SDTHeader)) / sizeof(uint32_t);
 		for (uint32_t i = 0; i < entries; i++)
 		{
-			ACPI_SDTHeader *tbl = (ACPI_SDTHeader *)PHYS_TO_VIRT((uint64_t)acpi_state.rsdt->TablePointers[i]);
+			ACPI_SDTHeader *tbl = (ACPI_SDTHeader *)(DIRECT_MAP_BASE + (uint64_t)acpi_state.rsdt->TablePointers[i]);
+
 			callback(tbl, ctx);
 		}
 	}
@@ -98,7 +100,8 @@ static void process_fadt(ACPI_SDTHeader *tbl, void *ctx)
 		return;
 	}
 
-	ACPI_SDTHeader *dsdt = (ACPI_SDTHeader *)PHYS_TO_VIRT(dsdt_phys);
+	ACPI_SDTHeader *dsdt = (ACPI_SDTHeader *)(DIRECT_MAP_BASE + dsdt_phys);
+
 	if (memcmp(dsdt->Signature, "DSDT", 4) != 0)
 	{
 		printk("Invalid DSDT signature\n");
@@ -176,7 +179,7 @@ int acpi_init(void *rsdp_ptr)
 		return -1;
 	}
 
-	RSDP *rsdp = (RSDP *)PHYS_TO_VIRT_PTR(RSDP, (uintptr_t)rsdp_ptr);
+	RSDP *rsdp = (RSDP *)(DIRECT_MAP_BASE + (uintptr_t)rsdp_ptr);
 
 	// Verify RSDP signature
 	if (memcmp(rsdp->Signature, "RSD PTR ", 8) != 0)
@@ -190,7 +193,8 @@ int acpi_init(void *rsdp_ptr)
 	// Get XSDT or RSDT
 	if (rsdp->Revision >= 2 && rsdp->XsdtAddress)
 	{
-		acpi_state.xsdt = (XSDT *)PHYS_TO_VIRT(rsdp->XsdtAddress);
+		acpi_state.xsdt = (XSDT *)(DIRECT_MAP_BASE + rsdp->XsdtAddress);
+
 		if (memcmp(acpi_state.xsdt->Header.Signature, "XSDT", 4) != 0)
 		{
 			printk("Invalid XSDT\n");
@@ -200,7 +204,8 @@ int acpi_init(void *rsdp_ptr)
 	}
 	else
 	{
-		acpi_state.rsdt = (RSDT *)PHYS_TO_VIRT((uint64_t)rsdp->RsdtAddress);
+		acpi_state.rsdt = (RSDT *)(DIRECT_MAP_BASE + (uint64_t)rsdp->RsdtAddress);
+
 		if (memcmp(acpi_state.rsdt->Header.Signature, "RSDT", 4) != 0)
 		{
 			printk("Invalid RSDT\n");
@@ -281,7 +286,7 @@ void acpi_reboot(void)
 		switch (acpi_state.fadt->ResetReg.AddressSpace)
 		{
 		case 0: // System Memory
-			*(volatile uint8_t *)PHYS_TO_VIRT(addr) = reset_value;
+			*(volatile uint8_t *)(DIRECT_MAP_BASE + addr) = reset_value;
 			break;
 		case 1: // System I/O
 			outb((uint16_t)addr, reset_value);
@@ -290,7 +295,7 @@ void acpi_reboot(void)
 	}
 
 	// Fallback methods
-	outb(0x64, 0xFE);			  // Keyboard controller
+	outb(0x64, 0xFE);	      // Keyboard controller
 	asm volatile("lidt 0; int3"); // Triple fault
 	while (1)
 		hlt();
@@ -373,7 +378,7 @@ void acpi_enum_ioapics(acpi_ioapic_callback_t callback, void *ctx)
 		{
 			MADT_IOAPIC *ioapic = (MADT_IOAPIC *)entry;
 			callback(ioapic->IOAPIC_ID, ioapic->IOAPIC_Address,
-					 ioapic->GlobalSystemInterruptBase, ctx);
+				 ioapic->GlobalSystemInterruptBase, ctx);
 		}
 
 		ptr += entry->Length;
@@ -400,7 +405,7 @@ void acpi_enum_isos(acpi_iso_callback_t callback, void *ctx)
 		{
 			MADT_ISO *iso = (MADT_ISO *)entry;
 			callback(iso->IRQSource, iso->GlobalSystemInterrupt,
-					 iso->Flags, ctx);
+				 iso->Flags, ctx);
 		}
 
 		ptr += entry->Length;
@@ -440,6 +445,6 @@ void acpi_enum_mcfg(acpi_mcfg_callback_t callback, void *ctx)
 	{
 		MCFG_Entry *entry = &acpi_state.mcfg->Entries[i];
 		callback(entry->BaseAddress, entry->SegmentGroup,
-				 entry->StartBus, entry->EndBus, ctx);
+			 entry->StartBus, entry->EndBus, ctx);
 	}
 }

@@ -53,9 +53,68 @@ struct ap_startup_data
 } __attribute__((packed));
 
 // Allocate stack for AP using VMM/PMM
+// static void *allocate_ap_stack(void)
+// {
+// 	// Allocate physical pages for stack
+// 	uint64_t phys = pmm_alloc_pages(AP_STACK_PAGES);
+// 	if (!phys)
+// 	{
+// 		printk("ERROR: Failed to allocate physical pages for AP stack\n");
+// 		return NULL;
+// 	}
+
+// 	printk("  Allocated %u physical pages at 0x%lx\n", AP_STACK_PAGES, phys);
+
+// 	uint64_t virt;
+
+// 	// Check if physical address is below 4GB (covered by bootloader's mapping)
+// 	if (phys < 0x100000000ULL)
+// 	{
+// 		printk("  Physical address below 4GB, using higher-half mapping\n");
+// 		virt = HIGHER_HALF_BASE + phys;
+// 		vmm_map_page(virt, phys, VMM_FLAGS_STACK);
+// 		printk("  Virtual address: 0x%lx (using bootloader mapping)\n", virt);
+// 	}
+// 	else
+// 	{
+// 		printk("  Physical address above 4GB, need explicit mapping\n");
+
+// 		// Allocate virtual address space
+// 		// Use a dedicated region for AP stacks (adjust to your memory map)
+// 		static uint64_t next_ap_stack_virt = 0xFFFFFF8000000000ULL;
+// 		virt = next_ap_stack_virt;
+// 		next_ap_stack_virt += AP_STACK_SIZE;
+
+// 		printk("  Virtual address: 0x%lx (explicit mapping)\n", virt);
+
+// 		// Map each page
+// 		for (size_t i = 0; i < AP_STACK_PAGES; i++)
+// 		{
+// 			uint64_t page_virt = virt + (i * VMM_PAGE_SIZE);
+// 			uint64_t page_phys = phys + (i * VMM_PAGE_SIZE);
+
+// 			if (vmm_map_page(page_virt, page_phys, VMM_FLAGS_STACK) != 0)
+// 			{
+// 				printk("ERROR: Failed to map AP stack page %zu\n", i);
+// 				pmm_free_pages(phys, AP_STACK_PAGES);
+// 				return NULL;
+// 			}
+// 		}
+// 	}
+
+// 	// Zero out the stack
+// 	printk("  Zeroing %u bytes at 0x%lx...\n", AP_STACK_SIZE, virt);
+// 	memset((void *)virt, 0, AP_STACK_SIZE);
+// 	printk("  Stack zeroed successfully\n");
+
+// 	// Return stack top (stacks grow downward)
+// 	void *stack_top = (void *)(virt + AP_STACK_SIZE);
+// 	printk("  Stack: 0x%lx - 0x%lx (top at %p)\n", virt, virt + AP_STACK_SIZE, stack_top);
+// 	return stack_top;
+// }
+
 static void *allocate_ap_stack(void)
 {
-	// Allocate physical pages for stack
 	uint64_t phys = pmm_alloc_pages(AP_STACK_PAGES);
 	if (!phys)
 	{
@@ -63,54 +122,11 @@ static void *allocate_ap_stack(void)
 		return NULL;
 	}
 
-	printk("  Allocated %u physical pages at 0x%lx\n", AP_STACK_PAGES, phys);
-
-	uint64_t virt;
-
-	// Check if physical address is below 4GB (covered by bootloader's mapping)
-	if (phys < 0x100000000ULL)
-	{
-		printk("  Physical address below 4GB, using higher-half mapping\n");
-		virt = HIGHER_HALF_BASE + phys;
-		vmm_map_page(virt, phys, VMM_FLAGS_STACK);
-		printk("  Virtual address: 0x%lx (using bootloader mapping)\n", virt);
-	}
-	else
-	{
-		printk("  Physical address above 4GB, need explicit mapping\n");
-
-		// Allocate virtual address space
-		// Use a dedicated region for AP stacks (adjust to your memory map)
-		static uint64_t next_ap_stack_virt = 0xFFFFFF8000000000ULL;
-		virt = next_ap_stack_virt;
-		next_ap_stack_virt += AP_STACK_SIZE;
-
-		printk("  Virtual address: 0x%lx (explicit mapping)\n", virt);
-
-		// Map each page
-		for (size_t i = 0; i < AP_STACK_PAGES; i++)
-		{
-			uint64_t page_virt = virt + (i * VMM_PAGE_SIZE);
-			uint64_t page_phys = phys + (i * VMM_PAGE_SIZE);
-
-			if (vmm_map_page(page_virt, page_phys, VMM_FLAGS_STACK) != 0)
-			{
-				printk("ERROR: Failed to map AP stack page %zu\n", i);
-				pmm_free_pages(phys, AP_STACK_PAGES);
-				return NULL;
-			}
-		}
-	}
-
-	// Zero out the stack
-	printk("  Zeroing %u bytes at 0x%lx...\n", AP_STACK_SIZE, virt);
+	// Direct map покриває 0..4GB — vmm_map_page не потрібен
+	uint64_t virt = DIRECT_MAP_BASE + phys;
 	memset((void *)virt, 0, AP_STACK_SIZE);
-	printk("  Stack zeroed successfully\n");
 
-	// Return stack top (stacks grow downward)
-	void *stack_top = (void *)(virt + AP_STACK_SIZE);
-	printk("  Stack: 0x%lx - 0x%lx (top at %p)\n", virt, virt + AP_STACK_SIZE, stack_top);
-	return stack_top;
+	return (void *)(virt + AP_STACK_SIZE);
 }
 
 void enable_nxe(void)
@@ -185,9 +201,9 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx)
 	data->pml4_phys = cr3;
 
 	data->gdt_limit = get_gdt_limit();
-	data->gdt_base = (uint64_t)get_gdt_base();
+	data->gdt_base = virt_to_phys((uint64_t)get_gdt_base());
 
-	data->stack_top = VIRT_TO_PHYS((uint64_t)stack_top) + 0x1000;
+	data->stack_top = (uint64_t)stack_top;
 	data->entry_point = (uint64_t)ap_entry;
 
 	data->ap_ready = 0;

@@ -22,18 +22,14 @@ static void *find_rsdp(EFI_SYSTEM_TABLE *SystemTable)
 
 		if (memcmp(&tbl->VendorGuid, &Acpi20Guid, sizeof(EFI_GUID)) == 0)
 		{
-			// VERIFY THE SIGNATURE HERE
 			char *sig = (char *)tbl->VendorTable;
-
 			if (sig[0] == 'R' && sig[1] == 'S' && sig[2] == 'D')
 				return tbl->VendorTable;
 		}
 
 		if (memcmp(&tbl->VendorGuid, &Acpi10Guid, sizeof(EFI_GUID)) == 0)
 		{
-			// VERIFY THE SIGNATURE HERE
 			char *sig = (char *)tbl->VendorTable;
-
 			if (sig[0] == 'R' && sig[1] == 'S' && sig[2] == 'D')
 				return tbl->VendorTable;
 		}
@@ -70,8 +66,8 @@ EFI_STATUS open_file(EFI_SYSTEM_TABLE *systab, const CHAR16 *path, EFI_FILE_HAND
 
 	*file = NULL;
 
-	status = systab->BootServices->LocateHandleBuffer(ByProtocol, &fs_guid, NULL, &handle_count, &handle_buffer);
-
+	status = systab->BootServices->LocateHandleBuffer(ByProtocol, &fs_guid, NULL,
+							  &handle_count, &handle_buffer);
 	if (EFI_ERROR(status))
 		return status;
 
@@ -111,17 +107,14 @@ EFI_STATUS get_file_size(EFI_FILE_HANDLE file, EFI_SYSTEM_TABLE *systab, UINTN *
 	EFI_FILE_INFO *file_info = NULL;
 	UINTN info_size = 0;
 
-	// The first call is to get the size of the structure
 	status = file->GetInfo(file, &FileInfoGuid, &info_size, NULL);
 	if (status != EFI_BUFFER_TOO_SMALL)
 		return status;
 
-	// Allocating memory for the structure
 	status = systab->BootServices->AllocatePool(EfiLoaderData, info_size, (void **)&file_info);
 	if (EFI_ERROR(status))
 		return status;
 
-	// Getting the structure itself
 	status = file->GetInfo(file, &FileInfoGuid, &info_size, file_info);
 	if (!EFI_ERROR(status))
 		*size = file_info->FileSize;
@@ -130,7 +123,6 @@ EFI_STATUS get_file_size(EFI_FILE_HANDLE file, EFI_SYSTEM_TABLE *systab, UINTN *
 	return status;
 }
 
-/* EFI type -> our type */
 static mem_type_t efi_to_mem_type(UINT32 efi_type)
 {
 	switch (efi_type)
@@ -160,9 +152,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	g_systab = systab;
 	EFI_STATUS status;
 
-	/* 1. Load the kernel */
+	/* 1. Open kernel.elf and get its size */
 	EFI_FILE_HANDLE kfile;
-	status = open_file(systab, L"\\kernel.bin", &kfile);
+	status = open_file(systab, L"\\kernel.elf", &kfile);
 	if (EFI_ERROR(status))
 		return status;
 
@@ -171,39 +163,63 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	if (EFI_ERROR(status))
 		return status;
 
+	/* 2. Reserve physical memory for the kernel image at KERNEL_PHYS_BASE.
+	      This prevents EFI from using 0x100000..0x100000+kernel_size
+	      while we're still in boot services. boot_main's load_elf()
+	      will copy PT_LOAD segments here after ExitBootServices. */
 	EFI_PHYSICAL_ADDRESS kernel_phys = KERNEL_PHYS_BASE;
-	INTN kernel_pages = (kernel_size + 0xFFF) / 0x1000;
+	UINTN kernel_pages = (kernel_size + 0xFFF) / 0x1000;
 	status = systab->BootServices->AllocatePages(
 	    AllocateAddress, EfiLoaderData,
 	    kernel_pages, &kernel_phys);
 	if (EFI_ERROR(status))
 		return status;
 
-	status = kfile->Read(kfile, &kernel_size, (void *)kernel_phys);
+	/* 3. Read the ELF into a page-aligned buffer.
+	      AllocatePool may return unaligned pointers with EFI metadata
+	      interspersed — AllocatePages guarantees a contiguous region. */
+	EFI_PHYSICAL_ADDRESS elf_phys;
+	UINTN elf_pages = (kernel_size + 0xFFF) / 0x1000;
+	status = systab->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData,
+						     elf_pages, &elf_phys);
 	if (EFI_ERROR(status))
 		return status;
+	void *elf_buf = (void *)elf_phys;
+
+	// status = kfile->Read(kfile, &kernel_size, elf_buf);
+	// if (EFI_ERROR(status))
+	// return status;
+	UINTN total = kernel_size;
+	UINTN offset = 0;
+	while (offset < total)
+	{
+		UINTN chunk = total - offset;
+		status = kfile->Read(kfile, &chunk, (uint8_t *)elf_buf + offset);
+		if (EFI_ERROR(status) || chunk == 0)
+			break;
+		offset += chunk;
+	}
+	kernel_size = offset;
+
 	kfile->Close(kfile);
 
-	/* 2. RSDP */
+	/* 4. RSDP */
 	void *rsdp = find_rsdp(systab);
 	if (!rsdp)
 		return EFI_NOT_FOUND;
 
-	/* 3. Framebuffer */
+	/* 5. Framebuffer */
 	fb_info_t fb;
 	status = init_framebuffer(systab, &fb);
-	// draw
 	if (EFI_ERROR(status))
 		return status;
 
-	/* 4. Memory map (before ExitBootServices) */
+	/* 6. Memory map (before ExitBootServices) */
 	EFI_MEMORY_DESCRIPTOR *efi_map = NULL;
 	UINTN map_size = 0, map_key, desc_size;
 	UINT32 desc_ver;
 
-	// the first challenge is to find out the size
-	systab->BootServices->GetMemoryMap(&map_size, NULL,
-					   &map_key, &desc_size, &desc_ver);
+	systab->BootServices->GetMemoryMap(&map_size, NULL, &map_key, &desc_size, &desc_ver);
 	map_size += desc_size * 16;
 
 	systab->BootServices->AllocatePool(EfiLoaderData, map_size, (void **)&efi_map);
@@ -214,7 +230,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	UINTN efi_count = map_size / desc_size;
 
-	/* 5. Find the largest free region */
+	/* 7. Find the largest free region */
 	EFI_MEMORY_DESCRIPTOR *largest = NULL;
 	UINT64 largest_size = 0;
 	for (UINTN i = 0; i < efi_count; i++)
@@ -234,11 +250,11 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	if (!largest || largest_size < 64 * 1024 * 1024)
 		return EFI_OUT_OF_RESOURCES;
 
-	/* 6. Allocate memory for our mem_map (EFI-independent) */
+	/* 8. Build our memory map */
 	mem_descriptor_t *our_map = NULL;
 	systab->BootServices->AllocatePool(EfiLoaderData,
-					   efi_count * sizeof(mem_descriptor_t), (void **)&our_map);
-
+					   efi_count * sizeof(mem_descriptor_t),
+					   (void **)&our_map);
 	for (UINTN i = 0; i < efi_count; i++)
 	{
 		EFI_MEMORY_DESCRIPTOR *d =
@@ -248,30 +264,26 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		our_map[i].type = efi_to_mem_type(d->Type);
 	}
 
-	/* 7. Fill LoaderContext */
+	/* 9. Fill LoaderContext */
 	loader_context_t *ctx = NULL;
-	systab->BootServices->AllocatePool(EfiLoaderData,
-					   sizeof(loader_context_t), (void **)&ctx);
+	systab->BootServices->AllocatePool(EfiLoaderData, sizeof(loader_context_t), (void **)&ctx);
 
+	ctx->elf_buf = elf_buf;
+	ctx->elf_size = kernel_size;
 	ctx->mem_map = our_map;
 	ctx->mem_map_count = efi_count;
 	ctx->framebuffer = fb;
 	ctx->rsdp = rsdp;
-	ctx->kernel_phys = kernel_phys;
-	ctx->kernel_size = kernel_size;
 	ctx->free_phys_base = largest->PhysicalStart;
 	ctx->free_phys_size = largest_size;
 
-	/* 8. ExitBootServices */
-	// need to update map_key after AllocatePool above
+	/* 10. ExitBootServices — refresh map_key first */
 	map_size = 0;
-	systab->BootServices->GetMemoryMap(&map_size, NULL,
-					   &map_key, &desc_size, &desc_ver);
+	systab->BootServices->GetMemoryMap(&map_size, NULL, &map_key, &desc_size, &desc_ver);
 	map_size += desc_size * 4;
 	EFI_MEMORY_DESCRIPTOR *temp = NULL;
 	systab->BootServices->AllocatePool(EfiLoaderData, map_size, (void **)&temp);
-	systab->BootServices->GetMemoryMap(&map_size, temp,
-					   &map_key, &desc_size, &desc_ver);
+	systab->BootServices->GetMemoryMap(&map_size, temp, &map_key, &desc_size, &desc_ver);
 
 	status = systab->BootServices->ExitBootServices(image, map_key);
 	if (EFI_ERROR(status))

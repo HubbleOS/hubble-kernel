@@ -1,4 +1,4 @@
-file out/build/x86/kernel.elf
+file out/build/x86/iso/kernel.elf
 target remote :1234
 define rq
     disconnect
