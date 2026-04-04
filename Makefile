@@ -111,6 +111,7 @@ KCOMMON_BUILD_DIR := $(BUILD_DIR)/kernel
 
 ifeq ($(ARCH),x86)
     KCOMMON_OBJS += $(BUILD_DIR)/init/main.o
+    KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/input/input.o
     KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/device/device.o
     KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/init/fs.o
     KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/printk.o
