@@ -35,12 +35,68 @@ typedef struct
 uint32_t open(const char *path, int flags) { return syscall2(4, (long)path, flags); }
 
 void test(void);
+void handle_command(char *cmd);
+
+void terminal(void)
+{
+	char buf[128];
+	int pos = 0;
+	char c;
+
+	int kbd_fd = open("/dev/kbd", 0);
+	int term_fd = open("/pipe/term", 0);
+
+	printf("SimpleOS Terminal\n> ");
+
+	while (1)
+	{
+		read_file(kbd_fd, &c, 1);
+
+		if (c == '\n' || c == '\r') // Enter
+		{
+			buf[pos] = '\0';
+			lseek(term_fd, 0, 0);
+			write_file(term_fd, buf, pos);
+			printf("\n");	     // переход на новую строку
+			handle_command(buf); // обработка команд
+			printf("> ");
+			pos = 0;
+		}
+		else if (c == '\b' && pos > 0) // Backspace
+		{
+			pos--;
+			printf("\b \b");
+		}
+		else
+		{
+			buf[pos++] = c;
+			printf("%c", c);
+		}
+	}
+}
+
+void handle_command(char *cmd)
+{
+	if (strcmp(cmd, "help") == 0)
+	{
+		printf("Available commands: help, echo, clear\n");
+	}
+	else if (strncmp(cmd, "echo ", 5) == 0)
+	{
+		printf("%s\n", cmd + 5);
+	}
+	else
+	{
+		printf("Unknown command: %s\n", cmd);
+	}
+}
 
 void _start(void)
 {
 	libc_init();
 	printf("Hello from user space 2!\n");
-	int pid = spawn(test, NULL, 0);
+	// int pid = spawn(test, NULL, 0);
+	int pid2 = spawn(terminal, NULL, 0);
 	while (1)
 	{
 		;
@@ -53,7 +109,7 @@ void test(void)
 	char buf[128];
 	int pos = 0;
 	int kbd_file = open("/dev/kbd", 0);
-	int pipe_file = open("/pipe/test", 0);
+	int pipe_file = open("/pipe/term", 0);
 	while (1)
 	{
 		;

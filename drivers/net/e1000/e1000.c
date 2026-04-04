@@ -211,7 +211,6 @@ static int e1000_probe(struct pci_device *pci_dev)
 	    .priv = &data,
 	};
 	e1000_get_mac(data.mac);
-	device_register(&dev);
 
 	printk("[e1000] init OK\n");
 	return 0;
