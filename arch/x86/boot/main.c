@@ -134,8 +134,8 @@ void boot_main(loader_context_t *ctx)
 	void *rsdp = ctx->rsdp;
 	fb_info_t fb = ctx->framebuffer;
 
-	uint64_t kern_end_phys = KERNEL_PHYS_BASE + 16 * 1024 * 1024;  // 16MB reserve
-	uint64_t pt_arena = (kern_end_phys + 0x1FFFFF) & ~0x1FFFFFULL; // align 2MB
+	uint64_t kern_phys_end = elf_phys_end(ctx->elf_buf);
+	uint64_t pt_arena = (kern_phys_end + 0x1FFFFF) & ~0x1FFFFFULL;
 	uint64_t arena = pt_arena + 2 * 1024 * 1024;
 
 	uint64_t *pml4 = alloc_page_table(&pt_arena);
@@ -146,7 +146,6 @@ void boot_main(loader_context_t *ctx)
 
 	/* 2. Kernel: KERNEL_VIRT_BASE -> KERNEL_PHYS_BASE
 	      Size derived from ELF segments, not ctx->kernel_size. */
-	uint64_t kern_phys_end = elf_phys_end(ctx->elf_buf);
 	for (uint64_t off = 0; off < kern_phys_end - KERNEL_PHYS_BASE; off += 0x1000)
 		map_4kb(pml4, KERNEL_VIRT_BASE + off, KERNEL_PHYS_BASE + off, &pt_arena);
 
