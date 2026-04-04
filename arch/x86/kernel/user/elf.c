@@ -78,7 +78,7 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 			return -1;
 		}
 		// make_pd_entry_user(phys, (uint64_t)target_pm);
-		uint8_t *kptr = (uint8_t *)(DIRECT_MAP_BASE + phys);
+		uint8_t *kptr = (uint8_t *)phys_to_virt(phys);
 		kptr[0] = 0xAA;
 		uint8_t val = kptr[0];
 
@@ -89,7 +89,7 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 			return -1;
 		}
 
-		memset((void *)(DIRECT_MAP_BASE + phys), 0, PAGE_SIZE);
+		memset((void *)phys_to_virt(phys), 0, PAGE_SIZE);
 	}
 
 	// --- 2) Copy file content ---
@@ -145,7 +145,7 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 			}
 
 			// Copy data via kernel mapping
-			void *kaddr = (void *)(DIRECT_MAP_BASE + phys);
+			void *kaddr = (void *)phys_to_virt(phys);
 			memcpy((uint8_t *)kaddr + in_page_off, kbuf, chunk);
 			dump_page(page_base, 0x20);
 			file_offset += chunk;
@@ -288,7 +288,7 @@ int elf_run(uint64_t entry)
 			return -1;
 		}
 
-		uint8_t *kptr = (uint8_t *)(DIRECT_MAP_BASE + phys);
+		uint8_t *kptr = (uint8_t *)phys_to_virt(phys);
 		kptr[0] = 0xAA;
 		uint8_t val = kptr[0];
 		if (val != 0xAA)
@@ -299,7 +299,7 @@ int elf_run(uint64_t entry)
 			return -1;
 		}
 
-		memset((uint8_t *)(DIRECT_MAP_BASE + phys), 0, PAGE_SIZE);
+		memset((uint8_t *)(phys_to_virt(phys)), 0, PAGE_SIZE);
 	}
 
 	printk("[ELF] Entering userspace at 0x%llx with stack 0x%llx\n",
@@ -333,7 +333,7 @@ int elf_run(uint64_t entry)
 	}
 
 	// Read via physical address
-	uint8_t *phys_ptr = (uint8_t *)(DIRECT_MAP_BASE + entry_phys);
+	uint8_t *phys_ptr = (uint8_t *)phys_to_virt(entry_phys);
 	printk("  Code via phys: %02x %02x %02x %02x %02x %02x %02x %02x\n",
 	       phys_ptr[0], phys_ptr[1], phys_ptr[2], phys_ptr[3],
 	       phys_ptr[4], phys_ptr[5], phys_ptr[6], phys_ptr[7]);

@@ -23,7 +23,7 @@ void *mmap_(uint64_t addr, size_t length, int prot, int flags,
 
 int read_file(int fd, void *buf, size_t size) { return syscall3(SYS_read, fd, (long)buf, size); }
 
-int spawn(void *entry_point, void *arg, uint32_t priority) { return syscall3(SYS_spawn, (long)entry_point, (long)arg, priority); }
+int spawn(void *entry_point, void *arg, uint32_t priority) { return syscall3(6, (long)entry_point, (long)arg, priority); }
 int spawn_file(const char *path, void *arg, uint32_t priority) { return syscall3(7, (long)path, (long)arg, priority); }
 typedef struct
 {
@@ -68,7 +68,7 @@ void _start(void)
 	window_t *win = window_create(0, 0, 400, 300);
 
 	int pid = spawn(test, NULL, 0);
-	int pid_file = spawn_file("/usr/bin/user1.elf", NULL, 0);
+	// int pid_file = spawn_file("/usr/bin/user1.elf", NULL, 0);
 	while (1)
 	{
 

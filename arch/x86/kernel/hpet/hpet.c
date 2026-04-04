@@ -211,7 +211,7 @@ int hpet_init(void)
 		return -1;
 	}
 
-	hpet_state.base = (volatile uint64_t *)(DIRECT_MAP_BASE + hpet_phys);
+	hpet_state.base = (volatile uint64_t *)phys_to_virt(hpet_phys);
 
 	printk("HPET at phys=0x%lx virt=%p\n", hpet_phys, hpet_state.base);
 

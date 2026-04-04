@@ -46,6 +46,7 @@ void init_filesystems(void)
 	printk(KERN_DEBUG "Mounting FAT32 at LBA %d...\n", partitions[0].first_lba);
 	vfs_mount("/", &partitions[0], FS_FAT32);
 	vfs_mount("/dev", NULL, FS_DEV);
+	vfs_mount("/pipe", NULL, FS_PIPE);
 	printk(KERN_INFO "Filesystem mounted\n");
 }
 

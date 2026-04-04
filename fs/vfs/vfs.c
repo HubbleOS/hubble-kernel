@@ -62,22 +62,33 @@ bool vfs_mount(const char *mountpoint, gpt_partition_t *partition, FileSystemTyp
 		extern void dev_vfs_init(VFS_FS * fs, VFS_Device * device, uint32_t start_lba);
 		dev_vfs_init(fs, partition->device, partition->first_lba);
 		break;
+	case FS_PIPE:
+		printk("VFS: init pipe vfs\n");
+		extern void pipe_vfs_init(VFS_FS * fs, VFS_Device * device, uint32_t start_lba);
+		pipe_vfs_init(fs, partition->device, partition->first_lba);
+		break;
 	default:
 		printk("VFS: unsupported FS type %d\n", type);
 		kfree(fs);
 		return false;
 	}
 	printk("VFS: mount %d at %s\n", type, mountpoint);
-	if (!partition->device->read && type != FS_DEV)
+	if (!partition->device->read && (type != FS_DEV || type != FS_PIPE))
 	{
 		printk("partition has no device\n");
 	}
 	printk("VFS: mount %d at %s\n", type, mountpoint);
-	if (type != FS_DEV && !fs->mount(fs, partition->device, partition->first_lba))
+
+	if ((type != FS_DEV && type != FS_PIPE))
 	{
-		printk("VFS: failed to mount %d at %s\n", type, mountpoint);
-		return false;
+
+		if (!fs->mount(fs, partition->device, partition->first_lba))
+		{
+			printk("VFS: failed to mount %d at %s\n", type, mountpoint);
+			return false;
+		}
 	}
+	printk("VFS: mounted %d at %s\n", type, mountpoint);
 	if (!fs->fs)
 	{
 		printk("VFS: failed to mount %d at %s\n", type, mountpoint);
