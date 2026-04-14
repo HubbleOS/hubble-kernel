@@ -11,3 +11,6 @@ void app_render(void);
 
 void geometry3d_app_init(void);
 void geometry3d_app_render(void);
+
+void surface_app_init(void);
+void surface_app_render(void);

@@ -2,46 +2,46 @@
 
 #include <stddef.h>
 
-// 3D point
 typedef struct
 {
 	float x, y, z;
 } point3d_t;
 
-// edges
 typedef struct
 {
 	int a, b;
 } edge_t;
 
-// Polyhedron: vertices + adjacency matrix for wireframe
+/* Triangular face (indices into vertices[]) */
 typedef struct
 {
-	size_t count;		// number of vertices
-	point3d_t *vertices;	// array of original vertices
-	point3d_t *transformed; // working copy after transforms
-	// int **adj;		// adjacency matrix [count x count]
+	int a, b, c;
+} face_t;
+
+typedef struct
+{
+	point3d_t *vertices;
+	point3d_t *transformed;
+	size_t count;
 
 	edge_t *edges;
 	size_t edge_count;
 
-	// color
+	face_t *faces;
+	size_t face_count;
+
 	float color_r, color_g, color_b;
 } polyhedron3d_t;
 
-// lifecycle
-polyhedron3d_t *polyhedron3d_create(size_t count, size_t edge_count);
-void polyhedron3d_destroy(polyhedron3d_t *poly);
+polyhedron3d_t *polyhedron3d_create(size_t count, size_t edge_count,
+				    size_t face_count);
+void polyhedron3d_destroy(polyhedron3d_t *p);
+void polyhedron3d_reset(polyhedron3d_t *p);
 
-// reset transformed vertices from original
-void polyhedron3d_reset(polyhedron3d_t *poly);
+point3d_t polyhedron3d_centroid(const polyhedron3d_t *p);
 
-// compute centroid of transformed vertices
-point3d_t polyhedron3d_centroid(const polyhedron3d_t *poly);
-
-// geometric transforms (applied to transformed vertices, around centroid)
-void polyhedron3d_scale(polyhedron3d_t *poly, float sx, float sy, float sz);
-void polyhedron3d_rotate_x(polyhedron3d_t *poly, float angle_deg);
-void polyhedron3d_rotate_y(polyhedron3d_t *poly, float angle_deg);
-void polyhedron3d_rotate_z(polyhedron3d_t *poly, float angle_deg);
-void polyhedron3d_translate(polyhedron3d_t *poly, float tx, float ty, float tz);
+void polyhedron3d_scale(polyhedron3d_t *p, float sx, float sy, float sz);
+void polyhedron3d_rotate_x(polyhedron3d_t *p, float angle_deg);
+void polyhedron3d_rotate_y(polyhedron3d_t *p, float angle_deg);
+void polyhedron3d_rotate_z(polyhedron3d_t *p, float angle_deg);
+void polyhedron3d_translate(polyhedron3d_t *p, float tx, float ty, float tz);
