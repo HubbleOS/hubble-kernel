@@ -115,8 +115,8 @@ void update_task(void)
 
 				if (g_mouse.drag_el)
 					object_move_element(g_mouse.drag_obj, g_mouse.drag_el,
-										drag_x - g_mouse.drag_obj->x,
-										drag_y - g_mouse.drag_obj->y);
+							    drag_x - g_mouse.drag_obj->x,
+							    drag_y - g_mouse.drag_obj->y);
 				else
 				{
 					compositor_move_object(g_mouse.drag_obj, drag_x, drag_y);

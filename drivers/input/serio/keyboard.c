@@ -1,255 +1,234 @@
+// #include "ps2.h"
+// #include "keyboard.h"
+
+// #include <stddef.h>
+// #include <hubble/string.h>
+// #include <hubble/init.h>
+// #include <hubble/printk.h>
+
+// #include <io.h>
+
+// #include <drivers/tty/keyboard.h>
+// #include <drivers/tty/keymap.h>
+
+// #include <asm.h>
+// #include <smp/waitqueue.h>
+
+// static bool process_scancode_once(uint8_t raw, key_event_t *out_evt)
+// {
+// 	static bool extended = false;
+// 	static bool shift_pressed = false;
+// 	static bool ctrl_pressed = false;
+// 	static bool alt_pressed = false;
+// 	static bool caps_lock_active = false;
+
+// 	uint8_t scancode = GET_SCANCODE(raw);
+
+// 	bool released = IS_RELEASED(raw);
+
+// 	if (IS_EXTENDED(raw))
+// 	{
+// 		// mark that next scancode is extended; don't emit event yet
+// 		extended = true;
+// 		return false;
+// 	}
+
+// 	// handle modifiers
+// 	if (scancode == KEY_LEFT_SHIFT || scancode == KEY_RIGHT_SHIFT)
+// 	{
+// 		shift_pressed = !released;
+// 	}
+// 	else if ((scancode == KEY_LEFT_CTRL && !extended) || (scancode == KEY_RIGHT_CTRL && extended))
+// 	{
+// 		ctrl_pressed = !released;
+// 	}
+// 	else if ((scancode == KEY_LEFT_ALT && !extended) || (scancode == KEY_RIGHT_ALT && extended))
+// 	{
+// 		alt_pressed = !released;
+// 	}
+// 	else if (scancode == KEY_CAPS_LOCK && !released)
+// 	{
+// 		caps_lock_active = !caps_lock_active;
+// 	}
+
+// 	// prepare event
+// 	out_evt->id.scancode = scancode;
+// 	out_evt->id.extended = extended;
+// 	out_evt->released = released;
+// 	out_evt->is_shift = shift_pressed;
+// 	out_evt->is_ctrl = ctrl_pressed;
+// 	out_evt->is_alt = alt_pressed;
+// 	out_evt->is_caps_lock = caps_lock_active;
+
+// 	// reset extended flag after consuming
+// 	extended = false;
+// 	return true;
+// }
+
+// #define KBD_BUFFER_SIZE 128
+
+// static key_event_t kbd_buffer[KBD_BUFFER_SIZE];
+// static volatile size_t kbd_head = 0;
+// static volatile size_t kbd_tail = 0;
+
+// static void kbd_push(key_event_t e)
+// {
+// 	size_t next = (kbd_head + 1) % KBD_BUFFER_SIZE;
+// 	if (next != kbd_tail)
+// 	{
+// 		kbd_buffer[kbd_head] = e;
+// 		kbd_head = next;
+// 	}
+// }
+
+// static bool kbd_pop(key_event_t *out)
+// {
+// 	if (kbd_tail == kbd_head)
+// 		return false;
+// 	*out = kbd_buffer[kbd_tail];
+// 	kbd_tail = (kbd_tail + 1) % KBD_BUFFER_SIZE;
+// 	return true;
+// }
+
+// typedef struct
+// {
+// 	task_t *waiting; // task blocked waiting for input
+// } kbd_stream_t;
+
+// static kbd_stream_t kbd_stream;
+
+// bool keyboard_poll_event(key_event_t *ev)
+// {
+// 	cli();
+// 	bool ok = kbd_pop(ev);
+// 	sti();
+
+// 	return ok;
+// }
+
+// key_event_t keyboard_get_event(void)
+// {
+// 	key_event_t ev;
+
+// 	while (true)
+// 	{
+// 		cli();
+// 		bool has_event = kbd_pop(&ev);
+// 		sti();
+
+// 		if (has_event && !ev.released)
+// 			return ev;
+
+// 		task_sleep();
+// 	}
+// }
+
+// static wait_queue_t kbd_queue;
+
+// char keyboard_get_char(void)
+// {
+// 	key_event_t ev;
+
+// 	while (true)
+// 	{
+// 		bool has_event = kbd_pop(&ev);
+
+// 		if (has_event)
+// 		{
+// 			if (ev.released)
+// 				continue;
+
+// 			return keymap_lookup_char(ev.id.scancode, ev.id.extended,
+// 						  ev.is_shift, ev.is_caps_lock);
+// 		}
+// 		waitqueue_sleep(&kbd_queue);
+// 	}
+// }
+
+// uint64_t kbd_read(uint64_t offset, size_t size, void *buf)
+// {
+// 	char c = keyboard_get_char();
+// 	memcpy(buf, &c, size < 1 ? size : 1);
+// 	return 1;
+// }
+
+// void keyboard_irq(registers_t *r)
+// {
+// 	uint8_t status = inb(0x64);
+
+// 	if ((status & 0x20))
+// 		return;
+// 	if (!(status & 0x01))
+// 		return;
+
+// 	uint8_t raw = inb(0x60);
+
+// 	key_event_t evt;
+// 	if (process_scancode_once(raw, &evt))
+// 	{
+// 		kbd_push(evt);
+// 		waitqueue_wake_all(&kbd_queue);
+// 	}
+// }
+
+// static void keyboard_write(uint8_t cmd)
+// {
+// 	ps2_wait_input();
+// 	outb(PS2_DATA, cmd);
+// }
+
+// static uint8_t keyboard_read(void)
+// {
+// 	ps2_wait_output();
+// 	return inb(PS2_DATA);
+// }
+
+// void keyboard_init()
+// {
+// 	__asm__ volatile("cli");
+
+// 	uint8_t act;
+// 	keyboard_write(0xF0);
+// 	act = keyboard_read();
+
+// 	printk("Keyboard active: %02x\n", act);
+
+// 	keyboard_write(0x01);
+// 	act = keyboard_read();
+// 	printk("Keyboard active: %02x\n", act);
+
+// 	waitqueue_init(&kbd_queue);
+
+// 	__asm__ volatile("sti");
+// 	printk("Keyboard initialized\n");
+// }
+
+// static int keyboard_initcall(void)
+// {
+// 	ps2_init();
+// 	keyboard_init();
+// 	irq_install_handler(1, keyboard_irq);
+// 	return 0;
+// }
+
+// device_initcall(keyboard_initcall);
+#include "ps2.h"
+#include "keyboard.h"
+
 #include <stddef.h>
-#include <hubble/ctype.h>
 #include <hubble/string.h>
 #include <hubble/init.h>
 #include <hubble/printk.h>
-#include <smp/scheduler.h>
-#include <smp/waitqueue.h>
-#include "keyboard.h"
-#include "keymap.h"
-#include <lib/misc.k.h>
+#include <hubble/input.h>
+
 #include <io.h>
-
-#include "ps2.h"
-
-static wait_queue_t kbd_queue = {0};
-
 #include <asm.h>
+#include <smp/waitqueue.h>
 
-// Existing keymap (keep as is)
-const keymap_entry_t keymap[] = {
-    {.id = {KEY_A, false}, 'a', 'A'},
-    {.id = {KEY_B, false}, 'b', 'B'},
-    {.id = {KEY_C, false}, 'c', 'C'},
-    {.id = {KEY_D, false}, 'd', 'D'},
-    {.id = {KEY_E, false}, 'e', 'E'},
-    {.id = {KEY_F, false}, 'f', 'F'},
-    {.id = {KEY_G, false}, 'g', 'G'},
-    {.id = {KEY_H, false}, 'h', 'H'},
-    {.id = {KEY_I, false}, 'i', 'I'},
-    {.id = {KEY_J, false}, 'j', 'J'},
-    {.id = {KEY_K, false}, 'k', 'K'},
-    {.id = {KEY_L, false}, 'l', 'L'},
-    {.id = {KEY_M, false}, 'm', 'M'},
-    {.id = {KEY_N, false}, 'n', 'N'},
-    {.id = {KEY_O, false}, 'o', 'O'},
-    {.id = {KEY_P, false}, 'p', 'P'},
-    {.id = {KEY_Q, false}, 'q', 'Q'},
-    {.id = {KEY_R, false}, 'r', 'R'},
-    {.id = {KEY_S, false}, 's', 'S'},
-    {.id = {KEY_T, false}, 't', 'T'},
-    {.id = {KEY_U, false}, 'u', 'U'},
-    {.id = {KEY_V, false}, 'v', 'V'},
-    {.id = {KEY_W, false}, 'w', 'W'},
-    {.id = {KEY_X, false}, 'x', 'X'},
-    {.id = {KEY_Y, false}, 'y', 'Y'},
-    {.id = {KEY_Z, false}, 'z', 'Z'},
+#include <drivers/tty/keyboard.h>
+#include <drivers/tty/keymap.h>
 
-    {.id = {KEY_1, false}, '1', '!'},
-    {.id = {KEY_2, false}, '2', '@'},
-    {.id = {KEY_3, false}, '3', '#'},
-    {.id = {KEY_4, false}, '4', '$'},
-    {.id = {KEY_5, false}, '5', '%'},
-    {.id = {KEY_6, false}, '6', '^'},
-    {.id = {KEY_7, false}, '7', '&'},
-    {.id = {KEY_8, false}, '8', '*'},
-    {.id = {KEY_9, false}, '9', '('},
-    {.id = {KEY_0, false}, '0', ')'},
-
-    {.id = {KEY_SPACE, false}, ' ', ' '},
-    {.id = {KEY_ENTER, false}, '\n', '\n'},
-    {.id = {KEY_TAB, false}, '\t', '\t'},
-    {.id = {KEY_ESC, false}, 27, 27},
-    {.id = {KEY_BACKSPACE, false}, '\b', '\b'},
-
-    {.id = {KEY_MINUS, false}, '-', '_'},
-    {.id = {KEY_EQUAL, false}, '=', '+'},
-    {.id = {KEY_LEFT_BRACKET, false}, '[', '{'},
-    {.id = {KEY_RIGHT_BRACKET, false}, ']', '}'},
-    {.id = {KEY_BACKSLASH, false}, '\\', '|'},
-    {.id = {KEY_SEMICOLON, false}, ';', ':'},
-    {.id = {KEY_APOSTROPHE, false}, '\'', '\"'},
-    {.id = {KEY_COMMA, false}, ',', '<'},
-    {.id = {KEY_PERIOD, false}, '.', '>'},
-    {.id = {KEY_SLASH, false}, '/', '?'},
-    {.id = {KEY_CAPS_LOCK, false}, 0, 0},
-    {.id = {KEY_GRAVE, false}, '`', '~'},
-
-    {.id = {KEY_LEFT_SHIFT, false}, 0, 0},
-    {.id = {KEY_RIGHT_SHIFT, false}, 0, 0},
-    {.id = {KEY_LEFT_CTRL, false}, 0, 0},
-    {.id = {KEY_RIGHT_CTRL, true}, 0, 0},
-    {.id = {KEY_LEFT_ALT, false}, 0, 0},
-    {.id = {KEY_RIGHT_ALT, true}, 0, 0},
-};
-
-const size_t keymap_size = SIZEOF_ARRAY(keymap);
-
-// Existing keymap_lookup_char (keep as is)
-char keymap_lookup_char(uint8_t scancode, bool extended, bool shift, bool caps)
-{
-	for (size_t i = 0; i < keymap_size; ++i)
-		if (keymap[i].id.scancode == scancode && keymap[i].id.extended == extended)
-		{
-			char c = shift ? keymap[i].shifted : keymap[i].normal;
-
-			if (isalpha(c) && caps)
-				c = shift ? tolower(c) : toupper(c);
-
-			return c;
-		}
-	return 0;
-}
-
-input_event_t keyboard_get_input(void)
-{
-	while (true)
-	{
-		key_event_t evt = keyboard_get_event();
-
-		// input_event_t input = {0};
-
-		input_event_t input = {
-		    .type = KEY_TYPE_UNKNOWN,
-		    .shift = evt.is_shift,
-		    .ctrl = evt.is_ctrl,
-		    .alt = evt.is_alt,
-		    .character = 0,
-		    .action = KEY_ACTION_NONE};
-
-		// Skip modifier keys themselves
-		if (evt.id.scancode == KEY_LEFT_SHIFT ||
-		    evt.id.scancode == KEY_RIGHT_SHIFT ||
-		    evt.id.scancode == KEY_LEFT_CTRL ||
-		    (evt.id.scancode == KEY_RIGHT_CTRL && evt.id.extended) ||
-		    evt.id.scancode == KEY_LEFT_ALT ||
-		    (evt.id.scancode == KEY_RIGHT_ALT && evt.id.extended) ||
-		    evt.id.scancode == KEY_CAPS_LOCK)
-		{
-			input.type = KEY_TYPE_MODIFIER;
-			continue;
-		}
-
-		// Handle function keys
-		if (!evt.id.extended && evt.id.scancode >= KEY_F1 && evt.id.scancode <= KEY_F12)
-		{
-			input.type = KEY_TYPE_FUNCTION;
-			if (evt.id.scancode <= KEY_F10)
-				input.function_key = evt.id.scancode - KEY_F1 + 1;
-			else
-				input.function_key = evt.id.scancode - KEY_F11 + 11;
-			return input;
-		}
-
-		// Handle extended special keys (arrows, navigation)
-		if (evt.id.extended)
-		{
-			input.type = KEY_TYPE_SPECIAL;
-
-			switch (evt.id.scancode)
-			{
-			case KEY_UP:
-				input.action = KEY_ACTION_UP;
-				return input;
-			case KEY_DOWN:
-				input.action = KEY_ACTION_DOWN;
-				return input;
-			case KEY_LEFT:
-				input.action = KEY_ACTION_LEFT;
-				return input;
-			case KEY_RIGHT:
-				input.action = KEY_ACTION_RIGHT;
-				return input;
-			case KEY_HOME:
-				input.action = KEY_ACTION_HOME;
-				return input;
-			case KEY_END:
-				input.action = KEY_ACTION_END;
-				return input;
-			case KEY_INSERT:
-				input.action = KEY_ACTION_INSERT;
-				return input;
-			case KEY_DELETE:
-				input.action = KEY_ACTION_DELETE;
-				return input;
-			case KEY_PAGEUP:
-				input.action = KEY_ACTION_PAGE_UP;
-				return input;
-			case KEY_PAGEDOWN:
-				input.action = KEY_ACTION_PAGE_DOWN;
-				return input;
-			default:
-				// Unknown extended key
-				continue;
-			}
-		}
-
-		// Try to get a character from keymap
-		char c = keymap_lookup_char(evt.id.scancode, evt.id.extended,
-					    evt.is_shift, evt.is_caps_lock);
-
-		if (c != 0)
-		{
-			// Check if it's a special character that needs special handling
-			if (c == '\b')
-			{
-				input.type = KEY_TYPE_SPECIAL;
-				input.action = KEY_ACTION_BACKSPACE;
-				return input;
-			}
-			if (c == '\n')
-			{
-				input.type = KEY_TYPE_SPECIAL;
-				input.action = KEY_ACTION_ENTER;
-				return input;
-			}
-			if (c == '\t')
-			{
-				input.type = KEY_TYPE_SPECIAL;
-				input.action = KEY_ACTION_TAB;
-				return input;
-			}
-			if (c == 27)
-			{ // ESC
-				input.type = KEY_TYPE_SPECIAL;
-				input.action = KEY_ACTION_ESC;
-				return input;
-			}
-
-			// Regular printable character
-			input.type = KEY_TYPE_CHAR;
-			input.character = c;
-			return input;
-		}
-
-		// Unknown key, continue waiting
-	}
-}
-
-#define KBD_BUFFER_SIZE 128
-
-static key_event_t kbd_buffer[KBD_BUFFER_SIZE];
-static volatile size_t kbd_head = 0;
-static volatile size_t kbd_tail = 0;
-
-static void kbd_push(key_event_t e)
-{
-	size_t next = (kbd_head + 1) % KBD_BUFFER_SIZE;
-	if (next != kbd_tail)
-	{
-		kbd_buffer[kbd_head] = e;
-		kbd_head = next;
-	}
-}
-
-static bool kbd_pop(key_event_t *out)
-{
-	if (kbd_tail == kbd_head)
-		return false;
-	*out = kbd_buffer[kbd_tail];
-	kbd_tail = (kbd_tail + 1) % KBD_BUFFER_SIZE;
-	return true;
-}
+/* ── Scancode processing (без змін) ─────────────────────────────────────── */
 
 static bool process_scancode_once(uint8_t raw, key_event_t *out_evt)
 {
@@ -260,35 +239,25 @@ static bool process_scancode_once(uint8_t raw, key_event_t *out_evt)
 	static bool caps_lock_active = false;
 
 	uint8_t scancode = GET_SCANCODE(raw);
-
 	bool released = IS_RELEASED(raw);
 
 	if (IS_EXTENDED(raw))
 	{
-		// mark that next scancode is extended; don't emit event yet
 		extended = true;
 		return false;
 	}
 
-	// handle modifiers
 	if (scancode == KEY_LEFT_SHIFT || scancode == KEY_RIGHT_SHIFT)
-	{
 		shift_pressed = !released;
-	}
-	else if ((scancode == KEY_LEFT_CTRL && !extended) || (scancode == KEY_RIGHT_CTRL && extended))
-	{
+	else if ((scancode == KEY_LEFT_CTRL && !extended) ||
+		 (scancode == KEY_RIGHT_CTRL && extended))
 		ctrl_pressed = !released;
-	}
-	else if ((scancode == KEY_LEFT_ALT && !extended) || (scancode == KEY_RIGHT_ALT && extended))
-	{
+	else if ((scancode == KEY_LEFT_ALT && !extended) ||
+		 (scancode == KEY_RIGHT_ALT && extended))
 		alt_pressed = !released;
-	}
 	else if (scancode == KEY_CAPS_LOCK && !released)
-	{
 		caps_lock_active = !caps_lock_active;
-	}
 
-	// prepare event
 	out_evt->id.scancode = scancode;
 	out_evt->id.extended = extended;
 	out_evt->released = released;
@@ -297,89 +266,52 @@ static bool process_scancode_once(uint8_t raw, key_event_t *out_evt)
 	out_evt->is_alt = alt_pressed;
 	out_evt->is_caps_lock = caps_lock_active;
 
-	// reset extended flag after consuming
 	extended = false;
 	return true;
 }
 
-// для IRQ — читаем без ожидания
-static inline uint8_t kbd_read_scancode_irq(void)
-{
-	return inb(0x60);
-}
+/* ── input_dev ───────────────────────────────────────────────────────────── */
 
-#define KBD_BUF_SIZE 128
+static input_dev_t kbd_input_dev = {
+    .name = "ps2-keyboard",
+};
 
-typedef struct
-{
-	task_t *waiting; // task blocked waiting for input
-} kbd_stream_t;
-
-static kbd_stream_t kbd_stream = {0};
+/* ── IRQ ─────────────────────────────────────────────────────────────────── */
 
 void keyboard_irq(registers_t *r)
 {
 	uint8_t status = inb(0x64);
-
 	if ((status & 0x20))
 		return;
 	if (!(status & 0x01))
 		return;
 
-	uint8_t raw = kbd_read_scancode_irq();
+	uint8_t raw = inb(0x60);
 
 	key_event_t evt;
-	if (process_scancode_once(raw, &evt))
-	{
-		kbd_push(evt);
-		waitqueue_wake_all(&kbd_queue);
-	}
+	if (!process_scancode_once(raw, &evt))
+		return;
+
+	/*
+	 * Пакуємо key_event_t в input_event_t і відправляємо в input core.
+	 *
+	 * type  = EV_KEY
+	 * code  = scancode (потім можна замінити на KEY_* константи)
+	 * value = 1 (press) / 0 (release)
+	 *
+	 * Модифікатори (shift/ctrl/alt/caps) передаємо окремими подіями
+	 * — так само як Linux: кожна клавіша це окрема EV_KEY подія.
+	 */
+	input_raw_event_t ev = {
+	    .type = EV_KEY,
+	    .code = evt.id.scancode | (evt.id.extended ? 0x100 : 0),
+	    .value = evt.released ? 0 : 1,
+	};
+
+	input_report(&kbd_input_dev, &ev);
 }
 
-char keyboard_get_char(void)
-{
-	key_event_t ev;
-
-	while (true)
-	{
-		// Атомарно проверяем буфер
-		bool has_event = kbd_pop(&ev);
-
-		if (has_event)
-		{
-			if (ev.released)
-				continue;
-
-			return keymap_lookup_char(ev.id.scancode, ev.id.extended,
-						  ev.is_shift, ev.is_caps_lock);
-		}
-		waitqueue_sleep(&kbd_queue);
-	}
-}
-
-uint64_t kbd_read(uint64_t offset, size_t size, void *buf)
-{
-	char c = keyboard_get_char();
-	memcpy(buf, &c, size < 1 ? size : 1);
-	return 1;
-}
-
-key_event_t keyboard_get_event(void)
-{
-	key_event_t ev;
-
-	while (true)
-	{
-		cli();
-		bool has_event = kbd_pop(&ev);
-		sti();
-
-		if (has_event && !ev.released)
-			return ev;
-
-		task_sleep();
-	}
-}
+/* ── Hardware init (без змін) ────────────────────────────────────────────── */
 
 static void keyboard_write(uint8_t cmd)
 {
@@ -393,40 +325,36 @@ static uint8_t keyboard_read(void)
 	return inb(PS2_DATA);
 }
 
-void keyboard_init()
+static void keyboard_init(void)
 {
 	__asm__ volatile("cli");
 
 	uint8_t act;
 	keyboard_write(0xF0);
 	act = keyboard_read();
-
 	printk("Keyboard active: %02x\n", act);
 
 	keyboard_write(0x01);
 	act = keyboard_read();
 	printk("Keyboard active: %02x\n", act);
 
-	waitqueue_init(&kbd_queue);
-
 	__asm__ volatile("sti");
 	printk("Keyboard initialized\n");
 }
 
-bool keyboard_poll_event(key_event_t *ev)
-{
-	cli();
-	bool ok = kbd_pop(ev);
-	sti();
-
-	return ok;
-}
+/* ── initcall ────────────────────────────────────────────────────────────── */
 
 static int keyboard_initcall(void)
 {
 	ps2_init();
 	keyboard_init();
+
+	/* виставляємо що вміє пристрій */
+	input_set_bit(EV_KEY, kbd_input_dev.evbit);
+
+	input_register_device(&kbd_input_dev); /* підключить handlers */
 	irq_install_handler(1, keyboard_irq);
+
 	return 0;
 }
 

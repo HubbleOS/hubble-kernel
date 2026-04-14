@@ -129,7 +129,7 @@ def build_qemu_command(opts: QemuOptions):
     cmd += [
         # "-S", "-s", "-d cpu_reset", "-no-reboot", "-no-shutdown"
         # "-S -s -d int,cpu_reset -no-reboot -no-shutdown"
-        "-S", "-s"
+        # "-S", "-s"
     ]
 
     #

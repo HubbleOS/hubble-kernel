@@ -239,6 +239,15 @@ void kmain_thread(void)
 			hlt();
 		}
 	}
+
+	VFS_File *tty_out = vfs_open("/pipe/tty0_out", VFS_O_RDWR | VFS_O_CREAT);
+	if (tty_out == NULL)
+	{
+		printk("failed to open pipe /pipe/tty0_out\n");
+		while (1)
+			hlt();
+	}
+
 	task_t *task1 = exec("/usr/bin/user1.elf");
 	if (task1 != NULL)
 	{

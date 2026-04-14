@@ -9,7 +9,7 @@ static uint64_t fb_mmap(uint64_t offset, size_t size)
 
 static int fb_init(void)
 {
-	dev_vfs_register("fb0", fb_mmap, NULL);
+	dev_vfs_register("fb0", fb_mmap, NULL, NULL);
 	return 0;
 }
 

@@ -14,7 +14,7 @@ static int early_x = 0;
 static int early_y = 0;
 static framebuffer_info_t *early_fb = NULL;
 
-static void early_putchar(char c)
+void early_putchar(char c)
 {
 	// serial
 	outb(0x3f8, c);
