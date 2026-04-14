@@ -24,3 +24,15 @@ void label_destroy(label_t *label)
 {
 	element_destroy(label);
 }
+
+void label_set_text(label_t *label, const char *text)
+{
+	if (!label)
+		return;
+
+	if (label->text)
+		free(label->text);
+
+	label->text = text ? strdup(text) : NULL;
+	label->needs_redraw = true;
+}

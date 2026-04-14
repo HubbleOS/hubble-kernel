@@ -4,7 +4,7 @@
 
 static int mouse__init(void)
 {
-	dev_vfs_register("mouse", mouse_mmap, mouse_read_file);
+	dev_vfs_register("mouse", mouse_mmap, mouse_read_file, NULL);
 	return 0;
 }
 
