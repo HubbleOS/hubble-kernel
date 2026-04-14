@@ -53,7 +53,9 @@ void tasks_init(void)
 	// graph_app_init();
 	// geometry_app_init();
 	// app_init();
+
 	geometry3d_app_init();
+	surface_app_init();
 
 	ui_editor_init(&g_editor, g_win_);
 }
@@ -63,7 +65,9 @@ void tasks_render(void)
 	// graph_app_render();
 	// geometry_app_render();
 	// app_render();
+
 	geometry3d_app_render();
+	surface_app_render();
 
 	if (g_editor.active)
 		ui_editor_render(&g_editor, g_cnv_);

@@ -102,7 +102,8 @@ static void apply_to_all(polyhedron3d_t *poly, const mat4_t *m)
 		poly->transformed[i] = mat4_apply(m, poly->transformed[i]);
 }
 
-polyhedron3d_t *polyhedron3d_create(size_t count, size_t edge_count)
+polyhedron3d_t *polyhedron3d_create(size_t count, size_t edge_count,
+				    size_t face_count)
 {
 	polyhedron3d_t *p = calloc(1, sizeof(polyhedron3d_t));
 	if (!p)
@@ -110,12 +111,17 @@ polyhedron3d_t *polyhedron3d_create(size_t count, size_t edge_count)
 
 	p->count = count;
 	p->edge_count = edge_count;
+	p->face_count = face_count;
 
 	p->vertices = calloc(count, sizeof(point3d_t));
 	p->transformed = calloc(count, sizeof(point3d_t));
 	p->edges = calloc(edge_count, sizeof(edge_t));
+	p->faces = face_count
+		       ? calloc(face_count, sizeof(face_t))
+		       : NULL;
 
-	if (!p->vertices || !p->transformed || !p->edges)
+	if (!p->vertices || !p->transformed || !p->edges ||
+	    (face_count && !p->faces))
 	{
 		polyhedron3d_destroy(p);
 		return NULL;
@@ -130,6 +136,7 @@ void polyhedron3d_destroy(polyhedron3d_t *p)
 	free(p->vertices);
 	free(p->transformed);
 	free(p->edges);
+	free(p->faces);
 	free(p);
 }
 
