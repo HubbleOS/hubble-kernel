@@ -177,47 +177,47 @@ void start_kernel(void)
 	// 		sound_play(melody[i].freq, melody[i].ms);
 	// }
 
-	// if (!device_find_by_type(DEV_NET))
-	// {
-	// 	printk("[net] no network device\n");
-	// }
+	if (!device_find_by_type(DEV_NET))
+	{
+		printk("[net] no network device\n");
+	}
 
-	// arp_request(ARP_IP(10, 0, 2, 2));
+	arp_request(ARP_IP(10, 0, 2, 2));
 
-	// uint8_t gw_mac[6];
+	uint8_t gw_mac[6];
 
-	// uint8_t buf[1500];
-	// uint16_t len;
-	// while (arp_lookup(ARP_IP(10, 0, 2, 2), gw_mac) != 0)
-	// 	eth_recv(buf, &len, NULL);
+	uint8_t buf[1500];
+	uint16_t len;
+	while (arp_lookup(ARP_IP(10, 0, 2, 2), gw_mac) != 0)
+		eth_recv(buf, &len, NULL);
 
-	// if (arp_lookup(ARP_IP(10, 0, 2, 2), gw_mac) != 0)
-	// {
-	// 	printk("[net] ARP failed\n");
-	// }
-	// else
-	// {
-	// 	printk("[net] ARP ok, sending UDP\n");
+	if (arp_lookup(ARP_IP(10, 0, 2, 2), gw_mac) != 0)
+	{
+		printk("[net] ARP failed\n");
+	}
+	else
+	{
+		printk("[net] ARP ok, sending UDP\n");
 
-	// 	char msg[] = "Hello from kernel!";
+		char msg[] = "Hello from kernel!";
 
-	// 	printk("[net] UDP sent\n");
-	// }
+		printk("[net] UDP sent\n");
+	}
 
-	// printk("[net] listening on port 7777...\n");
+	printk("[net] listening on port 7777...\n");
 
-	// uint8_t rbuf[1500];
-	// uint16_t rlen;
+	uint8_t rbuf[1500];
+	uint16_t rlen;
 
-	// while (1)
-	// {
+	while (1)
+	{
 
-	// 	while (udp_recv(7777, rbuf, &rlen) != 0)
-	// 		;
+		while (udp_recv(7777, rbuf, &rlen) != 0)
+			;
 
-	// 	rbuf[rlen] = 0;
-	// 	printk("[net] received: %s\n", rbuf);
-	// }
+		rbuf[rlen] = 0;
+		printk("[net] received: %s\n", rbuf);
+	}
 
 	scheduler_init();
 

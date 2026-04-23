@@ -16,7 +16,7 @@ static struct device *eth_dev(void)
 {
 	return device_find_by_type(DEV_NET);
 }
-
+#include <hubble/printk.h>
 void eth_send(uint8_t dst[6], uint16_t type, const void *payload, uint16_t len)
 {
 	struct device *dev = eth_dev();
