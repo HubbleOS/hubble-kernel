@@ -103,10 +103,15 @@ def build_qemu_command(opts: QemuOptions):
         # "-device", "sb16,audiodev=audio0",
         # "-machine", "pcspk-audiodev=audio0",
 
-        # # Network
-        # "-netdev user,id=net0,hostfwd=udp::4444-:7777",
+        # Network
+        # "-netdev \"user,id=net0,hostfwd=udp::4444-:7777\"",
         # "-device e1000,netdev=net0",
         # "-net none",
+    ]
+
+    cmd += [
+        "-netdev", "user,id=net0,hostfwd=udp::4444-:7777",
+        "-device", "e1000,netdev=net0",
     ]
 
     # USB controllers
