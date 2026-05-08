@@ -41,6 +41,45 @@ static struct
 	bool initialized;
 } hpet_state = {0};
 
+static bool hpet_mmio_is_mapped(uint64_t virt)
+{
+	uint64_t *pml4 = pml4_table();
+	if (!(pml4[PML4_INDEX(virt)] & PTE_PRESENT))
+		return false;
+
+	uint64_t *pdpt = pdpt_table(virt);
+	if (!(pdpt[PDPT_INDEX(virt)] & PTE_PRESENT))
+		return false;
+
+	uint64_t *pd = pd_table(virt);
+	if (!(pd[PD_INDEX(virt)] & PTE_PRESENT))
+		return false;
+
+	if (pd[PD_INDEX(virt)] & PTE_HUGE)
+		return true;
+
+	uint64_t *pt = pt_table(virt);
+	return pt[PT_INDEX(virt)] & PTE_PRESENT;
+}
+
+static int hpet_map_mmio_page(uint64_t phys)
+{
+	uint64_t page = phys & ~0xFFFULL;
+	uint64_t virt = phys_to_virt(page);
+
+	if (hpet_mmio_is_mapped(virt))
+		return 0;
+
+	if (vmm_map_page(virt, page, VMM_MAP_NO_CACHE) < 0)
+	{
+		printk("ERROR: failed to map HPET MMIO phys=0x%lx virt=%p\n",
+		       page, (void *)virt);
+		return -1;
+	}
+
+	return 0;
+}
+
 // Read/Write helpers
 static inline uint64_t hpet_read(uint32_t offset)
 {
@@ -205,11 +244,8 @@ int hpet_init(void)
 		return -1;
 	}
 
-	if (hpet_phys >= 0x100000000ULL)
-	{
-		printk("ERROR: HPET above 4GB (0x%lx)!\n", hpet_phys);
+	if (hpet_map_mmio_page(hpet_phys) < 0)
 		return -1;
-	}
 
 	hpet_state.base = (volatile uint64_t *)phys_to_virt(hpet_phys);
 

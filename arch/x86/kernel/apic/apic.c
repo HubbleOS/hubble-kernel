@@ -66,6 +66,45 @@ enum
 
 static uint8_t apic_mode = APIC_INIT_NONE;
 
+static bool apic_mmio_is_mapped(uint64_t virt)
+{
+	uint64_t *pml4 = pml4_table();
+	if (!(pml4[PML4_INDEX(virt)] & PTE_PRESENT))
+		return false;
+
+	uint64_t *pdpt = pdpt_table(virt);
+	if (!(pdpt[PDPT_INDEX(virt)] & PTE_PRESENT))
+		return false;
+
+	uint64_t *pd = pd_table(virt);
+	if (!(pd[PD_INDEX(virt)] & PTE_PRESENT))
+		return false;
+
+	if (pd[PD_INDEX(virt)] & PTE_HUGE)
+		return true;
+
+	uint64_t *pt = pt_table(virt);
+	return pt[PT_INDEX(virt)] & PTE_PRESENT;
+}
+
+static int map_apic_mmio_page(uint64_t phys)
+{
+	uint64_t page = phys & ~0xFFFULL;
+	uint64_t virt = phys_to_virt(page);
+
+	if (apic_mmio_is_mapped(virt))
+		return 0;
+
+	if (vmm_map_page(virt, page, VMM_MAP_MMIO) < 0)
+	{
+		printk("ERROR: failed to map APIC MMIO phys=0x%lx virt=%p\n",
+		       page, (void *)virt);
+		return -1;
+	}
+
+	return 0;
+}
+
 static inline bool cpu_has_x2apic(void)
 {
 	uint32_t eax, ebx, ecx, edx;
@@ -629,6 +668,9 @@ int lapic_init_xapic(void)
 
 	uint64_t lapic_phys = acpi_get_lapic_address();
 
+	if (map_apic_mmio_page(lapic_phys) < 0)
+		return -1;
+
 	apic_state.lapic_base = (volatile uint32_t *)phys_to_virt(lapic_phys);
 	apic_mode = APIC_INIT_XAPIC;
 
@@ -710,6 +752,9 @@ int apic_init(void)
 	}
 
 	uint64_t ioapic_phys = (uint64_t)ioapic_ctx.address;
+
+	if (map_apic_mmio_page(ioapic_phys) < 0)
+		return -1;
 
 	apic_state.ioapic_base = (volatile uint32_t *)phys_to_virt(ioapic_phys);
 	apic_state.ioapic_gsi_base = ioapic_ctx.gsi_base;

@@ -87,10 +87,12 @@ def build_qemu_command(opts: QemuOptions):
         "-smp", str(opts.smp),
 
         # Main disk
-        "-drive", "file=out/disks/disk.img,format=raw,index=0,media=disk,cache=none",
+        # "-drive", "file=out/disks/disk.img,format=raw,index=0,media=disk,cache=none",
+        "-drive", "file=fat:rw:out/,format=raw,index=0,media=disk,cache=none",
 
         # ISO
         "-drive", f"file=fat:rw:{opts.iso_path},format=raw,index=1,media=disk",
+        # "-cdrom", "myos.iso",
 
         # OVMF
         "-drive", f"if=pflash,format=raw,readonly=on,file={ovmf_path}",
@@ -152,7 +154,8 @@ def run_qemu(opts: QemuOptions):
         print(f"ISO directory not found: {opts.iso_path}")
         sys.exit(1)
     cmd = build_qemu_command(opts)
-    print(f"Running: {cmd}")
+    # print(f"Running: {cmd}")
+    print(*cmd)
 
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)

@@ -1,0 +1,21 @@
+aarch64-elf-as -c boot.asm -o boot.o
+aarch64-elf-gcc -ffreestanding -c kmain.c -o kernel.o -g -O0 -Wall -Wextra
+
+aarch64-elf-gcc -T linker.ld -o myos.elf -ffreestanding -g -O0 -nostdlib boot.o kernel.o -lgcc 
+aarch64-elf-objcopy myos.elf -O binary kernel8.img
+
+qemu-system-aarch64 -M raspi3b -kernel myos.elf -serial stdio -S -s
+
+####
+qemu-system-aarch64 -M raspi3b -serial stdio -kernel kernel8.img -S -s
+###
+
+dd if=/dev/zero of=hubble.img bs=1M count=10
+mkfs.vfat -F 32 hubble.img
+mcopy -i hubble.img kernel8.img ::
+mcopy -i hubble.img myos.elf ::
+mcopy -i hubble.img bootcode.bin ::
+mcopy -i hubble.img start.elf ::
+mcopy -i hubble.img fixup.dat ::
+mcopy -i hubble.img config.txt ::
+qemu-system-aarch64 -M raspi3b -serial stdio -drive file=hubble.img,format=raw,if=sd

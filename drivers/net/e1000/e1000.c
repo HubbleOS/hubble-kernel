@@ -14,6 +14,50 @@ static volatile uint32_t *e1000_base = NULL;
 static inline uint32_t e1000_read(uint32_t reg) { return e1000_base[reg / 4]; }
 static inline void e1000_write(uint32_t reg, uint32_t val) { e1000_base[reg / 4] = val; }
 
+static bool e1000_mmio_is_mapped(uint64_t virt)
+{
+	uint64_t *pml4 = pml4_table();
+	if (!(pml4[PML4_INDEX(virt)] & PTE_PRESENT))
+		return false;
+
+	uint64_t *pdpt = pdpt_table(virt);
+	if (!(pdpt[PDPT_INDEX(virt)] & PTE_PRESENT))
+		return false;
+
+	uint64_t *pd = pd_table(virt);
+	if (!(pd[PD_INDEX(virt)] & PTE_PRESENT))
+		return false;
+
+	if (pd[PD_INDEX(virt)] & PTE_HUGE)
+		return true;
+
+	uint64_t *pt = pt_table(virt);
+	return pt[PT_INDEX(virt)] & PTE_PRESENT;
+}
+
+static int e1000_map_mmio_range(uint64_t phys, uint64_t size)
+{
+	uint64_t start = phys & ~0xFFFULL;
+	uint64_t end = (phys + size + 0xFFFULL) & ~0xFFFULL;
+
+	for (uint64_t page = start; page < end; page += 0x1000)
+	{
+		uint64_t virt = phys_to_virt(page);
+
+		if (e1000_mmio_is_mapped(virt))
+			continue;
+
+		if (vmm_map_page(virt, page, VMM_MAP_NO_CACHE) < 0)
+		{
+			printk("[e1000] failed to map MMIO page phys=%llx virt=%p\n",
+			       page, (void *)virt);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 static struct e1000_rx_desc *rx_descs = NULL;
 static struct e1000_tx_desc *tx_descs = NULL;
 static uint8_t *rx_buffers[E1000_RX_DESC_COUNT];
@@ -186,6 +230,9 @@ static int e1000_probe(struct pci_device *pci_dev)
 	pci_cmd |= (1 << 2) | (1 << 1);
 	pci_write_config(e1000_pci_bus, e1000_pci_slot, e1000_pci_func, 0x04, pci_cmd);
 
+	if (e1000_map_mmio_range(bar0, E1000_MMIO_SIZE) < 0)
+		return -1;
+
 	e1000_base = (volatile uint32_t *)phys_to_virt(bar0);
 
 	printk("[e1000] bar0 phys=%llx virt=%p\n", bar0, e1000_base);
@@ -210,6 +257,9 @@ static int e1000_probe(struct pci_device *pci_dev)
 	    .ops = &ops,
 	    .priv = &data,
 	};
+
+	device_register(&dev);
+
 	e1000_get_mac(data.mac);
 
 	printk("[e1000] init OK\n");

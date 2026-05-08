@@ -1,0 +1,7 @@
+arm_64bit=1
+kernel=myos.elf
+disable_overscan=1
+
+boot_delay=1
+force_turbo=1
+enable_uart=1
