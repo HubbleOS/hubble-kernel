@@ -321,4 +321,4 @@ static int sb16_module_init(void)
 
 #include <hubble/init.h>
 
-device_initcall(sb16_module_init);
+// device_initcall(sb16_module_init);

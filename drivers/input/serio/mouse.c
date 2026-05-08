@@ -154,4 +154,4 @@ static int mouse_initcall(void)
 	return 0;
 }
 
-device_initcall(mouse_initcall);
+// device_initcall(mouse_initcall);
