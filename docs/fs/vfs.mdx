@@ -1,0 +1,23 @@
+---
+title: VFS
+---
+
+The VFS public interface is declared in `fs/vfs/vfs.h`. It provides a common mount and file API over different filesystem drivers.
+
+## Core Types
+
+- `VFS_Node`: metadata for an opened filesystem object. It stores the object name, directory flag, size, mode bits, current position, a filesystem-private pointer in `fs_node`, and a pointer to the owning `VFS_FS`.
+- `VFS_File`: an open descriptor object. It stores open flags, the current file offset, and a `VFS_Node`.
+- `VFS_FS`: the driver table for a mounted filesystem. It contains callbacks for `mount`, `unmount`, `open`, `read`, `write`, `mmap`, `mkdir`, `unlink`, `close`, `readdir`, and `create_file`.
+
+Common constants live in `fs/vfs/vfs_standart_struct.h`: filesystem types, open flags, mode bits, seek constants, `Directory`, `Entry`, and `VFS_Device`.
+
+## Mount Dispatch
+
+`fs/vfs/vfs.c` maintains a linked list of mounted filesystems.
+
+- `vfs_mount(mountpoint, partition, type)` allocates a `VFS_FS`, initializes the selected adapter, calls its `mount` callback for block filesystems, and inserts the mount into the global list.
+- `vfs_find_mount_for_path()` chooses the deepest mountpoint prefix match.
+- `vfs_get_relpath()` strips the mountpoint before dispatching the request to the backing filesystem.
+
+The main operations (`vfs_open`, `vfs_read`, `vfs_write`, `vfs_lseek`, `vfs_close`, `vfs_readdir`, `vfs_mkdir`, and `vfs_unlink`) are thin dispatchers over the selected `VFS_FS` callbacks.

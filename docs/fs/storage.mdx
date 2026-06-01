@@ -1,0 +1,27 @@
+---
+title: GPT and Storage Devices
+---
+
+GPT support lives in `fs/gpt/`. The active filesystem initialization path uses static ATA devices wrapped as VFS block devices.
+
+## GPT Discovery
+
+`gpt_init()` expects an array of `gpt_partition_t` values whose first element already contains a valid `VFS_Device`. It:
+
+1. Reads LBA 1 through the device `read` callback.
+2. Validates the GPT header signature.
+3. Allocates memory for the partition entry array.
+4. Reads the partition entries.
+5. Copies non-empty entries into the supplied partition array, including `first_lba`, `last_lba`, and a converted ASCII partition name.
+
+## Filesystem Initialization
+
+`kernel/init/fs.c` creates static ATA devices and wraps them in `VFS_Device` callbacks using `ata_read_sector` and `ata_write_sector`.
+
+It then runs GPT discovery and mounts:
+
+- `/` as `FS_FAT32`
+- `/dev` as `FS_DEV`
+- `/pipe` as `FS_PIPE`
+
+Current boot wiring note: `init_filesystems_call()` is registered with `fs_initcall`, but `init/main.c` currently comments out the `.initcalls.fs` range in `do_initcalls()`. The filesystem code exists, but the generic initcall sequence does not execute filesystem initcalls unless that line is restored or initialization is called separately.

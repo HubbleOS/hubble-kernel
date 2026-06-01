@@ -1,0 +1,28 @@
+---
+title: Input Core
+---
+
+The input core is declared in `include/hubble/input.h` and implemented in `drivers/input/input.c`. It separates physical input devices from event consumers.
+
+## Types
+
+- `input_dev_t` describes a device and its supported event capabilities.
+- `input_handler_t` describes a consumer that can match devices, connect to them, and receive events.
+- `input_handle_t` links one device to one handler.
+- `input_raw_event_t` carries one event with `type`, `code`, and `value`.
+
+Supported event classes currently include:
+
+- `EV_KEY` for key/button events.
+- `EV_REL` for relative movement.
+- `EV_ABS` for absolute coordinates.
+
+## Registration Flow
+
+1. A hardware driver fills an `input_dev_t` and calls `input_register_device()`.
+2. A consumer fills an `input_handler_t` and calls `input_register_handler()`.
+3. The core matches devices to handlers and calls the handler's `connect()` callback.
+4. The handler allocates an `input_handle_t` and calls `input_link_handle()`.
+5. Hardware drivers report events with `input_report()`.
+
+The lists are protected by IRQ-aware locks because input events may be reported from interrupt context.

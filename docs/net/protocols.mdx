@@ -1,0 +1,34 @@
+---
+title: ARP, IPv4, and UDP
+---
+
+## ARP
+
+`net/arp.c` provides a fixed-size ARP cache with 16 entries. It supports:
+
+- `arp_request(target_ip)` to broadcast an ARP request.
+- `arp_handle(pkt, len)` to process ARP replies and populate the cache.
+- `arp_lookup(ip, mac_out)` to find a cached MAC address.
+
+The current default IP constants target QEMU SLIRP-style networking:
+
+- local IP: `10.0.2.15`
+- gateway IP: `10.0.2.2`
+
+IP addresses are represented with `ARP_IP(a, b, c, d)`.
+
+## IPv4
+
+`net/ipv4.c` implements outbound IPv4 packet construction:
+
+- `ip_checksum(data, len)` computes the IPv4 header checksum.
+- `ip_send(dst_ip, proto, payload, payload_len)` looks up the destination MAC in the ARP cache, builds an IPv4 header, appends the payload, and sends it with `eth_send()`.
+
+Important limitation: `ip_send()` requires the destination MAC address to already exist in the ARP cache. It logs and returns if `arp_lookup()` fails.
+
+## UDP
+
+`net/udp.c` implements simple UDP helpers:
+
+- `udp_send(dst_ip, src_port, dst_port, data, len)` builds a UDP header, sets checksum to zero, and sends the packet through IPv4.
+- `udp_recv(port, buf_out, len_out)` receives one Ethernet payload, checks IPv4/UDP, filters by destination port, and copies the UDP payload out.

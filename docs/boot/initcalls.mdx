@@ -1,0 +1,37 @@
+---
+title: Initcalls
+---
+
+Initcall macros are declared in `include/hubble/init.h`.
+
+## Levels
+
+- `early_initcall(fn)` places `fn` in `.initcalls.early`.
+- `initcall(fn)` places `fn` in `.initcalls.core`.
+- `fs_initcall(fn)` places `fn` in `.initcalls.fs`.
+- `device_initcall(fn)` places `fn` in `.initcalls.device`.
+- `late_initcall(fn)` places `fn` in `.initcalls.late`.
+
+`do_initcalls()` in `init/main.c` currently executes:
+
+1. early initcalls
+2. core initcalls
+3. device initcalls
+4. late initcalls
+
+The filesystem initcall range is present but commented out:
+
+```c
+// do_initcalls_range(__start___initcalls_fs, __stop___initcalls_fs);
+```
+
+This means code registered with `fs_initcall`, such as `init_filesystems_call()` in `kernel/init/fs.c`, will not run through the current generic initcall sequence unless this line is restored or filesystem initialization is invoked separately.
+
+## Device Initcall Examples
+
+- `drivers/net/e1000/e1000.c` registers the E1000 PCI driver.
+- `drivers/input/serio/keyboard.c` initializes the PS/2 keyboard and registers the input device.
+- `drivers/tty/keyboard.c` registers the TTY keyboard input handler.
+- `drivers/tty/tty_dev.c` registers TTY-related devices.
+- `drivers/video/fb.c` registers `/dev/fb0`.
+- `drivers/input/mouse/mouse.c` registers `/dev/mouse`.
