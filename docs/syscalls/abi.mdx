@@ -1,0 +1,35 @@
+---
+title: x86-64 Syscall ABI
+---
+
+The x86-64 syscall entry path uses the `syscall` instruction.
+
+## Register ABI
+
+User-side code in `usr/include/sys/syscall.h` places arguments in these registers:
+
+- `rax`: syscall number
+- `rdi`: argument 1
+- `rsi`: argument 2
+- `rdx`: argument 3
+- `r10`: argument 4
+- `r8`: argument 5
+- `r9`: argument 6
+
+The return value is read from `rax`.
+
+## Kernel Entry
+
+`arch/x86/kernel/syscalls/syscall_init.c` configures:
+
+- `EFER.SCE`
+- `STAR`
+- `LSTAR`
+- `SFMASK`
+- per-CPU syscall stack data in `cpu_locals`
+
+`arch/x86/kernel/syscalls/syscall.c` provides `syscall_handler_wrapper(registers_t *regs)`. It marks the current task as being inside a syscall, passes register arguments to the generic `syscall_handler()`, stores the return value in `regs->rax`, and clears the task flag.
+
+## Generic Dispatch
+
+`kernel/syscalls/syscall.c` maps syscall numbers to handlers in `syscall_table`. `syscall_handler()` validates the number and table entry, then calls the handler with up to six arguments. Invalid syscalls return `-1`.

@@ -1,0 +1,28 @@
+---
+title: Kernel Initialization
+---
+
+The linked kernel entry is `kernel_entry` in `arch/x86/kernel/head.asm`. It stores the incoming `BootInfo *` in the global `g_boot_info` and calls `start_kernel()`.
+
+`BootInfo` is declared in `arch/x86/include/bootinfo/bootinfo.h`.
+
+## `start_kernel()`
+
+`start_kernel()` is implemented in `init/main.c`. Its current initialization order is:
+
+1. Copy framebuffer information from `g_boot_info` into `g_platform`.
+2. Initialize early console output with `printk_init()`.
+3. Initialize CPU state with `boot_cpu_init()`.
+4. Parse ACPI data with `acpi_init(g_boot_info->rsdp)`.
+5. Initialize memory with `boot_memory_init()`.
+6. Initialize the BSP local APIC with `apic_init_bsp()`.
+7. Initialize HPET with `hpet_init()`.
+8. Start SMP setup with `smp_init()`.
+9. Run initcalls with `do_initcalls()`.
+10. Enter a halt loop.
+
+There is scheduler and user-process startup code later in the function, but the current halt loop after `do_initcalls()` prevents that later block from being reached.
+
+## CPU and Syscalls
+
+`boot_cpu_init()` is called early from `start_kernel()`. On x86, CPU initialization reaches `syscall_init()` through `arch/x86/kernel/cpu/cpu.c`. AP startup also initializes syscall state in `arch/x86/kernel/smp/smp.c`.

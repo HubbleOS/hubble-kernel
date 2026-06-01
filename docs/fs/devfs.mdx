@@ -1,0 +1,25 @@
+---
+title: Device Filesystem
+---
+
+`FS_DEV` is implemented in `fs/vfs/dev_vfs.c`. It lets drivers expose named device files under the `/dev` mount.
+
+## Registration
+
+Drivers register device files with:
+
+```c
+void dev_vfs_register(const char *name,
+                      uint64_t (*mmap)(uint64_t, size_t),
+                      uint64_t (*read)(uint64_t, size_t, void *),
+                      uint64_t (*write)(uint64_t, size_t, const void *));
+```
+
+When a path under `/dev` is opened, `dev_vfs_open_device()` looks up the registered name and returns a `VFS_Node` whose `fs_node` points to the `VFS_device_reg`.
+
+Reads, writes, and mmaps are forwarded to the callbacks registered for that device.
+
+## Examples
+
+- `drivers/video/fb.c` registers `fb0` and maps it to the framebuffer base.
+- `drivers/input/mouse/mouse.c` registers `mouse` and exposes mouse state through read/mmap callbacks.

@@ -1,0 +1,29 @@
+---
+title: Device Manager
+---
+
+The generic device API is declared in `include/hubble/device.h` and implemented in `kernel/device/device.c`.
+
+```c
+struct device {
+    const char *name;
+    uint32_t type;
+    void *ops;
+    void *priv;
+};
+```
+
+The current device types are:
+
+- `DEV_SOUND`
+- `DEV_NET`
+- `DEV_OTHER`
+
+Drivers call `device_register()` to insert a device into a fixed-size global array. The current maximum is 32 devices.
+
+Consumers can use:
+
+- `device_find_by_name(name)`
+- `device_find_by_type(type)`
+
+The registry is generic. The meaning of `ops` and `priv` is defined by each device class. Network devices, for example, use `struct netdev_ops` and `struct netdev_data`.

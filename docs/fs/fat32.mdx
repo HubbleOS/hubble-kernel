@@ -1,0 +1,28 @@
+---
+title: FAT32
+---
+
+FAT32 support is split between the native filesystem code in `fs/fat32/` and the VFS adapter in `fs/vfs/fat32_vfs.c`.
+
+## VFS Adapter
+
+The FAT32 adapter:
+
+- Allocates a `FAT32_FS` during mount and calls `fat32_mount()`.
+- Converts a `FAT32_File` into a `VFS_Node` in `fat32_open_wrapper()`.
+- Maps FAT32 directory attributes to VFS mode bits such as `MODE_DIR`, `MODE_FILE`, `MODE_READ`, and `MODE_WRITE`.
+- Forwards reads, writes, file creation, directory creation, directory listing, unlink, and close to the FAT32 implementation.
+
+## Lower-Level API
+
+`fs/fat32/fat.h` exposes helpers for:
+
+- mounting from a block device,
+- opening files,
+- reading and writing file contents,
+- creating and deleting files,
+- creating and deleting directories,
+- listing directories,
+- updating FAT entries.
+
+FAT32 is currently the most complete real filesystem adapter in the tree.
