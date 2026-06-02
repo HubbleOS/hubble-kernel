@@ -77,7 +77,7 @@ static bool parse_s5(uint8_t *aml, uint32_t len)
 			acpi_state.slp_typb = aml[off + 1];
 		}
 
-		printk("_S5 found: SLP_TYPa=0x%x, SLP_TYPb=0x%x\n", acpi_state.slp_typa, acpi_state.slp_typb);
+		printk(KERN_INFO "_S5 found: SLP_TYPa=0x%x, SLP_TYPb=0x%x\n", acpi_state.slp_typa, acpi_state.slp_typb);
 		return true;
 	}
 	return false;
@@ -90,13 +90,13 @@ static void process_fadt(ACPI_SDTHeader *tbl, void *ctx)
 		return;
 
 	acpi_state.fadt = (FADT *)tbl;
-	printk("FADT found at %p\n", acpi_state.fadt);
+	printk(KERN_INFO "FADT found at %p\n", acpi_state.fadt);
 
 	// Get DSDT pointer (prefer X_Dsdt for 64-bit)
 	uint64_t dsdt_phys = acpi_state.fadt->X_Dsdt ? acpi_state.fadt->X_Dsdt : acpi_state.fadt->Dsdt;
 	if (!dsdt_phys)
 	{
-		printk("DSDT pointer missing\n");
+		printk(KERN_ERR "DSDT pointer missing\n");
 		return;
 	}
 
@@ -104,11 +104,11 @@ static void process_fadt(ACPI_SDTHeader *tbl, void *ctx)
 
 	if (memcmp(dsdt->Signature, "DSDT", 4) != 0)
 	{
-		printk("Invalid DSDT signature\n");
+		printk(KERN_ERR "Invalid DSDT signature\n");
 		return;
 	}
 
-	printk("DSDT found at %p (length=%u)\n", dsdt, dsdt->Length);
+	printk(KERN_INFO "DSDT found at %p (length=%u)\n", dsdt, dsdt->Length);
 
 	// Parse DSDT for _S5
 	uint8_t *aml = (uint8_t *)dsdt + sizeof(ACPI_SDTHeader);
@@ -117,11 +117,11 @@ static void process_fadt(ACPI_SDTHeader *tbl, void *ctx)
 	if (parse_s5(aml, aml_len))
 	{
 		acpi_state.shutdown_ready = true;
-		printk("ACPI shutdown ready\n");
+		printk(KERN_OK "ACPI shutdown ready\n");
 	}
 	else
 	{
-		printk("_S5 not found in DSDT\n");
+		printk(KERN_ERR "_S5 not found in DSDT\n");
 	}
 }
 
@@ -131,17 +131,17 @@ static void cache_tables(ACPI_SDTHeader *tbl, void *ctx)
 	if (memcmp(tbl->Signature, "APIC", 4) == 0)
 	{
 		acpi_state.madt = (MADT *)tbl;
-		printk("MADT found at %p\n", tbl);
+		printk(KERN_INFO "MADT found at %p\n", tbl);
 	}
 	else if (memcmp(tbl->Signature, "HPET", 4) == 0)
 	{
 		acpi_state.hpet = (HPET *)tbl;
-		printk("HPET found at %p\n", tbl);
+		printk(KERN_INFO "HPET found at %p\n", tbl);
 	}
 	else if (memcmp(tbl->Signature, "MCFG", 4) == 0)
 	{
 		acpi_state.mcfg = (MCFG *)tbl;
-		printk("MCFG found at %p\n", tbl);
+		printk(KERN_INFO "MCFG found at %p\n", tbl);
 	}
 }
 
@@ -175,7 +175,7 @@ int acpi_init(void *rsdp_ptr)
 {
 	if (!rsdp_ptr)
 	{
-		printk("No RSDP provided\n");
+		printk(KERN_INFO "No RSDP provided\n");
 		return -1;
 	}
 
@@ -184,11 +184,11 @@ int acpi_init(void *rsdp_ptr)
 	// Verify RSDP signature
 	if (memcmp(rsdp->Signature, "RSD PTR ", 8) != 0)
 	{
-		printk("Invalid RSDP signature\n");
+		printk(KERN_ERR "Invalid RSDP signature\n");
 		return -1;
 	}
 
-	printk("RSDP found (rev %d) at phys=%p\n", rsdp->Revision, rsdp_ptr);
+	printk(KERN_INFO "RSDP found (rev %d) at phys=%p\n", rsdp->Revision, rsdp_ptr);
 
 	// Get XSDT or RSDT
 	if (rsdp->Revision >= 2 && rsdp->XsdtAddress)
@@ -197,10 +197,10 @@ int acpi_init(void *rsdp_ptr)
 
 		if (memcmp(acpi_state.xsdt->Header.Signature, "XSDT", 4) != 0)
 		{
-			printk("Invalid XSDT\n");
+			printk(KERN_ERR "Invalid XSDT\n");
 			return -1;
 		}
-		printk("Using XSDT at %p\n", acpi_state.xsdt);
+		printk(KERN_INFO "Using XSDT at %p\n", acpi_state.xsdt);
 	}
 	else
 	{
@@ -208,10 +208,10 @@ int acpi_init(void *rsdp_ptr)
 
 		if (memcmp(acpi_state.rsdt->Header.Signature, "RSDT", 4) != 0)
 		{
-			printk("Invalid RSDT\n");
+			printk(KERN_ERR "Invalid RSDT\n");
 			return -1;
 		}
-		printk("Using RSDT at %p\n", acpi_state.rsdt);
+		printk(KERN_INFO "Using RSDT at %p\n", acpi_state.rsdt);
 	}
 
 	// Find and cache important tables
@@ -219,7 +219,7 @@ int acpi_init(void *rsdp_ptr)
 	iterate_sdt_entries(cache_tables, NULL);
 
 	acpi_state.initialized = true;
-	printk("ACPI initialized\n");
+	printk(KERN_OK "ACPI initialized\n");
 	return 0;
 }
 
@@ -227,7 +227,7 @@ void acpi_shutdown(void)
 {
 	if (!acpi_state.shutdown_ready || !acpi_state.fadt)
 	{
-		printk("ACPI shutdown unavailable, trying fallback methods\n");
+		printk(KERN_ERR "ACPI shutdown unavailable, trying fallback methods\n");
 
 		// Try common QEMU/Bochs shutdown ports
 		cli();
@@ -235,12 +235,12 @@ void acpi_shutdown(void)
 		outw(0xB004, 0x2000); // Old QEMU
 		outw(0x4004, 0x3400); // Bochs
 
-		printk("Shutdown failed, halting\n");
+		printk(KERN_ERR "Shutdown failed, halting\n");
 		while (1)
 			hlt();
 	}
 
-	printk("Shutting down via ACPI...\n");
+	printk(KERN_INFO "Shutting down via ACPI...\n");
 	cli();
 
 	// Write SLP_TYP | SLP_EN to PM1 control blocks
@@ -253,7 +253,7 @@ void acpi_shutdown(void)
 		outw(pm1b, (acpi_state.slp_typb << 10) | (1 << 13));
 
 	// Fallback if ACPI method didn't work
-	printk("ACPI shutdown failed, halting\n");
+	printk(KERN_ERR "ACPI shutdown failed, halting\n");
 	while (1)
 		hlt();
 }
@@ -262,7 +262,7 @@ void acpi_reboot(void)
 {
 	if (!acpi_state.fadt)
 	{
-		printk("ACPI reboot unavailable, trying fallback\n");
+		printk(KERN_ERR "ACPI reboot unavailable, trying fallback\n");
 
 		// Try keyboard controller reset
 		cli();
@@ -274,7 +274,7 @@ void acpi_reboot(void)
 			hlt();
 	}
 
-	printk("Rebooting via ACPI...\n");
+	printk(KERN_INFO "Rebooting via ACPI...\n");
 	cli();
 
 	// Use FADT reset register if available
@@ -305,7 +305,7 @@ void acpi_reboot(void)
 
 bool acpi_is_initialized(void)
 {
-	printk("ACPI initialized: %d\n", acpi_state.initialized);
+	printk(KERN_OK "ACPI initialized: %d\n", acpi_state.initialized);
 	return acpi_state.initialized;
 }
 
@@ -334,7 +334,7 @@ void acpi_enum_lapics(acpi_lapic_callback_t callback, void *ctx)
 {
 	if (!acpi_state.madt)
 	{
-		printk("MADT not available\n");
+		printk(KERN_INFO "MADT not available\n");
 		return;
 	}
 
@@ -363,7 +363,7 @@ void acpi_enum_ioapics(acpi_ioapic_callback_t callback, void *ctx)
 {
 	if (!acpi_state.madt)
 	{
-		printk("MADT not available\n");
+		printk(KERN_INFO "MADT not available\n");
 		return;
 	}
 
@@ -390,7 +390,7 @@ void acpi_enum_isos(acpi_iso_callback_t callback, void *ctx)
 {
 	if (!acpi_state.madt)
 	{
-		printk("MADT not available\n");
+		printk(KERN_INFO "MADT not available\n");
 		return;
 	}
 
@@ -435,7 +435,7 @@ void acpi_enum_mcfg(acpi_mcfg_callback_t callback, void *ctx)
 {
 	if (!acpi_state.mcfg)
 	{
-		printk("MCFG not available\n");
+		printk(KERN_INFO "MCFG not available\n");
 		return;
 	}
 

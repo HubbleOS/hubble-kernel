@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <hubble/color.h>
 
 // Log levels
 #define KERN_EMERG "<0>"   // System is unusable
@@ -14,6 +15,7 @@
 #define KERN_NOTICE "<5>"  // Normal but significant condition
 #define KERN_INFO "<6>"	   // Informational
 #define KERN_DEBUG "<7>"   // Debug-level messages
+#define KERN_OK "<8>"	   // Successful status messages
 
 #define PRINTK_BUFFER_SIZE (16 * 1024)
 
@@ -21,6 +23,7 @@ _Begin_C_Header;
 
 // Регистрация output функции (вызывается из arch-специфичного кода)
 void printk_set_output(void (*fn)(char c));
+void printk_set_color_output(void (*fn)(char c, color_t color));
 
 // Регистрация консоли (после того как поднялась полноценная подсистема вывода)
 void printk_register_console(void (*write_fn)(const char *buf, size_t len, void *data), void *user_data);

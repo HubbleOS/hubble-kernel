@@ -13,7 +13,7 @@ int sound_register_driver(const struct sound_driver *drv)
 	if (drv->init() != 0)
 		return -1;
 
-	printk("[sound] driver %s registered\n", drv->name);
+	printk(KERN_INFO "[sound] driver %s registered\n", drv->name);
 
 	active_driver = drv;
 	return 0;

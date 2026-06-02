@@ -73,7 +73,7 @@ int pipe_read(VFS_File *file, void *buf, uint32_t size);
 
 PathParts format_pipe_path(const char *in)
 {
-	printk("Formatting folder path: %s\n", in);
+	printk(KERN_INFO "Formatting folder path: %s\n", in);
 	PathParts result = {0};
 
 	while (*in == '/')
@@ -113,7 +113,7 @@ PathParts format_pipe_path(const char *in)
 
 bool pipe_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba)
 {
-	printk("Initializing device fs\n");
+	printk(KERN_INFO "Initializing device fs\n");
 
 	VFS_pipes = kmalloc(sizeof(VFS_pipes_tree), GFP_KERNEL);
 	memset(VFS_pipes, 0, sizeof(VFS_pipes_tree));
@@ -192,7 +192,7 @@ VFS_Node *pipe_vfs_open_pipe(VFS_FS *fs, const char *path)
 			return node;
 		}
 	}
-	printk("pipe not found\n");
+	printk(KERN_ERR "pipe not found\n");
 	return NULL;
 }
 

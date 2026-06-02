@@ -123,10 +123,10 @@ void mouse_init()
 	// 4. Reset mouse
 	mouse_write(0xFF);
 	uint8_t ack = mouse_read();
-	printk("Mouse reset ack: 0x%x (expect 0xFA)\n", ack);
+	printk(KERN_INFO "Mouse reset ack: 0x%x (expect 0xFA)\n", ack);
 	uint8_t bat = mouse_read();
 	uint8_t id = mouse_read();
-	printk("Mouse BAT: 0x%x, ID: 0x%x\n", bat, id);
+	printk(KERN_INFO "Mouse BAT: 0x%x, ID: 0x%x\n", bat, id);
 
 	// 5. Set defaults
 	mouse_write(0xF6);
@@ -137,7 +137,7 @@ void mouse_init()
 	mouse_read();
 
 	__asm__ volatile("sti");
-	printk("Mouse initialized\n");
+	printk(KERN_OK "Mouse initialized\n");
 }
 
 static int mouse_initcall(void)

@@ -30,7 +30,7 @@ void init_filesystems(void)
 		printk(KERN_WARNING "Continuing without GPT...\n");
 	}
 	else
-		printk(KERN_INFO "GPT initialized with %d partitions\n", gpt_result);
+		printk(KERN_OK "GPT initialized with %d partitions\n", gpt_result);
 
 	// Setup default device callbacks
 	for (int i = 1; i < 2; i++)

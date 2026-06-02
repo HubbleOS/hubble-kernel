@@ -259,11 +259,11 @@ static int sb16_init(void)
 {
 	if (dsp_reset() != 0)
 	{
-		printk("[sb16] reset failed\n");
+		printk(KERN_ERR "[sb16] reset failed\n");
 		return -1;
 	}
 	mixer_set_volume(0xFF);
-	printk("[sb16] init ok\n");
+	printk(KERN_OK "[sb16] init ok\n");
 	return 0;
 }
 
@@ -314,7 +314,7 @@ const struct sound_driver sb16_driver = {
 
 static int sb16_module_init(void)
 {
-	printk("[sound] registering SB16 driver\n");
+	printk(KERN_INFO "[sound] registering SB16 driver\n");
 	sound_register_driver(&sb16_driver);
 	return 0;
 }

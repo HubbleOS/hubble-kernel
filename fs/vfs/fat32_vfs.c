@@ -28,19 +28,19 @@ static VFS_Node *fat32_open_wrapper(VFS_FS *fs, const char *path)
 {
 	if (!fs->fs)
 	{
-		printk("fs not mounted\n");
+		printk(KERN_INFO "fs not mounted\n");
 		return NULL;
 	}
-	printk("Opening file: %s\n", path);
+	printk(KERN_INFO "Opening file: %s\n", path);
 	FAT32_File *file = fat32_open(fs->fs, path);
-	printk("\nEntry open here!!: ");
+	printk(KERN_INFO "\nEntry open here!!: ");
 	// for (int i = 0; i < sizeof(FAT32_DirectoryEntry); i++)
 	// {
 	// 	printk("%c", file->entry[i]);
 	// }
 	if (!file)
 	{
-		printk("\nFailed to open file\n");
+		printk(KERN_ERR "\nFailed to open file\n");
 		return NULL;
 	}
 
@@ -68,7 +68,7 @@ static VFS_Node *fat32_open_wrapper(VFS_FS *fs, const char *path)
 	{
 		node->mode |= MODE_READ | MODE_WRITE;
 	}
-	printk("Entry open: %s\n", node->name);
+	printk(KERN_INFO "Entry open: %s\n", node->name);
 	return node;
 }
 
@@ -84,11 +84,11 @@ static int fat32_write_wrapper(VFS_File *node, const void *buf, uint32_t size)
 }
 static VFS_Node *fat32_create_file_wrapper(VFS_FS *fs, const char *path)
 {
-	printk("Creating file: %s\n", path);
+	printk(KERN_INFO "Creating file: %s\n", path);
 
 	if (!fs->fs)
 	{
-		printk("fs not mounted\n");
+		printk(KERN_INFO "fs not mounted\n");
 		return NULL;
 	}
 
@@ -116,7 +116,7 @@ static int fat32_close_wrapper(VFS_File *file)
 	VFS_Node *node = file->node;
 	const char *name = node && node->name ? node->name : "<unknown>";
 
-	printk("VFS: closing file %s\n", name);
+	printk(KERN_INFO "VFS: closing file %s\n", name);
 	if (node)
 	{
 		if (node->fs_node)
@@ -125,7 +125,7 @@ static int fat32_close_wrapper(VFS_File *file)
 	}
 	kfree(file);
 
-	printk("VFS: file was closed %s\n", name);
+	printk(KERN_INFO "VFS: file was closed %s\n", name);
 	return 0;
 }
 

@@ -38,7 +38,7 @@ static void uhci_reset_controller(uint16_t io_base)
 	outw(io_base + USBCMD, cmd);
 	while (inw(io_base + USBCMD) & HCRESET)
 		;
-	printk("[uhci] Host Controller Reset done\n");
+	printk(KERN_INFO "[uhci] Host Controller Reset done\n");
 
 	cmd = inw(io_base + USBCMD);
 	cmd |= GRESET;
@@ -46,7 +46,7 @@ static void uhci_reset_controller(uint16_t io_base)
 	hpet_delay_ms(10);
 	cmd &= ~GRESET;
 	outw(io_base + USBCMD, cmd);
-	printk("[uhci] Global Reset done\n");
+	printk(KERN_INFO "[uhci] Global Reset done\n");
 }
 
 /* ────────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ static int uhci_init_frame_list(struct uhci_hcd *hcd)
 	hcd->frame_list_phys = pmm_alloc_page();
 	if (!hcd->frame_list_phys)
 	{
-		printk("[uhci] failed to allocate frame list\n");
+		printk(KERN_ERR "[uhci] failed to allocate frame list\n");
 		return -1;
 	}
 
@@ -70,7 +70,7 @@ static int uhci_init_frame_list(struct uhci_hcd *hcd)
 
 	outl(hcd->io_base + FRBASEADD, (uint32_t)hcd->frame_list_phys);
 
-	printk("[uhci] frame list phys=0x%llx virt=%p\n",
+	printk(KERN_INFO "[uhci] frame list phys=0x%llx virt=%p\n",
 	       hcd->frame_list_phys, hcd->frame_list_virt);
 	return 0;
 }
@@ -87,7 +87,7 @@ static void uhci_enable_interrupts(uint16_t io_base)
 {
 	uint16_t intr = USBINTR_TO | USBINTR_RES | USBINTR_IOC | USBINTR_HSE;
 	outw(io_base + USBINTR, intr);
-	printk("[uhci] interrupts enabled: 0x%x\n", intr);
+	printk(KERN_OK "[uhci] interrupts enabled: 0x%x\n", intr);
 }
 
 /* ────────────────────────────────────────────────────────
@@ -100,23 +100,23 @@ static void uhci_start_controller(uint16_t io_base)
 	outw(io_base + USBCMD, 0);
 	hpet_delay_ms(10);
 
-	printk("[uhci] writing RS...\n");
+	printk(KERN_INFO "[uhci] writing RS...\n");
 	outw(io_base + USBCMD, USBCMD_RS);
 
 	// читаємо одразу після запису
 	uint16_t cmd_imm = inw(io_base + USBCMD);
-	printk("[uhci] USBCMD immediately after write = 0x%x\n", cmd_imm);
+	printk(KERN_INFO "[uhci] USBCMD immediately after write = 0x%x\n", cmd_imm);
 
 	hpet_delay_ms(10);
 
 	uint16_t cmd = inw(io_base + USBCMD);
 	uint16_t sts = inw(io_base + USBSTS);
-	printk("[uhci] USBCMD=0x%x USBSTS=0x%x\n", cmd, sts);
+	printk(KERN_INFO "[uhci] USBCMD=0x%x USBSTS=0x%x\n", cmd, sts);
 
 	if (sts & (1 << 5))
-		printk("[uhci] WARNING: HCHalted still set!\n");
+		printk(KERN_WARNING "[uhci] WARNING: HCHalted still set!\n");
 	else
-		printk("[uhci] controller running\n");
+		printk(KERN_INFO "[uhci] controller running\n");
 }
 
 /* ────────────────────────────────────────────────────────
@@ -132,7 +132,7 @@ static int uhci_count_ports(uint16_t io_base)
 			break;
 		port++;
 	}
-	printk("[uhci] found %d ports\n", port);
+	printk(KERN_INFO "[uhci] found %d ports\n", port);
 	return port;
 }
 
@@ -245,13 +245,13 @@ static int uhci_get_config_descriptor(struct uhci_hcd *hcd,
 
 	if (td[1].status & TD_STATUS_STALLED)
 	{
-		printk("[uhci] GET_CONFIG stalled!\n");
+		printk(KERN_ERR "[uhci] GET_CONFIG stalled!\n");
 		return -1;
 	}
 
 	/* парсимо дескриптори */
 	struct usb_config_descriptor *cfg = (struct usb_config_descriptor *)buf;
-	printk("[uhci] config: interfaces=%d total_len=%d\n",
+	printk(KERN_INFO "[uhci] config: interfaces=%d total_len=%d\n",
 	       cfg->bNumInterfaces, cfg->wTotalLength);
 
 	*out_protocol = 0;
@@ -270,7 +270,7 @@ static int uhci_get_config_descriptor(struct uhci_hcd *hcd,
 		{
 			struct usb_interface_descriptor *iface =
 			    (struct usb_interface_descriptor *)p;
-			printk("[uhci] interface: class=0x%02x subclass=0x%02x proto=0x%02x\n",
+			printk(KERN_INFO "[uhci] interface: class=0x%02x subclass=0x%02x proto=0x%02x\n",
 			       iface->bInterfaceClass,
 			       iface->bInterfaceSubClass,
 			       iface->bInterfaceProtocol);
@@ -287,7 +287,7 @@ static int uhci_get_config_descriptor(struct uhci_hcd *hcd,
 			{
 				*out_endpoint = ep->bEndpointAddress & 0x0F;
 				*out_max_packet = ep->wMaxPacketSize;
-				printk("[uhci] endpoint: addr=0x%02x maxpkt=%d interval=%d\n",
+				printk(KERN_INFO "[uhci] endpoint: addr=0x%02x maxpkt=%d interval=%d\n",
 				       ep->bEndpointAddress,
 				       ep->wMaxPacketSize,
 				       ep->bInterval);
@@ -338,7 +338,7 @@ static int uhci_keyboard_transfer(struct uhci_hcd *hcd,
 
 		if (td->status & TD_STATUS_STALLED)
 		{
-			printk("[uhci] kbd stalled!\n");
+			printk(KERN_ERR "[uhci] kbd stalled!\n");
 			break;
 		}
 
@@ -347,7 +347,7 @@ static int uhci_keyboard_transfer(struct uhci_hcd *hcd,
 
 		if (key)
 		{
-			printk("[uhci] key: mod=0x%02x keycode=0x%02x\n", mod, key);
+			printk(KERN_INFO "[uhci] key: mod=0x%02x keycode=0x%02x\n", mod, key);
 		}
 
 		toggle ^= 1;
@@ -375,7 +375,7 @@ static void uhci_check_ports(struct uhci_hcd *hcd)
 				outw(hcd->io_base + PORTSC1 + i * 2, portsc | PORTSC_CSC);
 			}
 
-			printk("[uhci] device connected on port %d\n", i + 1);
+			printk(KERN_INFO "[uhci] device connected on port %d\n", i + 1);
 
 			// сброс, включение порта и установка адреса/конфигурации
 			outw(hcd->io_base + PORTSC1 + i * 2, PORTSC_RESET);
@@ -396,11 +396,11 @@ static void uhci_check_ports(struct uhci_hcd *hcd)
 			}
 
 			uint16_t portsc = inw(hcd->io_base + PORTSC1 + i * 2);
-			printk("[uhci] port %d enabled, portsc=0x%x\n", i + 1, portsc);
+			printk(KERN_OK "[uhci] port %d enabled, portsc=0x%x\n", i + 1, portsc);
 
 			if (!(portsc & PORTSC_PE))
 			{
-				printk("[uhci] port %d failed to enable!\n", i + 1);
+				printk(KERN_ERR "[uhci] port %d failed to enable!\n", i + 1);
 				continue;
 			}
 
@@ -408,7 +408,7 @@ static void uhci_check_ports(struct uhci_hcd *hcd)
 
 			if (uhci_get_device_descriptor(hcd, 0, is_low_speed) < 0)
 			{
-				printk("[uhci] port %d: get_descriptor failed\n", i + 1);
+				printk(KERN_ERR "[uhci] port %d: get_descriptor failed\n", i + 1);
 				continue;
 			}
 
@@ -420,7 +420,7 @@ static void uhci_check_ports(struct uhci_hcd *hcd)
 			if (uhci_get_config_descriptor(hcd, i + 1, is_low_speed,
 						       &protocol, &endpoint, &max_packet) < 0)
 			{
-				printk("[uhci] port %d: get_config failed\n", i + 1);
+				printk(KERN_ERR "[uhci] port %d: get_config failed\n", i + 1);
 				continue;
 			}
 
@@ -429,7 +429,7 @@ static void uhci_check_ports(struct uhci_hcd *hcd)
 
 			if (protocol == USB_PROTOCOL_MOUSE)
 			{
-				printk("[uhci] -> mouse on port %d\n", i + 1);
+				printk(KERN_INFO "[uhci] -> mouse on port %d\n", i + 1);
 
 				uhci_interrupt_transfer(hcd, i + 1);
 
@@ -437,18 +437,18 @@ static void uhci_check_ports(struct uhci_hcd *hcd)
 			}
 			else if (protocol == USB_PROTOCOL_KEYBOARD)
 			{
-				printk("[uhci] -> keyboard on port %d\n", i + 1);
+				printk(KERN_INFO "[uhci] -> keyboard on port %d\n", i + 1);
 				uhci_keyboard_transfer(hcd, i + 1, is_low_speed);
 				// uhci_keyboard_transfer(hcd, i + 1, is_low_speed, endpoint, max_packet);
 			}
 			else
 			{
-				printk("[uhci] -> unknown HID protocol %d\n", protocol);
+				printk(KERN_INFO "[uhci] -> unknown HID protocol %d\n", protocol);
 			}
 		}
 		else
 		{
-			printk("[uhci] device disconnected from port %d\n", i + 1);
+			printk(KERN_INFO "[uhci] device disconnected from port %d\n", i + 1);
 		}
 	}
 }
@@ -458,7 +458,7 @@ static void uhci_root_hub_poll(struct uhci_hcd *hcd)
 	for (int i = 0; i < hcd->num_ports; i++)
 	{
 		uint16_t portsc = inw(hcd->io_base + PORTSC1 + i * 2);
-		printk("[uhci] port %d initial status=0x%x\n", i + 1, portsc);
+		printk(KERN_INFO "[uhci] port %d initial status=0x%x\n", i + 1, portsc);
 	}
 
 	uhci_check_ports(hcd);
@@ -477,7 +477,7 @@ static int uhci_wait_td(struct uhci_td *td, char *label)
 		cpu_relax();
 	if (timeout <= 0)
 	{
-		printk("[uhci] %s: TD timed out! status=0x%x\n", label, td->status);
+		printk(KERN_ERR "[uhci] %s: TD timed out! status=0x%x\n", label, td->status);
 		return -1;
 	}
 	return 0;
@@ -509,7 +509,7 @@ static int uhci_set_address(struct uhci_hcd *hcd, uint8_t new_addr)
 	td[1].token = TD_TOKEN(TD_PID_IN, 0, 0, 1, 0x7FF);
 	td[1].buffer = 0;
 
-	printk("[uhci] set_addr: td_phys=0x%llx td[0].link=0x%x td[1] addr=0x%llx\n",
+	printk(KERN_INFO "[uhci] set_addr: td_phys=0x%llx td[0].link=0x%x td[1] addr=0x%llx\n",
 	       td_phys, td[0].link, td_phys + sizeof(struct uhci_td));
 
 	uint64_t qh_phys = pmm_alloc_page();
@@ -527,11 +527,11 @@ static int uhci_set_address(struct uhci_hcd *hcd, uint8_t new_addr)
 
 	if (td[1].status & TD_STATUS_STALLED)
 	{
-		printk("[uhci] SET_ADDRESS stalled! status=0x%x\n", td[1].status);
+		printk(KERN_ERR "[uhci] SET_ADDRESS stalled! status=0x%x\n", td[1].status);
 		return -1;
 	}
 
-	printk("[uhci] SET_ADDRESS ok, addr=%d\n", new_addr);
+	printk(KERN_OK "[uhci] SET_ADDRESS ok, addr=%d\n", new_addr);
 	return 0;
 }
 
@@ -606,8 +606,8 @@ static int uhci_get_device_descriptor(struct uhci_hcd *hcd,
 	qh->head_link = TD_LINK_TERMINATE;
 	qh->element_link = (uint32_t)td_phys;
 
-	printk("[uhci] get_desc: is_low_speed=%d ls=0x%x\n", is_low_speed, ls);
-	printk("[uhci] td0 status=0x%x token=0x%x\n", td[0].status, td[0].token);
+	printk(KERN_INFO "[uhci] get_desc: is_low_speed=%d ls=0x%x\n", is_low_speed, ls);
+	printk(KERN_INFO "[uhci] td0 status=0x%x token=0x%x\n", td[0].status, td[0].token);
 
 	for (int f = 0; f < FRAME_LIST_SIZE; f++)
 		hcd->frame_list_virt[f] = (uint32_t)qh_phys | TD_LINK_QH;
@@ -621,19 +621,19 @@ static int uhci_get_device_descriptor(struct uhci_hcd *hcd,
 
 	if (td[1].status & TD_STATUS_STALLED)
 	{
-		printk("[uhci] GET_DESCRIPTOR stalled! status=0x%x\n", td[1].status);
+		printk(KERN_ERR "[uhci] GET_DESCRIPTOR stalled! status=0x%x\n", td[1].status);
 		return -1;
 	}
 
-	printk("[uhci] Device Descriptor:\n");
-	printk("  bLength=%d bDescriptorType=%d\n",
+	printk(KERN_INFO "[uhci] Device Descriptor:\n");
+	printk(KERN_INFO "  bLength=%d bDescriptorType=%d\n",
 	       desc->bLength, desc->bDescriptorType);
-	printk("  bcdUSB=0x%04x bDeviceClass=%d\n",
+	printk(KERN_INFO "  bcdUSB=0x%04x bDeviceClass=%d\n",
 	       desc->bcdUSB, desc->bDeviceClass);
-	printk("  bMaxPacketSize0=%d\n", desc->bMaxPacketSize0);
-	printk("  idVendor=0x%04x idProduct=0x%04x\n",
+	printk(KERN_INFO "  bMaxPacketSize0=%d\n", desc->bMaxPacketSize0);
+	printk(KERN_INFO "  idVendor=0x%04x idProduct=0x%04x\n",
 	       desc->idVendor, desc->idProduct);
-	printk("  bNumConfigurations=%d\n", desc->bNumConfigurations);
+	printk(KERN_INFO "  bNumConfigurations=%d\n", desc->bNumConfigurations);
 
 	return 0;
 }
@@ -680,11 +680,11 @@ static int uhci_set_configuration(struct uhci_hcd *hcd, uint8_t dev_addr, uint8_
 
 	if (td[1].status & TD_STATUS_STALLED)
 	{
-		printk("[uhci] SET_CONFIGURATION stalled! status=0x%x\n", td[1].status);
+		printk(KERN_ERR "[uhci] SET_CONFIGURATION stalled! status=0x%x\n", td[1].status);
 		return -1;
 	}
 
-	printk("[uhci] SET_CONFIGURATION ok, config=%d\n", config);
+	printk(KERN_OK "[uhci] SET_CONFIGURATION ok, config=%d\n", config);
 	return 0;
 }
 
@@ -725,15 +725,15 @@ static int uhci_interrupt_transfer(struct uhci_hcd *hcd, uint8_t dev_addr)
 		while ((td->status & TD_STATUS_ACTIVE) && timeout--)
 			cpu_relax();
 		if (timeout == 0)
-			printk("[uhci] WARNING: TD timed out\n");
+			printk(KERN_WARNING "[uhci] WARNING: TD timed out\n");
 
 		if (td->status & TD_STATUS_STALLED)
 		{
-			printk("[uhci] interrupt stalled! status=0x%x\n", td->status);
+			printk(KERN_ERR "[uhci] interrupt stalled! status=0x%x\n", td->status);
 			break;
 		}
 
-		printk("[uhci] mouse: %02x %02x %02x %02x\n",
+		printk(KERN_INFO "[uhci] mouse: %02x %02x %02x %02x\n",
 		       buf[0], buf[1], buf[2], buf[3]);
 
 		uint8_t buttons = buf[0];
@@ -741,15 +741,15 @@ static int uhci_interrupt_transfer(struct uhci_hcd *hcd, uint8_t dev_addr)
 		int8_t dy = (int8_t)buf[2];
 
 		if (buttons & (1 << 0))
-			printk("[uhci] LEFT\n");
+			printk(KERN_INFO "[uhci] LEFT\n");
 		if (buttons & (1 << 1))
-			printk("[uhci] RIGHT\n");
+			printk(KERN_INFO "[uhci] RIGHT\n");
 		if (buttons & (1 << 2))
-			printk("[uhci] MIDDLE\n");
+			printk(KERN_INFO "[uhci] MIDDLE\n");
 		if (dx)
-			printk("[uhci] dx=%d\n", dx);
+			printk(KERN_INFO "[uhci] dx=%d\n", dx);
 		if (dy)
-			printk("[uhci] dy=%d\n", dy);
+			printk(KERN_INFO "[uhci] dy=%d\n", dy);
 
 		toggle ^= 1;
 	}
@@ -775,7 +775,7 @@ static int uhci_probe(struct pci_device *pci_dev)
 		if (bar & PCI_BAR_IO)
 		{
 			io_base = (uint16_t)(bar & PCI_BAR_IO_MASK);
-			printk("[uhci] I/O BAR%d = 0x%x\n", i, io_base);
+			printk(KERN_INFO "[uhci] I/O BAR%d = 0x%x\n", i, io_base);
 			break;
 		}
 	}
@@ -816,7 +816,7 @@ static struct pci_driver uhci_driver = {
 
 __init int uhci_module_init(void)
 {
-	printk("[uhci] module init\n");
+	printk(KERN_INFO "[uhci] module init\n");
 	return pci_register_driver(&uhci_driver);
 }
 

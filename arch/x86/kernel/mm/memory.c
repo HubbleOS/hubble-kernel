@@ -34,15 +34,15 @@ void boot_memory_init()
 
 	printk(KERN_DEBUG "Initializing PMM...\n");
 	pmm_init();
-	printk(KERN_INFO "PMM initialized\n");
+	printk(KERN_OK "PMM initialized\n");
 
 	printk(KERN_DEBUG "Initializing Slab Allocator...\n");
 	slab_init();
-	printk(KERN_INFO "Slab Allocator initialized\n");
+	printk(KERN_OK "Slab Allocator initialized\n");
 
 	printk(KERN_DEBUG "Initializing VMM...\n");
 	vmm_init();
-	printk(KERN_INFO "VMM initialized\n");
+	printk(KERN_OK "VMM initialized\n");
 
 	check_virtual_memory();
 }

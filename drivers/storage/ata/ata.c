@@ -69,7 +69,7 @@ int ata_read_sector(void *device, uint32_t lba, void *buffer)
 	ata_wait(dev);
 	if (ata_wait_drq(dev) != 0)
 	{
-		printk("ata_wait_drq failed\n");
+		printk(KERN_ERR "ata_wait_drq failed\n");
 		return -1;
 	}
 
@@ -84,17 +84,17 @@ int ata_read_sector(void *device, uint32_t lba, void *buffer)
 int ata_write_sector(void *device, uint32_t lba, const void *buffer)
 {
 	ATA_Device *dev = (ATA_Device *)device;
-	printk("bus: %d, device: %d, io_base: %d, ctrl_base: %d\n", dev->bus, dev->device, dev->io_base, dev->ctrl_base);
+	printk(KERN_INFO "bus: %d, device: %d, io_base: %d, ctrl_base: %d\n", dev->bus, dev->device, dev->io_base, dev->ctrl_base);
 	const uint16_t *buf = (const uint16_t *)buffer;
-	printk("\nata_write_sector %d", lba);
+	printk(KERN_INFO "\nata_write_sector %d", lba);
 
 	for (int j = 0; j < 16; j++)
-		printk("%02X ", buf[j]);
-	printk("\n");
+		printk(KERN_INFO "%02X ", buf[j]);
+	printk(KERN_INFO "\n");
 
 	if (((FAT32_DirectoryEntry *)(buf))->name[0] == 0x00)
 	{
-		printk("ata_write_sector: buffer is empty\n");
+		printk(KERN_INFO "ata_write_sector: buffer is empty\n");
 	}
 
 	ata_wait(dev);
@@ -108,7 +108,7 @@ int ata_write_sector(void *device, uint32_t lba, const void *buffer)
 
 	if (ata_wait_drq(dev) < 0)
 	{
-		printk("ata_wait_drq failed\n");
+		printk(KERN_ERR "ata_wait_drq failed\n");
 		return -1;
 	}
 
@@ -121,7 +121,7 @@ int ata_write_sector(void *device, uint32_t lba, const void *buffer)
 
 	if (inb(dev->io_base + 7) & ATA_STATUS_ERROR)
 	{
-		printk("ata_write_sector failed\n");
+		printk(KERN_ERR "ata_write_sector failed\n");
 		return -1;
 	}
 

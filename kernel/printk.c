@@ -1,4 +1,5 @@
 #include <hubble/printk.h>
+#include <hubble/color.h>
 #include <hubble/string.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -16,6 +17,7 @@ static bool log_wrapped = false;
 
 // Output function (set by arch via printk_set_output)
 static void (*output_fn)(char c) = NULL;
+static void (*color_output_fn)(char c, color_t color) = NULL;
 
 // Console callback (set after full console subsystem is up)
 static void (*console_write)(const char *buf, size_t len, void *data) = NULL;
@@ -23,10 +25,107 @@ static void *console_user_data = NULL;
 
 // Lock
 static spinlock_t printk_lock = SPINLOCK_INIT("printk");
+static bool printk_at_line_start = true;
+
+static void output_plain_string(const char *str, size_t len, color_t color);
 
 void printk_set_output(void (*fn)(char c))
 {
 	output_fn = fn;
+}
+
+void printk_set_color_output(void (*fn)(char c, color_t color))
+{
+	color_output_fn = fn;
+}
+
+static color_t printk_level_color(int level)
+{
+	switch (level)
+	{
+	case 0:
+	case 1:
+	case 2:
+	case 3:
+		return COLOR_RED;
+	case 4:
+		return COLOR_YELLOW;
+	case 5:
+	case 6:
+		return COLOR_BLUE;
+	case 7:
+		return COLOR_WHITE;
+	case 8:
+		return COLOR_GREEN;
+	default:
+		return COLOR_WHITE;
+	}
+}
+
+static const char *printk_level_label(int level)
+{
+	switch (level)
+	{
+	case 0:
+	case 1:
+	case 2:
+	case 3:
+		return "[ERROR] ";
+	case 4:
+		return "[WARN] ";
+	case 5:
+	case 6:
+		return "[INFO] ";
+	case 7:
+		return "[DEBUG] ";
+	case 8:
+		return "[ OK ] ";
+	default:
+		return NULL;
+	}
+}
+
+static int printk_token_len(const char *str, size_t len, color_t *color)
+{
+	struct printk_token
+	{
+		const char *text;
+		size_t len;
+		color_t color;
+	};
+
+	static const struct printk_token tokens[] = {
+	    {"[ OK ]", 6, COLOR_GREEN},
+	    {"[OK]", 4, COLOR_GREEN},
+	    {"[ERROR]", 7, COLOR_RED},
+	    {"[WARN]", 6, COLOR_YELLOW},
+	    {"[INFO]", 6, COLOR_BLUE},
+	    {"[DEBUG]", 7, COLOR_WHITE},
+	};
+
+	for (size_t i = 0; i < sizeof(tokens) / sizeof(tokens[0]); i++)
+	{
+		if (len >= tokens[i].len && strncmp(str, tokens[i].text, tokens[i].len) == 0)
+		{
+			*color = tokens[i].color;
+			return tokens[i].len;
+		}
+	}
+
+	return 0;
+}
+
+static void output_level_label(const char *str, size_t len, color_t color)
+{
+	if (len < 2)
+	{
+		output_plain_string(str, len, COLOR_WHITE);
+		return;
+	}
+
+	output_plain_string(str, 1, COLOR_WHITE);
+	output_plain_string(str + 1, len - 2, color);
+	output_plain_string(str + len - 1, 1, COLOR_WHITE);
 }
 
 static void log_buffer_append(const char *buf, size_t len)
@@ -46,15 +145,49 @@ static void log_buffer_append(const char *buf, size_t len)
 	}
 }
 
-static void output_string(const char *str, size_t len)
+static void output_plain_string(const char *str, size_t len, color_t color)
 {
 	log_buffer_append(str, len);
 
 	if (console_write)
 		console_write(str, len, console_user_data);
+	else if (color_output_fn)
+		for (size_t i = 0; i < len; i++)
+			color_output_fn(str[i], color);
 	else if (output_fn)
 		for (size_t i = 0; i < len; i++)
 			output_fn(str[i]);
+
+	for (size_t i = 0; i < len; i++)
+		printk_at_line_start = (str[i] == '\n');
+}
+
+static void output_string_color(const char *str, size_t len, color_t color)
+{
+	size_t pos = 0;
+
+	while (pos < len)
+	{
+		color_t token_color;
+		int token_len = printk_token_len(str + pos, len - pos, &token_color);
+
+		if (token_len > 0)
+		{
+			output_level_label(str + pos, token_len, token_color);
+			pos += token_len;
+			continue;
+		}
+
+		output_plain_string(str + pos, 1, color);
+		pos++;
+	}
+}
+
+static color_t current_color = COLOR_WHITE;
+
+static void output_string(const char *str, size_t len)
+{
+	output_string_color(str, len, current_color);
 }
 
 void printk_register_console(void (*write_fn)(const char *buf, size_t len, void *data), void *user_data)
@@ -321,10 +454,32 @@ static void output_formatted(const char *str, int str_len, int width,
 
 void vprintk(const char *fmt, va_list args)
 {
-	bool is_critical = (fmt[0] == '<' && fmt[1] >= '0' && fmt[1] <= '2' && fmt[2] == '>');
+	int level = -1;
 
-	if (fmt[0] == '<' && fmt[1] >= '0' && fmt[1] <= '7' && fmt[2] == '>')
+	if (fmt[0] == '<' && fmt[1] >= '0' && fmt[1] <= '8' && fmt[2] == '>')
+		level = fmt[1] - '0';
+
+	bool is_critical = (level >= 0 && level <= 2);
+
+	if (level >= 0)
 		fmt += 3;
+
+	while (*fmt == '\n' || *fmt == '\r')
+	{
+		char c = *fmt++;
+		output_string(&c, 1);
+	}
+
+	current_color = COLOR_WHITE;
+
+	const char *level_label = printk_level_label(level);
+	if (level_label && printk_at_line_start)
+	{
+		size_t label_len = strlen(level_label);
+
+		output_level_label(level_label, label_len - 1, printk_level_color(level));
+		output_plain_string(level_label + label_len - 1, 1, COLOR_WHITE);
+	}
 
 	char buf[128];
 	va_list args_copy;
@@ -502,6 +657,7 @@ void vprintk(const char *fmt, va_list args)
 	}
 
 	va_end(args_copy);
+	current_color = COLOR_WHITE;
 
 	if (is_critical)
 		for (volatile int i = 0; i < 10000000; i++)

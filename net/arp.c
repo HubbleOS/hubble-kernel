@@ -40,7 +40,7 @@ int arp_request(uint32_t target_ip)
 	pkt.tpa = target_ip;
 
 	eth_send(broadcast, ETH_TYPE_ARP, &pkt, sizeof(pkt));
-	printk("[arp] request sent for %d.%d.%d.%d\n",
+	printk(KERN_INFO "[arp] request sent for %d.%d.%d.%d\n",
 	       ((uint8_t *)&target_ip)[0], ((uint8_t *)&target_ip)[1],
 	       ((uint8_t *)&target_ip)[2], ((uint8_t *)&target_ip)[3]);
 	return 0;
@@ -63,7 +63,7 @@ void arp_handle(const uint8_t *pkt, uint16_t len)
 				arp_cache[i].ip = a->spa;
 				memcpy(arp_cache[i].mac, a->sha, 6);
 				arp_cache[i].valid = 1;
-				printk("[arp] cached %d.%d.%d.%d -> %02x:%02x:%02x:%02x:%02x:%02x\n",
+				printk(KERN_INFO "[arp] cached %d.%d.%d.%d -> %02x:%02x:%02x:%02x:%02x:%02x\n",
 				       ((uint8_t *)&a->spa)[0], ((uint8_t *)&a->spa)[1],
 				       ((uint8_t *)&a->spa)[2], ((uint8_t *)&a->spa)[3],
 				       a->sha[0], a->sha[1], a->sha[2],

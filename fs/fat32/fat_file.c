@@ -12,12 +12,12 @@
 
 bool fat32_create_file(FAT32_FS *fs, const char *path)
 {
-	printk("Creating file: %s\n", path);
+	printk(KERN_INFO "Creating file: %s\n", path);
 	PathParts parts = format_folder_path(path);
 	char abs_path[256] = {0};
 	abs_path[0] = '\0';
-	printk("parts: %d\n", parts.count);
-	printk("parts: %s\n", parts.parts[parts.count - 1].sfn);
+	printk(KERN_INFO "parts: %d\n", parts.count);
+	printk(KERN_INFO "parts: %s\n", parts.parts[parts.count - 1].sfn);
 	for (int i = 0; i < parts.count - 1; ++i)
 	{
 		if (i > 0)
@@ -26,7 +26,7 @@ bool fat32_create_file(FAT32_FS *fs, const char *path)
 	}
 
 	uint32_t parent_cluster = resolve_path_to_cluster(fs, abs_path);
-	printk("parent cluster: %d\n", parent_cluster);
+	printk(KERN_INFO "parent cluster: %d\n", parent_cluster);
 	return fat32_create_entry(fs, parent_cluster, &parts.parts[parts.count - 1], false);
 }
 
@@ -178,6 +178,6 @@ bool fat32_delete_file(FAT32_FS *fs, const char *path)
 	uint32_t parent_cluster = resolve_path_to_cluster(fs, abs_path);
 
 	fat32_delete_entry(fs, parent_cluster, pp.parts[pp.count - 1].sfn);
-	printk("File deleted: %s/%s\n", path, pp.parts[pp.count - 1].sfn);
+	printk(KERN_INFO "File deleted: %s/%s\n", path, pp.parts[pp.count - 1].sfn);
 	return true;
 }

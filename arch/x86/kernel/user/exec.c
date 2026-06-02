@@ -34,7 +34,7 @@ task_t *exec(const char *path)
 		uint64_t phys = pmm_alloc_page();
 		if (!phys)
 		{
-			printk("failed to alloc page\n");
+			printk(KERN_ERR "failed to alloc page\n");
 			break;
 		}
 		vmm_map_page_into(task1->page_table, stack_base + i, phys,

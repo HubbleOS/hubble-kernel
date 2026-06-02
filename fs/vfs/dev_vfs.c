@@ -16,7 +16,7 @@ static VFS_device_reg *dev_vfs_devices = NULL;
 
 bool dev_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba)
 {
-	printk("Initializing device fs\n");
+	printk(KERN_INFO "Initializing device fs\n");
 
 	fs->create_file = dev_vfs_create_device;
 	fs->open = dev_vfs_open_device;

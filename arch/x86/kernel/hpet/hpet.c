@@ -72,7 +72,7 @@ static int hpet_map_mmio_page(uint64_t phys)
 
 	if (vmm_map_page(virt, page, VMM_MAP_NO_CACHE) < 0)
 	{
-		printk("ERROR: failed to map HPET MMIO phys=0x%lx virt=%p\n",
+		printk(KERN_ERR "ERROR: failed to map HPET MMIO phys=0x%lx virt=%p\n",
 		       page, (void *)virt);
 		return -1;
 	}
@@ -170,7 +170,7 @@ int hpet_timer_oneshot(uint8_t timer_num, uint64_t ns, uint8_t vector)
 
 	hpet_write(HPET_TIMER_CONFIG(timer_num), config);
 
-	printk("HPET timer %u: one-shot in %lu ns (vector %u)\n",
+	printk(KERN_INFO "HPET timer %u: one-shot in %lu ns (vector %u)\n",
 	       timer_num, ns, vector);
 	return 0;
 }
@@ -185,7 +185,7 @@ int hpet_timer_periodic(uint8_t timer_num, uint64_t period_ns, uint8_t vector)
 	uint64_t caps = hpet_read(HPET_TIMER_CONFIG(timer_num));
 	if (!(caps & HPET_Tn_PER_INT_CAP))
 	{
-		printk("HPET timer %u doesn't support periodic mode\n", timer_num);
+		printk(KERN_ERR "HPET timer %u doesn't support periodic mode\n", timer_num);
 		return -1;
 	}
 
@@ -212,7 +212,7 @@ int hpet_timer_periodic(uint8_t timer_num, uint64_t period_ns, uint8_t vector)
 	// Write period to comparator again (required for periodic)
 	hpet_write(HPET_TIMER_COMPARATOR(timer_num), period_ticks);
 
-	printk("HPET timer %u: periodic every %lu ns (vector %u)\n",
+	printk(KERN_INFO "HPET timer %u: periodic every %lu ns (vector %u)\n",
 	       timer_num, period_ns, vector);
 	return 0;
 }
@@ -233,14 +233,14 @@ int hpet_init(void)
 {
 	if (!acpi_is_initialized())
 	{
-		printk("ACPI not initialized\n");
+		printk(KERN_ERR "ACPI not initialized\n");
 		return -1;
 	}
 
 	uint64_t hpet_phys = acpi_get_hpet_address();
 	if (!hpet_phys)
 	{
-		printk("HPET not found in ACPI\n");
+		printk(KERN_ERR "HPET not found in ACPI\n");
 		return -1;
 	}
 
@@ -249,7 +249,7 @@ int hpet_init(void)
 
 	hpet_state.base = (volatile uint64_t *)phys_to_virt(hpet_phys);
 
-	printk("HPET at phys=0x%lx virt=%p\n", hpet_phys, hpet_state.base);
+	printk(KERN_INFO "HPET at phys=0x%lx virt=%p\n", hpet_phys, hpet_state.base);
 
 	uint64_t caps = hpet_read(HPET_GENERAL_CAPS);
 	hpet_state.period_fs = caps >> 32;
@@ -257,7 +257,7 @@ int hpet_init(void)
 	hpet_state.num_timers = ((caps >> 8) & 0x1F) + 1;
 	bool is_64bit = caps & (1 << 13);
 
-	printk("HPET: period=%lu fs, freq=%lu MHz, timers=%u, %s-bit\n",
+	printk(KERN_INFO "HPET: period=%lu fs, freq=%lu MHz, timers=%u, %s-bit\n",
 	       hpet_state.period_fs,
 	       hpet_state.frequency / 1000000,
 	       hpet_state.num_timers,
@@ -281,7 +281,7 @@ int hpet_init(void)
 	hpet_write(HPET_GENERAL_CONFIG, config);
 
 	hpet_state.initialized = true;
-	printk("HPET initialized\n");
+	printk(KERN_OK "HPET initialized\n");
 	return 0;
 }
 

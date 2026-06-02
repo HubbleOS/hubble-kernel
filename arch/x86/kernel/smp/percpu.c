@@ -44,7 +44,7 @@ void percpu_init_bsp(void)
 
 	num_cpus_online = 1;
 
-	printk("BSP initialized: CPU 0 (APIC ID %u)\n", apic_id);
+	printk(KERN_OK "BSP initialized: CPU 0 (APIC ID %u)\n", apic_id);
 }
 
 void percpu_init_ap(uint8_t apic_id)

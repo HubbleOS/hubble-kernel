@@ -64,7 +64,7 @@ static struct pci_device *allocate_pci_device_struct(uint8_t bus, uint8_t slot, 
 
 int pci_register_driver(struct pci_driver *drv)
 {
-	printk("[pci] registering driver: %s\n", drv->name);
+	printk(KERN_INFO "[pci] registering driver: %s\n", drv->name);
 
 	for (uint16_t bus = 0; bus < 256; bus++)
 	{
@@ -88,7 +88,7 @@ int pci_register_driver(struct pci_driver *drv)
 					struct pci_device *dev =
 					    allocate_pci_device_struct(bus, slot, func);
 
-					printk("[pci] %s matched at %02x:%02x.%d\n",
+					printk(KERN_INFO "[pci] %s matched at %02x:%02x.%d\n",
 					       drv->name, bus, slot, func);
 
 					drv->probe(dev);
