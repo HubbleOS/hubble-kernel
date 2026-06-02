@@ -66,7 +66,7 @@ void play_bwvid(framebuffer_info_t *bi, const char *path, int x, int y)
 	VFS_File *file = vfs_open(path, VFS_O_RDONLY);
 	if (IS_ERR(file))
 	{
-		printk("Failed to open file %s\n", path);
+		printk(KERN_ERR "Failed to open file %s\n", path);
 		return;
 	}
 
@@ -91,12 +91,12 @@ void play_bwvid(framebuffer_info_t *bi, const char *path, int x, int y)
 		if (r != (int)hdr.size)
 		{
 			kfree(frame_data);
-			printk("frame read error %d, expected %d\n", r, hdr.size);
+			printk(KERN_ERR "frame read error %d, expected %d\n", r, hdr.size);
 			break;
 		}
-		printk("frame size: %d\n", hdr.size);
+		printk(KERN_INFO "frame size: %d\n", hdr.size);
 		//  відмальовуємо кадр
-		printk("Frame %dx%d, size=%d\n", hdr.width, hdr.height, hdr.size);
+		printk(KERN_INFO "Frame %dx%d, size=%d\n", hdr.width, hdr.height, hdr.size);
 
 		draw_frame(bi, frame_data, x, y);
 

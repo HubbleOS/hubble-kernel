@@ -64,7 +64,7 @@ int input_register_device(input_dev_t *dev)
 	devices = dev;
 	irqlock_release(&devices_lock);
 
-	printk("input: registered device '%s'\n", dev->name);
+	printk(KERN_INFO "input: registered device '%s'\n", dev->name);
 
 	/* підключаємо до вже існуючих handlers */
 	attach_device_to_handlers(dev);
@@ -101,7 +101,7 @@ void input_unregister_device(input_dev_t *dev)
 
 	irqlock_release(&devices_lock);
 
-	printk("input: unregistered device '%s'\n", dev->name);
+	printk(KERN_INFO "input: unregistered device '%s'\n", dev->name);
 }
 
 /* ── input_register_handler ──────────────────────────────────────────────── */
@@ -118,7 +118,7 @@ int input_register_handler(input_handler_t *handler)
 	handlers = handler;
 	irqlock_release(&handlers_lock);
 
-	printk("input: registered handler '%s'\n", handler->name);
+	printk(KERN_INFO "input: registered handler '%s'\n", handler->name);
 
 	/* підключаємо до вже існуючих devices */
 	attach_handler_to_devices(handler);
@@ -170,7 +170,7 @@ void input_unregister_handler(input_handler_t *handler)
 
 	irqlock_release(&devices_lock);
 
-	printk("input: unregistered handler '%s'\n", handler->name);
+	printk(KERN_INFO "input: unregistered handler '%s'\n", handler->name);
 }
 
 /* ── input_link_handle ───────────────────────────────────────────────────── */

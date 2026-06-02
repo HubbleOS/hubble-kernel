@@ -159,15 +159,19 @@ def run_qemu(opts: QemuOptions):
 
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    ansi_escape = re.compile(rb'\x1b\[[0-9;]*m')
+    # ansi_escape = re.compile(rb'\x1b\[[0-9;]*m')
+
+    # for line in process.stdout:
+    #     clean_line = ansi_escape.sub(b'', line)
+    #     sys.stdout.buffer.write(clean_line)
+    #     try:
+    #         sys.stdout.buffer.flush()
+    #     except BlockingIOError:
+    #         pass
 
     for line in process.stdout:
-        clean_line = ansi_escape.sub(b'', line)
-        sys.stdout.buffer.write(clean_line)
-        try:
-            sys.stdout.buffer.flush()
-        except BlockingIOError:
-            pass
+        sys.stdout.buffer.write(line)
+        sys.stdout.buffer.flush()
 
     return process.wait()
 

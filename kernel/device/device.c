@@ -10,11 +10,11 @@ void device_register(struct device *dev)
 {
 	if (device_count >= MAX_DEVICES)
 	{
-		printk("[device] too many devices, dropping %s\n", dev->name);
+		printk(KERN_ERR "[device] too many devices, dropping %s\n", dev->name);
 		return;
 	}
 	devices[device_count++] = dev;
-	printk("[device] registered: %s (type=%u)\n", dev->name, dev->type);
+	printk(KERN_INFO "[device] registered: %s (type=%u)\n", dev->name, dev->type);
 }
 
 struct device *device_find_by_name(const char *name)

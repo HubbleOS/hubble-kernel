@@ -16,18 +16,18 @@ static inline void check_nx_support(void)
 
 	if (edx & (1 << 20))
 	{
-		printk("[CPU] NX bit supported\n");
+		printk(KERN_INFO "[CPU] NX bit supported\n");
 
 		// Enable NX bit in EFER
 		uint64_t efer;
 		asm volatile("rdmsr" : "=A"(efer) : "c"(0xC0000080));
 		efer |= (1 << 11); // Set NXE bit
 		asm volatile("wrmsr" ::"A"(efer), "c"(0xC0000080));
-		printk("[CPU] NX bit enabled\n");
+		printk(KERN_OK "[CPU] NX bit enabled\n");
 	}
 	else
 	{
-		printk("[CPU] WARNING: NX bit not supported!\n");
+		printk(KERN_WARNING "[CPU] WARNING: NX bit not supported!\n");
 	}
 }
 
@@ -47,7 +47,7 @@ static void enable_sse(void)
 
 	// Проверяем что реально записалось
 	asm volatile("mov %%cr4, %0" : "=r"(cr4));
-	printk("[CPU] CR4 after SSE init: 0x%llx, OSFXSR=%d OSXMMEXCPT=%d\n",
+	printk(KERN_INFO "[CPU] CR4 after SSE init: 0x%llx, OSFXSR=%d OSXMMEXCPT=%d\n",
 	       cr4, !!(cr4 & (1 << 9)), !!(cr4 & (1 << 10)));
 }
 
@@ -63,5 +63,5 @@ void boot_cpu_init(void)
 	interrupts_init();
 	syscall_init();
 
-	printk(KERN_INFO "CPU initialization complete\n");
+	printk(KERN_OK "CPU initialization complete\n");
 }

@@ -59,7 +59,7 @@ static uint64_t alloc_user_stack(void)
 // Initialize a new task
 task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority, bool userspace)
 {
-	printk("Creating task\n");
+	printk(KERN_INFO "Creating task\n");
 	task_t *task = kmalloc(sizeof(task_t), GFP_KERNEL);
 	if (!task)
 		return NULL;
@@ -67,12 +67,12 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	memset(task, 0, sizeof(task_t));
 
 	// Assign PID
-	printk("Assigning PID\n");
+	printk(KERN_INFO "Assigning PID\n");
 	static uint32_t next_pid = 1;
 	task->pid = __atomic_fetch_add(&next_pid, 1, __ATOMIC_SEQ_CST);
 
 	// Set state
-	printk("Setting state\n");
+	printk(KERN_INFO "Setting state\n");
 	task->state = TASK_READY;
 	task->priority = priority;
 	task->time_slice_max = BASE_SLICE + priority;
@@ -83,7 +83,7 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	// Allocate kernel stack
 	if (!userspace)
 	{
-		printk("Allocating kernel stack\n");
+		printk(KERN_INFO "Allocating kernel stack\n");
 		task->stack_size = 16384; // 16 KB
 		task->kernel_stack = (uint64_t)kmalloc(task->stack_size, GFP_KERNEL);
 		if (!task->kernel_stack)
@@ -108,7 +108,7 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 				return NULL;
 			if (vmm_map_page(stack_base + i, phys, PTE_PRESENT | PTE_USER | PTE_WRITE) < 0)
 			{
-				printk("Failed to map page 0x%llx\n", stack_base + i);
+				printk(KERN_ERR "Failed to map page 0x%llx\n", stack_base + i);
 				return NULL;
 			}
 
@@ -117,7 +117,7 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 			// Also check flags directly
 			uint64_t *pt = pt_table(va);
 			uint64_t pte = pt[PT_INDEX(va)];
-			printk("  0x%llx -> phys=0x%llx PTE=0x%llx USER=%d\n",
+			printk(KERN_INFO "  0x%llx -> phys=0x%llx PTE=0x%llx USER=%d\n",
 			       va, phys, pte, !!(pte & PTE_USER));
 		}
 	}
@@ -136,19 +136,19 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	*(uint64_t *)(task->rsp0) = CANARY;
 
 	// Set up initial stack
-	printk("Setting up initial stack\n");
+	printk(KERN_INFO "Setting up initial stack\n");
 	uint64_t *stack_top = (uint64_t *)(((task->kernel_stack + task->stack_size) & ~0xFULL) - 8);
-	printk("stack_base=0x%llx faulting=0x6fedcfd0 PT_INDEX=0x%x\n",
+	printk(KERN_INFO "stack_base=0x%llx faulting=0x6fedcfd0 PT_INDEX=0x%x\n",
 	       task->kernel_stack, PT_INDEX(task->kernel_stack));
-	printk("mapped up to: 0x%llx\n", task->kernel_stack + task->stack_size + PAGE_SIZE);
+	printk(KERN_INFO "mapped up to: 0x%llx\n", task->kernel_stack + task->stack_size + PAGE_SIZE);
 	// Push initial values onto stack
-	printk("Pushing initial values onto stack\n");
+	printk(KERN_INFO "Pushing initial values onto stack\n");
 	// *(--stack_top) = 0x202;			 // RFLAGS (interrupts enabled)
 	// *(--stack_top) = 0x08;			 // CS
 	// *(--stack_top) = (uint64_t)task_wrapper; // RIP
 
 	// Initialize context
-	printk("Initializing context\n");
+	printk(KERN_INFO "Initializing context\n");
 	if (!userspace)
 	{
 		task->context.rip = (uint64_t)task_wrapper;
@@ -184,18 +184,18 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	task->entry_arg = entry_arg;
 
 	// print all
-	printk("RSP: %p\n", task->context.rsp);
-	printk("RIP: %p\n", task->context.rip);
-	printk("CS: %p\n", task->context.cs);
-	printk("SS: %p\n", task->context.ss);
-	printk("DS: %p\n", task->context.ds);
-	printk("ES: %p\n", task->context.es);
-	printk("FS: %p\n", task->context.fs);
-	printk("GS: %p\n", task->context.gs);
-	printk("RFLAGS: %p\n", task->context.rflags);
+	printk(KERN_INFO "RSP: %p\n", task->context.rsp);
+	printk(KERN_INFO "RIP: %p\n", task->context.rip);
+	printk(KERN_INFO "CS: %p\n", task->context.cs);
+	printk(KERN_INFO "SS: %p\n", task->context.ss);
+	printk(KERN_INFO "DS: %p\n", task->context.ds);
+	printk(KERN_INFO "ES: %p\n", task->context.es);
+	printk(KERN_INFO "FS: %p\n", task->context.fs);
+	printk(KERN_INFO "GS: %p\n", task->context.gs);
+	printk(KERN_INFO "RFLAGS: %p\n", task->context.rflags);
 
 	// Allocate FPU state (512 bytes, 16-byte aligned)
-	printk("Allocating FPU state\n");
+	printk(KERN_INFO "Allocating FPU state\n");
 	// void *fpu_state = kmalloc(512 + 16, GFP_KERNEL);
 	fpu_cache = slab_cache_create(512, 16);
 	// task->context.fpu_state = (void *)(((uintptr_t)fpu_state + 15) & ~0xF);
@@ -204,23 +204,23 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	if (task->context.fpu_state)
 	{
 		// Initialize with default FPU state
-		printk("Initializing FPU state\n");
+		printk(KERN_INFO "Initializing FPU state\n");
 		asm volatile("fxsave %0" : "=m"(*(char *)task->context.fpu_state));
 	}
-	printk("FPU state: %p\n", task->context.fpu_state);
+	printk(KERN_INFO "FPU state: %p\n", task->context.fpu_state);
 
 	// Allocate page table (or share kernel page table)
 
 	// get kernel page table
-	printk("Getting kernel page table\n");
+	printk(KERN_INFO "Getting kernel page table\n");
 	uint64_t cr3;
 	asm volatile("mov %%cr3, %0" : "=r"(cr3));
 	task->page_table = (uint64_t *)cr3; // Or create new one
-	printk("Page table: %p\n", task->page_table);
+	printk(KERN_INFO "Page table: %p\n", task->page_table);
 
 	task->signal = 0;
 
-	printk("Task created\n");
+	printk(KERN_INFO "Task created\n");
 	return task;
 }
 
@@ -421,7 +421,7 @@ void lapic_timer_handler(registers_t *regs)
 		uint64_t *canary = (uint64_t *)(current->rsp0);
 		if (*canary != CANARY)
 		{
-			printk("STACK UNDERFLOW on task pid=%d, data=0x%llx\n", current->pid, *(uint64_t *)(current->rsp0));
+			printk(KERN_ERR "STACK UNDERFLOW on task pid=%d, data=0x%llx\n", current->pid, *(uint64_t *)(current->rsp0));
 			*(uint64_t *)(current->rsp0) = CANARY;
 		}
 	}
@@ -569,10 +569,10 @@ void idle_task(void)
 // Initialize scheduler
 void scheduler_init(void)
 {
-	printk("Initializing scheduler\n");
+	printk(KERN_INFO "Initializing scheduler\n");
 	for (int i = 0; i < smp_get_cpu_count(); i++)
 	{
-		printk("Initializing runqueue for CPU %d\n", i);
+		printk(KERN_INFO "Initializing runqueue for CPU %d\n", i);
 		runqueues[i].count = 0;
 		runqueues[i].next_index = 0;
 		task_t *idle = task_create(idle_task, 0, 0);

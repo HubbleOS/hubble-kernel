@@ -19,7 +19,7 @@
 
 bool ext2_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba)
 {
-	printk("Initializing device\n");
+	printk(KERN_INFO "Initializing device\n");
 	EXT2_FS *ext2_fs = kmalloc(sizeof(EXT2_FS), GFP_KERNEL);
 	ext2_fs->device = device->device;
 	ext2_fs->read_sector = device->read;
@@ -27,16 +27,16 @@ bool ext2_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba)
 	{
 		if (device->read == NULL)
 		{
-			printk("EXT2: read_sector is NULL from param\n");
+			printk(KERN_ERR "EXT2: read_sector is NULL from param\n");
 		}
-		printk("EXT2: read_sector is NULL\n");
+		printk(KERN_ERR "EXT2: read_sector is NULL\n");
 		return 0;
 	}
 	ext2_fs->write_sector = device->write;
 	ext2_fs->first_lba = start_lba;
-	printk("Initializing EXT2 on partition starting at LBA %u\n", start_lba);
+	printk(KERN_INFO "Initializing EXT2 on partition starting at LBA %u\n", start_lba);
 	ext2_init(ext2_fs);
-	printk("EXT2 Superblock OK (magic 0x%x)\n", ext2_fs->magic);
+	printk(KERN_OK "EXT2 Superblock OK (magic 0x%x)\n", ext2_fs->magic);
 	fs->fs = ext2_fs;
 	return 1;
 }
@@ -79,7 +79,7 @@ bool ext2_vfs_mkdir(VFS_FS *fs, const char *path)
 Directory ext2_vfs_readdir(VFS_FS *fs, const char *path)
 {
 
-	printk("path: %s\n", path);
+	printk(KERN_INFO "path: %s\n", path);
 	Ext2Inode *inode = kmalloc(sizeof(Ext2Inode), GFP_KERNEL);
 	// inode = ext2_find_dir_entry(fs->fs, 2, path);
 	ext2_read_inode(fs->fs, ext2_parse_path(fs->fs, 2, path), inode);

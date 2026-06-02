@@ -25,7 +25,7 @@ void pic_disable(void)
 	// Mask all interrupts on both PICs
 	outb(PIC1_DATA, 0xFF);
 	outb(PIC2_DATA, 0xFF);
-	printk("Legacy PIC disabled\n");
+	printk(KERN_INFO "Legacy PIC disabled\n");
 }
 
 /**
@@ -160,31 +160,31 @@ static const char *exception_messages[] = {
 
 void isr_handler(registers_t *regs)
 {
-	printk("\n\tEXCEPTION OCCURRED\n");
+	printk(KERN_INFO "\n\tEXCEPTION OCCURRED\n");
 
-	printk("Exception: %s (%lu)\n",
+	printk(KERN_INFO "Exception: %s (%lu)\n",
 		   regs->int_no < 22 ? exception_messages[regs->int_no] : "Unknown",
 		   regs->int_no);
-	printk("Error code: 0x%lx\n", regs->err_code);
+	printk(KERN_ERR "Error code: 0x%lx\n", regs->err_code);
 
-	printk("Registers");
-	printk("RIP: 0x%016lx    RSP: 0x%016lx\n", regs->rip, regs->rsp);
-	printk("RAX: 0x%016lx    RBX: 0x%016lx\n", regs->rax, regs->rbx);
-	printk("RCX: 0x%016lx    RDX: 0x%016lx\n", regs->rcx, regs->rdx);
-	printk("RSI: 0x%016lx    RDI: 0x%016lx\n", regs->rsi, regs->rdi);
-	printk("RBP: 0x%016lx    R8:  0x%016lx\n", regs->rbp, regs->r8);
-	printk("R9:  0x%016lx    R10: 0x%016lx\n", regs->r9, regs->r10);
-	printk("R11: 0x%016lx    R12: 0x%016lx\n", regs->r11, regs->r12);
-	printk("R13: 0x%016lx    R14: 0x%016lx\n", regs->r13, regs->r14);
-	printk("R15: 0x%016lx\n", regs->r15);
+	printk(KERN_INFO "Registers");
+	printk(KERN_INFO "RIP: 0x%016lx    RSP: 0x%016lx\n", regs->rip, regs->rsp);
+	printk(KERN_INFO "RAX: 0x%016lx    RBX: 0x%016lx\n", regs->rax, regs->rbx);
+	printk(KERN_INFO "RCX: 0x%016lx    RDX: 0x%016lx\n", regs->rcx, regs->rdx);
+	printk(KERN_INFO "RSI: 0x%016lx    RDI: 0x%016lx\n", regs->rsi, regs->rdi);
+	printk(KERN_INFO "RBP: 0x%016lx    R8:  0x%016lx\n", regs->rbp, regs->r8);
+	printk(KERN_INFO "R9:  0x%016lx    R10: 0x%016lx\n", regs->r9, regs->r10);
+	printk(KERN_INFO "R11: 0x%016lx    R12: 0x%016lx\n", regs->r11, regs->r12);
+	printk(KERN_INFO "R13: 0x%016lx    R14: 0x%016lx\n", regs->r13, regs->r14);
+	printk(KERN_INFO "R15: 0x%016lx\n", regs->r15);
 
-	printk("Segments");
-	printk("SS:  0x%04lx\n", regs->ss);
-	printk("RFLAGS: 0x%016lx\n", regs->rflags);
+	printk(KERN_INFO "Segments");
+	printk(KERN_INFO "SS:  0x%04lx\n", regs->ss);
+	printk(KERN_INFO "RFLAGS: 0x%016lx\n", regs->rflags);
 
 	if (regs->int_no == 8 || regs->int_no == 13 || regs->int_no == 14)
 	{
-		printk("\nFATAL ERROR - System Halted\n");
+		printk(KERN_ERR "\nFATAL ERROR - System Halted\n");
 
 		if (regs->int_no == 14)
 		{
@@ -197,7 +197,7 @@ void isr_handler(registers_t *regs)
 			uint64_t cr3;
 			asm volatile("mov %%cr3, %0" : "=r"(cr3));
 			task_t *t = get_current_task();
-			printk("Fault: active CR3=0x%llx task->page_table=0x%llx match=%d\n",
+			printk(KERN_INFO "Fault: active CR3=0x%llx task->page_table=0x%llx match=%d\n",
 				   cr3, (uint64_t)t->page_table, cr3 == (uint64_t)t->page_table);
 		}
 		while (1)
@@ -259,12 +259,12 @@ void irq_handler(registers_t *regs)
 
 void interrupts_init(void)
 {
-	printk("Initializing interrupt system...\n");
+	printk(KERN_INFO "Initializing interrupt system...\n");
 
 	// IDT і PIC remap
 	pic_remap();
 	pic_disable();
 
 	sti();
-	printk("Interrupts enabled\n");
+	printk(KERN_OK "Interrupts enabled\n");
 }

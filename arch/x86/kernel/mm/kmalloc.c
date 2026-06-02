@@ -31,7 +31,7 @@ void *kmalloc(size_t size, kmalloc_flags_t flags)
 {
 	if (size == 0)
 	{
-		printk("KMALLOC: size is 0\n");
+		printk(KERN_INFO "KMALLOC: size is 0\n");
 		return NULL;
 	}
 	uint64_t flags_l = kmalloc_acquire();
@@ -43,7 +43,7 @@ void *kmalloc(size_t size, kmalloc_flags_t flags)
 		kmalloc_release(flags_l);
 		if (!ptr)
 		{
-			printk("KMALLOC: failed to allocate %zu bytes\n", size);
+			printk(KERN_ERR "KMALLOC: failed to allocate %zu bytes\n", size);
 		}
 
 		return ptr;
@@ -54,7 +54,7 @@ void *kmalloc(size_t size, kmalloc_flags_t flags)
 	if (!phys)
 	{
 		kmalloc_release(flags_l);
-		printk("KMALLOC: failed to allocate %zu bytes\n", size);
+		printk(KERN_ERR "KMALLOC: failed to allocate %zu bytes\n", size);
 		return NULL;
 	}
 

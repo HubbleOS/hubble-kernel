@@ -33,7 +33,7 @@ static uint64_t *vmm_alloc_table(void)
 	uint64_t phys = pmm_alloc_page();
 	if (!phys)
 	{
-		printk("Failed to allocate page for VMM table\n");
+		printk(KERN_ERR "Failed to allocate page for VMM table\n");
 		return NULL;
 	}
 	uint64_t *virt = (uint64_t *)phys_to_virt(phys);
@@ -78,7 +78,7 @@ int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags)
 		uint64_t *new_pdpt = vmm_alloc_table();
 		if (!new_pdpt)
 		{
-			printk("[VMM] ERROR: Failed to allocate new PDPT\n");
+			printk(KERN_ERR "[VMM] ERROR: Failed to allocate new PDPT\n");
 
 			return -1;
 		}
@@ -99,7 +99,7 @@ int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags)
 		uint64_t *new_pd = vmm_alloc_table();
 		if (!new_pd)
 		{
-			printk("[VMM] ERROR: Failed to allocate new PD\n");
+			printk(KERN_ERR "[VMM] ERROR: Failed to allocate new PD\n");
 			return -1;
 		}
 		pdpt[PDPT_INDEX(va)] = pte_make(virt_to_phys((uint64_t)new_pd), table_flags);
@@ -122,7 +122,7 @@ int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags)
 		pd[PD_INDEX(va)] = pte_make(pa, flags | PTE_HUGE);
 		g_vmm.total_mapped_pages += VMM_HUGE_PAGE_SIZE / VMM_PAGE_SIZE;
 		invlpg((void *)va);
-		printk("[VMM] Mapping huge page 0x%llx to 0x%llx\n", va, pa);
+		printk(KERN_INFO "[VMM] Mapping huge page 0x%llx to 0x%llx\n", va, pa);
 		return 0;
 	}
 
@@ -132,7 +132,7 @@ int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags)
 		uint64_t *new_pt = vmm_alloc_table();
 		if (!new_pt)
 		{
-			printk("[VMM] ERROR: Failed to allocate new PT\n");
+			printk(KERN_ERR "[VMM] ERROR: Failed to allocate new PT\n");
 			return -1;
 		}
 		pd[PD_INDEX(va)] = pte_make(virt_to_phys((uint64_t)new_pt), table_flags);
@@ -143,7 +143,7 @@ int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags)
 		if (pd[PD_INDEX(va)] & PTE_HUGE)
 		{
 			// Skip or return error - can't mix huge and 4KB pages
-			printk("[VMM] ERROR: Huge page already mapped at 0x%llx\n", va);
+			printk(KERN_ERR "[VMM] ERROR: Huge page already mapped at 0x%llx\n", va);
 			return -1;
 		}
 
@@ -181,7 +181,7 @@ void vmm_unmap_page(uint64_t va)
 	uint64_t *pt = pt_table(va);
 	if (!pte_present(pt[PT_INDEX(va)]))
 	{
-		printk("[VMM] ERROR: Page not mapped at 0x%llx\n", va);
+		printk(KERN_ERR "[VMM] ERROR: Page not mapped at 0x%llx\n", va);
 		return;
 	}
 	pt[PT_INDEX(va)] = 0;
@@ -230,9 +230,9 @@ void dump_page_flags(uint64_t va)
 {
 	uint64_t *pt = pt_table(va);
 	uint64_t pte = pt[PT_INDEX(va)];
-	printk("VA 0x%llx -> PTE 0x%llx\n", va, pte);
+	printk(KERN_INFO "VA 0x%llx -> PTE 0x%llx\n", va, pte);
 
-	printk("Flags: PRESENT=%d USER=%d WRITE=%d NX=%d\n",
+	printk(KERN_INFO "Flags: PRESENT=%d USER=%d WRITE=%d NX=%d\n",
 	       !!(pte & PTE_PRESENT),
 	       !!(pte & PTE_USER),
 	       !!(pte & PTE_WRITE),
@@ -244,19 +244,19 @@ void dump_page(uint64_t va, size_t len)
 	uint64_t phys = vmm_get_phys(va);
 	if (!phys)
 	{
-		printk("VA 0x%llx not mapped!\n", va);
+		printk(KERN_ERR "VA 0x%llx not mapped!\n", va);
 		return;
 	}
 	dump_page_flags(va);
 	uint8_t *kptr = (uint8_t *)phys_to_virt(phys);
-	printk("Dumping VA 0x%llx -> PA 0x%llx\n", va, phys);
+	printk(KERN_INFO "Dumping VA 0x%llx -> PA 0x%llx\n", va, phys);
 	for (size_t i = 0; i < len; i++)
 	{
 		if (i % 16 == 0)
-			printk("\n%04zx: ", i);
-		printk("%02x ", kptr[i]);
+			printk(KERN_INFO "\n%04zx: ", i);
+		printk(KERN_INFO "%02x ", kptr[i]);
 	}
-	printk("\n");
+	printk(KERN_INFO "\n");
 }
 
 // make only when 2MB page is user only
@@ -282,7 +282,7 @@ int make_pd_entry_user(uint64_t va, uint64_t pm)
 
 	if (!(pde & (1ULL << 7)))
 	{
-		printk("Not a large page at PDE\n");
+		printk(KERN_INFO "Not a large page at PDE\n");
 		return -1;
 	}
 
@@ -428,7 +428,7 @@ void debug_dump_mapping(uint64_t *pml4_phys, uint64_t va)
 	uint64_t *pml4 = (uint64_t *)phys_to_virt((uint64_t)pml4_phys);
 
 	uint64_t pml4e = pml4[PML4_INDEX(va)];
-	printk("PML4[%d] = 0x%llx  USER=%d WRITE=%d PRESENT=%d\n",
+	printk(KERN_INFO "PML4[%d] = 0x%llx  USER=%d WRITE=%d PRESENT=%d\n",
 	       PML4_INDEX(va), pml4e,
 	       !!(pml4e & PTE_USER), !!(pml4e & PTE_WRITE), !!(pml4e & PTE_PRESENT));
 	if (!pte_present(pml4e))
@@ -436,7 +436,7 @@ void debug_dump_mapping(uint64_t *pml4_phys, uint64_t va)
 
 	uint64_t *pdpt = (uint64_t *)phys_to_virt(pte_addr(pml4e));
 	uint64_t pdpte = pdpt[PDPT_INDEX(va)];
-	printk("PDPT[%d] = 0x%llx  USER=%d WRITE=%d PRESENT=%d\n",
+	printk(KERN_INFO "PDPT[%d] = 0x%llx  USER=%d WRITE=%d PRESENT=%d\n",
 	       PDPT_INDEX(va), pdpte,
 	       !!(pdpte & PTE_USER), !!(pdpte & PTE_WRITE), !!(pdpte & PTE_PRESENT));
 	if (!pte_present(pdpte))
@@ -444,7 +444,7 @@ void debug_dump_mapping(uint64_t *pml4_phys, uint64_t va)
 
 	uint64_t *pd = (uint64_t *)phys_to_virt(pte_addr(pdpte));
 	uint64_t pde = pd[PD_INDEX(va)];
-	printk("PD  [%d] = 0x%llx  USER=%d WRITE=%d PRESENT=%d\n",
+	printk(KERN_INFO "PD  [%d] = 0x%llx  USER=%d WRITE=%d PRESENT=%d\n",
 	       PD_INDEX(va), pde,
 	       !!(pde & PTE_USER), !!(pde & PTE_WRITE), !!(pde & PTE_PRESENT));
 	if (!pte_present(pde))
@@ -452,7 +452,7 @@ void debug_dump_mapping(uint64_t *pml4_phys, uint64_t va)
 
 	uint64_t *pt = (uint64_t *)phys_to_virt(pte_addr(pde));
 	uint64_t pte = pt[PT_INDEX(va)];
-	printk("PT  [%d] = 0x%llx  USER=%d WRITE=%d PRESENT=%d NX=%d\n",
+	printk(KERN_INFO "PT  [%d] = 0x%llx  USER=%d WRITE=%d PRESENT=%d NX=%d\n",
 	       PT_INDEX(va), pte,
 	       !!(pte & PTE_USER), !!(pte & PTE_WRITE), !!(pte & PTE_PRESENT),
 	       !!(pte & PTE_NX));
@@ -464,19 +464,19 @@ void dump_kernel_pagemap(void)
 	asm volatile("mov %%cr3, %0" : "=r"(cr3));
 	uint64_t *current_pml4 = (uint64_t *)phys_to_virt(cr3 & ~0xFFFULL);
 
-	printk("[VMM] === KERNEL PAGEMAP DUMP");
+	printk(KERN_INFO "[VMM] === KERNEL PAGEMAP DUMP");
 	for (int i = 0; i < 512; i++)
 	{
 		if (!(current_pml4[i] & PTE_PRESENT))
 			continue;
-		printk("[VMM] PML4[%d] = 0x%llx\n", i, current_pml4[i]);
+		printk(KERN_INFO "[VMM] PML4[%d] = 0x%llx\n", i, current_pml4[i]);
 
 		uint64_t *pdpt = (uint64_t *)phys_to_virt(pte_addr(current_pml4[i]));
 		for (int j = 0; j < 512; j++)
 		{
 			if (!(pdpt[j] & PTE_PRESENT))
 				continue;
-			printk("[VMM]   PDPT[%d] = 0x%llx\n", j, pdpt[j]);
+			printk(KERN_INFO "[VMM]   PDPT[%d] = 0x%llx\n", j, pdpt[j]);
 			if (pdpt[j] & PTE_HUGE)
 				continue;
 
@@ -485,11 +485,11 @@ void dump_kernel_pagemap(void)
 			{
 				if (!(pd[k] & PTE_PRESENT))
 					continue;
-				printk("[VMM]     PD[%d] = 0x%llx  HUGE=%d\n", k, pd[k], !!(pd[k] & PTE_HUGE));
+				printk(KERN_INFO "[VMM]     PD[%d] = 0x%llx  HUGE=%d\n", k, pd[k], !!(pd[k] & PTE_HUGE));
 			}
 		}
 	}
-	printk("[VMM] === END DUMP");
+	printk(KERN_INFO "[VMM] === END DUMP");
 }
 
 void flush_tlb(void)

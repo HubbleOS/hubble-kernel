@@ -30,10 +30,10 @@ Directory fat32_list_files(FAT32_FS *fs, uint32_t cluster)
 	Directory ctx = Directory_init((Directory){.entries = kmalloc(1024, GFP_KERNEL), .count = 0});
 	if (!ctx.entries)
 	{
-		printk("Failed to allocate directory\n");
+		printk(KERN_ERR "Failed to allocate directory\n");
 	}
 	iterate_directory(fs, cluster, list_files_callback, &ctx);
-	printk("count: %d\n", ctx.count);
+	printk(KERN_INFO "count: %d\n", ctx.count);
 	return ctx;
 }
 
@@ -42,18 +42,18 @@ Directory fat32_list_files_from_path(FAT32_FS *fs, const char *path)
 
 	if (!path)
 	{
-		printk("Path not found: %s\n", path);
+		printk(KERN_ERR "Path not found: %s\n", path);
 		return (Directory){.entries = NULL, .count = 0};
 	}
 
 	uint32_t cluster = resolve_path_to_cluster(fs, path);
-	printk("cluster show: %d\n", cluster);
+	printk(KERN_INFO "cluster show: %d\n", cluster);
 	if (cluster == 0)
 	{
-		printk("Path not found: %s\n", path);
+		printk(KERN_ERR "Path not found: %s\n", path);
 		return (Directory){.entries = NULL, .count = 0};
 	}
-	printk("cluster: %d\n", cluster);
+	printk(KERN_INFO "cluster: %d\n", cluster);
 	return fat32_list_files(fs, cluster);
 }
 
@@ -92,12 +92,12 @@ void set_fat_entry(FAT32_FS *fs, uint32_t cluster, uint32_t value)
 	value &= 0x0FFFFFFF;
 	if (fs->fat_cache && cluster < fs->total_fat_entries)
 	{
-		printk("Setting FAT entry cache %u to %u\n", cluster, value);
+		printk(KERN_INFO "Setting FAT entry cache %u to %u\n", cluster, value);
 		fs->fat_cache[cluster] = value;
 		fs->fat_dirty = true;
 		return;
 	}
-	printk("Setting FAT entry %u to %u\n", cluster, value);
+	printk(KERN_INFO "Setting FAT entry %u to %u\n", cluster, value);
 	//  fallback: sector read/modify/write
 	uint32_t fat_offset = cluster * 4;
 	uint32_t fat_sector = fs->fat_start_lba + (fat_offset / fs->bytes_per_sector);
@@ -114,11 +114,11 @@ void fat32_free_cluster(FAT32_FS *fs, uint32_t cluster)
 {
 	if (cluster < 2 || cluster >= fs->total_fat_entries)
 	{
-		printk("Invalid cluster number: %u\n", cluster);
+		printk(KERN_ERR "Invalid cluster number: %u\n", cluster);
 		return;
 	}
 	set_fat_entry(fs, cluster, 0x00000000);
-	printk("Cluster %u freed\n", cluster);
+	printk(KERN_INFO "Cluster %u freed\n", cluster);
 }
 
 uint32_t fat32_allocate_cluster(FAT32_FS *fs)
@@ -130,12 +130,12 @@ uint32_t fat32_allocate_cluster(FAT32_FS *fs)
 		{
 			if (i == fs->root_cluster) // root
 				continue;
-			printk("Checking FAT entry %d\n", i);
+			printk(KERN_INFO "Checking FAT entry %d\n", i);
 			if (get_fat_entry(fs, i) == 0x00000000)
 			{
-				printk("Found free FAT entry %d\n", i);
+				printk(KERN_INFO "Found free FAT entry %d\n", i);
 				set_fat_entry(fs, i, 0x0FFFFFFF);
-				printk("Allocated FAT entry %d\n", i);
+				printk(KERN_INFO "Allocated FAT entry %d\n", i);
 				return i;
 			}
 		}

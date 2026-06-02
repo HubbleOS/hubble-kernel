@@ -49,7 +49,7 @@ static void pcspk_off(void)
 
 static int pcspk_init(void)
 {
-	printk("[pcspk] init ok\n");
+	printk(KERN_OK "[pcspk] init ok\n");
 	return 0;
 }
 

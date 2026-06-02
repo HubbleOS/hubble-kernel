@@ -49,7 +49,7 @@ static int e1000_map_mmio_range(uint64_t phys, uint64_t size)
 
 		if (vmm_map_page(virt, page, VMM_MAP_NO_CACHE) < 0)
 		{
-			printk("[e1000] failed to map MMIO page phys=%llx virt=%p\n",
+			printk(KERN_ERR "[e1000] failed to map MMIO page phys=%llx virt=%p\n",
 			       page, (void *)virt);
 			return -1;
 		}
@@ -130,7 +130,7 @@ static void e1000_read_mac(void)
 	mac_addr[4] = (high >> 0) & 0xFF;
 	mac_addr[5] = (high >> 8) & 0xFF;
 
-	printk("[e1000] MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
+	printk(KERN_INFO "[e1000] MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
 	       mac_addr[0], mac_addr[1], mac_addr[2],
 	       mac_addr[3], mac_addr[4], mac_addr[5]);
 }
@@ -146,9 +146,9 @@ int e1000_send(const void *data, uint16_t len)
 	uint32_t idx = tx_tail % E1000_TX_DESC_COUNT;
 
 	uint64_t phys = virt_to_phys((uint64_t)data);
-	printk("[tx] idx=%d phys=%llx len=%d\n", idx, phys, len);
-	printk("[tx] TDH=%d TDT=%d\n", e1000_read(E1000_TDH), e1000_read(E1000_TDT));
-	printk("[tx] STATUS before=%02x\n", tx_descs[idx].status);
+	printk(KERN_INFO "[tx] idx=%d phys=%llx len=%d\n", idx, phys, len);
+	printk(KERN_INFO "[tx] TDH=%d TDT=%d\n", e1000_read(E1000_TDH), e1000_read(E1000_TDT));
+	printk(KERN_INFO "[tx] STATUS before=%02x\n", tx_descs[idx].status);
 
 	tx_descs[idx].addr = phys;
 	tx_descs[idx].length = len;
@@ -158,8 +158,8 @@ int e1000_send(const void *data, uint16_t len)
 	tx_tail = (tx_tail + 1) % E1000_TX_DESC_COUNT;
 	e1000_write(E1000_TDT, tx_tail);
 
-	printk("[tx] TDT written=%d\n", tx_tail);
-	printk("[tx] TCTL=%08x TDBAL=%08x TDBAH=%08x TDLEN=%08x\n",
+	printk(KERN_INFO "[tx] TDT written=%d\n", tx_tail);
+	printk(KERN_INFO "[tx] TCTL=%08x TDBAL=%08x TDBAH=%08x TDLEN=%08x\n",
 	       e1000_read(E1000_TCTL),
 	       e1000_read(E1000_TDBAL),
 	       e1000_read(E1000_TDBAH),
@@ -167,7 +167,7 @@ int e1000_send(const void *data, uint16_t len)
 
 	for (volatile int i = 0; i < 10000000; i++)
 		;
-	printk("[tx] STATUS after wait=%02x\n", tx_descs[idx].status);
+	printk(KERN_INFO "[tx] STATUS after wait=%02x\n", tx_descs[idx].status);
 
 	while (!(tx_descs[idx].status & E1000_TX_STAT_DD))
 		;
@@ -182,7 +182,7 @@ int e1000_recv(void *buf, uint16_t *len_out)
 	if (!first)
 	{
 		first = 1;
-		printk("[rx] FIRST CALL: idx=%d status=%02x RDH=%d RDT=%d RDBAL=%08x\n",
+		printk(KERN_INFO "[rx] FIRST CALL: idx=%d status=%02x RDH=%d RDT=%d RDBAL=%08x\n",
 		       idx,
 		       rx_descs[idx].status,
 		       e1000_read(E1000_RDH),
@@ -192,7 +192,7 @@ int e1000_recv(void *buf, uint16_t *len_out)
 
 	uint8_t st = rx_descs[idx].status;
 	if (st != 0)
-		printk("[rx] idx=%d status=%02x RDH=%d\n",
+		printk(KERN_INFO "[rx] idx=%d status=%02x RDH=%d\n",
 		       idx, st, e1000_read(E1000_RDH));
 
 	if (!(st & E1000_RX_STAT_DD))
@@ -222,7 +222,7 @@ static int e1000_probe(struct pci_device *pci_dev)
 	uint64_t bar0 = pci_dev->bar0;
 	if (!bar0)
 	{
-		printk("[e1000] bad BAR0\n");
+		printk(KERN_ERR "[e1000] bad BAR0\n");
 		return -1;
 	}
 
@@ -235,7 +235,7 @@ static int e1000_probe(struct pci_device *pci_dev)
 
 	e1000_base = (volatile uint32_t *)phys_to_virt(bar0);
 
-	printk("[e1000] bar0 phys=%llx virt=%p\n", bar0, e1000_base);
+	printk(KERN_INFO "[e1000] bar0 phys=%llx virt=%p\n", bar0, e1000_base);
 
 	e1000_write(E1000_CTRL, e1000_read(E1000_CTRL) | E1000_CTRL_RST);
 	for (volatile int i = 0; i < 1000000; i++)
@@ -262,7 +262,7 @@ static int e1000_probe(struct pci_device *pci_dev)
 
 	e1000_get_mac(data.mac);
 
-	printk("[e1000] init OK\n");
+	printk(KERN_OK "[e1000] init OK\n");
 	return 0;
 }
 
@@ -279,7 +279,7 @@ static struct pci_driver e1000_driver = {
 
 __init int e1000_module_init(void)
 {
-	printk("[e1000] module init\n");
+	printk(KERN_INFO "[e1000] module init\n");
 	return pci_register_driver(&e1000_driver);
 }
 

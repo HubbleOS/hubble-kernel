@@ -97,7 +97,7 @@ static int map_apic_mmio_page(uint64_t phys)
 
 	if (vmm_map_page(virt, page, VMM_MAP_MMIO) < 0)
 	{
-		printk("ERROR: failed to map APIC MMIO phys=0x%lx virt=%p\n",
+		printk(KERN_ERR "ERROR: failed to map APIC MMIO phys=0x%lx virt=%p\n",
 		       page, (void *)virt);
 		return -1;
 	}
@@ -188,15 +188,15 @@ void lapic_timer_init(uint32_t frequency_hz)
 {
 	if (!apic_state.lapic_base && apic_mode != APIC_INIT_X2APIC)
 	{
-		printk("ERROR: LAPIC not initialized\n");
+		printk(KERN_ERR "ERROR: LAPIC not initialized\n");
 		return;
 	}
 
-	printk("Testing HPET delay...\n");
+	printk(KERN_INFO "Testing HPET delay...\n");
 	uint64_t hpet_before = hpet_get_counter();
 	hpet_delay_ms(10);
 	uint64_t hpet_after = hpet_get_counter();
-	printk("HPET ticks in 10ms: %llu\n", hpet_after - hpet_before);
+	printk(KERN_INFO "HPET ticks in 10ms: %llu\n", hpet_after - hpet_before);
 
 	lapic_write(LAPIC_TIMER_DCR, 0x3);
 
@@ -208,7 +208,7 @@ void lapic_timer_init(uint32_t frequency_hz)
 	lapic_write(LAPIC_TIMER_ICR, 0xFFFFFFFF);
 
 	uint32_t ccr_start = lapic_read(LAPIC_TIMER_CCR);
-	printk("Timer started, CCR = 0x%08x\n", ccr_start);
+	printk(KERN_INFO "Timer started, CCR = 0x%08x\n", ccr_start);
 
 	// Wait 10ms
 	hpet_delay_ms(10);
@@ -221,12 +221,12 @@ void lapic_timer_init(uint32_t frequency_hz)
 
 	uint32_t elapsed = ccr_start - ccr_final;
 
-	printk("CCR after 10ms: 0x%08x\n", ccr_final);
-	printk("Elapsed ticks: %u\n", elapsed);
+	printk(KERN_INFO "CCR after 10ms: 0x%08x\n", ccr_final);
+	printk(KERN_INFO "Elapsed ticks: %u\n", elapsed);
 
 	if (elapsed == 0 || elapsed < 1000)
 	{
-		printk("ERROR: LAPIC timer calibration failed (elapsed too small)\n");
+		printk(KERN_ERR "ERROR: LAPIC timer calibration failed (elapsed too small)\n");
 		return;
 	}
 
@@ -235,11 +235,11 @@ void lapic_timer_init(uint32_t frequency_hz)
 
 	if (ticks_per_interrupt == 0)
 	{
-		printk("ERROR: Frequency too high for LAPIC timer\n");
+		printk(KERN_ERR "ERROR: Frequency too high for LAPIC timer\n");
 		return;
 	}
 
-	printk("Calculated: %u ticks for %u Hz interrupt\n", ticks_per_interrupt, frequency_hz);
+	printk(KERN_INFO "Calculated: %u ticks for %u Hz interrupt\n", ticks_per_interrupt, frequency_hz);
 
 	// Setup timer in periodic mode
 	lapic_write(LAPIC_TIMER, LAPIC_TIMER_VECTOR | LAPIC_TIMER_PERIODIC);
@@ -248,16 +248,16 @@ void lapic_timer_init(uint32_t frequency_hz)
 
 	// verify ticks
 	uint32_t icr = lapic_read(LAPIC_TIMER_ICR);
-	printk("LAPIC timer ICR: 0x%08x\n", icr);
+	printk(KERN_INFO "LAPIC timer ICR: 0x%08x\n", icr);
 
 	// Verify it's configured correctly
 	uint32_t lvt = lapic_read(LAPIC_TIMER);
-	printk("LVT Timer: 0x%08x (Vector=%u, Periodic=%s, Masked=%s)\n",
+	printk(KERN_INFO "LVT Timer: 0x%08x (Vector=%u, Periodic=%s, Masked=%s)\n",
 	       lvt, lvt & 0xFF,
 	       (lvt & (1 << 17)) ? "YES" : "NO",
 	       (lvt & (1 << 16)) ? "YES" : "NO");
 
-	printk("LAPIC timer initialized (%u Hz, %u ticks/int)\n",
+	printk(KERN_OK "LAPIC timer initialized (%u Hz, %u ticks/int)\n",
 	       frequency_hz, ticks_per_interrupt);
 }
 
@@ -265,7 +265,7 @@ void lapic_send_ipi(uint32_t dest, uint8_t vector)
 {
 	if (!apic_state.lapic_base && apic_mode != APIC_INIT_X2APIC)
 	{
-		printk("ERROR: LAPIC not initialized\n");
+		printk(KERN_ERR "ERROR: LAPIC not initialized\n");
 		return;
 	}
 
@@ -292,11 +292,11 @@ void lapic_send_init_ipi(uint8_t dest_apic_id)
 {
 	if (!apic_state.lapic_base && apic_mode != APIC_INIT_X2APIC)
 	{
-		printk("ERROR: LAPIC not initialized\n");
+		printk(KERN_ERR "ERROR: LAPIC not initialized\n");
 		return;
 	}
 
-	printk("Sending INIT IPI to APIC ID %u\n", dest_apic_id);
+	printk(KERN_INFO "Sending INIT IPI to APIC ID %u\n", dest_apic_id);
 
 	if (apic_mode == APIC_INIT_X2APIC)
 	{
@@ -335,37 +335,37 @@ void lapic_send_init_ipi(uint8_t dest_apic_id)
 			;
 	}
 
-	printk("INIT IPI sent\n");
+	printk(KERN_INFO "INIT IPI sent\n");
 }
 
 void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 {
 	if (!apic_state.lapic_base && apic_mode != APIC_INIT_X2APIC)
 	{
-		printk("ERROR: LAPIC base not initialized\n");
+		printk(KERN_ERR "ERROR: LAPIC base not initialized\n");
 		return;
 	}
 
-	printk("Sending STARTUP IPI");
-	printk("Destination APIC ID: %u\n", dest_apic_id);
-	printk("Vector: 0x%02x\n", vector);
-	printk("Target physical address: 0x%05x\n", (uint32_t)vector << 12);
-	printk("APIC Mode: %s\n", apic_mode == APIC_INIT_X2APIC ? "x2APIC" : "xAPIC");
+	printk(KERN_INFO "Sending STARTUP IPI");
+	printk(KERN_INFO "Destination APIC ID: %u\n", dest_apic_id);
+	printk(KERN_INFO "Vector: 0x%02x\n", vector);
+	printk(KERN_INFO "Target physical address: 0x%05x\n", (uint32_t)vector << 12);
+	printk(KERN_INFO "APIC Mode: %s\n", apic_mode == APIC_INIT_X2APIC ? "x2APIC" : "xAPIC");
 
 	// Check LAPIC is enabled
 	uint32_t svr = lapic_read(LAPIC_SVR);
-	printk("LAPIC SVR: 0x%08x %s\n", svr,
+	printk(KERN_INFO "LAPIC SVR: 0x%08x %s\n", svr,
 	       (svr & 0x100) ? "[ENABLED]" : "[DISABLED!]");
 
 	if (!(svr & 0x100))
 	{
-		printk("ERROR: LAPIC not enabled!\n");
+		printk(KERN_ERR "ERROR: LAPIC not enabled!\n");
 		return;
 	}
 
 	// Check error status before sending
 	uint32_t esr_before = lapic_read(LAPIC_ESR);
-	printk("ESR before: 0x%08x\n", esr_before);
+	printk(KERN_INFO "ESR before: 0x%08x\n", esr_before);
 
 	// x2APIC uses a single 64-bit ICR write, xAPIC uses two 32-bit writes
 	if (apic_mode == APIC_INIT_X2APIC)
@@ -379,28 +379,28 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 			       (1 << 14) |			// Level: Assert
 			       (0 << 15);
 
-		printk("Writing x2APIC ICR (single 64-bit MSR):\n");
-		printk("  Destination (bits 63:32): 0x%08x\n", dest_apic_id);
-		printk("  Vector (bits 0-7):        0x%02x\n", vector & 0xFF);
-		printk("  Delivery mode (bits 8-10): %u (STARTUP)\n", 6);
-		printk("  Full ICR value:           0x%016llx\n", icr);
+		printk(KERN_INFO "Writing x2APIC ICR (single 64-bit MSR):\n");
+		printk(KERN_INFO "  Destination (bits 63:32): 0x%08x\n", dest_apic_id);
+		printk(KERN_INFO "  Vector (bits 0-7):        0x%02x\n", vector & 0xFF);
+		printk(KERN_INFO "  Delivery mode (bits 8-10): %u (STARTUP)\n", 6);
+		printk(KERN_INFO "  Full ICR value:           0x%016llx\n", icr);
 
 		// Write ICR as a single atomic operation
 		wrmsr(0x830, icr);
 
 		// x2APIC ICR writes are self-synchronizing, no busy-wait needed
-		printk("x2APIC ICR write completed (self-synchronizing)\n");
+		printk(KERN_OK "x2APIC ICR write completed (self-synchronizing)\n");
 	}
 	else
 	{
 		// xAPIC: Traditional two-register write (ICR_HIGH then ICR_LOW)
 		uint32_t icr_high = ((uint32_t)dest_apic_id) << 24;
-		printk("Writing xAPIC ICR_HIGH: 0x%08x\n", icr_high);
+		printk(KERN_INFO "Writing xAPIC ICR_HIGH: 0x%08x\n", icr_high);
 		lapic_write(LAPIC_ICR_HIGH, icr_high);
 
 		// Verify write
 		uint32_t icr_high_read = lapic_read(LAPIC_ICR_HIGH);
-		printk("ICR_HIGH readback: 0x%08x %s\n", icr_high_read,
+		printk(KERN_INFO "ICR_HIGH readback: 0x%08x %s\n", icr_high_read,
 		       (icr_high_read == icr_high) ? "[OK]" : "[MISMATCH!]");
 
 		// Memory barrier
@@ -408,18 +408,18 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 
 		uint32_t icr_low = (vector & 0xFF) | (6 << 8);
 
-		printk("Writing xAPIC ICR_LOW: 0x%08x\n", icr_low);
-		printk("  Vector field (bits 0-7):    0x%02x\n", icr_low & 0xFF);
-		printk("  Delivery mode (bits 8-10):  %u (STARTUP)\n", (icr_low >> 8) & 0x7);
-		printk("  Level (bit 14):             %u\n", (icr_low >> 14) & 1);
-		printk("  Trigger (bit 15):           %u\n", (icr_low >> 15) & 1);
+		printk(KERN_INFO "Writing xAPIC ICR_LOW: 0x%08x\n", icr_low);
+		printk(KERN_INFO "  Vector field (bits 0-7):    0x%02x\n", icr_low & 0xFF);
+		printk(KERN_INFO "  Delivery mode (bits 8-10):  %u (STARTUP)\n", (icr_low >> 8) & 0x7);
+		printk(KERN_INFO "  Level (bit 14):             %u\n", (icr_low >> 14) & 1);
+		printk(KERN_INFO "  Trigger (bit 15):           %u\n", (icr_low >> 15) & 1);
 
 		lapic_write(LAPIC_ICR_LOW, icr_low);
 
 		// Immediate readback
 		uint32_t icr_low_read = lapic_read(LAPIC_ICR_LOW);
-		printk("ICR_LOW readback: 0x%08x\n", icr_low_read);
-		printk("  Delivery Status (bit 12): %s\n",
+		printk(KERN_INFO "ICR_LOW readback: 0x%08x\n", icr_low_read);
+		printk(KERN_INFO "  Delivery Status (bit 12): %s\n",
 		       (icr_low_read & (1 << 12)) ? "Send Pending" : "Idle");
 
 		// Wait for delivery to complete
@@ -432,41 +432,41 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 
 		if (timeout == 0)
 		{
-			printk("WARNING: SIPI delivery timeout!\n");
+			printk(KERN_WARNING "WARNING: SIPI delivery timeout!\n");
 		}
 		else
 		{
-			printk("SIPI delivery completed (iterations left: %d)\n", timeout);
+			printk(KERN_OK "SIPI delivery completed (iterations left: %d)\n", timeout);
 		}
 	}
 
 	// Check error status after
 	uint32_t esr_after = lapic_read(LAPIC_ESR);
-	printk("ESR after: 0x%08x\n", esr_after);
+	printk(KERN_INFO "ESR after: 0x%08x\n", esr_after);
 
 	if (esr_after != 0)
 	{
-		printk("ERROR: LAPIC errors detected!\n");
+		printk(KERN_ERR "ERROR: LAPIC errors detected!\n");
 		if (esr_after & 0x01)
-			printk("  - Send Checksum Error\n");
+			printk(KERN_ERR "  - Send Checksum Error\n");
 		if (esr_after & 0x02)
-			printk("  - Receive Checksum Error\n");
+			printk(KERN_ERR "  - Receive Checksum Error\n");
 		if (esr_after & 0x04)
-			printk("  - Send Accept Error\n");
+			printk(KERN_ERR "  - Send Accept Error\n");
 		if (esr_after & 0x08)
-			printk("  - Receive Accept Error\n");
+			printk(KERN_ERR "  - Receive Accept Error\n");
 		if (esr_after & 0x20)
-			printk("  - Send Illegal Vector\n");
+			printk(KERN_INFO "  - Send Illegal Vector\n");
 		if (esr_after & 0x40)
-			printk("  - Receive Illegal Vector\n");
+			printk(KERN_INFO "  - Receive Illegal Vector\n");
 		if (esr_after & 0x80)
-			printk("  - Illegal Register Address\n");
+			printk(KERN_INFO "  - Illegal Register Address\n");
 	}
 
-	printk("STARTUP IPI Complete\n");
+	printk(KERN_OK "STARTUP IPI Complete\n");
 
 	// At the END of lapic_send_startup_ipi(), add:
-	printk("POST-SIPI VERIFICATION");
+	printk(KERN_INFO "POST-SIPI VERIFICATION");
 
 	// Small delay to let SIPI process
 	for (volatile int i = 0; i < 100000; i++)
@@ -476,13 +476,13 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 	if (apic_mode == APIC_INIT_X2APIC)
 	{
 		uint64_t icr = rdmsr(0x830);
-		printk("ICR after delay: 0x%016llx\n", icr);
-		printk("  Delivery Status (bit 12): %s\n",
+		printk(KERN_INFO "ICR after delay: 0x%016llx\n", icr);
+		printk(KERN_INFO "  Delivery Status (bit 12): %s\n",
 		       (icr & (1ULL << 12)) ? "STILL PENDING (!)" : "Complete");
 
 		if (icr & (1ULL << 12))
 		{
-			printk("ERROR: SIPI delivery still pending - may not have been sent!\n");
+			printk(KERN_ERR "ERROR: SIPI delivery still pending - may not have been sent!\n");
 		}
 	}
 
@@ -490,74 +490,74 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 	uint32_t esr = lapic_read(LAPIC_ESR);
 	if (esr != 0)
 	{
-		printk("ERROR: LAPIC ESR shows errors: 0x%08x\n", esr);
+		printk(KERN_ERR "ERROR: LAPIC ESR shows errors: 0x%08x\n", esr);
 		if (esr & 0x04)
 		{
-			printk("  Send Accept Error - Destination AP didn't accept IPI!\n");
-			printk("  This means the AP either doesn't exist or isn't ready.\n");
+			printk(KERN_ERR "  Send Accept Error - Destination AP didn't accept IPI!\n");
+			printk(KERN_INFO "  This means the AP either doesn't exist or isn't ready.\n");
 		}
 	}
 
-	printk("END POST-SIPI VERIFICATION\n");
+	printk(KERN_INFO "END POST-SIPI VERIFICATION\n");
 }
 void apic_debug_check(void)
 {
-	printk("LAPIC Debug Check");
-	printk("APIC Mode: %s\n", apic_mode == APIC_INIT_X2APIC ? "x2APIC" : "xAPIC");
+	printk(KERN_INFO "LAPIC Debug Check");
+	printk(KERN_INFO "APIC Mode: %s\n", apic_mode == APIC_INIT_X2APIC ? "x2APIC" : "xAPIC");
 
 	if (apic_mode == APIC_INIT_X2APIC)
 	{
-		printk("x2APIC mode - using MSR access\n");
+		printk(KERN_INFO "x2APIC mode - using MSR access\n");
 		uint32_t id = (uint32_t)rdmsr(0x802);
-		printk("LAPIC ID (MSR 0x802): 0x%08x\n", id);
+		printk(KERN_INFO "LAPIC ID (MSR 0x802): 0x%08x\n", id);
 
 		uint32_t version = (uint32_t)rdmsr(0x803);
-		printk("LAPIC Version (MSR 0x803): 0x%08x\n", version);
+		printk(KERN_INFO "LAPIC Version (MSR 0x803): 0x%08x\n", version);
 
 		uint64_t svr = rdmsr(0x80F);
-		printk("LAPIC SVR (MSR 0x80F): 0x%llx %s\n", svr,
+		printk(KERN_INFO "LAPIC SVR (MSR 0x80F): 0x%llx %s\n", svr,
 		       (svr & 0x100) ? "[ENABLED]" : "[DISABLED!]");
 
-		printk("End LAPIC Debug\n");
+		printk(KERN_INFO "End LAPIC Debug\n");
 		return;
 	}
 
 	// xAPIC mode - MMIO access
 	uint64_t lapic_phys = acpi_get_lapic_address();
-	printk("LAPIC physical: 0x%lx\n", lapic_phys);
-	printk("apic_state.lapic_base: %p\n", apic_state.lapic_base);
+	printk(KERN_INFO "LAPIC physical: 0x%lx\n", lapic_phys);
+	printk(KERN_INFO "apic_state.lapic_base: %p\n", apic_state.lapic_base);
 
 	if (!apic_state.lapic_base)
 	{
-		printk("ERROR: LAPIC base is NULL!\n");
+		printk(KERN_ERR "ERROR: LAPIC base is NULL!\n");
 		return;
 	}
 
 	// Try to read LAPIC ID
 	volatile uint32_t *lapic_id_reg = apic_state.lapic_base + (LAPIC_ID / 4);
-	printk("Reading from: %p\n", lapic_id_reg);
+	printk(KERN_INFO "Reading from: %p\n", lapic_id_reg);
 
 	uint32_t id = *lapic_id_reg;
-	printk("LAPIC ID register: 0x%08x\n", id);
+	printk(KERN_INFO "LAPIC ID register: 0x%08x\n", id);
 
 	if (id == 0xFFFFFFFF || id == 0x00000000)
 	{
-		printk("ERROR: LAPIC not accessible (got 0x%08x)!\n", id);
-		printk("       Either not mapped or wrong address\n");
+		printk(KERN_ERR "ERROR: LAPIC not accessible (got 0x%08x)!\n", id);
+		printk(KERN_ERR "       Either not mapped or wrong address\n");
 	}
 
 	// Check if page is mapped
-	printk("\nChecking page table mapping:\n");
+	printk(KERN_INFO "\nChecking page table mapping:\n");
 	uint64_t virt = (uint64_t)apic_state.lapic_base;
-	printk("Virtual address: 0x%lx\n", virt);
+	printk(KERN_INFO "Virtual address: 0x%lx\n", virt);
 
 	// Try direct physical access (if identity mapped)
 	volatile uint32_t *direct = (volatile uint32_t *)(0xFFFF800000000000ULL + lapic_phys);
-	printk("Direct mapping attempt: %p\n", direct);
+	printk(KERN_INFO "Direct mapping attempt: %p\n", direct);
 	uint32_t direct_read = *direct;
-	printk("Direct read: 0x%08x\n", direct_read);
+	printk(KERN_INFO "Direct read: 0x%08x\n", direct_read);
 
-	printk("End LAPIC Debug\n");
+	printk(KERN_INFO "End LAPIC Debug\n");
 }
 
 // === I/O APIC Functions ===
@@ -664,7 +664,7 @@ int lapic_init_x2apic(void)
 
 int lapic_init_xapic(void)
 {
-	printk("xAPIC mode enabled\n");
+	printk(KERN_OK "xAPIC mode enabled\n");
 
 	uint64_t lapic_phys = acpi_get_lapic_address();
 
@@ -694,7 +694,7 @@ void find_ioapic(uint8_t id, uint32_t addr, uint32_t gsi, void *ctx)
 		data->found = true;
 		data->address = addr;
 		data->gsi_base = gsi;
-		printk("I/O APIC found: ID=%u addr=0x%x GSI_base=%u\n", id, addr, gsi);
+		printk(KERN_INFO "I/O APIC found: ID=%u addr=0x%x GSI_base=%u\n", id, addr, gsi);
 	}
 }
 
@@ -702,22 +702,22 @@ int apic_init(void)
 {
 	if (!acpi_is_initialized())
 	{
-		printk("ACPI not initialized\n");
+		printk(KERN_ERR "ACPI not initialized\n");
 		return -1;
 	}
 
 	uint64_t lapic_phys = acpi_get_lapic_address();
 	if (!lapic_phys)
 	{
-		printk("Local APIC address not found\n");
+		printk(KERN_ERR "Local APIC address not found\n");
 		return -1;
 	}
 
-	printk("Local APIC physical address: 0x%lx\n", lapic_phys);
+	printk(KERN_INFO "Local APIC physical address: 0x%lx\n", lapic_phys);
 
 	if (cpu_has_x2apic())
 	{
-		printk("x2APIC mode detected\n");
+		printk(KERN_INFO "x2APIC mode detected\n");
 		lapic_init_x2apic();
 	}
 	else
@@ -726,12 +726,12 @@ int apic_init(void)
 	}
 
 	uint64_t apic_base = rdmsr(0x1B);
-	printk("APIC=%d x2APIC=%d\n",
+	printk(KERN_INFO "APIC=%d x2APIC=%d\n",
 	       !!(apic_base & (1ULL << 11)),
 	       !!(apic_base & (1ULL << 10)));
 
 	apic_state.bsp_id = lapic_get_id();
-	printk("BSP APIC ID: %u\n", apic_state.bsp_id);
+	printk(KERN_INFO "BSP APIC ID: %u\n", apic_state.bsp_id);
 
 	lapic_enable();
 
@@ -747,7 +747,7 @@ int apic_init(void)
 
 	if (!ioapic_ctx.found)
 	{
-		printk("No I/O APIC found\n");
+		printk(KERN_INFO "No I/O APIC found\n");
 		return -1;
 	}
 
@@ -759,17 +759,17 @@ int apic_init(void)
 	apic_state.ioapic_base = (volatile uint32_t *)phys_to_virt(ioapic_phys);
 	apic_state.ioapic_gsi_base = ioapic_ctx.gsi_base;
 
-	printk("I/O APIC: phys=0x%lx virt=%p\n", ioapic_phys, apic_state.ioapic_base);
+	printk(KERN_INFO "I/O APIC: phys=0x%lx virt=%p\n", ioapic_phys, apic_state.ioapic_base);
 
 	uint32_t ver = ioapic_read(IOAPIC_REG_VER);
 	if (ver == 0 || ver == 0xFFFFFFFF)
 	{
-		printk("ERROR: I/O APIC not accessible!\n");
+		printk(KERN_ERR "ERROR: I/O APIC not accessible!\n");
 		return -1;
 	}
 
 	apic_state.ioapic_max_redirect = ((ver >> 16) & 0xFF) + 1;
-	printk("I/O APIC version: 0x%x, max redirects: %u\n",
+	printk(KERN_INFO "I/O APIC version: 0x%x, max redirects: %u\n",
 	       ver & 0xFF, apic_state.ioapic_max_redirect);
 
 	for (uint32_t i = 0; i < apic_state.ioapic_max_redirect; i++)
@@ -778,7 +778,7 @@ int apic_init(void)
 	acpi_enum_isos(setup_iso_callback, NULL);
 
 	apic_state.initialized = true;
-	printk("APIC initialized successfully\n");
+	printk(KERN_OK "APIC initialized successfully\n");
 	return 0;
 }
 
@@ -815,35 +815,35 @@ void apic_start_ap(uint8_t apic_id, uint32_t trampoline_addr)
 	if (!apic_state.initialized)
 		return;
 
-	printk("Starting AP with APIC ID %u", apic_id);
-	printk("Trampoline at physical 0x%x\n", trampoline_addr);
+	printk(KERN_INFO "Starting AP with APIC ID %u", apic_id);
+	printk(KERN_INFO "Trampoline at physical 0x%x\n", trampoline_addr);
 
 	uint8_t vector = (trampoline_addr >> 12) & 0xFF;
-	printk("SIPI vector: 0x%02x (starts at 0x%05x)\n", vector, vector << 12);
+	printk(KERN_INFO "SIPI vector: 0x%02x (starts at 0x%05x)\n", vector, vector << 12);
 
 	// === STEP 1: INIT IPI (puts AP in wait-for-SIPI state) ===
-	printk("\nStep 1: Sending INIT IPI...\n");
+	printk(KERN_INFO "\nStep 1: Sending INIT IPI...\n");
 
 	lapic_send_init_ipi(apic_id);
 	// === STEP 2: Wait 10ms for INIT to take effect ===
-	printk("Step 2: Waiting 10ms...\n");
+	printk(KERN_INFO "Step 2: Waiting 10ms...\n");
 	for (volatile int i = 0; i < 10000000; i++)
 		cpu_pause();
 
 	// === STEP 3: First STARTUP IPI ===
-	printk("Step 3: Sending first SIPI...\n");
+	printk(KERN_INFO "Step 3: Sending first SIPI...\n");
 	lapic_send_startup_ipi(apic_id, vector);
 
 	// === STEP 4: Wait 200us ===
-	printk("Step 4: Waiting 200us...\n");
+	printk(KERN_INFO "Step 4: Waiting 200us...\n");
 	for (volatile int i = 0; i < 200000; i++)
 		cpu_pause();
 
 	// === STEP 5: Second STARTUP IPI (per Intel MP spec) ===
-	printk("Step 5: Sending second SIPI...\n");
+	printk(KERN_INFO "Step 5: Sending second SIPI...\n");
 	lapic_send_startup_ipi(apic_id, vector);
 
-	printk("AP startup sequence complete\n");
+	printk(KERN_OK "AP startup sequence complete\n");
 }
 
 static bool using_apic = false;

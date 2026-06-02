@@ -32,14 +32,14 @@ void ip_send(uint32_t dst_ip, uint8_t proto, const void *payload, uint16_t paylo
 	uint8_t dst_mac[6];
 	if (arp_lookup(dst_ip, dst_mac) != 0)
 	{
-		printk("[ip] no ARP entry\n");
+		printk(KERN_INFO "[ip] no ARP entry\n");
 		return;
 	}
 
-	printk("[ip] dst_mac=%02x:%02x:%02x:%02x:%02x:%02x\n",
+	printk(KERN_INFO "[ip] dst_mac=%02x:%02x:%02x:%02x:%02x:%02x\n",
 		   dst_mac[0], dst_mac[1], dst_mac[2],
 		   dst_mac[3], dst_mac[4], dst_mac[5]);
-	printk("[ip] dst=%d.%d.%d.%d proto=%d len=%d\n",
+	printk(KERN_INFO "[ip] dst=%d.%d.%d.%d proto=%d len=%d\n",
 		   ((uint8_t *)&dst_ip)[0], ((uint8_t *)&dst_ip)[1],
 		   ((uint8_t *)&dst_ip)[2], ((uint8_t *)&dst_ip)[3],
 		   proto, payload_len);

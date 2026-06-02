@@ -97,7 +97,7 @@ static void do_initcalls_range(initcall_t *start, initcall_t *end)
 	{
 		int ret = (*fn)();
 		if (ret != 0)
-			printk("[init] initcall %p failed: %d\n", fn, ret);
+			printk(KERN_ERR "[init] initcall %p failed: %d\n", fn, ret);
 	}
 }
 
@@ -129,7 +129,7 @@ BootInfo *g_boot_info;
 
 void test()
 {
-	printk("hello");
+	printk(KERN_INFO "hello");
 }
 
 #include <higher_half.h>
@@ -145,7 +145,7 @@ void start_kernel(void)
 	void *virt = (void *)test;
 	void *phys = (void *)virt_to_phys((uint64_t)virt);
 
-	printk("virt: %p\nphys: %p\n", virt, phys);
+	printk(KERN_INFO "virt: %p\nphys: %p\n", virt, phys);
 
 	boot_cpu_init();
 	acpi_init(g_boot_info->rsdp); // parses MADT, learns LAPIC/IOAPIC addresses
@@ -161,6 +161,8 @@ void start_kernel(void)
 	// }
 
 	//
+
+	printk(KERN_ERR "test Error code\n");
 
 	do_initcalls();
 
@@ -234,11 +236,11 @@ void start_kernel(void)
 
 void kmain_thread(void)
 {
-	printk("kmain thread\n");
+	printk(KERN_INFO "kmain thread\n");
 	VFS_File *pipe = vfs_open("/pipe/term", VFS_O_RDWR | VFS_O_CREAT);
 	if (pipe == NULL)
 	{
-		printk("failed to open pipe\n");
+		printk(KERN_ERR "failed to open pipe\n");
 		while (1)
 		{
 			hlt();
@@ -248,7 +250,7 @@ void kmain_thread(void)
 	VFS_File *tty_out = vfs_open("/pipe/tty0_out", VFS_O_RDWR | VFS_O_CREAT);
 	if (tty_out == NULL)
 	{
-		printk("failed to open pipe /pipe/tty0_out\n");
+		printk(KERN_ERR "failed to open pipe /pipe/tty0_out\n");
 		while (1)
 			hlt();
 	}

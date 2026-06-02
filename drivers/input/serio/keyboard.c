@@ -332,14 +332,14 @@ static void keyboard_init(void)
 	uint8_t act;
 	keyboard_write(0xF0);
 	act = keyboard_read();
-	printk("Keyboard active: %02x\n", act);
+	printk(KERN_INFO "Keyboard active: %02x\n", act);
 
 	keyboard_write(0x01);
 	act = keyboard_read();
-	printk("Keyboard active: %02x\n", act);
+	printk(KERN_INFO "Keyboard active: %02x\n", act);
 
 	__asm__ volatile("sti");
-	printk("Keyboard initialized\n");
+	printk(KERN_OK "Keyboard initialized\n");
 }
 
 /* ── initcall ────────────────────────────────────────────────────────────── */

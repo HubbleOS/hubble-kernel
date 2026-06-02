@@ -65,7 +65,7 @@ void gdt_init(void)
 	gdt_ptr.limit = sizeof(gdt_table) - 1;
 	gdt_ptr.base = (uint64_t)&gdt_table;
 
-	printk("GDT Pointer: %p\n", gdt_ptr.base);
+	printk(KERN_INFO "GDT Pointer: %p\n", gdt_ptr.base);
 
 	// Очищаємо таблицю
 	memset(&gdt_table, 0, sizeof(gdt_table));
@@ -105,7 +105,7 @@ void gdt_init(void)
 
 uint64_t get_gdt_base(void)
 {
-	printk("GDT Base: %p\n", gdt_ptr.base);
+	printk(KERN_INFO "GDT Base: %p\n", gdt_ptr.base);
 	return gdt_ptr.base;
 }
 

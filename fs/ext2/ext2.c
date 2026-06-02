@@ -87,7 +87,7 @@ int ext2_read_group_desc(EXT2_FS *fs)
 	uint8_t *buf = kmalloc(blocks_needed * fs->block_size, GFP_KERNEL);
 	if (!buf)
 	{
-		printk("EXT2: failed to alloc group desc buffer\n");
+		printk(KERN_ERR "EXT2: failed to alloc group desc buffer\n");
 		return -1;
 	}
 
@@ -100,42 +100,42 @@ int ext2_read_group_desc(EXT2_FS *fs)
 	if (!fs->groups)
 	{
 		kfree(buf);
-		printk("EXT2: failed to alloc fs->groups\n");
+		printk(KERN_ERR "EXT2: failed to alloc fs->groups\n");
 		return -1;
 	}
 
 	memcpy(fs->groups, buf, desc_size);
 	kfree(buf);
 
-	printk("EXT2: read %u group descriptors\n", groups_count);
-	printk("inode_table: %u\n", fs->groups[0].inode_table);
+	printk(KERN_INFO "EXT2: read %u group descriptors\n", groups_count);
+	printk(KERN_INFO "inode_table: %u\n", fs->groups[0].inode_table);
 	return 0;
 }
 
 int ext2_read_superblock(EXT2_FS *fs)
 {
 	uint8_t buf[1024];
-	printk("Reading superblock\n");
+	printk(KERN_INFO "Reading superblock\n");
 	// Суперблок завжди починається через 1024 байти після початку розділу
 	uint32_t superblock_lba = fs->first_lba + 2; // 1024 / 512 = 2 секторa
-	printk("Superblock LBA: %u\n", superblock_lba);
+	printk(KERN_INFO "Superblock LBA: %u\n", superblock_lba);
 	if (!fs->read_sector)
 	{
-		printk("EXT2: read_sector is NULL\n");
+		printk(KERN_ERR "EXT2: read_sector is NULL\n");
 		return -1;
 	}
 	for (int i = 0; i < 2; i++) // читаємо 1024 байти (2×512)
 		fs->read_sector(fs->device, superblock_lba + i, buf + i * 512);
-	printk("EXT2: read superblock\n");
+	printk(KERN_INFO "EXT2: read superblock\n");
 	Ext2Superblock *sb = (Ext2Superblock *)buf;
 
 	if (sb->s_magic != 0xEF53)
 	{
-		printk("EXT2: invalid magic 0x%x (expected 0xEF53)\n", sb->s_magic);
-		printk("first_lba=%u superblock_lba=%u\n", fs->first_lba, superblock_lba);
+		printk(KERN_ERR "EXT2: invalid magic 0x%x (expected 0xEF53)\n", sb->s_magic);
+		printk(KERN_INFO "first_lba=%u superblock_lba=%u\n", fs->first_lba, superblock_lba);
 		return -1;
 	}
-	printk("EXT2: magic ok 0x%x\n", sb->s_magic);
+	printk(KERN_OK "EXT2: magic ok 0x%x\n", sb->s_magic);
 	fs->inodes_count = sb->s_inodes_count;
 	fs->blocks_count = sb->s_blocks_count;
 	fs->first_data_block = sb->s_first_data_block;
@@ -147,30 +147,30 @@ int ext2_read_superblock(EXT2_FS *fs)
 
 	fs->inode_size = (sb->s_inode_size && sb->s_inode_size >= 128) ? sb->s_inode_size : 128;
 
-	printk("EXT2: magic ok 0x%x\n", sb->s_magic);
-	printk("EXT2: block size = %u bytes\n", fs->block_size);
-	printk("EXT2: inodes = %u, blocks = %u\n", fs->inodes_count, fs->blocks_count);
+	printk(KERN_OK "EXT2: magic ok 0x%x\n", sb->s_magic);
+	printk(KERN_INFO "EXT2: block size = %u bytes\n", fs->block_size);
+	printk(KERN_INFO "EXT2: inodes = %u, blocks = %u\n", fs->inodes_count, fs->blocks_count);
 
 	return 0;
 }
 int ext2_read_inode(EXT2_FS *fs, uint32_t inode_number, Ext2Inode *out_inode)
 {
-	printk("Reading inode in func %u\n", inode_number);
+	printk(KERN_INFO "Reading inode in func %u\n", inode_number);
 	uint32_t group = (inode_number - 1) / fs->inodes_per_group;
 	uint32_t index = (inode_number - 1) % fs->inodes_per_group;
-	printk("group=%u index=%u\n", group, index);
+	printk(KERN_INFO "group=%u index=%u\n", group, index);
 
-	printk("inode_table=%u\n", fs->groups[0].inode_table);
-	printk("inode_size=%u\n", fs->inode_size);
+	printk(KERN_INFO "inode_table=%u\n", fs->groups[0].inode_table);
+	printk(KERN_INFO "inode_size=%u\n", fs->inode_size);
 	Ext2GroupDesc *gd = &fs->groups[group];
 	uint32_t inode_table_block = gd->inode_table;
 
 	if (inode_table_block == 0)
 	{
-		printk("inode_table_block == 0\n");
+		printk(KERN_INFO "inode_table_block == 0\n");
 		return -1;
 	}
-	printk("inode_table_block=%u\n", inode_table_block);
+	printk(KERN_INFO "inode_table_block=%u\n", inode_table_block);
 
 	uint32_t inode_size = fs->inode_size;
 	uint32_t offset = index * inode_size;
@@ -181,11 +181,11 @@ int ext2_read_inode(EXT2_FS *fs, uint32_t inode_number, Ext2Inode *out_inode)
 	uint8_t *block_buf = kmalloc(fs->block_size, GFP_KERNEL);
 	if (!block_buf)
 		return -1;
-	printk("inode_table_block=%u block_offset=%u offset_in_block=%u\n", inode_table_block, block_offset, offset_in_block);
+	printk(KERN_INFO "inode_table_block=%u block_offset=%u offset_in_block=%u\n", inode_table_block, block_offset, offset_in_block);
 	ext2_read_block(fs, inode_table_block + block_offset, block_buf);
-	printk("inode_size=%u\n", inode_size);
+	printk(KERN_INFO "inode_size=%u\n", inode_size);
 	memcpy(out_inode, block_buf + offset_in_block, sizeof(Ext2Inode)); // переконайсь, що sizeof(Ext2Inode) <= inode_size
-	printk("inode read\n");
+	printk(KERN_INFO "inode read\n");
 	kfree(block_buf);
 	return 0;
 }
@@ -194,21 +194,21 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode)
 {
 	if (!IS_DIR(dir_inode->mode))
 	{
-		printk("Not a directory\n");
+		printk(KERN_INFO "Not a directory\n");
 		return Directory_init((Directory){.entries = NULL, .count = 0});
 	}
 
 	uint8_t *block_buf = kmalloc(fs->block_size, GFP_KERNEL);
 
-	printk("Listing directory (size=%u bytes)\n", dir_inode->size);
+	printk(KERN_INFO "Listing directory (size=%u bytes)\n", dir_inode->size);
 
 	Directory dir = Directory_init((Directory){.entries = kmalloc(1024, GFP_KERNEL), .count = 0});
 
 	for (int i = 0; i < 12 && dir_inode->block[i]; i++) // тільки прямі блоки для простої версії
 	{
-		printk("read in for");
+		printk(KERN_INFO "read in for");
 		ext2_read_block(fs, dir_inode->block[i], block_buf);
-		printk("test");
+		printk(KERN_INFO "test");
 		uint32_t offset = 0;
 		while (offset < fs->block_size)
 		{
@@ -219,11 +219,11 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode)
 			dir.entries[dir.count].name = kmalloc(entry->name_len + 1, GFP_KERNEL);
 			if (!dir.entries[dir.count].name)
 			{
-				printk("failed");
+				printk(KERN_ERR "failed");
 			}
-			printk("teto 2");
+			printk(KERN_INFO "teto 2");
 			memcpy(dir.entries[dir.count].name, entry->name, entry->name_len);
-			printk("teto3 count - %d\n", dir.count);
+			printk(KERN_INFO "teto3 count - %d\n", dir.count);
 			dir.entries[dir.count]
 				.name[entry->name_len] = '\0';
 			dir.entries[dir.count].is_dir = entry->file_type == 0x10;
@@ -239,7 +239,7 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode)
 			}
 		}
 	}
-	printk("teto ultima");
+	printk(KERN_INFO "teto ultima");
 	kfree(block_buf);
 	return dir;
 }
@@ -361,21 +361,21 @@ uint32_t ext2_create_file(EXT2_FS *fs, uint32_t parent_inode, const char *name)
 
 int ext2_init(EXT2_FS *fs)
 {
-	printk("Initializing EXT2\n");
-	printk("Reading superblock\n");
+	printk(KERN_INFO "Initializing EXT2\n");
+	printk(KERN_INFO "Reading superblock\n");
 	if (ext2_read_superblock(fs) < 0)
 		return -1;
-	printk("Reading group descriptors\n");
+	printk(KERN_INFO "Reading group descriptors\n");
 	if (ext2_read_group_desc(fs) < 0)
 		return -1;
 	Ext2Inode root_inode;
-	printk("Reading root inode\n");
+	printk(KERN_INFO "Reading root inode\n");
 	ext2_read_inode(fs, 2, &root_inode);
 
-	printk("Root inode size = %u bytes\n", root_inode.size);
-	printk("Root inode first block = %u\n", root_inode.block[0]);
+	printk(KERN_INFO "Root inode size = %u bytes\n", root_inode.size);
+	printk(KERN_INFO "Root inode first block = %u\n", root_inode.block[0]);
 	// display all info
-	printk("inode blocks count = %u\n", root_inode.blocks);
+	printk(KERN_INFO "inode blocks count = %u\n", root_inode.blocks);
 	ext2_list_dir(fs, &root_inode);
 	return 0;
 }
