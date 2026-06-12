@@ -22,7 +22,7 @@ void print_usage(const char *prog)
 	printf("  --obj-files <files>  Extra object files to pass directly to linker\n");
 	printf("  --ldscript <file>    Linker script file\n");
 	printf("  --output <file>      Output file (archive or executable)\n");
-	printf("  --type <type>        Output type: archive, exe (default: archive)\n");
+	printf("  --type <type>        Output type: archive, exe, module (default: archive)\n");
 	printf("  --log-dir <dir>      Directory for log files (creates YYYY-MM-DD.log)\n");
 	printf("  --log-file <file>    Specific log file path\n");
 	printf("  -v, --verbose        Verbose output\n");

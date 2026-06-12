@@ -23,6 +23,8 @@
 #include <net/udp.h>
 
 #include <sound/core/dev.h>
+#include <hubble/module.h>
+#include <fs/vfs/vfs.h>
 
 platform_info_t g_platform;
 
@@ -120,7 +122,7 @@ void do_initcalls(void)
 {
 	do_initcalls_range(__start___initcalls_early, __stop___initcalls_early);
 	do_initcalls_range(__start___initcalls_core, __stop___initcalls_core);
-	// do_initcalls_range(__start___initcalls_fs, __stop___initcalls_fs);
+	do_initcalls_range(__start___initcalls_fs, __stop___initcalls_fs);
 	do_initcalls_range(__start___initcalls_device, __stop___initcalls_device);
 	do_initcalls_range(__start___initcalls_late, __stop___initcalls_late);
 }
@@ -237,10 +239,12 @@ void start_kernel(void)
 void kmain_thread(void)
 {
 	printk(KERN_INFO "kmain thread\n");
+	module_load_directory("/modules");
+
 	VFS_File *pipe = vfs_open("/pipe/term", VFS_O_RDWR | VFS_O_CREAT);
-	if (pipe == NULL)
+	if (IS_ERR(pipe) || pipe == NULL)
 	{
-		printk(KERN_ERR "failed to open pipe\n");
+		printk(KERN_ERR "failed to open pipe: %d\n", IS_ERR(pipe) ? PTR_ERR(pipe) : -1);
 		while (1)
 		{
 			hlt();
@@ -248,9 +252,10 @@ void kmain_thread(void)
 	}
 
 	VFS_File *tty_out = vfs_open("/pipe/tty0_out", VFS_O_RDWR | VFS_O_CREAT);
-	if (tty_out == NULL)
+	if (IS_ERR(tty_out) || tty_out == NULL)
 	{
-		printk(KERN_ERR "failed to open pipe /pipe/tty0_out\n");
+		printk(KERN_ERR "failed to open pipe /pipe/tty0_out: %d\n",
+		       IS_ERR(tty_out) ? PTR_ERR(tty_out) : -1);
 		while (1)
 			hlt();
 	}

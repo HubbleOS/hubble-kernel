@@ -137,25 +137,33 @@ int main(int argc, char **argv)
 				return 1;
 			}
 		}
-		else if (strcmp(output_type, "exe") == 0 || strcmp(output_type, "executable") == 0)
+	else if (strcmp(output_type, "exe") == 0 || strcmp(output_type, "executable") == 0)
+	{
+		// Линковка исполняемого файла
+		if (link_executable(cfg.output, obj_files, obj_count, &cfg, cxx_compiler) != 0)
 		{
-			// Линковка исполняемого файла
-			if (link_executable(cfg.output, obj_files, obj_count, &cfg, cxx_compiler) != 0)
-			{
-				log_close();
-				return 1;
-			}
-		}
-		else if (strcmp(output_type, "objects") == 0)
-		{
-			printf("Objects compiled to: %s\n", cfg.build_dir);
-		}
-		else
-		{
-			fprintf(stderr, "Error: Unknown output type '%s'. Use 'archive' or 'exe'\n", output_type);
-			LOG_ERROR("Unknown output type: %s", output_type);
 			log_close();
 			return 1;
+		}
+	}
+	else if (strcmp(output_type, "module") == 0)
+	{
+		if (link_module(cfg.output, obj_files, obj_count, &cfg) != 0)
+		{
+			log_close();
+			return 1;
+		}
+	}
+	else if (strcmp(output_type, "objects") == 0)
+	{
+		printf("Objects compiled to: %s\n", cfg.build_dir);
+	}
+	else
+	{
+		fprintf(stderr, "Error: Unknown output type '%s'. Use 'archive', 'exe', or 'module'\n", output_type);
+		LOG_ERROR("Unknown output type: %s", output_type);
+		log_close();
+		return 1;
 		}
 	}
 
