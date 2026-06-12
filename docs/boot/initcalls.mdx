@@ -19,13 +19,13 @@ Initcall macros are declared in `include/hubble/init.h`.
 3. device initcalls
 4. late initcalls
 
-The filesystem initcall range is present but commented out:
+The filesystem initcall range is executed as part of the normal boot path:
 
 ```c
-// do_initcalls_range(__start___initcalls_fs, __stop___initcalls_fs);
+do_initcalls_range(__start___initcalls_fs, __stop___initcalls_fs);
 ```
 
-This means code registered with `fs_initcall`, such as `init_filesystems_call()` in `kernel/init/fs.c`, will not run through the current generic initcall sequence unless this line is restored or filesystem initialization is invoked separately.
+This means code registered with `fs_initcall`, such as `init_filesystems_call()` in `kernel/init/fs.c`, runs before the kernel thread starts.
 
 ## Device Initcall Examples
 
@@ -35,3 +35,9 @@ This means code registered with `fs_initcall`, such as `init_filesystems_call()`
 - `drivers/tty/tty_dev.c` registers TTY-related devices.
 - `drivers/video/fb.c` registers `/dev/fb0`.
 - `drivers/input/mouse/mouse.c` registers `/dev/mouse`.
+
+## Kernel Modules
+
+The kernel now includes a small ELF module loader in `kernel/module.c`. It accepts relocatable x86-64 ELF objects with a `.ko` extension, resolves relocations against a built-in kernel export table, and runs any `device_initcall`/`initcall` entries stored in `.initcalls.*` sections.
+
+At boot, `kmain_thread()` scans `/modules` and tries to load every `.ko` file it finds there.

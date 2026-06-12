@@ -181,6 +181,23 @@ define build-exe-module
 		$(if $(exe-libs-y),    --libs      "$(exe-libs-y)")
 endef
 
+define build-mod-module
+	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
+		--src-dir   $(ROOT_DIR)/$(d) \
+		--build-dir $(BUILD_DIR)/$(d) \
+		--cc $(CC) \
+		--asm $(ASM) \
+		--cflags    "$(if $(cflags-y),$(cflags-y),$(CFLAGS)) $(ccflags-y)" \
+		--asmflags  "$(ASMFLAGS) $(asflags-y)" \
+		--includes  "$(INCLUDES)" \
+		--output    $(mod-output-y) \
+		--type module \
+		--ld $(LD) \
+		$(if $(mod-ldflags-y), --ldflags  "$(mod-ldflags-y)") \
+		$(if $(mod-objs-y),    --obj-files "$(mod-objs-y)") \
+		$(if $(mod-libs-y),    --libs      "$(mod-libs-y)")
+endef
+
 define reset-module-vars
 	$(eval lib-y        :=)
 	$(eval lib-asm-y    :=)
@@ -190,6 +207,11 @@ define reset-module-vars
 	$(eval exe-ldflags-y :=)
 	$(eval exe-objs-y   :=)
 	$(eval exe-libs-y   :=)
+	$(eval mod-y        :=)
+	$(eval mod-output-y :=)
+	$(eval mod-ldflags-y :=)
+	$(eval mod-objs-y   :=)
+	$(eval mod-libs-y   :=)
 	$(eval subdir-y     :=)
 	$(eval always-y     :=)
 	$(eval ccflags-y    :=)
@@ -206,6 +228,7 @@ define load-module
 		$(foreach d,$(lib-asm-y), $(call build-lib-asm-module)) \
 		$(foreach d,$(obj-y),     $(call build-obj-module)) \
 		$(foreach d,$(exe-y),     $(call build-exe-module)) \
+		$(foreach d,$(mod-y),     $(call build-mod-module)) \
 		$(eval _subdirs_$(subst /,_,$(1)) := $(subdir-y)) \
 		$(call reset-module-vars) \
 		$(foreach s,$(_subdirs_$(subst /,_,$(1))),$(call load-module,$(s))) \
@@ -224,11 +247,12 @@ else
     MODULES += init
     MODULES += net
     MODULES += fs
-    MODULES += drivers
-    MODULES += lib
-    MODULES += sound
-    MODULES += kernel
-    MODULES += arch/$(ARCH)
+	    MODULES += drivers
+	    MODULES += lib
+	    MODULES += sound
+	    MODULES += kernel
+	    MODULES += modules
+	    MODULES += arch/$(ARCH)
 endif
 
 # arch subdirs (boot etc.)
