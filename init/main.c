@@ -129,11 +129,6 @@ void do_initcalls(void)
 
 BootInfo *g_boot_info;
 
-void test()
-{
-	printk(KERN_INFO "hello");
-}
-
 #include <higher_half.h>
 
 void start_kernel(void)
@@ -144,10 +139,6 @@ void start_kernel(void)
 	g_platform.fb_pitch = g_boot_info->framebuffer.pitch;
 
 	printk_init(&g_boot_info->framebuffer);
-	void *virt = (void *)test;
-	void *phys = (void *)virt_to_phys((uint64_t)virt);
-
-	printk(KERN_INFO "virt: %p\nphys: %p\n", virt, phys);
 
 	boot_cpu_init();
 	acpi_init(g_boot_info->rsdp); // parses MADT, learns LAPIC/IOAPIC addresses
@@ -157,23 +148,11 @@ void start_kernel(void)
 
 	smp_init();
 
-	// while (1)
-	// {
-	// 	/* code */
-	// }
-
-	//
-
 	do_initcalls();
 
 	// while (1)
 	// {
 	// 	hlt();
-	// }
-
-	// while (1)
-	// {
-	// 	/* code */
 	// }
 
 	// sound_init();
@@ -237,39 +216,6 @@ void start_kernel(void)
 void kmain_thread(void)
 {
 	printk(KERN_INFO "kmain thread\n");
-
-	// Debug: check /modules directory
-	Directory dir = vfs_readdir("/modules");
-	printk(KERN_INFO "[debug] vfs_readdir(/modules) returned count: %d\n", dir.count);
-	for (int i = 0; i < dir.count; i++)
-	{
-		printk(KERN_INFO "[debug]   entry %d: %s (is_dir=%d)\n", i, dir.entries[i].name, dir.entries[i].is_dir);
-	}
-	if (dir.free_entries)
-		dir.free_entries(&dir);
-
-	// Debug: try to open hello.ko directly
-	VFS_File *f = vfs_open("/modules/hello.ko", VFS_O_RDONLY);
-	if (IS_ERR(f))
-	{
-		printk(KERN_ERR "[debug] failed to open /modules/hello.ko: %d\n", PTR_ERR(f));
-	}
-	else
-	{
-		printk(KERN_OK "[debug] successfully opened /modules/hello.ko\n");
-		vfs_close(f);
-	}
-
-	module_load_directory("/modules");
-
-	// if (module_is_loaded("hello.ko"))
-	// {
-	// 	printk(KERN_OK "[test] module hello.ko is programmatically verified as loaded\n");
-	// }
-	// else
-	// {
-	// 	printk(KERN_ERR "[test] module hello.ko was NOT found in the registry\n");
-	// }
 
 	VFS_File *pipe = vfs_open("/pipe/term", VFS_O_RDWR | VFS_O_CREAT);
 	if (IS_ERR(pipe) || pipe == NULL)
