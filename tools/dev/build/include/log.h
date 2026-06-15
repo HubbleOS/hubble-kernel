@@ -41,9 +41,9 @@ void log_message(const char *level, const char *format, ...);
 #define COLOR_CYAN "\x1b[36m"
 #define COLOR_WHITE "\x1b[37m"
 
-#define LOG_INFO(...) log_message("INFO", __VA_ARGS__);
-#define LOG_WARN(...) log_message("WARN", __VA_ARGS__);
-#define LOG_ERROR(...) log_message("ERROR", __VA_ARGS__);
-#define LOG_SUCCESS(...) log_message("SUCCESS", __VA_ARGS__);
+#define LOG_INFO(...) log_message("INFO", __VA_ARGS__)
+#define LOG_WARN(...) log_message("WARN", __VA_ARGS__)
+#define LOG_ERROR(...) log_message("ERROR", __VA_ARGS__)
+#define LOG_SUCCESS(...) log_message("SUCCESS", __VA_ARGS__)
 
 extern FILE *log_file;

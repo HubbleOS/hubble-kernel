@@ -39,6 +39,7 @@ void task_sleep(void);
 
 task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority, bool userspace);
 task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority, bool userspace);
+void task_map_user_stack(task_t *task, uint64_t *pml4_phys);
 
 #define _task_create_select(_1, _2, _3, _4, NAME) NAME
 

@@ -11,7 +11,8 @@ syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_close] = (syscall_fn_t)sys_close,
     [SYS_spawn] = (syscall_fn_t)sys_spawn,
     [SYS_spawn_file] = (syscall_fn_t)sys_spawn_file,
-    [SYS_lseek] = (syscall_fn_t)sys_lseek};
+    [SYS_lseek] = (syscall_fn_t)sys_lseek,
+    [SYS_module_load] = (syscall_fn_t)sys_module_load};
 
 uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
 			 uint64_t a4, uint64_t a5, uint64_t a6)

@@ -163,5 +163,5 @@ int gpt_init(gpt_partition_t *partitions)
 	pmm_free_pages((uint64_t)entry_buf_phys, (total_size + 0xFFF) / 0x1000);
 
 	printk(KERN_OK "GPT initialized, %d partitions found\n", partition_count);
-	return 0;
+	return partition_count;
 }

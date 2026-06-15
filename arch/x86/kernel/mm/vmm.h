@@ -170,7 +170,7 @@ uint64_t vmm_get_phys(uint64_t virt);
 bool vmm_is_mapped(uint64_t va);
 void vmm_unmap_user_page(uint64_t va);
 void dump_page(uint64_t va, size_t len);
-int make_pd_entry_user(uint64_t va, uint64_t pm);
+int make_pd_entry_user(uint64_t va);
 uint64_t *vmm_create_user_pagemap(void);
 int vmm_map_page_into(uint64_t *pml4_phys, uint64_t va, uint64_t pa, uint64_t flags);
 uint64_t vmm_get_phys_from(uint64_t *pml4_phys, uint64_t va);

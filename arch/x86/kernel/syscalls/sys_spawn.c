@@ -20,6 +20,7 @@
 
 long sys_spawn(void *entry_point, void *arg, uint32_t priority)
 {
+	(void)arg;
 	if (!entry_point)
 		return -1;
 
@@ -27,11 +28,14 @@ long sys_spawn(void *entry_point, void *arg, uint32_t priority)
 	if (!task)
 		return -1;
 
+	task_map_user_stack(task, (uint64_t *)get_cr3());
+
 	scheduler_add_task(task);
 	return (long)task->pid;
 }
 long sys_spawn_file(const char *path, void *arg, uint32_t priority)
 {
+	(void)arg;
 
 	task_t *task = exec(path);
 	task->priority = priority;

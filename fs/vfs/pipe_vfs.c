@@ -192,7 +192,7 @@ VFS_Node *pipe_vfs_open_pipe(VFS_FS *fs, const char *path)
 			return node;
 		}
 	}
-	printk(KERN_ERR "pipe not found\n");
+	printk(KERN_DEBUG "pipe not found\n");
 	return NULL;
 }
 

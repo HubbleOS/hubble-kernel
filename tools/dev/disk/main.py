@@ -1,6 +1,8 @@
+import os
 from config import DiskConfig, Partition
 from builder import DiskBuilder
 
+arch = os.environ.get("ARCH", "x86")
 
 config = DiskConfig(
     path="out/disks/disk.img",
@@ -12,6 +14,7 @@ config = DiskConfig(
             size="0",
             files=[
                 ("out/usr", "/usr/bin"),
+                ("out/modules", "/modules"),
             ]
         ),
     ]

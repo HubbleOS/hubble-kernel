@@ -1,1 +1,1 @@
-subdir-y += hello
+subdir-y += modules/hello

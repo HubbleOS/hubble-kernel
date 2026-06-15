@@ -147,7 +147,6 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 			// Copy data via kernel mapping
 			void *kaddr = (void *)phys_to_virt(phys);
 			memcpy((uint8_t *)kaddr + in_page_off, kbuf, chunk);
-			dump_page(page_base, 0x20);
 			file_offset += chunk;
 			remaining -= chunk;
 		}
