@@ -6,6 +6,7 @@
 #include <hubble/string.h>
 #include <hubble/init.h>
 #include <hubble/device.h>
+#include <hubble/ctype.h>
 
 #include <fs/vfs/vfs.h>
 
@@ -18,6 +19,16 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+
+static int local_strcasecmp(const char *s1, const char *s2)
+{
+	while (*s1 && (tolower((unsigned char)*s1) == tolower((unsigned char)*s2)))
+	{
+		s1++;
+		s2++;
+	}
+	return (int)(tolower((unsigned char)*s1) - tolower((unsigned char)*s2));
+}
 
 typedef struct
 {
@@ -147,7 +158,7 @@ static bool module_name_ends_with(const char *name, const char *suffix)
 	size_t suffix_len = strlen(suffix);
 	if (name_len < suffix_len)
 		return false;
-	return strcmp(name + (name_len - suffix_len), suffix) == 0;
+	return local_strcasecmp(name + (name_len - suffix_len), suffix) == 0;
 }
 
 static const char *module_section_name(const char *shstrtab, const Elf64_Shdr *shdr)
@@ -345,6 +356,47 @@ fail:
 		}
 	}
 	return 0;
+}
+
+typedef struct module
+{
+	char name[64];
+	uint64_t base;
+	size_t size;
+	struct module *next;
+} module_t;
+
+static module_t *g_modules_list = NULL;
+
+static void module_register(const char *path, uint64_t base, size_t size)
+{
+	module_t *mod = kzalloc(sizeof(module_t));
+	if (!mod)
+		return;
+
+	const char *filename = strrchr(path, '/');
+	if (filename)
+		filename++;
+	else
+		filename = path;
+
+	strncpy(mod->name, filename, sizeof(mod->name) - 1);
+	mod->base = base;
+	mod->size = size;
+	mod->next = g_modules_list;
+	g_modules_list = mod;
+}
+
+bool module_is_loaded(const char *name)
+{
+	module_t *curr = g_modules_list;
+	while (curr)
+	{
+		if (local_strcasecmp(curr->name, name) == 0)
+			return true;
+		curr = curr->next;
+	}
+	return false;
 }
 
 static int module_load_buffer(const char *path, uint8_t *image, size_t image_size)
@@ -563,7 +615,6 @@ int module_load(const char *path)
 	if (!path)
 		return -EINVAL;
 
-	printk(KERN_INFO "[module] loading %s\n", path);
 	VFS_File *file = vfs_open(path, VFS_O_RDONLY);
 	if (IS_ERR(file))
 		return PTR_ERR(file);
@@ -596,9 +647,20 @@ int module_load(const char *path)
 	kfree(image);
 
 	if (ret == 0)
+	{
+		module_register(path, 0, size); // base 0 for now as we don't have a single base
 		printk(KERN_OK "[module] loaded %s\n", path);
+	}
 	else
-		printk(KERN_ERR "[module] failed to load %s: %d\n", path, ret);
+	{
+		// Don't log error for common non-module metadata files
+		const char *filename = strrchr(path, '/');
+		if (filename) filename++; else filename = path;
+		
+		if (strncmp(filename, "._", 2) != 0 && filename[0] != '.') {
+			printk(KERN_ERR "[module] failed to load %s: %d\n", path, ret);
+		}
+	}
 
 	return ret;
 }
@@ -618,6 +680,11 @@ int module_load_directory(const char *path)
 		Entry *entry = &dir.entries[i];
 		if (!entry->name || entry->is_dir)
 			continue;
+			
+		// Skip hidden files and AppleDouble metadata
+		if (entry->name[0] == '.' || (entry->name[0] == '_' && strchr(entry->name, '~')))
+			continue;
+			
 		if (!module_name_ends_with(entry->name, ".ko"))
 			continue;
 

@@ -19,6 +19,7 @@ int fat32_delete_dir(FAT32_FS *fs, const char *path);
 int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs);
 bool fat32_delete_directory(FAT32_FS *fs, const char *path);
 FAT32_BPB fat_init(gpt_partition_t part);
+uint32_t fat32_resolve_path(FAT32_FS *fs, const char *path);
 bool fat32_mount(FAT32_FS *fs, VFS_Device *device, uint32_t start_lba);
 bool fat32_unmount(FAT32_FS *fs);
 FAT32_File *fat32_open(FAT32_FS *fs, const char *path);

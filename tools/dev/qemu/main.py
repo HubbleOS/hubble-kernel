@@ -87,8 +87,8 @@ def build_qemu_command(opts: QemuOptions):
         "-smp", str(opts.smp),
 
         # Main disk
-        # "-drive", "file=out/disks/disk.img,format=raw,index=0,media=disk,cache=none",
-        "-drive", "file=fat:rw:out/,format=raw,index=0,media=disk,cache=none",
+        "-drive", "file=out/disks/disk.img,format=raw,index=0,media=disk,cache=none",
+        # "-drive", "file=fat:rw:out/,format=raw,index=0,media=disk,cache=none",
 
         # ISO
         "-drive", f"file=fat:rw:{opts.iso_path},format=raw,index=1,media=disk",

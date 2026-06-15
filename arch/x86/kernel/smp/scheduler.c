@@ -80,72 +80,45 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	task->context_saved = false;
 	task->in_syscall = false;
 
-	// Allocate kernel stack
+	// Set page table
+	uint64_t cr3;
+	asm volatile("mov %%cr3, %0" : "=r"(cr3));
+	task->page_table = (uint64_t *)cr3;
+
+	// Allocate kernel stack (rsp0 is always in kernel space)
+	task->rsp0_size = 64 * 1024;
+	task->rsp0 = (uint64_t)kmalloc(task->rsp0_size, GFP_KERNEL);
+	if (!task->rsp0)
+	{
+		kfree(task);
+		return NULL;
+	}
+	*(uint64_t *)(task->rsp0 + task->rsp0_size - 8) = CANARY;
+	*(uint64_t *)(task->rsp0) = CANARY;
+
 	if (!userspace)
 	{
-		printk(KERN_INFO "Allocating kernel stack\n");
+		printk(KERN_INFO "Allocating kernel task stack\n");
 		task->stack_size = 16384; // 16 KB
 		task->kernel_stack = (uint64_t)kmalloc(task->stack_size, GFP_KERNEL);
 		if (!task->kernel_stack)
 		{
+			kfree((void *)task->rsp0);
 			kfree(task);
 			return NULL;
 		}
 	}
 	else
 	{
-		uint64_t stack_base = alloc_user_stack();
-		task->kernel_stack = stack_base;
+		// For user tasks, kernel_stack is the USER stack address.
+		// Mapping must be done by the caller using task_map_user_stack!
+		task->kernel_stack = alloc_user_stack();
 		task->stack_size = USER_STACK_SIZE;
-
-		for (uint64_t i = 0; i < task->stack_size; i += PAGE_SIZE)
-		{
-			uint64_t phys = pmm_alloc_page();
-
-			vmm_unmap_user_page(stack_base + i);
-
-			if (!phys)
-				return NULL;
-			if (vmm_map_page(stack_base + i, phys, PTE_PRESENT | PTE_USER | PTE_WRITE) < 0)
-			{
-				printk(KERN_ERR "Failed to map page 0x%llx\n", stack_base + i);
-				return NULL;
-			}
-
-			uint64_t va = stack_base + i;
-			phys = vmm_get_phys(va);
-			// Also check flags directly
-			uint64_t *pt = pt_table(va);
-			uint64_t pte = pt[PT_INDEX(va)];
-			printk(KERN_INFO "  0x%llx -> phys=0x%llx PTE=0x%llx USER=%d\n",
-			       va, phys, pte, !!(pte & PTE_USER));
-		}
 	}
-	// Set-up syscall stack
-
-	task->rsp0_size = 64 * 1024;
-	task->rsp0 = (uint64_t)kmalloc(task->rsp0_size, GFP_KERNEL);
-	if (!task->rsp0)
-	{
-		kfree((void *)task->kernel_stack);
-		kfree(task);
-		return NULL;
-	}
-
-	*(uint64_t *)(task->rsp0 + task->rsp0_size - 8) = CANARY;
-	*(uint64_t *)(task->rsp0) = CANARY;
 
 	// Set up initial stack
 	printk(KERN_INFO "Setting up initial stack\n");
 	uint64_t *stack_top = (uint64_t *)(((task->kernel_stack + task->stack_size) & ~0xFULL) - 8);
-	printk(KERN_INFO "stack_base=0x%llx faulting=0x6fedcfd0 PT_INDEX=0x%x\n",
-	       task->kernel_stack, PT_INDEX(task->kernel_stack));
-	printk(KERN_INFO "mapped up to: 0x%llx\n", task->kernel_stack + task->stack_size + PAGE_SIZE);
-	// Push initial values onto stack
-	printk(KERN_INFO "Pushing initial values onto stack\n");
-	// *(--stack_top) = 0x202;			 // RFLAGS (interrupts enabled)
-	// *(--stack_top) = 0x08;			 // CS
-	// *(--stack_top) = (uint64_t)task_wrapper; // RIP
 
 	// Initialize context
 	printk(KERN_INFO "Initializing context\n");
@@ -160,7 +133,6 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	task->context.rsp = (uint64_t)stack_top;
 	if (!userspace)
 	{
-
 		task->context.cs = 0x08;
 		task->context.ss = 0x10;
 		task->context.ds = 0x10;
@@ -188,17 +160,11 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	printk(KERN_INFO "RIP: %p\n", task->context.rip);
 	printk(KERN_INFO "CS: %p\n", task->context.cs);
 	printk(KERN_INFO "SS: %p\n", task->context.ss);
-	printk(KERN_INFO "DS: %p\n", task->context.ds);
-	printk(KERN_INFO "ES: %p\n", task->context.es);
-	printk(KERN_INFO "FS: %p\n", task->context.fs);
-	printk(KERN_INFO "GS: %p\n", task->context.gs);
-	printk(KERN_INFO "RFLAGS: %p\n", task->context.rflags);
 
 	// Allocate FPU state (512 bytes, 16-byte aligned)
 	printk(KERN_INFO "Allocating FPU state\n");
-	// void *fpu_state = kmalloc(512 + 16, GFP_KERNEL);
-	fpu_cache = slab_cache_create(512, 16);
-	// task->context.fpu_state = (void *)(((uintptr_t)fpu_state + 15) & ~0xF);
+	if (!fpu_cache)
+		fpu_cache = slab_cache_create(512, 16);
 	task->context.fpu_state = slab_cache_alloc(fpu_cache);
 
 	if (task->context.fpu_state)
@@ -207,21 +173,26 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 		printk(KERN_INFO "Initializing FPU state\n");
 		asm volatile("fxsave %0" : "=m"(*(char *)task->context.fpu_state));
 	}
-	printk(KERN_INFO "FPU state: %p\n", task->context.fpu_state);
-
-	// Allocate page table (or share kernel page table)
-
-	// get kernel page table
-	printk(KERN_INFO "Getting kernel page table\n");
-	uint64_t cr3;
-	asm volatile("mov %%cr3, %0" : "=r"(cr3));
-	task->page_table = (uint64_t *)cr3; // Or create new one
-	printk(KERN_INFO "Page table: %p\n", task->page_table);
 
 	task->signal = 0;
-
 	printk(KERN_INFO "Task created\n");
 	return task;
+}
+
+void task_map_user_stack(task_t *task, uint64_t *pml4_phys)
+{
+	uint64_t stack_base = task->kernel_stack;
+	uint32_t size = task->stack_size;
+
+	for (uint64_t i = 0; i < size; i += PAGE_SIZE)
+	{
+		uint64_t phys = pmm_alloc_page();
+		if (!phys)
+			return;
+
+		vmm_map_page_into(pml4_phys, stack_base + i, phys,
+				  PTE_PRESENT | PTE_USER | PTE_WRITE);
+	}
 }
 
 // Create a new idle task

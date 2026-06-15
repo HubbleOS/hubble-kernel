@@ -8,5 +8,6 @@
 #define SYS_spawn 6
 #define SYS_spawn_file 7
 #define SYS_lseek 8
+#define SYS_module_load 9
 
 #define SYSCALL_COUNT 256

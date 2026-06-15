@@ -18,28 +18,7 @@ task_t *exec(const char *path)
 
 	task_t *task1 = task_create((void *)entry, 255, 1);
 
-	uint64_t stack_base = task1->kernel_stack;
-	for (uint64_t i = 0; i < task1->stack_size + PAGE_SIZE; i += PAGE_SIZE)
-	{
-		uint64_t phys = pmm_alloc_page();
-		if (!phys)
-			break;
-		vmm_map_page_into(pml4, stack_base + i, phys,
-				  PTE_PRESENT | PTE_USER | PTE_WRITE);
-	}
-
-	stack_base = task1->rsp0;
-	for (uint64_t i = 0; i < task1->rsp0_size + PAGE_SIZE; i += PAGE_SIZE)
-	{
-		uint64_t phys = pmm_alloc_page();
-		if (!phys)
-		{
-			printk(KERN_ERR "failed to alloc page\n");
-			break;
-		}
-		vmm_map_page_into(task1->page_table, stack_base + i, phys,
-				  PTE_PRESENT | PTE_USER | PTE_WRITE);
-	}
+	task_map_user_stack(task1, (uint64_t *)pml4);
 
 	task1->page_table = pml4;
 	return task1;

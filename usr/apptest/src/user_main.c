@@ -24,6 +24,8 @@ int lseek(int fd, uint64_t offset, int whence) { return syscall3(8, fd, offset, 
 
 int spawn(void *entry_point, void *arg, uint32_t priority) { return syscall3(6, (long)entry_point, (long)arg, priority); }
 
+int module_load(const char *path) { return syscall1(9, (long)path); }
+
 typedef struct
 {
 	int32_t x, y;
@@ -105,11 +107,24 @@ void handle_command(char *cmd)
 
 	if (strcmp(cmd, "help") == 0)
 	{
-		printf("Available commands: help, echo, clear\n");
+		printf("Available commands: help, echo, clear, hello\n");
 	}
 	else if (strncmp(cmd, "echo ", 5) == 0)
 	{
 		printf("%s\n", cmd + 5);
+	}
+	else if (strcmp(cmd, "hello") == 0)
+	{
+		printf("Loading hello.ko...\n");
+		int ret = module_load("/modules/hello.ko");
+		if (ret == 0)
+		{
+			printf("Module hello.ko loaded successfully!\n");
+		}
+		else
+		{
+			printf("Failed to load module: %d\n", ret);
+		}
 	}
 	else
 	{

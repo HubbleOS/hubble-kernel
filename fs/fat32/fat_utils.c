@@ -366,6 +366,20 @@ int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 		return -1;
 	}
 
+	FAT32_BPB *temp_bpb = (FAT32_BPB *)(sector + 0x0B);
+	if (memcmp(temp_bpb->fs_type, "FAT32   ", 8) != 0)
+	{
+		printk(KERN_ERR "Not a FAT32 filesystem (fs_type mismatch)\n");
+		return -1;
+	}
+
+	if (temp_bpb->bytes_per_sector != 512 && temp_bpb->bytes_per_sector != 1024 &&
+		temp_bpb->bytes_per_sector != 2048 && temp_bpb->bytes_per_sector != 4096)
+	{
+		printk(KERN_ERR "Invalid bytes_per_sector: %d\n", temp_bpb->bytes_per_sector);
+		return -1;
+	}
+
 	FAT32_BPB *bpb = kmalloc(sizeof(FAT32_BPB), GFP_KERNEL);
 	if (!bpb)
 	{

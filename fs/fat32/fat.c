@@ -1,21 +1,17 @@
 #include "fat.h"
 #include <hubble/printk.h>
-
 #include "fat_structs.h"
 #include "fat_utils.h"
 #include <fs/vfs/vfs_standart_struct.h>
-
 #include <mm/kmalloc.h>
-
 #include <drivers/storage/ata/ata.h>
-
 #include <hubble/string.h>
 #include <stdbool.h>
 
 void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr)
 {
 	size_t namelen = strlen(name);
-	size_t need = namelen + 2; // prefix + '\n'
+	size_t need = namelen + 2; 
 	ctx_ptr->entries[ctx_ptr->count].name = kmalloc(need, GFP_KERNEL);
 	if (!ctx_ptr->entries[ctx_ptr->count].name)
 		return;
@@ -27,40 +23,34 @@ void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr)
 
 Directory fat32_list_files(FAT32_FS *fs, uint32_t cluster)
 {
-	Directory ctx = Directory_init((Directory){.entries = kmalloc(1024, GFP_KERNEL), .count = 0});
+	Directory ctx = Directory_init((Directory){.entries = kmalloc(1024 * sizeof(Entry), GFP_KERNEL), .count = 0});
 	if (!ctx.entries)
 	{
-		printk(KERN_ERR "Failed to allocate directory\n");
+		return (Directory){0};
 	}
 	iterate_directory(fs, cluster, list_files_callback, &ctx);
-	printk(KERN_INFO "count: %d\n", ctx.count);
 	return ctx;
 }
 
 Directory fat32_list_files_from_path(FAT32_FS *fs, const char *path)
 {
-
 	if (!path)
 	{
-		printk(KERN_ERR "Path not found: %s\n", path);
 		return (Directory){.entries = NULL, .count = 0};
 	}
 
-	uint32_t cluster = resolve_path_to_cluster(fs, path);
-	printk(KERN_INFO "cluster show: %d\n", cluster);
+	uint32_t cluster = fat32_resolve_path(fs, path);
 	if (cluster == 0)
 	{
-		printk(KERN_ERR "Path not found: %s\n", path);
 		return (Directory){.entries = NULL, .count = 0};
 	}
-	printk(KERN_INFO "cluster: %d\n", cluster);
 	return fat32_list_files(fs, cluster);
 }
 
 uint32_t get_fat_entry(FAT32_FS *fs, uint32_t cluster)
 {
 	if (cluster >= fs->total_fat_entries)
-		return 0x0FFFFFFF; // end
+		return 0x0FFFFFFF;
 
 	if (fs->fat_cache)
 	{
@@ -92,21 +82,16 @@ void set_fat_entry(FAT32_FS *fs, uint32_t cluster, uint32_t value)
 	value &= 0x0FFFFFFF;
 	if (fs->fat_cache && cluster < fs->total_fat_entries)
 	{
-		printk(KERN_INFO "Setting FAT entry cache %u to %u\n", cluster, value);
 		fs->fat_cache[cluster] = value;
 		fs->fat_dirty = true;
 		return;
 	}
-	printk(KERN_INFO "Setting FAT entry %u to %u\n", cluster, value);
-	//  fallback: sector read/modify/write
 	uint32_t fat_offset = cluster * 4;
 	uint32_t fat_sector = fs->fat_start_lba + (fat_offset / fs->bytes_per_sector);
 	uint8_t sector[512];
-	// ata_read_sector(fs, fat_sector, sector);
-	fat32_read_cluster(fs, cluster, sector);
+	fs->read_sector(fs->device, fat_sector, sector);
 	uint32_t offset = fat_offset % fs->bytes_per_sector;
 	*((uint32_t *)(sector + offset)) = value;
-	// ata_write_sector(fs, fat_sector, sector);
 	fs->write_sector(fs->device, fat_sector, sector);
 }
 
@@ -114,28 +99,22 @@ void fat32_free_cluster(FAT32_FS *fs, uint32_t cluster)
 {
 	if (cluster < 2 || cluster >= fs->total_fat_entries)
 	{
-		printk(KERN_ERR "Invalid cluster number: %u\n", cluster);
 		return;
 	}
 	set_fat_entry(fs, cluster, 0x00000000);
-	printk(KERN_INFO "Cluster %u freed\n", cluster);
 }
 
 uint32_t fat32_allocate_cluster(FAT32_FS *fs)
 {
 	if (!(fs->fat_cache))
 	{
-		// fallback: sector scan (slow)
 		for (uint32_t i = 2; i < fs->total_fat_entries; ++i)
 		{
-			if (i == fs->root_cluster) // root
+			if (i == fs->root_cluster)
 				continue;
-			printk(KERN_INFO "Checking FAT entry %d\n", i);
 			if (get_fat_entry(fs, i) == 0x00000000)
 			{
-				printk(KERN_INFO "Found free FAT entry %d\n", i);
 				set_fat_entry(fs, i, 0x0FFFFFFF);
-				printk(KERN_INFO "Allocated FAT entry %d\n", i);
 				return i;
 			}
 		}
