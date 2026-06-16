@@ -1,6 +1,6 @@
 # usr/apps/Makefile
 
-SRC_DIR := src
+SRC_DIR := $(abspath src)
 USR_BUILD_DIR := $(OUT_DIR)/build/apptest
 OUTPUT := $(OUT_DIR)/usr/user1.elf
 LDSCRIPT := $(SRC_DIR)/user.ld
@@ -17,7 +17,7 @@ LIBC := ../lib/libc.a
 LIBGUI := ../lib/libgui.a
 LDFLAGS := -T$(LDSCRIPT) -Ttext-segment=0x400000
 
-.PHONY: all clean
+.PHONY: all clean $(OUTPUT)
 
 # All
 all: $(OUTPUT)
