@@ -275,7 +275,7 @@ export USR_DIR
 
 USR_BUILD :=
 ifneq ($(ARCH),arm64)
-USR_BUILD := $(MAKE) -C usr
+USR_BUILD := $(MAKE) -C $(USR_DIR)
 endif
 
 # Targets
