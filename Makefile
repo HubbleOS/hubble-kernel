@@ -304,6 +304,10 @@ disk:
 	@mkdir -p out/disks
 	@python3 tools/dev/disk/main.py
 
+PHONY += flash
+flash:
+	@python3 tools/dev/flash/main.py
+
 PHONY += demo
 demo:
 	@$(MAKE) -C tools/dev/demo run
