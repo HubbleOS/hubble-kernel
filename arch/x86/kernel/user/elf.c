@@ -23,16 +23,16 @@
 
 /* ── ELF Constants ───────────────────────────────────────────── */
 
-#define ELF_MAGIC       0x464c457fUL
-#define PAGE_SIZE       4096
+#define ELF_MAGIC 0x464c457fUL
+#define PAGE_SIZE 4096
 
-#define PT_LOAD         0x1
-#define PF_X            0x1
-#define PF_W            0x2
-#define PF_R            0x4
+#define PT_LOAD 0x1
+#define PF_X 0x1
+#define PF_W 0x2
+#define PF_R 0x4
 
 #define USER_STACK_PAGES 128
-#define USER_STACK_TOP   0x70000000ULL
+#define USER_STACK_TOP 0x70000000ULL
 
 /* ── Segment Loading ─────────────────────────────────────────── */
 
@@ -374,7 +374,7 @@ int elf_run(uint64_t entry)
 	current_task->context.fs = 0x23;
 	current_task->context.gs = 0x23;
 
-	user_enter(entry, USER_STACK_TOP - 8);
+	user_enter(entry, USER_STACK_TOP);
 
 	printk(KERN_ERR "[ELF] ERROR: Returned from userspace!\n");
 	return -1;
