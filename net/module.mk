@@ -1,2 +1,2 @@
 # net/module.mk
-lib-y        := net
+lib-y := net

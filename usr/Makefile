@@ -1,4 +1,5 @@
 # usr/Makefile
+
 Q = @
 export Q
 
@@ -9,16 +10,13 @@ export OUT_DIR BUILD_DIR
 USR_DIR := $(abspath .)
 export USR_DIR
 
-# CFLAGS для userland
 CFLAGS := -ffreestanding -O2 -Wall -Wextra -m64 -g -fno-stack-protector
 export CFLAGS
 
-# BUILD_TOOL
 BUILD_TOOL := $(OUT_DIR)/tools/dev/build/build_main
 BUILD_TOOL_FLAGS := --log-file $(OUT_DIR)/logs/usr_build.log -v
 export BUILD_TOOL BUILD_TOOL_FLAGS
 
-# Подкаталоги для сборки: сначала lib, потом apps
 subdirs := lib apps apptest
 
 .PHONY: all build clean rebuild

@@ -1,3 +1,5 @@
+# arch/arm64/kernel/Makefile
+
 CROSS_COMPILE ?= aarch64-linux-gnu-
 CC := $(CROSS_COMPILE)gcc
 OBJCOPY := $(CROSS_COMPILE)objcopy
@@ -8,15 +10,15 @@ TARGET_ELF := $(BUILD_DIR)/kernel8.elf
 TARGET_IMG := $(BUILD_DIR)/kernel8.img
 TARGET_MAP := $(BUILD_DIR)/kernel8.map
 
-CFLAGS := -Wall -Wextra -O2 -ffreestanding -fno-builtin -fno-pic -fno-pie \
-          -mgeneral-regs-only -mcpu=cortex-a53
+CFLAGS := -Wall -Wextra -O2 -ffreestanding -fno-builtin \
+	-fno-pic -fno-pie -mgeneral-regs-only -mcpu=cortex-a53
+
 ASFLAGS := -x assembler-with-cpp -mcpu=cortex-a53
 LDFLAGS := -nostdlib -static -T kernel.ld -Wl,-Map,$(TARGET_MAP)
 
 .PHONY: all quick test disasm clean
 
 all: $(TARGET_IMG)
-
 quick: all
 
 $(BUILD_DIR):
@@ -35,7 +37,8 @@ $(TARGET_IMG): $(TARGET_ELF)
 	$(OBJCOPY) -O binary $< $@
 
 test: $(TARGET_IMG)
-	timeout 5s qemu-system-aarch64 -M raspi3b -kernel $(TARGET_IMG) -serial stdio -display none; test $$? -eq 124
+	timeout 5s qemu-system-aarch64 -M raspi3b -kernel $(TARGET_IMG) \
+		-serial stdio -display none; test $$? -eq 124
 
 disasm: $(TARGET_ELF)
 	$(OBJDUMP) -d $<

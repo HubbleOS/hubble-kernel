@@ -1,4 +1,5 @@
 # usr/lib/libc/Makefile
+
 LIBC_SRC := src
 LIBC_OUT := $(USR_DIR)/lib/libc.a
 INCLUDES := -Iinclude -I../../include
