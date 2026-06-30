@@ -14,7 +14,7 @@ long sys_open(const char *path, int flags)
 	task_t *current = get_current_task();
 
 	VFS_File *file = vfs_open(path, flags);
-	if (!file)
+	if (IS_ERR(file) || !file)
 		return -1;
 
 	// Find free fd slot

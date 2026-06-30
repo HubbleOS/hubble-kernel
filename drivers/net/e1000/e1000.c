@@ -1,6 +1,6 @@
 #include "e1000.h"
 #include <hubble/device.h>
-#include <hubble/init.h>
+#include <hubble/module.h>
 #include <hubble/printk.h>
 #include <hubble/string.h>
 #include <mm/kmalloc.h>
@@ -283,4 +283,5 @@ __init int e1000_module_init(void)
 	return pci_register_driver(&e1000_driver);
 }
 
-device_initcall(e1000_module_init);
+module_init(e1000_module_init);
+MODULE_NAME("e1000");

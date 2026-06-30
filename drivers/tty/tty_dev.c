@@ -1,6 +1,6 @@
 #include <drivers/tty/tty.h>
 #include <fs/vfs/dev.h>
-#include <hubble/init.h>
+#include <hubble/module.h>
 #include <hubble/string.h>
 
 /* ── tty instance ────────────────────────────────────────────────────────── */
@@ -42,4 +42,5 @@ static int tty_dev_init(void)
 	return 0;
 }
 
-device_initcall(tty_dev_init);
+module_init(tty_dev_init);
+MODULE_NAME("tty");

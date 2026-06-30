@@ -20,3 +20,4 @@ long sys_spawn(void *entry_point, void *arg, uint32_t priority);
 long sys_spawn_file(const char *path, void *arg, uint32_t priority);
 
 long sys_module_load(const char *path);
+long sys_module_unload(const char *name);

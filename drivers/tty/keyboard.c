@@ -226,7 +226,7 @@ char keymap_lookup_char(uint8_t scancode, bool extended, bool shift, bool caps)
 #include <drivers/tty/keymap.h>
 
 #include <hubble/input.h>
-#include <hubble/init.h>
+#include <hubble/module.h>
 
 /*
  * Стан модифікаторів — відновлюємо з input_raw_event_t.
@@ -407,4 +407,5 @@ static int tty_keyboard_initcall(void)
 	return 0;
 }
 
-device_initcall(tty_keyboard_initcall);
+module_init(tty_keyboard_initcall);
+MODULE_NAME("tty_keyboard");

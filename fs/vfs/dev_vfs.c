@@ -41,18 +41,19 @@ VFS_device_reg *dev_vfs_find_device(VFS_FS *fs, const char *path)
 int dev_vfs_read_device(VFS_File *file, void *buf, uint32_t size)
 {
 	VFS_device_reg *dev = (VFS_device_reg *)file->node->fs_node;
-	if (dev->read)
-		dev->read(0, size, buf);
+	if (!dev->read)
+		return 0;
+	int ret = (int)dev->read(0, size, buf);
 	file->pos = 0;
-	return size;
+	return ret;
 }
 
 int dev_vfs_write_device(VFS_File *file, const void *buf, uint32_t size)
 {
 	VFS_device_reg *dev = (VFS_device_reg *)file->node->fs_node;
-	if (dev->write)
-		dev->write(0, size, buf);
-	return size;
+	if (!dev->write)
+		return 0;
+	return (int)dev->write(0, size, buf);
 }
 
 VFS_Node *dev_vfs_open_device(VFS_FS *fs, const char *path)

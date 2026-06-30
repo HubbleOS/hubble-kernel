@@ -1,5 +1,5 @@
 #include <hubble/platform.h>
-#include <hubble/init.h>
+#include <hubble/module.h>
 #include <fs/vfs/dev.h>
 
 static uint64_t fb_mmap(uint64_t offset, size_t size)
@@ -13,4 +13,5 @@ static int fb_init(void)
 	return 0;
 }
 
-device_initcall(fb_init);
+module_init(fb_init);
+MODULE_NAME("fb");
