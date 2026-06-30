@@ -1,7 +1,8 @@
 # usr/lib/libgui/Makefile
+
 GUI_SRC := .
 GUI_OUT := $(USR_DIR)/lib/libgui.a
-INCLUDES := -Iinclude -Isrc -I../libc/include 
+INCLUDES := -Iinclude -Isrc -I../libc/include
 
 .PHONY: all
 all: $(GUI_OUT)
@@ -16,4 +17,3 @@ $(GUI_OUT): $(BUILD_TOOL)
 		--ar $(AR) \
 		--output $@ \
 		--type archive
-

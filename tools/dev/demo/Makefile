@@ -1,5 +1,6 @@
-SRC_DIR    := src
+# tools/dev/demo/Makefile
 
+SRC_DIR    := src
 CC         := gcc
 CCFLAGS    :=
 INCLUDES   := -Iinclude -I$(SRC_DIR)
@@ -15,11 +16,12 @@ all: build
 
 build:
 	@mkdir -p $(BUILD_DIR)
-	@cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="" -DCMAKE_CXX_FLAGS="" -DARCH_DIR=$(ARCH_DIR)
+	@cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug \
+		-DCMAKE_C_FLAGS="" -DCMAKE_CXX_FLAGS="" -DARCH_DIR=$(ARCH_DIR)
 	@cmake --build $(BUILD_DIR) --target $(TARGET)
 
 run: build
-	@$(MAKE) -C $(BUILD_DIR) 
+	@$(MAKE) -C $(BUILD_DIR)
 	@$(BIN)
 
 clean:

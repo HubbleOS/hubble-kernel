@@ -1,2 +1,2 @@
 # drivers/module.mk
-lib-y        := drivers
+lib-y := drivers

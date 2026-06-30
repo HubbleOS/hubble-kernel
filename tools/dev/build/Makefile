@@ -1,13 +1,13 @@
+# tools/dev/build/Makefile
+
 SRC_DIR := src
 
 CC := gcc
 CCFLAGS := -MMD -MP
 INCLUDES := -Iinclude -I$(SRC_DIR)
-
-LDFLAGS := 
+LDFLAGS :=
 
 override BUILD_DIR := $(if $(OUT_DIR),$(OUT_DIR)/tools/dev/build,build)
-
 TARGET := $(BUILD_DIR)/build_main
 
 SRCS := $(wildcard $(SRC_DIR)/*.c)
@@ -29,4 +29,3 @@ $(BUILD_DIR)/%.o: %.c
 	$(CC) $(CCFLAGS) $(INCLUDES) -c $< -o $@
 
 -include $(DEPS)
-

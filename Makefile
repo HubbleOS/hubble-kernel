@@ -1,6 +1,11 @@
 # Main Makefile
+
 Q = @
 export Q
+
+# ---------------------------------------------------------------------------
+# Paths and configuration
+# ---------------------------------------------------------------------------
 
 ROOT_DIR := $(abspath .)
 export ROOT_DIR
@@ -20,60 +25,80 @@ ifneq ($(ARCH),$(filter $(ARCH),$(SUPPORTED_ARCHES)))
   $(error Unsupported architecture: $(ARCH). Supported: $(SUPPORTED_ARCHES))
 endif
 
-# Build mode: set RELEASE=1 for optimized builds without debug symbols
+# ---------------------------------------------------------------------------
+# Build mode: RELEASE=1 removes debug symbols, uses -O3
+# ---------------------------------------------------------------------------
+
 RELEASE ?= 0
 
+# ---------------------------------------------------------------------------
 # Parallel jobs: defaults to number of CPUs
+# ---------------------------------------------------------------------------
+
 JOBS ?= $(shell sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
 
-# Compiler flags
-
-ifeq ($(RELEASE),1)
-CFLAGS = -ffreestanding -O3 -Wall -Wextra
-else
-CFLAGS = -ffreestanding -O2 -Wall -Wextra -g
-endif
+# ---------------------------------------------------------------------------
+# Toolchain
+# ---------------------------------------------------------------------------
 
 ifeq ($(ARCH),x86)
-    CFLAGS += -mcmodel=kernel -m64 -mno-mmx -mno-sse -mno-sse2 -mno-sse3 -mno-avx -mno-avx2 -mno-red-zone
-endif
-
-ifeq ($(ARCH),arm64)
-    CFLAGS += -march=armv8-a
-endif
-
-ifeq ($(ARCH),x86)
-	CROSS   = x86_64-elf-
-	CC      = $(CROSS)gcc
-	AS      = $(CROSS)as
-	LD      = $(CROSS)ld
-	AR      = $(CROSS)ar
-	OBJCOPY = $(CROSS)objcopy
-	
-	ASM     = nasm
-	CFLAGS += -m64
+	CROSS    = x86_64-elf-
+	CC       = $(CROSS)gcc
+	AS       = $(CROSS)as
+	LD       = $(CROSS)ld
+	AR       = $(CROSS)ar
+	OBJCOPY  = $(CROSS)objcopy
+	ASM      = nasm
 	ASMFLAGS := -g -f elf64
 endif
-ifeq ($(ARCH),arm64)
-    CROSS = aarch64-elf-
-    CC    = $(CROSS)gcc
-    AS    = $(CROSS)as
-    LD    = $(CROSS)ld
-    AR    = $(CROSS)ar
-    OBJCOPY = $(CROSS)objcopy
-    ASMFLAGS := -g -march=armv8-a
-    ASM := $(AS)
-endif
 
+ifeq ($(ARCH),arm64)
+	CROSS    = aarch64-elf-
+	CC       = $(CROSS)gcc
+	AS       = $(CROSS)as
+	LD       = $(CROSS)ld
+	AR       = $(CROSS)ar
+	OBJCOPY  = $(CROSS)objcopy
+	ASM      := $(AS)
+	ASMFLAGS := -g -march=armv8-a
+endif
 
 export LD CC AS AR OBJCOPY ASM CFLAGS ASMFLAGS
 export ARCH OUT_DIR BUILD_DIR ARCH_DIR TOOLS_DIR BUILD_TOOL
+
+# ---------------------------------------------------------------------------
+# Compiler flags
+# ---------------------------------------------------------------------------
+
+ifeq ($(RELEASE),1)
+	CFLAGS = -ffreestanding -O3 -Wall -Wextra
+else
+	CFLAGS = -ffreestanding -O2 -Wall -Wextra -g
+endif
+
+ifeq ($(ARCH),x86)
+	CFLAGS += -mcmodel=kernel -m64 \
+		-mno-mmx -mno-sse -mno-sse2 -mno-sse3 \
+		-mno-avx -mno-avx2 -mno-red-zone
+endif
+
+ifeq ($(ARCH),arm64)
+	CFLAGS += -march=armv8-a
+endif
+
+# ---------------------------------------------------------------------------
+# Include paths
+# ---------------------------------------------------------------------------
 
 INCLUDES += -I$(abspath .)
 INCLUDES += -I$(abspath include)
 INCLUDES += -I$(ARCH_DIR)/include
 INCLUDES += -I$(ARCH_DIR)/kernel
 export INCLUDES
+
+# ---------------------------------------------------------------------------
+# Derived paths
+# ---------------------------------------------------------------------------
 
 LIB_DIR := $(abspath lib)
 export LIB_DIR
@@ -86,18 +111,20 @@ ISO_DIR := $(BUILD_DIR)/iso
 export ISO_DIR
 
 ifeq ($(ARCH),x86)
-EFI_NAME := BOOTx64.EFI
-EFI_TARGET := efi-app-x86_64
+	EFI_NAME := BOOTx64.EFI
+	EFI_TARGET := efi-app-x86_64
 endif
 
 ifeq ($(ARCH),arm64)
-EFI_NAME := BOOTAA64.EFI
-EFI_TARGET := efi-app-aarch64
+	EFI_NAME := BOOTAA64.EFI
+	EFI_TARGET := efi-app-aarch64
 endif
 
-# Libraries
-# The path is displayed automatically: $(BUILD_DIR)/<relpath>/lib<name>.a
+# ---------------------------------------------------------------------------
+# Library paths
+# ---------------------------------------------------------------------------
 
+# $(BUILD_DIR)/<relpath>/lib<name>.a
 define lib-path
 $(BUILD_DIR)/$(1)/lib$(notdir $(1)).a
 endef
@@ -112,30 +139,37 @@ CORE_LIB    := $(call lib-path,lib/core)
 
 export NET_LIB FS_LIB DRIVERS_LIB FONT_LIB COLOR_LIB CORE_LIB
 
-LIBS := $(NET_LIB) $(FS_LIB) $(SOUND_LIB) $(DRIVERS_LIB) $(FONT_LIB) $(COLOR_LIB) $(CORE_LIB)
+LIBS := $(NET_LIB) $(FS_LIB) $(SOUND_LIB) \
+	$(DRIVERS_LIB) $(FONT_LIB) $(COLOR_LIB) $(CORE_LIB)
 export LIBS
 
-# kernel/ common objects
+# ---------------------------------------------------------------------------
+# Kernel common objects
+# ---------------------------------------------------------------------------
 
 KCOMMON_BUILD_DIR := $(BUILD_DIR)/kernel
 
 ifeq ($(ARCH),x86)
-    KCOMMON_OBJS += $(BUILD_DIR)/init/main.o
-    KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/module.o
-    KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/device/device.o
-    KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/init/fs.o
-    KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/printk.o
-    KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/syscalls/syscall.o
-    KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/syscalls/sys_module.o
+	KCOMMON_OBJS += $(BUILD_DIR)/init/main.o
+	KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/module.o
+	KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/device/device.o
+	KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/init/fs.o
+	KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/printk.o
+	KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/syscalls/syscall.o
+	KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/syscalls/sys_module.o
 endif
 
 export KCOMMON_BUILD_DIR KCOMMON_OBJS
 
+# ---------------------------------------------------------------------------
 # Build tool flags
+# ---------------------------------------------------------------------------
 
 BUILD_TOOL_FLAGS = --log-file $(LOG_FILE) -v --jobs $(JOBS)
 
+# ---------------------------------------------------------------------------
 # Build macros
+# ---------------------------------------------------------------------------
 
 # $(d) = relpath, expanded when called via foreach
 define build-lib-module
@@ -249,26 +283,32 @@ define load-module
 	)
 endef
 
+# ---------------------------------------------------------------------------
 # Module list
+# ---------------------------------------------------------------------------
 
 MODULES :=
 
 ifeq ($(ARCH),arm64)
-    MODULES += arch/arm64
-else 
-    MODULES += init
-    MODULES += net
-    MODULES += fs
-	    MODULES += drivers
-	    MODULES += lib
-	    MODULES += sound
-	    MODULES += kernel
-	    MODULES += modules
-	    MODULES += arch/$(ARCH)
+	MODULES += arch/arm64
+else
+	MODULES += init
+	MODULES += net
+	MODULES += fs
+	MODULES += drivers
+	MODULES += lib
+	MODULES += sound
+	MODULES += kernel
+	MODULES += modules
+	MODULES += arch/$(ARCH)
 endif
 
-# arch subdirs (boot etc.)
+# ---------------------------------------------------------------------------
+# Subdirectory discovery (boot, tools, etc.)
+# ---------------------------------------------------------------------------
 
+# Note: use spaces, not tabs, inside this define because it's used
+# with $(eval ...) where leading tabs are treated as recipe lines.
 define kbuild-subdir
   subdir-y :=
   include $(1)/Makefile
@@ -280,15 +320,21 @@ subdirs :=
 $(eval $(call kbuild-subdir,arch/$(ARCH)))
 $(eval $(call kbuild-subdir,tools/dev))
 
+# ---------------------------------------------------------------------------
+# Userland build
+# ---------------------------------------------------------------------------
+
 USR_DIR := $(abspath usr)
 export USR_DIR
 
 USR_BUILD :=
 ifneq ($(ARCH),arm64)
-USR_BUILD := $(MAKE) -C $(USR_DIR) -j$(JOBS)
+	USR_BUILD := $(MAKE) -C $(USR_DIR) -j$(JOBS)
 endif
 
+# ---------------------------------------------------------------------------
 # Targets
+# ---------------------------------------------------------------------------
 
 PHONY += build-tool
 build-tool:

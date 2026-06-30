@@ -1,2 +1,2 @@
 # sound/module.mk
-lib-y        := sound
+lib-y := sound
