@@ -1,0 +1,249 @@
+# scripts/kbuild/Kbuild.include
+#
+# Kbuild compatibility layer — maps Kbuild-style declarations to BUILD_TOOL.
+#
+# =========================================================================
+# VARIABLE CONVENTIONS
+# =========================================================================
+#
+# All build configuration uses ONLY directory-level declarations:
+#
+#   obj-y     Directories to compile as relocatable .o objects
+#             BUILD_TOOL: --type objects
+#             Output: .o files at $(BUILD_DIR)/<dir>/
+#             Used for: kernel core (init/, kernel/)
+#
+#   lib-y     Directories to compile and archive into static .a libraries
+#             BUILD_TOOL: --type archive
+#             Output: $(BUILD_DIR)/<dir>/lib<basename>.a
+#             Used for: net, fs, drivers, sound, lib/*
+#
+#   mod-y     Directories to compile and relocatable-link into .ko
+#             BUILD_TOOL: --type module
+#             Output: as specified by $(mod-output-y)
+#             Used for: loadable kernel modules
+#
+#   exe-y     Directories to compile and link into final executable
+#             BUILD_TOOL: --type exe
+#             Output: as specified by $(exe-output-y), $(exe-ldflags-y)
+#             Used for: kernel ELF (final link)
+#
+#   subdir-y  Subdirectories to recurse into (bridge directories)
+#             No BUILD_TOOL invocation — delegates to load-module
+#             Used for: lib/, modules/, arch/x86/
+#
+# =========================================================================
+# ARCH INTEGRATION
+# =========================================================================
+#
+# Architecture selection is directory-level only:
+#
+#   obj-y += arch/$(ARCH)/
+#
+# arch/$(ARCH)/Kbuild (or module.mk) then declares subdir-y for its
+# kernel/ subdirectory. No file-level ARCH conditionals.
+#
+# =========================================================================
+# BUILD_TOOL INVOCATION
+# =========================================================================
+#
+# Every Kbuild variable maps to a BUILD_TOOL invocation with specific
+# flags. The toolchain and ARCH-specific flags come from the parent
+# environment (exported by Makefile). Per-module overrides:
+#
+#   ccflags-y  Additional C compiler flags for this module
+#   asflags-y  Additional assembler flags for this module
+#
+# Helper macros below provide parameterized BUILD_TOOL invocations.
+
+# Resolve the build output directory for a module path
+# $(1): module relative path
+kbuild-build-dir = $(BUILD_DIR)/$(1)
+
+# Resolve the source directory for a module path
+# $(1): module relative path
+kbuild-src-dir = $(ROOT_DIR)/$(1)
+
+# Default library output path
+# $(1): module relative path (e.g. "drivers", "lib/core")
+kbuild-lib-output = $(BUILD_DIR)/$(1)/lib$(notdir $(1)).a
+
+# -------------------------------------------------------------------------
+# obj-y  →  compile objects, no link
+# -------------------------------------------------------------------------
+# Invokes BUILD_TOOL with --type objects.
+# Sources are discovered recursively by BUILD_TOOL in --src-dir.
+# Output .o files mirror source tree structure under --build-dir.
+#
+# Example:
+#   obj-y += kernel/
+#   → compile kernel/ → out/build/x86/kernel/module.o, printk.o, ...
+
+kbuild-obj = \
+	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
+		--src-dir   $(ROOT_DIR)/$(1) \
+		--build-dir $(BUILD_DIR)/$(1) \
+		--cc $(CC) \
+		--asm $(ASM) \
+		--cflags    "$(CFLAGS) $(ccflags-y)" \
+		--asmflags  "$(ASMFLAGS) $(asflags-y)" \
+		--includes  "$(INCLUDES)" \
+		--type objects
+
+# -------------------------------------------------------------------------
+# lib-y  →  compile objects + archive into .a
+# -------------------------------------------------------------------------
+# Invokes BUILD_TOOL with --type archive.
+# Produces lib<basename>.a at $(BUILD_DIR)/<path>/.
+#
+# Example:
+#   lib-y += net/
+#   → compile net/ → archive → out/build/x86/net/libnet.a
+
+kbuild-lib = \
+	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
+		--src-dir   $(ROOT_DIR)/$(1) \
+		--build-dir $(BUILD_DIR)/$(1) \
+		--cc $(CC) \
+		--cflags    "$(CFLAGS) $(ccflags-y)" \
+		--includes  "$(INCLUDES)" \
+		--ar $(AR) \
+		--output    $(BUILD_DIR)/$(1)/lib$(notdir $(1)).a \
+		--type archive
+
+kbuild-lib-asm = \
+	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
+		--src-dir   $(ROOT_DIR)/$(1) \
+		--build-dir $(BUILD_DIR)/$(1) \
+		--cc $(CC) \
+		--asm $(ASM) \
+		--cflags    "$(CFLAGS) $(ccflags-y)" \
+		--asmflags  "$(ASMFLAGS) $(asflags-y)" \
+		--includes  "$(INCLUDES)" \
+		--ar $(AR) \
+		--output    $(BUILD_DIR)/$(1)/lib$(notdir $(1)).a \
+		--type archive
+
+# -------------------------------------------------------------------------
+# exe-y  →  compile + link executable
+# -------------------------------------------------------------------------
+# Invokes BUILD_TOOL with --type exe.
+# Requires module-level variables:
+#   exe-output-y     Output executable path
+#   exe-ldflags-y    Linker flags (e.g. -T ldscript)
+#   exe-whole-archive Libraries to link with --whole-archive
+#   exe-libs          Libraries to link with --no-whole-archive
+#
+# Obj-y objects are auto-collected and passed via --obj-files.
+#
+# Example:
+#   exe-y           := arch/x86/kernel
+#   exe-output-y    := $(ISO_DIR)/kernel.elf
+#   exe-ldflags-y   := -nostdlib -T kernel.ld
+#   exe-whole-archive := drivers sound
+#   exe-libs        := net fs lib/fonts lib/color lib/core
+
+kbuild-exe = \
+	$(Q)__obj_files=""; \
+	for __dir in $(__obj_y_dirs); do \
+		for __f in $$(find $(BUILD_DIR)/$$__dir -name '*.o' 2>/dev/null); do \
+			__obj_files="$$__obj_files $$__f"; \
+		done; \
+	done; \
+	__whole_archive=""; \
+	for __mod in $(exe-whole-archive); do \
+		__base=$$(basename $$__mod); \
+		__whole_archive="$$__whole_archive $(BUILD_DIR)/$$__mod/lib$$__base.a"; \
+	done; \
+	__libs=""; \
+	for __mod in $(exe-libs); do \
+		__base=$$(basename $$__mod); \
+		__libs="$$__libs $(BUILD_DIR)/$$__mod/lib$$__base.a"; \
+	done; \
+	__libs_arg=""; \
+	if [ -n "$$__whole_archive" ]; then \
+		__libs_arg="--whole-archive $$__whole_archive"; \
+	fi; \
+	if [ -n "$$__libs" ]; then \
+		__libs_arg="$$__libs_arg --no-whole-archive $$__libs"; \
+	fi; \
+	$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
+		--src-dir   $(ROOT_DIR)/$(1) \
+		--build-dir $(BUILD_DIR)/$(1) \
+		--cc $(CC) \
+		--asm $(ASM) \
+		--cflags    "$(if $(cflags-y),$(cflags-y),$(CFLAGS)) $(ccflags-y)" \
+		--asmflags  "$(ASMFLAGS) $(asflags-y)" \
+		--includes  "$(INCLUDES)" \
+		--output    $(exe-output-y) \
+		--type exe \
+		--ld $(LD) \
+		$(if $(exe-ldflags-y), --ldflags "$(exe-ldflags-y)") \
+		--obj-files "$$__obj_files" \
+		--libs "$$__libs_arg"
+
+# -------------------------------------------------------------------------
+# mod-y  →  compile + relocatable-link kernel module
+# -------------------------------------------------------------------------
+# Invokes BUILD_TOOL with --type module (ld -r).
+# Requires module-level variables:
+#   mod-output-y   Output .ko path
+#   mod-ldflags-y  Extra linker flags
+#
+# Example:
+#   mod-y        := modules/hello
+#   mod-output-y := $(OUT_DIR)/modules/hello.ko
+#   mod-ldflags-y := -nostdlib
+
+kbuild-mod = \
+	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
+		--src-dir   $(ROOT_DIR)/$(1) \
+		--build-dir $(BUILD_DIR)/$(1) \
+		--cc $(CC) \
+		--asm $(ASM) \
+		--cflags    "$(if $(cflags-y),$(cflags-y),$(CFLAGS)) $(ccflags-y)" \
+		--asmflags  "$(ASMFLAGS) $(asflags-y)" \
+		--includes  "$(INCLUDES)" \
+		--output    $(mod-output-y) \
+		--type module \
+		--ld $(LD) \
+		$(if $(mod-ldflags-y), --ldflags "$(mod-ldflags-y)") \
+		$(if $(mod-objs-y),    --obj-files "$(mod-objs-y)") \
+		$(if $(mod-libs-y),    --libs      "$(mod-libs-y)")
+
+# -------------------------------------------------------------------------
+# MODULE FILE CONVENTIONS
+# -------------------------------------------------------------------------
+#
+# A Kbuild module file (module.mk) is a minimal Makefile snippet that
+# declares ONLY build variables. It is included by load-module macro
+# at build time.
+#
+# Standard form — one declaration per file:
+#
+#   # <path>/module.mk
+#   <type>-y := <path>
+#   [<type>-flags ...]
+#   [<type>-output ...]
+#
+# Examples:
+#
+#   # init/module.mk          →  obj-y := init
+#   # kernel/module.mk        →  obj-y := kernel
+#   # net/module.mk           →  lib-y := net
+#   # drivers/module.mk       →  lib-y := drivers
+#   # modules/hello/module.mk →  mod-y  := modules/hello
+#   #                          + mod-output-y, mod-ldflags-y
+#
+# Bridge directories (subdir-y only):
+#
+#   # lib/Makefile or lib/module.mk
+#   #   subdir-y += lib/fonts
+#   #   subdir-y += lib/color
+#   #   subdir-y += lib/core
+#
+#   # arch/x86/Makefile or arch/x86/module.mk
+#   #   subdir-y += arch/x86/kernel/
+#
+#   # modules/module.mk
+#   #   subdir-y += modules/hello
