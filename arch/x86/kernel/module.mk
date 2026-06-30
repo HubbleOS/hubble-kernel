@@ -1,8 +1,6 @@
 # arch/x86/kernel/module.mk
-exe-y        := arch/x86/kernel
-exe-build-y  := $(BUILD_DIR)/kernel
-exe-output-y := $(ISO_DIR)/kernel.elf
-exe-ldflags-y := -nostdlib -T $(ROOT_DIR)/arch/x86/kernel/kernel.ld
-exe-libs-y   := --whole-archive $(DRIVERS_LIB) $(SOUND_LIB) \
-	--no-whole-archive $(NET_LIB) $(FS_LIB) $(FONT_LIB) $(COLOR_LIB) $(CORE_LIB)
-exe-objs-y   := $(KCOMMON_OBJS)
+exe-y           := arch/x86/kernel
+exe-output-y    := $(ISO_DIR)/kernel.elf
+exe-ldflags-y   := -nostdlib -T $(ROOT_DIR)/arch/x86/kernel/kernel.ld
+exe-whole-archive := drivers sound
+exe-libs        := net fs lib/fonts lib/color lib/core
