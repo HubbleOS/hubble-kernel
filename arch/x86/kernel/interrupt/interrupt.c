@@ -1,64 +1,68 @@
+/**
+ * @file interrupt.c
+ * @brief Interrupt handling: PIC, IRQ dispatch, exception handlers
+ *
+ * Manages the legacy 8259 PIC (used before or alongside APIC),
+ * provides an IRQ handler registration table, and implements
+ * the common CPU exception and hardware interrupt dispatchers.
+ */
+
 #include "interrupt.h"
-#include <syscalls/syscall_entry.h>
-#include <stdint.h>
+#include <asm.h>
 #include <hubble/printk.h>
 #include <io.h>
+
 #include <apic/apic.h>
+#include <mm/vmm.h>
 #include <smp/scheduler.h>
 
-#include <asm.h>
+/* ── Legacy PIC Constants ────────────────────────────────────── */
 
-// Legacy PIC functions (kept for fallback/compatibility)
 #define PIC1_COMMAND 0x20
-#define PIC1_DATA 0x21
+#define PIC1_DATA    0x21
 #define PIC2_COMMAND 0xA0
-#define PIC2_DATA 0xA1
-#define PIC_EOI 0x20
+#define PIC2_DATA    0xA1
+#define PIC_EOI      0x20
+
+/* ── PIC Functions ───────────────────────────────────────────── */
 
 /**
- * @brief Disable legacy PIC by masking all IRQ lines.
- *
- * Used when switching to APIC mode.
+ * @brief Disable the legacy PIC by masking all IRQs
  */
 void pic_disable(void)
 {
-	// Mask all interrupts on both PICs
 	outb(PIC1_DATA, 0xFF);
 	outb(PIC2_DATA, 0xFF);
 	printk(KERN_INFO "Legacy PIC disabled\n");
 }
 
 /**
- * @brief Remap PIC interrupt vectors.
+ * @brief Remap PIC vectors to avoid overlap with CPU exceptions
  *
- * Moves IRQs from default (0–15) to 32–47 to avoid collision
- * with CPU exceptions (0–31).
+ * Moves IRQs from default 0-15 to vectors 32-47.
  */
 void pic_remap(void)
 {
 	outb(PIC1_COMMAND, 0x11);
 	outb(PIC2_COMMAND, 0x11);
-	// ICW2: remap to vectors 0x20 (32) and 0x28 (40)
+
 	outb(PIC1_DATA, 32);
 	outb(PIC2_DATA, 40);
-	// ICW3: cascade
+
 	outb(PIC1_DATA, 4);
 	outb(PIC2_DATA, 2);
-	// ICW4: 8086 mode
+
 	outb(PIC1_DATA, 0x01);
 	outb(PIC2_DATA, 0x01);
 
-	// DON'T restore a1/a2 here — mask everything immediately
 	outb(PIC1_DATA, 0xFF);
 	outb(PIC2_DATA, 0xFF);
 }
 
 /**
- * @brief Send End Of Interrupt (EOI) to PIC controllers.
+ * @brief Send End-Of-Interrupt to the PIC
  *
- * Required after handling an IRQ to allow further interrupts.
- *
- * @param irq IRQ number
+ * @param irq IRQ number that was handled
  */
 void pic_send_eoi(uint8_t irq)
 {
@@ -68,9 +72,9 @@ void pic_send_eoi(uint8_t irq)
 }
 
 /**
- * @brief Mask (disable) a specific IRQ line on PIC.
+ * @brief Mask (disable) a specific IRQ line on the PIC
  *
- * @param irq IRQ number
+ * @param irq IRQ number to disable
  */
 void irq_set_mask(uint8_t irq)
 {
@@ -81,6 +85,11 @@ void irq_set_mask(uint8_t irq)
 	outb(port, value);
 }
 
+/**
+ * @brief Unmask (enable) a specific IRQ line on the PIC
+ *
+ * @param irq IRQ number to enable
+ */
 void irq_clear_mask(uint8_t irq)
 {
 	uint16_t port = (irq < 8) ? PIC1_DATA : PIC2_DATA;
@@ -90,15 +99,14 @@ void irq_clear_mask(uint8_t irq)
 	outb(port, value);
 }
 
-// IRQ handlers (supports both PIC and APIC)
-static irq_handler_t irq_handlers[256] = {0}; // Extended for APIC vectors
+/* ── IRQ Handler Table ───────────────────────────────────────── */
+
+static irq_handler_t irq_handlers[256] = {0};
 
 /**
- * @brief Install an interrupt handler for a given IRQ vector.
+ * @brief Register an interrupt handler for a given vector
  *
- * Supports up to 256 vectors (for APIC compatibility).
- *
- * @param irq IRQ/vector number
+ * @param irq     IRQ / vector number
  * @param handler Handler function
  */
 void irq_install_handler(uint8_t irq, irq_handler_t handler)
@@ -108,9 +116,9 @@ void irq_install_handler(uint8_t irq, irq_handler_t handler)
 }
 
 /**
- * @brief Uninstall interrupt handler for a given IRQ vector.
+ * @brief Unregister an interrupt handler
  *
- * @param irq IRQ/vector number
+ * @param irq IRQ / vector number
  */
 void irq_uninstall_handler(uint8_t irq)
 {
@@ -118,7 +126,8 @@ void irq_uninstall_handler(uint8_t irq)
 		irq_handlers[irq] = 0;
 }
 
-// Exception messages
+/* ── Exception Messages ──────────────────────────────────────── */
+
 static const char *exception_messages[] = {
 	"Division By Zero",
 	"Debug",
@@ -144,27 +153,24 @@ static const char *exception_messages[] = {
 	"Control Protection Exception",
 };
 
-// Handlers
+/* ── Common Exception Handler ────────────────────────────────── */
+
 /**
- * @brief Handle CPU exceptions (faults, traps, aborts).
+ * @brief Handle CPU exceptions (faults, traps, aborts)
  *
- * Prints diagnostic information and halts on critical faults.
- * Non-fatal exceptions terminate the current task if scheduler is active.
+ * Prints diagnostic information and halts on fatal faults
+ * (double fault, GPF, page fault).  Non-fatal exceptions
+ * terminate the current task if the scheduler is active.
  *
- * @param regs Pointer to register snapshot
+ * @param regs Register snapshot from the ISR stub
  */
-// ============================================================================
-
-#include "higher_half.h"
-#include <asm.h>
-
 void isr_handler(registers_t *regs)
 {
 	printk(KERN_INFO "\n\tEXCEPTION OCCURRED\n");
 
 	printk(KERN_INFO "Exception: %s (%lu)\n",
-		   regs->int_no < 22 ? exception_messages[regs->int_no] : "Unknown",
-		   regs->int_no);
+	       regs->int_no < 22 ? exception_messages[regs->int_no] : "Unknown",
+	       regs->int_no);
 	printk(KERN_ERR "Error code: 0x%lx\n", regs->err_code);
 
 	printk(KERN_INFO "Registers");
@@ -188,7 +194,6 @@ void isr_handler(registers_t *regs)
 
 		if (regs->int_no == 14)
 		{
-			// cr2
 			uint64_t addr;
 			asm volatile("mov %%cr2, %0" : "=r"(addr));
 
@@ -198,7 +203,7 @@ void isr_handler(registers_t *regs)
 			asm volatile("mov %%cr3, %0" : "=r"(cr3));
 			task_t *t = get_current_task();
 			printk(KERN_INFO "Fault: active CR3=0x%llx task->page_table=0x%llx match=%d\n",
-				   cr3, (uint64_t)t->page_table, cr3 == (uint64_t)t->page_table);
+			       cr3, (uint64_t)t->page_table, cr3 == (uint64_t)t->page_table);
 		}
 		while (1)
 		{
@@ -214,34 +219,33 @@ void isr_handler(registers_t *regs)
 	}
 }
 
+/* ── Common IRQ Handler ──────────────────────────────────────── */
+
 /**
- * @brief Handle hardware interrupts (IRQs).
+ * @brief Handle hardware interrupts (IRQs)
  *
- * - Detects and ignores spurious IRQs (PIC-specific)
- * - Dispatches to registered handler
- * - Sends EOI via PIC or APIC
+ * - Detects and ignores spurious IRQs on the PIC
+ * - Dispatches to the registered handler
+ * - Sends EOI via APIC (if available) or PIC
  *
- * @param regs Pointer to register snapshot
+ * @param regs Register snapshot from the ISR stub
  */
 void irq_handler(registers_t *regs)
 {
 	uint8_t irq = regs->int_no - 32;
-	// outb(0x3f8, irq + '0');
-	// Check for PIC spurious IRQ before doing anything
+
 	if (irq == 7)
 	{
-		// Check master PIC ISR
-		outb(PIC1_COMMAND, 0x0B); // Read ISR
+		outb(PIC1_COMMAND, 0x0B);
 		if (!(inb(PIC1_COMMAND) & 0x80))
-			return; // Spurious — no EOI
+			return;
 	}
 	if (irq == 15)
 	{
-		// Check slave PIC ISR
 		outb(PIC2_COMMAND, 0x0B);
 		if (!(inb(PIC2_COMMAND) & 0x80))
 		{
-			outb(PIC1_COMMAND, PIC_EOI); // Still need master EOI
+			outb(PIC1_COMMAND, PIC_EOI);
 			return;
 		}
 	}
@@ -255,13 +259,18 @@ void irq_handler(registers_t *regs)
 		pic_send_eoi(irq);
 }
 
-// Init
+/* ── Initialisation ──────────────────────────────────────────── */
 
+/**
+ * @brief Initialise the interrupt subsystem
+ *
+ * Remaps the PIC to vectors 32+, masks all IRQs, and
+ * enables interrupts on the BSP.
+ */
 void interrupts_init(void)
 {
 	printk(KERN_INFO "Initializing interrupt system...\n");
 
-	// IDT і PIC remap
 	pic_remap();
 	pic_disable();
 

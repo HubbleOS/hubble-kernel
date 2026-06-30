@@ -1,9 +1,13 @@
 #pragma once
-#include <stdint.h>
-#include <stddef.h>
 
-typedef struct
-{
+/**
+ * @brief Platform information populated from bootloader data.
+ */
+
+#include <stddef.h>
+#include <stdint.h>
+
+typedef struct {
 	uint64_t fb_base;
 	uint32_t fb_width;
 	uint32_t fb_height;

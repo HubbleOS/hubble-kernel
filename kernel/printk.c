@@ -1,44 +1,65 @@
-#include <hubble/printk.h>
-#include <hubble/color.h>
-#include <hubble/string.h>
+/*
+ * printk — kernel logging and formatted output.
+ *
+ * Provides buffered, colorized log output with ring-buffer storage,
+ * pluggable output backends (early serial, full console), and
+ * level-based prefix formatting.
+ */
+
 #include <stdarg.h>
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <limits.h>
-#include <smp/spinlock.h>
+
+#include <hubble/color.h>
+#include <hubble/printk.h>
+#include <hubble/string.h>
+
 #include <asm.h>
+#include <smp/spinlock.h>
 
-// Ring buffer
+/* ── Ring buffer ──────────────────────────────────────────────────────────── */
+
 static char log_buffer[PRINTK_BUFFER_SIZE];
-static size_t log_head = 0;
-static size_t log_tail = 0;
-static size_t log_size = 0;
-static bool log_wrapped = false;
+static size_t log_head;
+static size_t log_tail;
+static size_t log_size;
+static bool   log_wrapped;
 
-// Output function (set by arch via printk_set_output)
-static void (*output_fn)(char c) = NULL;
-static void (*color_output_fn)(char c, color_t color) = NULL;
+/* ── Pluggable output backends ────────────────────────────────────────────── */
 
-// Console callback (set after full console subsystem is up)
-static void (*console_write)(const char *buf, size_t len, void *data) = NULL;
-static void *console_user_data = NULL;
+static void (*output_fn)(char c);
+static void (*color_output_fn)(char c, color_t color);
+static void (*console_write)(const char *buf, size_t len, void *data);
+static void  *console_user_data;
 
-// Lock
+/* ── State ────────────────────────────────────────────────────────────────── */
+
 static spinlock_t printk_lock = SPINLOCK_INIT("printk");
-static bool printk_at_line_start = true;
+static bool       printk_at_line_start = true;
+static color_t    current_color = COLOR_WHITE;
 
-static void output_plain_string(const char *str, size_t len, color_t color);
+/* ── Output helpers ───────────────────────────────────────────────────────── */
 
+/**
+ * @brief Set the single-character output function (early boot path).
+ */
 void printk_set_output(void (*fn)(char c))
 {
 	output_fn = fn;
 }
 
+/**
+ * @brief Set the color-aware single-character output function.
+ */
 void printk_set_color_output(void (*fn)(char c, color_t color))
 {
 	color_output_fn = fn;
 }
 
+/**
+ * @brief Map a log level to its display colour.
+ */
 static color_t printk_level_color(int level)
 {
 	switch (level)
@@ -62,6 +83,11 @@ static color_t printk_level_color(int level)
 	}
 }
 
+/**
+ * @brief Get the label string for a given log level.
+ *
+ * @return Pointer to a static string, or NULL for unrecognised levels.
+ */
 static const char *printk_level_label(int level)
 {
 	switch (level)
@@ -72,47 +98,94 @@ static const char *printk_level_label(int level)
 	case 3:
 		return "[ERROR] ";
 	case 4:
-		return "[WARN] ";
+		return "[WARN]  ";
 	case 5:
 	case 6:
-		return "[INFO] ";
+		return "[INFO]  ";
 	case 7:
 		return "[DEBUG] ";
 	case 8:
-		return "[ OK ] ";
+		return "[ OK ]  ";
 	default:
 		return NULL;
 	}
 }
 
+/* ── Token-based colourisation ────────────────────────────────────────────── */
+
+struct printk_token {
+	const char *text;
+	size_t      len;
+	color_t     color;
+};
+
+static const struct printk_token tokens[] = {
+	{"[ OK ]",   6, COLOR_GREEN},
+	{"[OK]",     4, COLOR_GREEN},
+	{"[ERROR]",  7, COLOR_RED},
+	{"[WARN]",   6, COLOR_YELLOW},
+	{"[INFO]",   6, COLOR_BLUE},
+	{"[DEBUG]",  7, COLOR_WHITE},
+};
+
 static int printk_token_len(const char *str, size_t len, color_t *color)
 {
-	struct printk_token
-	{
-		const char *text;
-		size_t len;
-		color_t color;
-	};
-
-	static const struct printk_token tokens[] = {
-	    {"[ OK ]", 6, COLOR_GREEN},
-	    {"[OK]", 4, COLOR_GREEN},
-	    {"[ERROR]", 7, COLOR_RED},
-	    {"[WARN]", 6, COLOR_YELLOW},
-	    {"[INFO]", 6, COLOR_BLUE},
-	    {"[DEBUG]", 7, COLOR_WHITE},
-	};
-
 	for (size_t i = 0; i < sizeof(tokens) / sizeof(tokens[0]); i++)
 	{
-		if (len >= tokens[i].len && strncmp(str, tokens[i].text, tokens[i].len) == 0)
+		if (len >= tokens[i].len &&
+		    strncmp(str, tokens[i].text, tokens[i].len) == 0)
 		{
 			*color = tokens[i].color;
-			return tokens[i].len;
+			return (int)tokens[i].len;
 		}
 	}
-
 	return 0;
+}
+
+/* ── Ring-buffer management ───────────────────────────────────────────────── */
+
+static void log_buffer_append(const char *buf, size_t len)
+{
+	for (size_t i = 0; i < len; i++)
+	{
+		log_buffer[log_head] = buf[i];
+		log_head = (log_head + 1) % PRINTK_BUFFER_SIZE;
+
+		if (log_size < PRINTK_BUFFER_SIZE)
+		{
+			log_size++;
+		}
+		else
+		{
+			log_wrapped = true;
+			log_tail = (log_tail + 1) % PRINTK_BUFFER_SIZE;
+		}
+	}
+}
+
+/* ── Output plumbing ──────────────────────────────────────────────────────── */
+
+static void output_plain_string(const char *str, size_t len, color_t color)
+{
+	log_buffer_append(str, len);
+
+	if (console_write)
+	{
+		console_write(str, len, console_user_data);
+	}
+	else if (color_output_fn)
+	{
+		for (size_t i = 0; i < len; i++)
+			color_output_fn(str[i], color);
+	}
+	else if (output_fn)
+	{
+		for (size_t i = 0; i < len; i++)
+			output_fn(str[i]);
+	}
+
+	for (size_t i = 0; i < len; i++)
+		printk_at_line_start = (str[i] == '\n');
 }
 
 static void output_level_label(const char *str, size_t len, color_t color)
@@ -123,43 +196,10 @@ static void output_level_label(const char *str, size_t len, color_t color)
 		return;
 	}
 
+	/* Colour the inside of [LEVEL], leaving brackets white. */
 	output_plain_string(str, 1, COLOR_WHITE);
 	output_plain_string(str + 1, len - 2, color);
 	output_plain_string(str + len - 1, 1, COLOR_WHITE);
-}
-
-static void log_buffer_append(const char *buf, size_t len)
-{
-	for (size_t i = 0; i < len; i++)
-	{
-		log_buffer[log_head] = buf[i];
-		log_head = (log_head + 1) % PRINTK_BUFFER_SIZE;
-
-		if (log_size < PRINTK_BUFFER_SIZE)
-			log_size++;
-		else
-		{
-			log_wrapped = true;
-			log_tail = (log_tail + 1) % PRINTK_BUFFER_SIZE;
-		}
-	}
-}
-
-static void output_plain_string(const char *str, size_t len, color_t color)
-{
-	log_buffer_append(str, len);
-
-	if (console_write)
-		console_write(str, len, console_user_data);
-	else if (color_output_fn)
-		for (size_t i = 0; i < len; i++)
-			color_output_fn(str[i], color);
-	else if (output_fn)
-		for (size_t i = 0; i < len; i++)
-			output_fn(str[i]);
-
-	for (size_t i = 0; i < len; i++)
-		printk_at_line_start = (str[i] == '\n');
 }
 
 static void output_string_color(const char *str, size_t len, color_t color)
@@ -173,8 +213,8 @@ static void output_string_color(const char *str, size_t len, color_t color)
 
 		if (token_len > 0)
 		{
-			output_level_label(str + pos, token_len, token_color);
-			pos += token_len;
+			output_level_label(str + pos, (size_t)token_len, token_color);
+			pos += (size_t)token_len;
 			continue;
 		}
 
@@ -183,19 +223,28 @@ static void output_string_color(const char *str, size_t len, color_t color)
 	}
 }
 
-static color_t current_color = COLOR_WHITE;
-
 static void output_string(const char *str, size_t len)
 {
 	output_string_color(str, len, current_color);
 }
 
-void printk_register_console(void (*write_fn)(const char *buf, size_t len, void *data), void *user_data)
-{
-	console_write = write_fn;
-	console_user_data = user_data;
+/* ── Console registration ─────────────────────────────────────────────────── */
 
-	// Flush accumulated logs to console
+/**
+ * @brief Register a fully-capable console backend.
+ *
+ * Once registered, all buffered log contents are flushed to the new
+ * console. The console replaces the simpler early-output backends.
+ *
+ * @param write_fn  Callback invoked with each log chunk.
+ * @param user_data Opaque pointer passed to the callback.
+ */
+void printk_register_console(void (*write_fn)(const char *, size_t, void *),
+			     void *user_data)
+{
+	console_write       = write_fn;
+	console_user_data   = user_data;
+
 	if (console_write && log_size > 0)
 	{
 		size_t pos = log_tail;
@@ -214,18 +263,23 @@ void printk_register_console(void (*write_fn)(const char *buf, size_t len, void 
 	}
 }
 
+/**
+ * @brief Unregister the console backend, reverting to early output.
+ */
 void printk_unregister_console(void)
 {
-	console_write = NULL;
-	console_user_data = NULL;
+	console_write       = NULL;
+	console_user_data   = NULL;
 }
 
-size_t printk_get_log_buffer(char *dest, size_t max_len)
+/* ─── Log buffer access (for crash dumps, /proc/kmsg, etc.) ──────────────── */
+
+size_t printk_get_log(char *dest, size_t max_len)
 {
 	if (!dest || max_len == 0)
 		return 0;
 
-	size_t to_copy = log_size < max_len ? log_size : max_len;
+	size_t to_copy = (log_size < max_len) ? log_size : max_len;
 	size_t copied = 0;
 	size_t pos = log_tail;
 
@@ -234,22 +288,23 @@ size_t printk_get_log_buffer(char *dest, size_t max_len)
 		dest[copied++] = log_buffer[pos];
 		pos = (pos + 1) % PRINTK_BUFFER_SIZE;
 	}
-
 	return copied;
 }
 
-void printk_clear_log_buffer(void)
+void printk_clear_log(void)
 {
-	log_head = 0;
-	log_tail = 0;
-	log_size = 0;
+	log_head    = 0;
+	log_tail    = 0;
+	log_size    = 0;
 	log_wrapped = false;
 }
 
-size_t printk_get_log_size(void)
+size_t printk_log_size(void)
 {
 	return log_size;
 }
+
+/* ── Formatting helpers ───────────────────────────────────────────────────── */
 
 static void printk_pad(char c, int count)
 {
@@ -257,21 +312,22 @@ static void printk_pad(char c, int count)
 
 	while (count > 0)
 	{
-		int chunk = count > (int)sizeof(buf) ? (int)sizeof(buf) : count;
-		memset(buf, c, chunk);
-		output_string(buf, chunk);
+		int chunk = (count > (int)sizeof(buf)) ? (int)sizeof(buf) : count;
+		memset(buf, c, (size_t)chunk);
+		output_string(buf, (size_t)chunk);
 		count -= chunk;
 	}
 }
 
-#define FLAG_LEFT_ADJUST (1U << 0)
-#define FLAG_SHOW_SIGN (1U << 1)
-#define FLAG_SPACE (1U << 2)
-#define FLAG_ALT_FORM (1U << 3)
-#define FLAG_ZERO_PAD (1U << 4)
+enum {
+	FLAG_LEFT_ADJUST  = 1U << 0,
+	FLAG_SHOW_SIGN    = 1U << 1,
+	FLAG_SPACE        = 1U << 2,
+	FLAG_ALT_FORM     = 1U << 3,
+	FLAG_ZERO_PAD     = 1U << 4,
+};
 
-enum length_mod
-{
+enum length_mod {
 	LEN_NONE,
 	LEN_HH,
 	LEN_H,
@@ -279,38 +335,22 @@ enum length_mod
 	LEN_LL,
 	LEN_Z,
 	LEN_T,
-	LEN_J
+	LEN_J,
 };
 
-static const char *parse_flags(const char *fmt, unsigned *flags)
+static const char *parse_flags(const char *fmt, unsigned int *flags)
 {
 	*flags = 0;
 	while (*fmt)
 	{
 		switch (*fmt)
 		{
-		case '-':
-			*flags |= FLAG_LEFT_ADJUST;
-			fmt++;
-			break;
-		case '+':
-			*flags |= FLAG_SHOW_SIGN;
-			fmt++;
-			break;
-		case ' ':
-			*flags |= FLAG_SPACE;
-			fmt++;
-			break;
-		case '#':
-			*flags |= FLAG_ALT_FORM;
-			fmt++;
-			break;
-		case '0':
-			*flags |= FLAG_ZERO_PAD;
-			fmt++;
-			break;
-		default:
-			return fmt;
+		case '-': *flags |= FLAG_LEFT_ADJUST; fmt++; break;
+		case '+': *flags |= FLAG_SHOW_SIGN;   fmt++; break;
+		case ' ': *flags |= FLAG_SPACE;       fmt++; break;
+		case '#': *flags |= FLAG_ALT_FORM;    fmt++; break;
+		case '0': *flags |= FLAG_ZERO_PAD;    fmt++; break;
+		default:  return fmt;
 		}
 	}
 	return fmt;
@@ -365,25 +405,14 @@ static const char *parse_length(const char *fmt, enum length_mod *length)
 		fmt++;
 		*length = (*fmt == 'l') ? (fmt++, LEN_LL) : LEN_L;
 	}
-	else if (*fmt == 'z')
-	{
-		*length = LEN_Z;
-		fmt++;
-	}
-	else if (*fmt == 't')
-	{
-		*length = LEN_T;
-		fmt++;
-	}
-	else if (*fmt == 'j')
-	{
-		*length = LEN_J;
-		fmt++;
-	}
+	else if (*fmt == 'z')  { *length = LEN_Z; fmt++; }
+	else if (*fmt == 't')  { *length = LEN_T; fmt++; }
+	else if (*fmt == 'j')  { *length = LEN_J; fmt++; }
 	return fmt;
 }
 
-static char *format_uint(uintmax_t num, char *buf, int base, bool uppercase, int precision)
+static char *format_uint(uintmax_t num, char *buf, int base,
+			 bool uppercase, int precision)
 {
 	static const char digits_lower[] = "0123456789abcdef";
 	static const char digits_upper[] = "0123456789ABCDEF";
@@ -400,17 +429,16 @@ static char *format_uint(uintmax_t num, char *buf, int base, bool uppercase, int
 
 	while (num > 0)
 	{
-		*--ptr = digits[num % base];
-		num /= base;
+		*--ptr = digits[num % (unsigned int)base];
+		num /= (unsigned int)base;
 	}
 
-	int len = (buf + 64) - ptr;
+	int len = (int)((buf + 64) - ptr);
 	while (len < precision)
 	{
 		*--ptr = '0';
 		len++;
 	}
-
 	return ptr;
 }
 
@@ -423,7 +451,7 @@ static char *format_int(intmax_t num, char *buf, bool *is_negative)
 }
 
 static void output_formatted(const char *str, int str_len, int width,
-			     unsigned flags, char pad_char,
+			     unsigned int flags, char pad_char,
 			     const char *prefix, int prefix_len)
 {
 	int total_len = str_len + prefix_len;
@@ -432,26 +460,37 @@ static void output_formatted(const char *str, int str_len, int width,
 	if (flags & FLAG_LEFT_ADJUST)
 	{
 		if (prefix_len > 0)
-			output_string(prefix, prefix_len);
-		output_string(str, str_len);
+			output_string(prefix, (size_t)prefix_len);
+		output_string(str, (size_t)str_len);
 		printk_pad(' ', padding);
 	}
 	else if ((flags & FLAG_ZERO_PAD) && !(flags & FLAG_LEFT_ADJUST))
 	{
 		if (prefix_len > 0)
-			output_string(prefix, prefix_len);
+			output_string(prefix, (size_t)prefix_len);
 		printk_pad('0', padding);
-		output_string(str, str_len);
+		output_string(str, (size_t)str_len);
 	}
 	else
 	{
 		printk_pad(pad_char, padding);
 		if (prefix_len > 0)
-			output_string(prefix, prefix_len);
-		output_string(str, str_len);
+			output_string(prefix, (size_t)prefix_len);
+		output_string(str, (size_t)str_len);
 	}
 }
 
+/* ── Core printk engine ───────────────────────────────────────────────────── */
+
+/**
+ * @brief Format and output a log message.
+ *
+ * Parses a KERN_* level prefix, applies level-based colour/label, then
+ * processes the printf(3)-style format string.
+ *
+ * @param fmt  Format string, optionally prefixed with "<N>" for log level.
+ * @param args Variable argument list.
+ */
 void vprintk(const char *fmt, va_list args)
 {
 	int level = -1;
@@ -476,8 +515,8 @@ void vprintk(const char *fmt, va_list args)
 	if (level_label && printk_at_line_start)
 	{
 		size_t label_len = strlen(level_label);
-
-		output_level_label(level_label, label_len - 1, printk_level_color(level));
+		output_level_label(level_label, label_len - 1,
+				   printk_level_color(level));
 		output_plain_string(level_label + label_len - 1, 1, COLOR_WHITE);
 	}
 
@@ -494,6 +533,7 @@ void vprintk(const char *fmt, va_list args)
 			continue;
 		}
 		fmt++;
+
 		if (*fmt == '%')
 		{
 			char c = '%';
@@ -502,7 +542,7 @@ void vprintk(const char *fmt, va_list args)
 			continue;
 		}
 
-		unsigned flags;
+		unsigned int flags;
 		fmt = parse_flags(fmt, &flags);
 		int width;
 		fmt = parse_width(fmt, &width, &args_copy);
@@ -526,33 +566,17 @@ void vprintk(const char *fmt, va_list args)
 		case 'i':
 			switch (length)
 			{
-			case LEN_HH:
-				ival = (signed char)va_arg(args_copy, int);
-				break;
-			case LEN_H:
-				ival = (short)va_arg(args_copy, int);
-				break;
-			case LEN_L:
-				ival = va_arg(args_copy, long);
-				break;
-			case LEN_LL:
-				ival = va_arg(args_copy, long long);
-				break;
-			case LEN_Z:
-				ival = va_arg(args_copy, size_t);
-				break;
-			case LEN_T:
-				ival = va_arg(args_copy, ptrdiff_t);
-				break;
-			case LEN_J:
-				ival = va_arg(args_copy, intmax_t);
-				break;
-			default:
-				ival = va_arg(args_copy, int);
-				break;
+			case LEN_HH: ival = (signed char)va_arg(args_copy, int);       break;
+			case LEN_H:  ival = (short)va_arg(args_copy, int);             break;
+			case LEN_L:  ival = va_arg(args_copy, long);                   break;
+			case LEN_LL: ival = va_arg(args_copy, long long);              break;
+			case LEN_Z:  ival = (intmax_t)va_arg(args_copy, size_t);       break;
+			case LEN_T:  ival = (intmax_t)va_arg(args_copy, ptrdiff_t);    break;
+			case LEN_J:  ival = va_arg(args_copy, intmax_t);               break;
+			default:     ival = va_arg(args_copy, int);                    break;
 			}
 			str = format_int(ival, buf, &is_negative);
-			str_len = strlen(str);
+			str_len = (int)strlen(str);
 			if (is_negative)
 				prefix[prefix_len++] = '-';
 			else if (flags & FLAG_SHOW_SIGN)
@@ -561,7 +585,8 @@ void vprintk(const char *fmt, va_list args)
 				prefix[prefix_len++] = ' ';
 			if (precision >= 0)
 				flags &= ~FLAG_ZERO_PAD;
-			output_formatted(str, str_len, width, flags, ' ', prefix, prefix_len);
+			output_formatted(str, str_len, width, flags, ' ',
+					 prefix, prefix_len);
 			break;
 
 		case 'u':
@@ -570,35 +595,21 @@ void vprintk(const char *fmt, va_list args)
 		case 'X':
 			switch (length)
 			{
-			case LEN_HH:
-				uval = (unsigned char)va_arg(args_copy, unsigned int);
-				break;
-			case LEN_H:
-				uval = (unsigned short)va_arg(args_copy, unsigned int);
-				break;
-			case LEN_L:
-				uval = va_arg(args_copy, unsigned long);
-				break;
-			case LEN_LL:
-				uval = va_arg(args_copy, unsigned long long);
-				break;
-			case LEN_Z:
-				uval = va_arg(args_copy, size_t);
-				break;
-			case LEN_T:
-				uval = va_arg(args_copy, ptrdiff_t);
-				break;
-			case LEN_J:
-				uval = va_arg(args_copy, uintmax_t);
-				break;
-			default:
-				uval = va_arg(args_copy, unsigned int);
-				break;
+			case LEN_HH: uval = (unsigned char)va_arg(args_copy, unsigned int);        break;
+			case LEN_H:  uval = (unsigned short)va_arg(args_copy, unsigned int);       break;
+			case LEN_L:  uval = va_arg(args_copy, unsigned long);                      break;
+			case LEN_LL: uval = va_arg(args_copy, unsigned long long);                break;
+			case LEN_Z:  uval = va_arg(args_copy, size_t);                             break;
+			case LEN_T:  uval = (uintmax_t)va_arg(args_copy, ptrdiff_t);               break;
+			case LEN_J:  uval = va_arg(args_copy, uintmax_t);                          break;
+			default:     uval = va_arg(args_copy, unsigned int);                       break;
 			}
 			{
-				int base = (specifier == 'o') ? 8 : ((specifier == 'u') ? 10 : 16);
-				str = format_uint(uval, buf, base, specifier == 'X', precision);
-				str_len = strlen(str);
+				int base = (specifier == 'o') ? 8
+				         : (specifier == 'u') ? 10 : 16;
+				str = format_uint(uval, buf, base,
+						 specifier == 'X', precision);
+				str_len = (int)strlen(str);
 				if ((flags & FLAG_ALT_FORM) && uval != 0)
 				{
 					if (specifier == 'o' && str[0] != '0')
@@ -611,48 +622,52 @@ void vprintk(const char *fmt, va_list args)
 				}
 				if (precision >= 0)
 					flags &= ~FLAG_ZERO_PAD;
-				output_formatted(str, str_len, width, flags, ' ', prefix, prefix_len);
+				output_formatted(str, str_len, width, flags, ' ',
+						 prefix, prefix_len);
 			}
 			break;
 
 		case 'p':
 			uval = (uintptr_t)va_arg(args_copy, void *);
 			str = format_uint(uval, buf, 16, false, sizeof(void *) * 2);
-			str_len = strlen(str);
+			str_len = (int)strlen(str);
 			prefix[prefix_len++] = '0';
 			prefix[prefix_len++] = 'x';
-			output_formatted(str, str_len, width, flags, ' ', prefix, prefix_len);
+			output_formatted(str, str_len, width, flags, ' ',
+					 prefix, prefix_len);
 			break;
 
 		case 's':
-		{
-			const char *s = va_arg(args_copy, const char *);
-			if (!s)
-				s = "(null)";
-			str_len = strlen(s);
-			if (precision >= 0 && str_len > precision)
-				str_len = precision;
-			output_formatted(s, str_len, width, flags, ' ', NULL, 0);
+			{
+				const char *s = va_arg(args_copy, const char *);
+				if (!s)
+					s = "(null)";
+				str_len = (int)strlen(s);
+				if (precision >= 0 && str_len > precision)
+					str_len = precision;
+				output_formatted(s, str_len, width, flags, ' ',
+						 NULL, 0);
+			}
 			break;
-		}
 
 		case 'c':
-		{
-			char c = (char)va_arg(args_copy, int);
-			buf[0] = c;
-			output_formatted(buf, 1, width, flags, ' ', NULL, 0);
+			{
+				char c = (char)va_arg(args_copy, int);
+				buf[0] = c;
+				output_formatted(buf, 1, width, flags, ' ',
+						 NULL, 0);
+			}
 			break;
-		}
 
 		case 'n':
 			break;
 
 		default:
-		{
-			char tmp[2] = {'%', specifier};
-			output_string(tmp, 2);
+			{
+				char tmp[2] = { '%', specifier };
+				output_string(tmp, 2);
+			}
 			break;
-		}
 		}
 	}
 
@@ -660,24 +675,29 @@ void vprintk(const char *fmt, va_list args)
 	current_color = COLOR_WHITE;
 
 	if (is_critical)
+	{
+		/* Spin briefly to let the serial port drain. */
 		for (volatile int i = 0; i < 10000000; i++)
 			;
+	}
 }
 
+/**
+ * @brief Kernel formatted print (printf-compatible).
+ *
+ * Acquires the printk spinlock, formats the message via vprintk(),
+ * then releases the lock.
+ *
+ * @param fmt Format string with optional KERN_* level prefix.
+ */
 void printk(const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
 
-	uint64_t flags;
-	// asm volatile("pushfq; pop %0; cli" : "=r"(flags));
-
 	spinlock_acquire(&printk_lock);
 	vprintk(fmt, args);
 	spinlock_release(&printk_lock);
-
-	if (flags & (1ULL << 9))
-		sti();
 
 	va_end(args);
 }

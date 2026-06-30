@@ -1,3 +1,8 @@
+/**
+ * @file strncat.c
+ * @brief Concatenate strings with length limit
+ */
+
 #include <string.h>
 
 char *strncat(char *dest, const char *src, size_t n)

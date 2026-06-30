@@ -1,3 +1,8 @@
+/**
+ * @file mem.h
+ * @brief Internal heap block structure for malloc/free/realloc
+ */
+
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -10,7 +15,7 @@ typedef struct heap_block
 } heap_block_t;
 
 #define HEAP_BLOCK_SIZE sizeof(heap_block_t)
-#define HEAP_INCREMENT 0x1000 // 4 KB
+#define HEAP_INCREMENT 0x1000
 
 static heap_block_t *heap_start = NULL;
 static heap_block_t *heap_end = NULL;

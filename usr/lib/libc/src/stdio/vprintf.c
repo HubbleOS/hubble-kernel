@@ -1,21 +1,20 @@
+/**
+ * @file vprintf.c
+ * @brief Formatted output core engine (vfprintf)
+ */
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <ctype.h>
-
 #include <stddef.h>
 #include <stdarg.h>
 #include <limits.h>
 #include <float.h>
 
-/* Some useful macros */
-
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
-
-/* Convenient bit representation for modifier flags, which all fall
- * within 31 codepoints of the space character. */
 
 #define ALT_FORM (1U << '#' - ' ')
 #define ZERO_PAD (1U << '0' - ' ')
@@ -25,9 +24,6 @@
 #define GROUPED (1U << '\'' - ' ')
 
 #define FLAGMASK (ALT_FORM | ZERO_PAD | LEFT_ADJ | PAD_POS | MARK_POS | GROUPED)
-
-/* State machine to accept length modifiers + conversion specifiers.
- * Result is 0 on failure, or an argument type to pop on success. */
 
 enum
 {
@@ -66,7 +62,6 @@ enum
 
 static const unsigned char states[]['z' - 'A' + 1] = {
     {
-	/* 0: bare types */
 	S('d') = INT,
 	S('i') = INT,
 	S('o') = UINT,
@@ -96,7 +91,6 @@ static const unsigned char states[]['z' - 'A' + 1] = {
 	S('t') = ZTPRE,
     },
     {
-	/* 1: l-prefixed */
 	S('d') = LONG,
 	S('i') = LONG,
 	S('o') = ULONG,
@@ -117,7 +111,6 @@ static const unsigned char states[]['z' - 'A' + 1] = {
 	S('l') = LLPRE,
     },
     {
-	/* 2: ll-prefixed */
 	S('d') = LLONG,
 	S('i') = LLONG,
 	S('o') = ULLONG,
@@ -127,7 +120,6 @@ static const unsigned char states[]['z' - 'A' + 1] = {
 	S('n') = PTR,
     },
     {
-	/* 3: h-prefixed */
 	S('d') = SHORT,
 	S('i') = SHORT,
 	S('o') = USHORT,
@@ -138,7 +130,6 @@ static const unsigned char states[]['z' - 'A' + 1] = {
 	S('h') = HHPRE,
     },
     {
-	/* 4: hh-prefixed */
 	S('d') = CHAR,
 	S('i') = CHAR,
 	S('o') = UCHAR,
@@ -148,7 +139,6 @@ static const unsigned char states[]['z' - 'A' + 1] = {
 	S('n') = PTR,
     },
     {
-	/* 5: L-prefixed */
 	S('e') = LDBL,
 	S('f') = LDBL,
 	S('g') = LDBL,
@@ -160,7 +150,6 @@ static const unsigned char states[]['z' - 'A' + 1] = {
 	S('n') = PTR,
     },
     {
-	/* 6: z- or t-prefixed (assumed to be same size) */
 	S('d') = PDIFF,
 	S('i') = PDIFF,
 	S('o') = SIZET,
@@ -170,7 +159,6 @@ static const unsigned char states[]['z' - 'A' + 1] = {
 	S('n') = PTR,
     },
     {
-	/* 7: j-prefixed */
 	S('d') = IMAX,
 	S('i') = IMAX,
 	S('o') = UMAX,
@@ -251,8 +239,6 @@ static void pop_arg(union arg *arg, int type, va_list *ap)
 
 static void out(FILE *f, const char *s, size_t l)
 {
-	// if (!(f->flags & F_ERR))
-	// __fwritex((void *)s, l, f);
 	f->write(f, s, l);
 }
 
@@ -297,8 +283,8 @@ static char *fmt_u(uintmax_t x, char *s)
 
 static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 {
-	uint32_t big[(LDBL_MANT_DIG + 28) / 29 + 1		     // mantissa expansion
-		     + (LDBL_MAX_EXP + LDBL_MANT_DIG + 28 + 8) / 9]; // exponent expansion
+	uint32_t big[(LDBL_MANT_DIG + 28) / 29 + 1
+		     + (LDBL_MAX_EXP + LDBL_MANT_DIG + 28 + 8) / 9];
 	uint32_t *a, *d, *r, *z;
 	int e2 = 0, e, i, j, l;
 	char buf[9 + LDBL_MANT_DIG / 4], *s;
@@ -307,7 +293,6 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 	char ebuf0[3 * sizeof(int)], *ebuf = &ebuf0[3 * sizeof(int)], *estr;
 
 	pl = 1;
-	// if (signbit(y))
 	if (y < 0)
 	{
 		y = -y;
@@ -323,19 +308,6 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 	else
 		prefix++, pl = 0;
 
-	// if (!isfinite(y))
-	// {
-	// 	char *s = (t & 32) ? "inf" : "INF";
-	// 	if (y != y)
-	// 		s = (t & 32) ? "nan" : "NAN";
-	// 	pad(f, ' ', w, 3 + pl, fl & ~ZERO_PAD);
-	// 	out(f, prefix, pl);
-	// 	out(f, s, 3);
-	// 	pad(f, ' ', w, 3 + pl, fl ^ LEFT_ADJ);
-	// 	return MAX(w, 3 + pl);
-	// }
-
-	// y = frexpl(y, &e2) * 2;
 	if (y)
 		e2--;
 
@@ -450,7 +422,6 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 			a++;
 		if (carry)
 			*z++ = carry;
-		/* Avoid (slow!) computation past requested precision */
 		b = (t | 32) == 'f' ? r : a;
 		if (z - b > need)
 			z = b + need;
@@ -463,19 +434,16 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 	else
 		e = 0;
 
-	/* Perform rounding: j is precision after the radix (possibly neg) */
 	j = p - ((t | 32) != 'f') * e - ((t | 32) == 'g' && p);
 	if (j < 9 * (z - r - 1))
 	{
 		uint32_t x;
-		/* We avoid C's broken division of negative numbers */
 		d = r + 1 + ((j + 9 * LDBL_MAX_EXP) / 9 - LDBL_MAX_EXP);
 		j += 9 * LDBL_MAX_EXP;
 		j %= 9;
 		for (i = 10, j++; j < 9; i *= 10, j++)
 			;
 		x = *d % i;
-		/* Are there any significant digits past j? */
 		if (x || d + 1 != z)
 		{
 			long double round = 2 / LDBL_EPSILON;
@@ -491,7 +459,6 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 			if (pl && *prefix == '-')
 				round *= -1, small *= -1;
 			*d -= x;
-			/* Decide whether to round by probing round+small */
 			if (round + small != round)
 			{
 				*d = *d + i;
@@ -528,7 +495,6 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 		}
 		if (!(fl & ALT_FORM))
 		{
-			/* Count trailing zeros in last place */
 			if (z > a && z[-1])
 				for (i = 10, j = 0; z[-1] % i == 0; i *= 10, j++)
 					;
@@ -654,18 +620,13 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 
 	while (true)
 	{
-		/* This error is only specified for snprintf, but since it's
-		 * unspecified for other forms, do the same. Stop immediately
-		 * on overflow; otherwise %n could produce wrong results. */
 		if (l > INT_MAX - cnt)
 			goto overflow;
 
-		/* Update output count, end loop when fmt is exhausted */
 		cnt += l;
 		if (!*s)
 			break;
 
-		/* Handle literal text and %% format specifiers */
 		for (a = s; *s && *s != '%'; s++)
 			;
 		for (z = s; s[0] == '%' && s[1] == '%'; z++, s += 2)
@@ -690,11 +651,9 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 			s++;
 		}
 
-		/* Read modifier flags */
 		for (fl = 0; (unsigned)*s - ' ' < 32 && (FLAGMASK & (1U << *s - ' ')); s++)
 			fl |= 1U << *s - ' ';
 
-		/* Read field width */
 		if (*s == '*')
 		{
 			if (isdigit(s[1]) && s[2] == '$')
@@ -717,7 +676,6 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 		else if ((w = getint(&s)) < 0)
 			goto overflow;
 
-		/* Read precision */
 		if (*s == '.' && s[1] == '*')
 		{
 			if (isdigit(s[2]) && s[3] == '$')
@@ -747,7 +705,6 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 			xp = 0;
 		}
 
-		/* Format specifier state machine */
 		st = 0;
 		do
 		{
@@ -759,7 +716,6 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 		if (!st)
 			goto inval;
 
-		/* Check validity of argument type (nl/normal) */
 		if (st == NOARG)
 		{
 			if (argpos >= 0)
@@ -783,11 +739,9 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 		pl = 0;
 		t = s[-1];
 
-		/* Transform ls,lc -> S,C */
 		if (ps && (t & 15) == 3)
 			t &= ~32;
 
-		/* - and 0 flags are mutually exclusive */
 		if (fl & LEFT_ADJ)
 			fl &= ~ZERO_PAD;
 
@@ -875,7 +829,6 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 		case 'm':
 			if (1)
 			{
-				// a = strerror(errno);
 			}
 			else
 			case 's':
@@ -891,22 +844,6 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 			wc[1] = 0;
 			arg.p = wc;
 			p = -1;
-		// case 'S':
-		// 	ws = arg.p;
-		// 	for (i = l = 0; i < p && *ws && (l = wctomb(mb, *ws++)) >= 0 && l <= p - i; i += l)
-		// 	;
-		// 	if (l < 0)
-		// 		return -1;
-		// 	if (i > INT_MAX)
-		// 		goto overflow;
-		// 	p = i;
-		// 	pad(f, ' ', w, p, fl);
-		// 	ws = arg.p;
-		// 	for (i = 0; i < 0U + p && *ws && i + (l = wctomb(mb, *ws++)) <= p; i += l)
-		// 		out(f, mb, l);
-		// 	pad(f, ' ', w, p, fl ^ LEFT_ADJ);
-		// 	l = w > p ? w : p;
-		// 	continue;
 		case 'e':
 		case 'f':
 		case 'g':
@@ -956,13 +893,12 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 	return 1;
 
 inval:
-	// errno = EINVAL;
 	return -1;
 overflow:
-	// errno = EOVERFLOW;
 	return -1;
 }
 
+/** @brief Formatted print to a stream (va_list version) */
 int vfprintf(FILE *restrict f, const char *restrict fmt, va_list ap)
 {
 	va_list ap2;
@@ -972,7 +908,6 @@ int vfprintf(FILE *restrict f, const char *restrict fmt, va_list ap)
 	int olderr;
 	int ret;
 
-	/* the copy allows passing va_list* even if va_list is an array */
 	va_copy(ap2, ap);
 	if (printf_core(0, fmt, &ap2, nl_arg, nl_type) < 0)
 	{
@@ -980,31 +915,7 @@ int vfprintf(FILE *restrict f, const char *restrict fmt, va_list ap)
 		return -1;
 	}
 
-	// FLOCK(f);
-	// olderr = f->flags & F_ERR;
-	// if (f->mode < 1)
-	// 	f->flags &= ~F_ERR;
-	// if (!f->buf_size)
-	// {
-	// 	saved_buf = f->buf;
-	// 	f->wpos = f->wbase = f->buf = internal_buf;
-	// 	f->buf_size = sizeof internal_buf;
-	// 	f->wend = internal_buf + sizeof internal_buf;
-	// }
 	ret = printf_core(f, fmt, &ap2, nl_arg, nl_type);
-	// if (saved_buf)
-	// {
-	// 	f->write(f, 0, 0);
-	// 	if (!f->wpos)
-	// 		ret = -1;
-	// 	f->buf = saved_buf;
-	// 	f->buf_size = 0;
-	// 	f->wpos = f->wbase = f->wend = 0;
-	// }
-	// if (f->flags & F_ERR)
-	// ret = -1;
-	// f->flags |= olderr;
-	// FUNLOCK(f);
 	va_end(ap2);
 	return ret;
 }

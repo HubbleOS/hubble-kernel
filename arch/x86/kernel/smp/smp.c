@@ -1,57 +1,70 @@
+/**
+ * @file smp.c
+ * @brief SMP initialization, AP startup, and IPI support
+ */
 
-#include "smp.h"
-// #include "apic.h"
-// #include "acpi.h"
-#include <mm/vmm.h>
-#include <mm/pmm.h>
-#include <mm/slab.h>
-#include <mm/kmalloc.h>
-
-#include <apic/apic.h>
 #include <acpi/acpi.h>
+#include <apic/apic.h>
+#include <asm.h>
 #include <gdt/gdt.h>
 #include <hpet/hpet.h>
-
-#include "percpu.h"
-#include "higher_half.h"
 #include <hubble/printk.h>
 #include <hubble/string.h>
-
+#include <mm/kmalloc.h>
+#include <mm/pmm.h>
+#include <mm/slab.h>
+#include <mm/vmm.h>
+#include <msr.h>
 #include <syscalls/syscall_entry.h>
 
+#include "higher_half.h"
+#include "percpu.h"
 #include "smp.h"
-#include <msr.h>
 
-#include <asm.h>
+/* ── Constants ────────────────────────────────────────────────────────── */
+
+#define AP_TRAMPOLINE_ADDR 0x8000
+#define AP_STACK_SIZE (64 * 1024)
+#define AP_STACK_PAGES ((AP_STACK_SIZE + 0xFFF) / 0x1000)
+
+/* ── External symbols ─────────────────────────────────────────────────── */
+
+extern uint8_t ap_trampoline_start[];
+extern uint8_t ap_trampoline_end[];
+
+/* ── Static data ──────────────────────────────────────────────────────── */
 
 static size_t g_trampoline_size = 0;
 static volatile uint64_t *g_trampoline_cr3 = NULL;
 static volatile uint64_t *g_trampoline_stack = NULL;
 static volatile uint64_t *g_trampoline_entry = NULL;
 
-#define AP_TRAMPOLINE_ADDR 0x8000
-#define AP_STACK_SIZE (64 * 1024)			  // 64KB per CPU
-#define AP_STACK_PAGES ((AP_STACK_SIZE + 0xFFF) / 0x1000) // 16 pages
-
-extern uint8_t ap_trampoline_start[];
-extern uint8_t ap_trampoline_end[];
-// AP entry point in kernel
-void ap_entry(void);
-
-// Global AP synchronization
 static volatile bool ap_ready = false;
 static spinlock_t smp_lock = SPINLOCK_INIT("smp");
 
+/* ── AP startup data structure ────────────────────────────────────────── */
+
 struct ap_startup_data
 {
-	uint64_t pml4_phys;	    // Offset 0
-	uint16_t gdt_limit;	    // Offset 8
-	uint64_t gdt_base;	    // Offset 10 (note: misaligned, but packed)
-	uint64_t stack_top;	    // Offset 18
-	uint64_t entry_point;	    // Offset 26
-	volatile uint32_t ap_ready; // Offset 34
+	uint64_t pml4_phys;
+	uint16_t gdt_limit;
+	uint64_t gdt_base;
+	uint64_t stack_top;
+	uint64_t entry_point;
+	volatile uint32_t ap_ready;
 } __attribute__((packed));
 
+/* ── Forward declarations ────────────────────────────────────────────── */
+
+static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx);
+static void *allocate_ap_stack(void);
+
+/* ── AP stack allocation ──────────────────────────────────────────────── */
+
+/**
+ * @brief Allocate a stack for an Application Processor
+ * @return Pointer to top of allocated stack, or NULL on failure
+ */
 static void *allocate_ap_stack(void)
 {
 	uint64_t phys = pmm_alloc_pages(AP_STACK_PAGES);
@@ -67,6 +80,11 @@ static void *allocate_ap_stack(void)
 	return (void *)(virt + AP_STACK_SIZE);
 }
 
+/* ── AP entry point ───────────────────────────────────────────────────── */
+
+/**
+ * @brief Enable NXE (Non-Execute) bit in EFER MSR
+ */
 void enable_nxe(void)
 {
 	uint64_t efer;
@@ -78,17 +96,17 @@ void enable_nxe(void)
 	    : : : "eax", "ecx", "edx");
 }
 
-// AP kernel entry point (called by trampoline in long mode)
+/**
+ * @brief AP kernel entry point called by trampoline in long mode
+ */
 void ap_entry(void)
 {
 	apic_init_ap();
 
 	uint8_t apic_id = lapic_get_id();
 
-	// Initialize per-CPU data
 	percpu_init_ap(apic_id);
 
-	// Signal that we're ready
 	hpet_init();
 
 	idt_load();
@@ -110,7 +128,14 @@ void ap_entry(void)
 	}
 }
 
-// Callback for enumerating CPUs
+/* ── AP startup callback ──────────────────────────────────────────────── */
+
+/**
+ * @brief Callback to start a single AP
+ * @param apic_id APIC ID of the AP
+ * @param processor_id ACPI processor ID
+ * @param ctx User context (unused)
+ */
 static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx)
 {
 	uint8_t bsp_id = lapic_get_id();
@@ -119,7 +144,6 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx)
 
 	printk(KERN_INFO "Starting AP %u", apic_id);
 
-	// Allocate stack for this AP
 	void *stack_top = allocate_ap_stack();
 	if (!stack_top)
 	{
@@ -128,14 +152,12 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx)
 	}
 	printk(KERN_INFO "AP %u stack top: %p\n", apic_id, stack_top);
 
-	// Get pointer to data structure at end of trampoline
 	volatile struct ap_startup_data *data =
 	    (volatile struct ap_startup_data *)(AP_TRAMPOLINE_ADDR + 512);
 
 	uint64_t cr3;
 	asm volatile("mov %%cr3, %0" : "=r"(cr3));
 
-	// Fill in the data structure
 	data->pml4_phys = cr3;
 
 	data->gdt_limit = get_gdt_limit();
@@ -146,7 +168,6 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx)
 
 	data->ap_ready = 0;
 
-	// Ensure writes are visible
 	asm volatile("mfence" ::: "memory");
 
 	printk(KERN_INFO "Data structure setup:\n");
@@ -167,20 +188,19 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx)
 
 	printk(KERN_INFO "AP marker: 0x%x\n", *marker);
 
-	// Wait with timeout
 	printk(KERN_INFO "Waiting for AP %u to signal ready...\n", apic_id);
-	uint64_t timeout = 1000000000; // Use uint64_t to avoid overflow
+	uint64_t timeout = 1000000000;
 
-	while (data->ap_ready == 0 && timeout > 0) //  Check data->ap_ready, not global
+	while (data->ap_ready == 0 && timeout > 0)
 	{
 		timeout--;
 
-		if (timeout % 100000000 == 0) // Print every 100M iterations
+		if (timeout % 100000000 == 0)
 		{
 			printk(KERN_INFO "  Still waiting... (ap_ready=%u)\n", data->ap_ready);
 		}
 
-		asm volatile("pause" ::: "memory"); // Add memory clobber
+		asm volatile("pause" ::: "memory");
 	}
 
 	if (data->ap_ready)
@@ -189,37 +209,33 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx)
 	}
 	else
 	{
-		printk(KERN_ERR "✗ ERROR: AP %u failed to start (timeout)\n", apic_id);
-		// Debug: Check if AP modified anything
+		printk(KERN_ERR "AP %u failed to start (timeout)\n", apic_id);
 		printk(KERN_INFO "  Final ap_ready value: %u\n", data->ap_ready);
 	}
 
-	// Small delay before next AP
 	for (volatile int i = 0; i < 10000000; i++)
 		;
 }
 
-// Initialize SMP
+/* ── SMP initialization ───────────────────────────────────────────────── */
+
+/**
+ * @brief Initialize SMP subsystem and start all APs
+ * @return 0 on success, negative on error
+ */
 int smp_init(void)
 {
 	printk(KERN_INFO "SMP Initialization");
 
 	percpu_init_bsp();
 
-	// CRITICAL: The trampoline must be accessible at BOTH:
-	// 1. Physical 0x8000 (for AP in real mode)
-	// 2. Virtual address for kernel to write to it
-
 	printk(KERN_INFO "Setting up AP trampoline at 0x%x\n", AP_TRAMPOLINE_ADDR);
 
-	// Method 1: Use identity mapping (0x8000 -> 0x8000)
-	// This ensures the AP can access it in real mode
 	void *trampoline_dest = (void *)AP_TRAMPOLINE_ADDR;
 
 	printk(KERN_INFO "  Using identity mapping: virt 0x%lx = phys 0x%x\n",
 	       (uint64_t)trampoline_dest, AP_TRAMPOLINE_ADDR);
 
-	// Ensure identity mapping exists
 	printk(KERN_INFO "  Creating identity mapping for trampoline...\n");
 
 	g_trampoline_size =
@@ -233,20 +249,17 @@ int smp_init(void)
 		return -1;
 	}
 
-	// Copy trampoline to identity-mapped location
 	printk(KERN_INFO "  Copying trampoline code...\n");
 	memcpy(trampoline_dest,
 	       ap_trampoline_start,
 	       g_trampoline_size);
 
-	// Verify the copy worked
 	uint8_t *verify = (uint8_t *)trampoline_dest;
 	printk(KERN_INFO "  First bytes at 0x%lx: %02x %02x %02x %02x\n",
 	       (uint64_t)verify, verify[0], verify[1], verify[2], verify[3]);
 
 	printk(KERN_OK "Trampoline initialized\n");
 
-	// Enumerate and start all APs
 	printk(KERN_INFO "\nStarting Application Processors:\n");
 	acpi_enum_lapics(start_ap_callback, NULL);
 
@@ -254,14 +267,26 @@ int smp_init(void)
 	printk(KERN_INFO "Total CPUs online: %u\n", num_cpus_online);
 	return 0;
 }
+
+/* ── CPU count ────────────────────────────────────────────────────────── */
+
+/**
+ * @brief Get number of online CPUs
+ * @return Number of online CPUs
+ */
 uint32_t smp_get_cpu_count(void)
 {
 	return num_cpus_online;
 }
 
+/* ── Inter-processor communication ────────────────────────────────────── */
+
+/**
+ * @brief Send IPI to all CPUs except the current one
+ * @param vector Interrupt vector to send
+ */
 void smp_send_ipi_all(uint8_t vector)
 {
-	// Get list of all CPUs
 	for (int i = 0; i < MAX_CPUS; i++)
 	{
 		if (cpu_data[i].online && cpu_data[i].apic_id != lapic_get_id())
@@ -271,9 +296,12 @@ void smp_send_ipi_all(uint8_t vector)
 	}
 }
 
+/**
+ * @brief Call a function on all CPUs (not yet implemented)
+ * @param func Function pointer to call
+ * @param arg Argument to pass to the function
+ */
 void smp_call_function_all(void (*func)(void *), void *arg)
 {
-	// TODO: Implement IPI-based function calls
-	// This requires setting up an IPI handler
 	printk(KERN_WARNING "smp_call_function_all: not implemented yet\n");
 }

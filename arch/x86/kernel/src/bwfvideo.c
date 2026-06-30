@@ -1,7 +1,14 @@
-#include "bwfvideo.h"
+/**
+ * @file bwfvideo.c
+ * @brief Black-and-white frame video player
+ *
+ * Reads a custom BW-format video file from the VFS and renders
+ * each frame to the framebuffer at a hard-coded ~30 FPS.
+ */
 
-#include <hubble/printk.h>
+#include "bwfvideo.h"
 #include <hubble/color.h>
+#include <hubble/printk.h>
 #include <stdint.h>
 
 #include <fs/vfs/vfs.h>
@@ -9,7 +16,11 @@
 
 #include <mm/kmalloc.h>
 
-// frame header
+/* ── Frame Header ────────────────────────────────────────────── */
+
+/**
+ * @brief On-disk header for a single BW-format frame
+ */
 struct BWFrameHeader
 {
 	uint16_t width;
@@ -17,15 +28,31 @@ struct BWFrameHeader
 	uint32_t size;
 } __attribute__((packed));
 
+/* ── Helpers (static) ────────────────────────────────────────── */
+
+/**
+ * @brief Busy-wait delay in milliseconds
+ *
+ * @param ms Milliseconds to wait
+ */
 void sleep_ms(uint32_t ms)
 {
-	// delay
 	for (volatile uint64_t i = 0; i < (ms * 100000); i++)
 	{
 		__asm__ __volatile__("nop");
 	}
 }
 
+/**
+ * @brief Set one pixel on the framebuffer
+ *
+ * @param bi       Framebuffer info
+ * @param x        X position
+ * @param y        Y position
+ * @param color    Pixel colour
+ * @param fb_pitch Framebuffer pitch in bytes
+ * @param bpp      Bits per pixel
+ */
 static inline void putpixel(framebuffer_info_t *bi, int x, int y, color_t color,
 			    uint32_t fb_pitch, uint32_t bpp)
 {
@@ -33,7 +60,16 @@ static inline void putpixel(framebuffer_info_t *bi, int x, int y, color_t color,
 	*(color_t *)ptr = color;
 }
 
-// draw frame
+/* ── Frame Rendering ─────────────────────────────────────────── */
+
+/**
+ * @brief Decode and draw a single BW frame
+ *
+ * @param bi      Framebuffer info
+ * @param data    Raw frame data (header + packed pixels)
+ * @param x_start Screen X offset
+ * @param y_start Screen Y offset
+ */
 void draw_frame(framebuffer_info_t *bi, uint8_t *data, int x_start, int y_start)
 {
 	struct BWFrameHeader *hdr = (struct BWFrameHeader *)data;
@@ -60,7 +96,19 @@ void draw_frame(framebuffer_info_t *bi, uint8_t *data, int x_start, int y_start)
 	}
 }
 
-// play bwvid
+/* ── Video Playback ──────────────────────────────────────────── */
+
+/**
+ * @brief Play a BW-format video file at the given screen position
+ *
+ * Opens the file, reads frames sequentially, renders them, and
+ * sleeps ~33 ms between frames.
+ *
+ * @param bi   Framebuffer info
+ * @param path VFS path to the video file
+ * @param x    Screen X offset
+ * @param y    Screen Y offset
+ */
 void play_bwvid(framebuffer_info_t *bi, const char *path, int x, int y)
 {
 	VFS_File *file = vfs_open(path, VFS_O_RDONLY);
@@ -74,19 +122,16 @@ void play_bwvid(framebuffer_info_t *bi, const char *path, int x, int y)
 	{
 		struct BWFrameHeader hdr;
 
-		// читаємо заголовок
 		int r = vfs_read(file, &hdr, sizeof(hdr));
 		if (r != sizeof(hdr))
-			break; // кінець файлу або помилка
+			break;
 
-		// виділяємо буфер під кадр
 		uint8_t *frame_data = kmalloc(sizeof(hdr) + hdr.size, GFP_KERNEL);
 		if (!frame_data)
 			break;
 
 		*(struct BWFrameHeader *)frame_data = hdr;
 
-		// читаємо дані кадру
 		r = vfs_read(file, frame_data + sizeof(hdr), hdr.size);
 		if (r != (int)hdr.size)
 		{
@@ -95,16 +140,11 @@ void play_bwvid(framebuffer_info_t *bi, const char *path, int x, int y)
 			break;
 		}
 		printk(KERN_INFO "frame size: %d\n", hdr.size);
-		//  відмальовуємо кадр
 		printk(KERN_INFO "Frame %dx%d, size=%d\n", hdr.width, hdr.height, hdr.size);
 
 		draw_frame(bi, frame_data, x, y);
 
 		kfree(frame_data);
 		sleep_ms(33);
-		// тут можна вставити таймер/затримку для FPS
-		// наприклад: sleep_ms(33) для ~30 кадрів/с
 	}
-
-	// vfs_close(file);
 }

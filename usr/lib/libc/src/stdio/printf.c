@@ -1,5 +1,9 @@
-#include <stdio.h>
+/**
+ * @file printf.c
+ * @brief Formatted print to stdout
+ */
 
+#include <stdio.h>
 #include <stdint.h>
 
 int printf(const char *format, ...)

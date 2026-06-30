@@ -1,5 +1,11 @@
+/**
+ * @file string.c
+ * @brief String and memory manipulation implementation for the bootloader
+ */
+
 #include "string.h"
 
+/** @brief Compare two memory regions */
 int memcmp(const void *s1, const void *s2, size_t n)
 {
 	const unsigned char *p1 = s1;
@@ -14,6 +20,7 @@ int memcmp(const void *s1, const void *s2, size_t n)
 	return 0;
 }
 
+/** @brief Fill memory region with a constant byte */
 void *memset(void *dest, int c, size_t n)
 {
 	unsigned char *s = dest;
@@ -51,6 +58,7 @@ void *memset(void *dest, int c, size_t n)
 	return dest;
 }
 
+/** @brief Copy memory region */
 void *memcpy(void *dest, const void *src, size_t n)
 {
 	unsigned char *d = dest;

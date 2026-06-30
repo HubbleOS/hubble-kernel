@@ -1,44 +1,58 @@
-#include <hubble/init.h>
+/**
+ * @file sb16.c
+ * @brief Sound Blaster 16 (SB16) ISA driver
+ *
+ * Uses DSP commands and DMA channel 1 to generate 8-bit PCM audio.
+ */
 
-#include <sound/core/dev.h>
+#include <stdint.h>
+#include <hubble/init.h>
 #include <hubble/printk.h>
 #include <hpet/hpet.h>
-#include <stdint.h>
+#include <sound/core/dev.h>
 
-//  SB16 I/O ports
-#define SB16_BASE 0x220
-#define SB16_RESET (SB16_BASE + 0x6)
-#define SB16_READ (SB16_BASE + 0xA)
-#define SB16_WRITE (SB16_BASE + 0xC)
+/* SB16 I/O ports */
+#define SB16_BASE      0x220
+#define SB16_RESET     (SB16_BASE + 0x6)
+#define SB16_READ      (SB16_BASE + 0xA)
+#define SB16_WRITE     (SB16_BASE + 0xC)
 #define SB16_READ_STAT (SB16_BASE + 0xE)
 #define SB16_MIXER_ADDR (SB16_BASE + 0x4)
 #define SB16_MIXER_DATA (SB16_BASE + 0x5)
 
-// DSP commands
+/* DSP commands */
 #define DSP_SET_RATE_OUT 0x41
-#define DSP_OUT_8BIT 0xC0 // single-cycle, 8-bit PCM
+#define DSP_OUT_8BIT     0xC0
 
-// DMA channel 1 (8-bit)
-#define DMA_MASK 0x0A
-#define DMA_MODE 0x0B
-#define DMA_FLIP 0x0C
-#define DMA_ADDR1 0x02
+/* DMA channel 1 (8-bit) */
+#define DMA_MASK   0x0A
+#define DMA_MODE   0x0B
+#define DMA_FLIP   0x0C
+#define DMA_ADDR1  0x02
 #define DMA_COUNT1 0x03
-#define DMA_PAGE1 0x83
+#define DMA_PAGE1  0x83
 
-// PCM buffer - must be below 16 MB and page-aligned
-// The static buffer in .bss is guaranteed to go to the lower addresses
-#define PCM_SAMPLE_RATE 22050
-#define PCM_BUF_SAMPLES (PCM_SAMPLE_RATE / 2) // 0.5s maximum
+/* PCM buffer must be below 16 MB and page-aligned */
+#define PCM_SAMPLE_RATE  22050
+#define PCM_BUF_SAMPLES  (PCM_SAMPLE_RATE / 2)
 
 static uint8_t pcm_buf[PCM_BUF_SAMPLES] __attribute__((aligned(4096)));
 
-//  Port I/O
+/**
+ * @brief Write a byte to an I/O port
+ * @param port Port address
+ * @param val Value to write
+ */
 static inline void outb(uint16_t port, uint8_t val)
 {
 	__asm__ volatile("outb %0, %1" ::"a"(val), "Nd"(port));
 }
 
+/**
+ * @brief Read a byte from an I/O port
+ * @param port Port address
+ * @return Value read
+ */
 static inline uint8_t inb(uint16_t port)
 {
 	uint8_t val;
@@ -46,7 +60,10 @@ static inline uint8_t inb(uint16_t port)
 	return val;
 }
 
-// DSP helpers
+/**
+ * @brief Write a command byte to the DSP
+ * @param cmd Command byte to write
+ */
 static void dsp_write(uint8_t cmd)
 {
 	while (inb(SB16_WRITE) & 0x80)
@@ -54,6 +71,10 @@ static void dsp_write(uint8_t cmd)
 	outb(SB16_WRITE, cmd);
 }
 
+/**
+ * @brief Reset the DSP
+ * @return 0 on success, -1 on failure
+ */
 static int dsp_reset(void)
 {
 	outb(SB16_RESET, 1);
@@ -67,150 +88,47 @@ static int dsp_reset(void)
 	return -1;
 }
 
-//  Mixer: set the volume (0x00–0xFF)
+/**
+ * @brief Set the master and DAC volume
+ * @param vol Volume value (0x00 to 0xFF)
+ */
 static void mixer_set_volume(uint8_t vol)
 {
-	outb(SB16_MIXER_ADDR, 0x22); // master volume
+	outb(SB16_MIXER_ADDR, 0x22);
 	outb(SB16_MIXER_DATA, vol);
-	outb(SB16_MIXER_ADDR, 0x04); // DAC volume
+	outb(SB16_MIXER_ADDR, 0x04);
 	outb(SB16_MIXER_DATA, vol);
 }
 
-// sin(x) ≈ through the quarter sine table (128 points from 0..255)
+/**
+ * @brief Quarter-wave sine lookup table (128 entries, 0..255 range)
+ */
 static const uint8_t sin_lut[128] = {
-    128,
-    134,
-    140,
-    146,
-    152,
-    158,
-    164,
-    170,
-    176,
-    181,
-    187,
-    192,
-    197,
-    202,
-    207,
-    211,
-    215,
-    219,
-    223,
-    226,
-    229,
-    232,
-    234,
-    236,
-    238,
-    240,
-    241,
-    242,
-    243,
-    244,
-    244,
-    244,
-    244,
-    244,
-    243,
-    242,
-    241,
-    240,
-    238,
-    236,
-    234,
-    232,
-    229,
-    226,
-    223,
-    219,
-    215,
-    211,
-    207,
-    202,
-    197,
-    192,
-    187,
-    181,
-    176,
-    170,
-    164,
-    158,
-    152,
-    146,
-    140,
-    134,
-    128,
-    122,
-    116,
-    110,
-    104,
-    98,
-    92,
-    86,
-    80,
-    75,
-    69,
-    64,
-    59,
-    54,
-    49,
-    45,
-    41,
-    37,
-    33,
-    30,
-    27,
-    24,
-    22,
-    20,
-    18,
-    16,
-    15,
-    14,
-    13,
-    12,
-    12,
-    12,
-    12,
-    12,
-    13,
-    14,
-    15,
-    16,
-    18,
-    20,
-    22,
-    24,
-    27,
-    30,
-    33,
-    37,
-    41,
-    45,
-    49,
-    54,
-    59,
-    64,
-    69,
-    75,
-    80,
-    86,
-    92,
-    98,
-    104,
-    110,
-    116,
-    122,
-    128,
-    128,
-    128,
-    128,
+	128, 134, 140, 146, 152, 158, 164, 170,
+	176, 181, 187, 192, 197, 202, 207, 211,
+	215, 219, 223, 226, 229, 232, 234, 236,
+	238, 240, 241, 242, 243, 244, 244, 244,
+	244, 244, 243, 242, 241, 240, 238, 236,
+	234, 232, 229, 226, 223, 219, 215, 211,
+	207, 202, 197, 192, 187, 181, 176, 170,
+	164, 158, 152, 146, 140, 134, 128, 122,
+	116, 110, 104,  98,  92,  86,  80,  75,
+	 69,  64,  59,  54,  49,  45,  41,  37,
+	 33,  30,  27,  24,  22,  20,  18,  16,
+	 15,  14,  13,  12,  12,  12,  12,  12,
+	 13,  14,  15,  16,  18,  20,  22,  24,
+	 27,  30,  33,  37,  41,  45,  49,  54,
+	 59,  64,  69,  75,  80,  86,  92,  98,
+	104, 110, 116, 122, 128, 128, 128, 128,
 };
 
+/**
+ * @brief Compute a sine sample from a phase offset
+ * @param phase Phase in range 0..511 (512 steps per full cycle)
+ * @return 8-bit unsigned sample value
+ */
 static uint8_t sin_sample(uint32_t phase)
 {
-	// phase: 0..511 = full sine wave cycle (512 samples per period)
 	phase &= 0x1FF;
 	if (phase < 128)
 		return sin_lut[phase];
@@ -222,9 +140,13 @@ static uint8_t sin_sample(uint32_t phase)
 		return 255 - sin_lut[511 - phase];
 }
 
+/**
+ * @brief Generate PCM samples into the buffer
+ * @param freq Desired frequency in Hz
+ * @param n_samples Number of samples to generate
+ */
 static void pcm_generate(uint32_t freq, uint32_t n_samples)
 {
-	// phase_step = freq * 512 / sample_rate
 	uint32_t step = (freq * 512u) / PCM_SAMPLE_RATE;
 	uint32_t phase = 0;
 
@@ -235,14 +157,18 @@ static void pcm_generate(uint32_t freq, uint32_t n_samples)
 	}
 }
 
-// DMA setup (channel 1, 8-bit)
+/**
+ * @brief Configure DMA channel 1 for 8-bit transfer
+ * @param addr Physical address of the buffer
+ * @param count Number of bytes to transfer
+ */
 static void dma_setup(uint32_t addr, uint32_t count)
 {
-	count--; /* DMA count = N-1 */
+	count--;
 
-	outb(DMA_MASK, 0x05); // mask channel 1
-	outb(DMA_FLIP, 0x00); // clear flip-flop
-	outb(DMA_MODE, 0x49); // single, read, ch 1
+	outb(DMA_MASK, 0x05);
+	outb(DMA_FLIP, 0x00);
+	outb(DMA_MODE, 0x49);
 
 	outb(DMA_ADDR1, (addr >> 0) & 0xFF);
 	outb(DMA_ADDR1, (addr >> 8) & 0xFF);
@@ -251,10 +177,13 @@ static void dma_setup(uint32_t addr, uint32_t count)
 	outb(DMA_COUNT1, (count >> 0) & 0xFF);
 	outb(DMA_COUNT1, (count >> 8) & 0xFF);
 
-	outb(DMA_MASK, 0x01); // unmask channel 1
+	outb(DMA_MASK, 0x01);
 }
 
-//  sound_driver ops
+/**
+ * @brief Initialize the SB16 (reset DSP and set volume)
+ * @return 0 on success, -1 on failure
+ */
 static int sb16_init(void)
 {
 	if (dsp_reset() != 0)
@@ -267,6 +196,11 @@ static int sb16_init(void)
 	return 0;
 }
 
+/**
+ * @brief Play a tone using the SB16
+ * @param freq Frequency in Hz (0 = silence)
+ * @param duration_ms Duration in milliseconds
+ */
 static void sb16_play(uint32_t freq, uint32_t duration_ms)
 {
 	if (freq == 0)
@@ -275,7 +209,6 @@ static void sb16_play(uint32_t freq, uint32_t duration_ms)
 		return;
 	}
 
-	// how many samples to play
 	uint32_t n = (PCM_SAMPLE_RATE * duration_ms) / 1000;
 	if (n > PCM_BUF_SAMPLES)
 		n = PCM_BUF_SAMPLES;
@@ -286,39 +219,40 @@ static void sb16_play(uint32_t freq, uint32_t duration_ms)
 
 	dma_setup(addr, n);
 
-	// sample rate
 	dsp_write(DSP_SET_RATE_OUT);
 	dsp_write((PCM_SAMPLE_RATE >> 8) & 0xFF);
 	dsp_write(PCM_SAMPLE_RATE & 0xFF);
 
-	// start transmission: 8-bit unsigned mono
 	dsp_write(DSP_OUT_8BIT);
-	dsp_write(0x00); // mode: unsigned mono
+	dsp_write(0x00);
 	dsp_write((n - 1) & 0xFF);
 	dsp_write((n - 1) >> 8);
 
 	hpet_delay_ms(duration_ms);
 }
 
+/**
+ * @brief Stop playback
+ */
 static void sb16_stop(void)
 {
-	dsp_write(0xD0); // pause 8-bit DMA
+	dsp_write(0xD0);
 }
 
 const struct sound_driver sb16_driver = {
-    .name = "sb16",
-    .init = sb16_init,
-    .play = sb16_play,
-    .stop = sb16_stop,
+	.name = "sb16",
+	.init = sb16_init,
+	.play = sb16_play,
+	.stop = sb16_stop,
 };
 
+/**
+ * @brief Module initialisation entry point for SB16
+ * @return 0
+ */
 static int sb16_module_init(void)
 {
 	printk(KERN_INFO "[sound] registering SB16 driver\n");
 	sound_register_driver(&sb16_driver);
 	return 0;
 }
-
-#include <hubble/init.h>
-
-// device_initcall(sb16_module_init);

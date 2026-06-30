@@ -1,32 +1,53 @@
+/**
+ * @file elf.c
+ * @brief ELF64 user-space binary loader
+ *
+ * Implements loading of ELF64 executables: reads the file from
+ * the VFS, maps PT_LOAD segments into a user page table with
+ * appropriate permissions, copies file content, and transfers
+ * control to user space via user_enter().
+ */
+
 #include "elf.h"
-#include "mm/vmm.h"
-#include "mm/pmm.h"
-#include "mm/slab.h"
-#include "mm/kmalloc.h"
-#include "fs/vfs/vfs.h"
-#include "higher_half.h"
 #include <hubble/printk.h>
-#include <stdint.h>
 #include <hubble/string.h>
+#include <mm/kmalloc.h>
+#include <mm/pmm.h>
+#include <mm/vmm.h>
 #include <smp/scheduler.h>
+#include <stdint.h>
 
-#define ELF_MAGIC 0x464c457fUL
-#define PAGE_SIZE 4096
+#include <fs/vfs/vfs.h>
 
-#define PT_LOAD 0x1
-#define PF_X 0x1
-#define PF_W 0x2
-#define PF_R 0x4
+#include "higher_half.h"
+
+/* ── ELF Constants ───────────────────────────────────────────── */
+
+#define ELF_MAGIC       0x464c457fUL
+#define PAGE_SIZE       4096
+
+#define PT_LOAD         0x1
+#define PF_X            0x1
+#define PF_W            0x2
+#define PF_R            0x4
 
 #define USER_STACK_PAGES 128
-#define USER_STACK_TOP 0x70000000ULL
+#define USER_STACK_TOP   0x70000000ULL
+
+/* ── Segment Loading ─────────────────────────────────────────── */
 
 /**
- * @brief Load one PT_LOAD segment from ELF file
+ * @brief Load one PT_LOAD segment from an ELF file
  *
- * IMPORTANT: We map pages to user virtual addresses, but access them
- * through kernel higher-half mapping (PHYS_TO_VIRT).
- * This works because bootloader identity-mapped first 4GB.
+ * Allocates physical pages for the segment, maps them into the
+ * target page table with the correct user/supervisor, RW, and
+ * NX flags, and copies the file-backed portion into memory.
+ * The remainder (BSS) is zero-filled by the prior page clearing.
+ *
+ * @param f      Opened ELF file handle
+ * @param phdr   Program header describing the segment
+ * @param target_pm  Target user page table (PML4 physical)
+ * @return 0 on success, -1 on failure
  */
 int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 {
@@ -49,15 +70,8 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 	       (unsigned long long)memsz,
 	       (unsigned long long)filesz);
 
-	// --- 1) Allocate and map all pages ---
 	for (uint64_t addr = map_start; addr < map_end; addr += PAGE_SIZE)
 	{
-		// if (vmm_is_mapped(addr))
-		// {
-		// 	printk("[ELF] WARNING: 0x%llx already mapped, skipping\n", addr);
-		// 	vmm_unmap_page(addr);
-		// }
-
 		uint64_t phys = pmm_alloc_page();
 		if (!phys)
 		{
@@ -70,14 +84,14 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 			flags |= PTE_WRITE;
 		if (!(phdr->p_flags & PF_X))
 			flags |= PTE_NX;
-		// vmm_unmap_user_page(addr);
+
 		if (vmm_map_page_into(target_pm, addr, phys, flags) < 0)
 		{
 			printk(KERN_ERR "[ELF] ERROR: Failed to map 0x%llx -> 0x%llx\n", addr, phys);
 			pmm_free_page(phys);
 			return -1;
 		}
-		// make_pd_entry_user(phys, (uint64_t)target_pm);
+
 		uint8_t *kptr = (uint8_t *)phys_to_virt(phys);
 		kptr[0] = 0xAA;
 		uint8_t val = kptr[0];
@@ -92,14 +106,12 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 		memset((void *)phys_to_virt(phys), 0, PAGE_SIZE);
 	}
 
-	// --- 2) Copy file content ---
 	if (filesz > 0)
 	{
 		size_t remaining = (size_t)filesz;
 		uint64_t file_offset = 0;
 
-		// Use temporary buffer for reading
-		void *kbuf = kmalloc(PAGE_SIZE, GFP_KERNEL); // void *kbuf = kmalloc(PAGE_SIZE, GFP_KERNEL);
+		void *kbuf = kmalloc(PAGE_SIZE, GFP_KERNEL);
 		if (!kbuf)
 		{
 			printk(KERN_ERR "[ELF] ERROR: Failed to allocate temp buffer\n");
@@ -116,7 +128,6 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 			if (chunk > remaining)
 				chunk = remaining;
 
-			// Seek to file position
 			if (vfs_lseek(f, offset + file_offset, SEEK_SET) < 0)
 			{
 				printk(KERN_ERR "[ELF] ERROR: Failed to seek to offset 0x%llx\n",
@@ -125,7 +136,6 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 				return -1;
 			}
 
-			// Read chunk from file
 			size_t got = vfs_read(f, kbuf, chunk);
 			if (got != chunk)
 			{
@@ -134,7 +144,6 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 				return -1;
 			}
 
-			// Get physical address of the user page
 			uint64_t phys = vmm_get_phys_from(target_pm, page_base);
 			if (!phys)
 			{
@@ -144,7 +153,6 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 				return -1;
 			}
 
-			// Copy data via kernel mapping
 			void *kaddr = (void *)phys_to_virt(phys);
 			memcpy((uint8_t *)kaddr + in_page_off, kbuf, chunk);
 			file_offset += chunk;
@@ -164,9 +172,21 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm)
 	return 0;
 }
 
+/* ── Full ELF Load ───────────────────────────────────────────── */
+
+/**
+ * @brief Load an ELF binary from the VFS
+ *
+ * Opens the file, validates the ELF magic, reads program headers,
+ * and loads each PT_LOAD segment via elf_load_segment().
+ *
+ * @param path      VFS path to the ELF binary
+ * @param entry_out Receives the entry-point virtual address
+ * @param pm        Target user page table to map into
+ * @return 0 on success, -1 on failure
+ */
 int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm)
 {
-
 	VFS_File *f = vfs_open(path, VFS_O_RDONLY);
 	printk(KERN_INFO "[ELF] Trying to open %s\n", path);
 	if (!f)
@@ -174,13 +194,6 @@ int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm)
 		printk(KERN_ERR "[ELF] ERROR: Failed to open %s\n", path);
 		return -1;
 	}
-
-	// uint64_t *new_pm = vmm_create_user_pagemap();
-	// if (!new_pm)
-	// {
-	// 	printk("Failed to create pagemap\n");
-	// 	return -1;
-	// }
 
 	Elf64_Ehdr ehdr;
 	if (vfs_read(f, &ehdr, sizeof(ehdr)) != sizeof(ehdr))
@@ -190,7 +203,6 @@ int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm)
 		return -1;
 	}
 
-	// Verify ELF magic
 	uint32_t magic = *(uint32_t *)ehdr.e_ident;
 	if (magic != ELF_MAGIC)
 	{
@@ -202,7 +214,6 @@ int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm)
 	printk(KERN_INFO "[ELF] Loading %s (entry=0x%llx, phnum=%u)\n",
 	       path, (unsigned long long)ehdr.e_entry, ehdr.e_phnum);
 
-	// Read program headers
 	size_t ph_size = (size_t)ehdr.e_phnum * sizeof(Elf64_Phdr);
 	Elf64_Phdr *phdrs = kmalloc(ph_size, GFP_KERNEL);
 	if (!phdrs)
@@ -228,7 +239,6 @@ int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm)
 		return -1;
 	}
 
-	// Load all PT_LOAD segments
 	for (uint16_t i = 0; i < ehdr.e_phnum; ++i)
 	{
 		Elf64_Phdr *p = &phdrs[i];
@@ -259,8 +269,20 @@ int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm)
 	return 0;
 }
 
+/* ── Userspace Entry ─────────────────────────────────────────── */
+
 extern void user_enter(uint64_t entry, uint64_t stack);
 
+/**
+ * @brief Set up user stack and enter userspace
+ *
+ * Allocates and maps a user stack, sets up segment registers
+ * in the current task context, and calls user_enter() to
+ * perform the mode switch.
+ *
+ * @param entry Entry-point virtual address
+ * @return Never returns on success, -1 on failure
+ */
 int elf_run(uint64_t entry)
 {
 	printk(KERN_INFO "[ELF] Setting up user stack at 0x%llx\n",
@@ -268,11 +290,8 @@ int elf_run(uint64_t entry)
 
 	uint64_t stack_base = USER_STACK_TOP - USER_STACK_PAGES * PAGE_SIZE;
 
-	// Allocate and map stack pages
 	for (uint64_t addr = stack_base; addr < USER_STACK_TOP; addr += PAGE_SIZE)
 	{
-		// vmm_unmap_user_page(addr);
-
 		uint64_t phys = pmm_alloc_page();
 		if (!phys)
 		{
@@ -312,14 +331,6 @@ int elf_run(uint64_t entry)
 	printk(KERN_INFO "  User CS should be: 0x1B\n");
 	printk(KERN_INFO "  User SS should be: 0x23\n");
 
-	// // Verify the entry point is reasonable
-	// if (entry < 0x400000 || entry > 0x800000)
-	// {
-	// 	printk("[ELF] WARNING: Entry point looks suspicious!\n");
-	// }
-	// dump_page(0x400000, 0x20);
-
-	// Verify the entry point mapping
 	printk(KERN_INFO "[ELF] Verifying entry point mapping:\n");
 	uint64_t entry_phys = vmm_get_phys(entry);
 	printk(KERN_INFO "  Virtual: 0x%llx\n", (unsigned long long)entry);
@@ -331,7 +342,6 @@ int elf_run(uint64_t entry)
 		return -1;
 	}
 
-	// Read via physical address
 	uint8_t *phys_ptr = (uint8_t *)phys_to_virt(entry_phys);
 	printk(KERN_INFO "  Code via phys: %02x %02x %02x %02x %02x %02x %02x %02x\n",
 	       phys_ptr[0], phys_ptr[1], phys_ptr[2], phys_ptr[3],
@@ -356,119 +366,16 @@ int elf_run(uint64_t entry)
 	uint64_t *pt = pt_table(entry);
 	uint64_t pte = pt[PT_INDEX(entry)];
 	printk(KERN_INFO "  PTE[%d] = 0x%llx (USER=%d)\n", PT_INDEX(entry), pte, !!(pte & PTE_USER));
-	// After all ELF segments are loaded, before user_enter():
 
 	task_t *current_task = get_current_task();
 
-	// current_task->context.cs = 0x23;
-	// current_task->context.ss = 0x1B;
-
-	current_task->context.ds = 0x23; // User Data
+	current_task->context.ds = 0x23;
 	current_task->context.es = 0x23;
 	current_task->context.fs = 0x23;
 	current_task->context.gs = 0x23;
 
 	user_enter(entry, USER_STACK_TOP - 8);
 
-	// Should never return
 	printk(KERN_ERR "[ELF] ERROR: Returned from userspace!\n");
 	return -1;
 }
-
-// int elf_load_sep(const char *path, uint64_t *entry_out, uint64_t *pm)
-// {
-// 	VFS_File *f = vfs_open(path, VFS_O_RDONLY);
-// 	printk("[ELF] Trying to open %s\n", path);
-// 	if (!f)
-// 	{
-// 		printk("[ELF] ERROR: Failed to open %s\n", path);
-// 		return -1;
-// 	}
-
-// 	Elf64_Ehdr ehdr;
-// 	if (vfs_read(f, &ehdr, sizeof(ehdr)) != sizeof(ehdr))
-// 	{
-// 		printk("[ELF] ERROR: Failed to read ELF header\n");
-// 		vfs_close(f);
-// 		return -1;
-// 	}
-
-// 	// Verify ELF magic
-// 	uint32_t magic = *(uint32_t *)ehdr.e_ident;
-// 	if (magic != ELF_MAGIC)
-// 	{
-// 		printk("[ELF] ERROR: Invalid ELF magic: 0x%x\n", magic);
-// 		vfs_close(f);
-// 		return -1;
-// 	}
-
-// 	printk("[ELF] Loading %s (entry=0x%llx, phnum=%u)\n",
-// 	       path, (unsigned long long)ehdr.e_entry, ehdr.e_phnum);
-
-// 	// Read program headers
-// 	size_t ph_size = (size_t)ehdr.e_phnum * sizeof(Elf64_Phdr);
-// 	Elf64_Phdr *phdrs = kmalloc(ph_size, GFP_KERNEL);
-// 	if (!phdrs)
-// 	{
-// 		printk("[ELF] ERROR: Failed to allocate phdrs\n");
-// 		vfs_close(f);
-// 		return -1;
-// 	}
-
-// 	if (vfs_lseek(f, ehdr.e_phoff, SEEK_SET) < 0)
-// 	{
-// 		printk("[ELF] ERROR: Failed to seek to phdrs\n");
-// 		kfree(phdrs);
-// 		vfs_close(f);
-// 		return -1;
-// 	}
-
-// 	if (vfs_read(f, phdrs, ph_size) != (size_t)ph_size)
-// 	{
-// 		printk("[ELF] ERROR: Failed to read phdrs\n");
-// 		kfree(phdrs);
-// 		vfs_close(f);
-// 		return -1;
-// 	}
-
-// 	// Load all PT_LOAD segments
-// 	for (uint16_t i = 0; i < ehdr.e_phnum; ++i)
-// 	{
-// 		Elf64_Phdr *p = &phdrs[i];
-// 		if (p->p_type == PT_LOAD)
-// 		{
-// 			printk("[ELF] HERE loading PHDR[%u]: vaddr=0x%llx filesz=0x%llx memsz=0x%llx flags=0x%x\n",
-// 			       i,
-// 			       (unsigned long long)p->p_vaddr,
-// 			       (unsigned long long)p->p_filesz,
-// 			       (unsigned long long)p->p_memsz,
-// 			       p->p_flags);
-
-// 			if (elf_load_segment(f, p) < 0)
-// 			{
-// 				printk("[ELF] ERROR: Failed to load segment %u\n", i);
-// 				kfree(phdrs);
-// 				vfs_close(f);
-// 				return -1;
-// 			}
-// 		}
-// 	}
-
-// 	kfree(phdrs);
-// 	vfs_close(f);
-
-// 	*entry_out = ehdr.e_entry;
-// 	printk("[ELF] Load complete, entry=0x%llx\n", (unsigned long long)*entry_out);
-// 	return 0;
-// }
-
-#include <gdt/gdt.h>
-
-// int load_elf_and_run(const char *path)
-// {
-// 	uint64_t entry;
-// 	if (elf_load(path, &entry) < 0)
-// 		return -1;
-
-// 	return elf_run(entry);
-// }

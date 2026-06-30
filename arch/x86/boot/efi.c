@@ -1,3 +1,8 @@
+/**
+ * @file efi.c
+ * @brief UEFI application entry — locates kernel ELF, sets up memory map, transitions to boot_main
+ */
+
 #include "efi.h"
 #include "loader_context.h"
 #include <stddef.h>
@@ -14,6 +19,7 @@ extern void boot_main(loader_context_t *ctx);
 static EFI_GUID Acpi20Guid = {0x8868e871, 0xe4f1, 0x11d3, {0xbc, 0x22, 0x00, 0x80, 0xc7, 0x3c, 0x88, 0x81}};
 static EFI_GUID Acpi10Guid = {0xeb9d2d30, 0x2d88, 0x11d3, {0x9a, 0x16, 0x00, 0x90, 0x27, 0x3f, 0xc1, 0x4d}};
 
+/** @brief Find the RSDP pointer in the EFI configuration table */
 static void *find_rsdp(EFI_SYSTEM_TABLE *SystemTable)
 {
 	for (UINTN i = 0; i < g_systab->NumberOfTableEntries; i++)
@@ -38,6 +44,7 @@ static void *find_rsdp(EFI_SYSTEM_TABLE *SystemTable)
 	return NULL;
 }
 
+/** @brief Initialise framebuffer via EFI Graphics Output Protocol */
 EFI_STATUS init_framebuffer(EFI_SYSTEM_TABLE *systab, fb_info_t *fb_info)
 {
 	EFI_GUID gop_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
@@ -57,6 +64,7 @@ EFI_STATUS init_framebuffer(EFI_SYSTEM_TABLE *systab, fb_info_t *fb_info)
 	return EFI_SUCCESS;
 }
 
+/** @brief Open a file on any EFI simple file system volume */
 EFI_STATUS open_file(EFI_SYSTEM_TABLE *systab, const CHAR16 *path, EFI_FILE_HANDLE *file)
 {
 	EFI_GUID fs_guid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
@@ -100,6 +108,7 @@ EFI_STATUS open_file(EFI_SYSTEM_TABLE *systab, const CHAR16 *path, EFI_FILE_HAND
 	return (*file != NULL) ? EFI_SUCCESS : EFI_NOT_FOUND;
 }
 
+/** @brief Get the size of an open EFI file */
 EFI_STATUS get_file_size(EFI_FILE_HANDLE file, EFI_SYSTEM_TABLE *systab, UINTN *size)
 {
 	EFI_STATUS status;
@@ -123,6 +132,7 @@ EFI_STATUS get_file_size(EFI_FILE_HANDLE file, EFI_SYSTEM_TABLE *systab, UINTN *
 	return status;
 }
 
+/** @brief Convert EFI memory type to internal mem_type_t */
 static mem_type_t efi_to_mem_type(UINT32 efi_type)
 {
 	switch (efi_type)
@@ -146,13 +156,14 @@ static mem_type_t efi_to_mem_type(UINT32 efi_type)
 	}
 }
 
+/** @brief UEFI application entry point */
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 {
 	g_image = image;
 	g_systab = systab;
 	EFI_STATUS status;
 
-	/* 1. Open kernel.elf and get its size */
+	/* ── 1. Open kernel.elf and get its size ── */
 	EFI_FILE_HANDLE kfile;
 	status = open_file(systab, L"\\kernel.elf", &kfile);
 	if (EFI_ERROR(status))
@@ -163,10 +174,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	if (EFI_ERROR(status))
 		return status;
 
-	/* 2. Reserve physical memory for the kernel image at KERNEL_PHYS_BASE.
-	      This prevents EFI from using 0x100000..0x100000+kernel_size
-	      while we're still in boot services. boot_main's load_elf()
-	      will copy PT_LOAD segments here after ExitBootServices. */
+	/* ── 2. Reserve physical memory for the kernel image at KERNEL_PHYS_BASE ── */
 	EFI_PHYSICAL_ADDRESS kernel_phys = KERNEL_PHYS_BASE;
 	UINTN kernel_pages = (kernel_size + 0xFFF) / 0x1000;
 	status = systab->BootServices->AllocatePages(
@@ -175,9 +183,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	if (EFI_ERROR(status))
 		return status;
 
-	/* 3. Read the ELF into a page-aligned buffer.
-	      AllocatePool may return unaligned pointers with EFI metadata
-	      interspersed — AllocatePages guarantees a contiguous region. */
+	/* ── 3. Read the ELF into a page-aligned buffer ── */
 	EFI_PHYSICAL_ADDRESS elf_phys;
 	UINTN elf_pages = (kernel_size + 0xFFF) / 0x1000;
 	status = systab->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData,
@@ -186,9 +192,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		return status;
 	void *elf_buf = (void *)elf_phys;
 
-	// status = kfile->Read(kfile, &kernel_size, elf_buf);
-	// if (EFI_ERROR(status))
-	// return status;
 	UINTN total = kernel_size;
 	UINTN offset = 0;
 	while (offset < total)
@@ -203,18 +206,18 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	kfile->Close(kfile);
 
-	/* 4. RSDP */
+	/* ── 4. Get RSDP ── */
 	void *rsdp = find_rsdp(systab);
 	if (!rsdp)
 		return EFI_NOT_FOUND;
 
-	/* 5. Framebuffer */
+	/* ── 5. Initialise framebuffer ── */
 	fb_info_t fb;
 	status = init_framebuffer(systab, &fb);
 	if (EFI_ERROR(status))
 		return status;
 
-	/* 6. Memory map (before ExitBootServices) */
+	/* ── 6. Memory map (before ExitBootServices) ── */
 	EFI_MEMORY_DESCRIPTOR *efi_map = NULL;
 	UINTN map_size = 0, map_key, desc_size;
 	UINT32 desc_ver;
@@ -230,7 +233,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 
 	UINTN efi_count = map_size / desc_size;
 
-	/* 7. Find the largest free region */
+	/* ── 7. Find the largest free region ── */
 	EFI_MEMORY_DESCRIPTOR *largest = NULL;
 	UINT64 largest_size = 0;
 	for (UINTN i = 0; i < efi_count; i++)
@@ -250,7 +253,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	if (!largest || largest_size < 64 * 1024 * 1024)
 		return EFI_OUT_OF_RESOURCES;
 
-	/* 8. Build our memory map */
+	/* ── 8. Build our memory map ── */
 	mem_descriptor_t *our_map = NULL;
 	systab->BootServices->AllocatePool(EfiLoaderData,
 					   efi_count * sizeof(mem_descriptor_t),
@@ -264,7 +267,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 		our_map[i].type = efi_to_mem_type(d->Type);
 	}
 
-	/* 9. Fill LoaderContext */
+	/* ── 9. Fill LoaderContext ── */
 	loader_context_t *ctx = NULL;
 	systab->BootServices->AllocatePool(EfiLoaderData, sizeof(loader_context_t), (void **)&ctx);
 
@@ -277,7 +280,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	ctx->free_phys_base = largest->PhysicalStart;
 	ctx->free_phys_size = largest_size;
 
-	/* 10. ExitBootServices — refresh map_key first */
+	/* ── 10. ExitBootServices ── */
 	map_size = 0;
 	systab->BootServices->GetMemoryMap(&map_size, NULL, &map_key, &desc_size, &desc_ver);
 	map_size += desc_size * 4;
@@ -289,7 +292,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *systab)
 	if (EFI_ERROR(status))
 		return status;
 
-	/* POINT OF NO RETURN */
+	/* ── POINT OF NO RETURN ── */
 
 	boot_main(ctx);
 

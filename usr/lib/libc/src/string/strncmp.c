@@ -1,3 +1,8 @@
+/**
+ * @file strncmp.c
+ * @brief Compare two strings with length limit
+ */
+
 #include <string.h>
 
 int strncmp(const char *s1, const char *s2, size_t n)

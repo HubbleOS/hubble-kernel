@@ -1,3 +1,8 @@
+/**
+ * @file fscanf.c
+ * @brief Formatted input from a stream
+ */
+
 #include <stdio.h>
 
 int fscanf(FILE *stream, const char *format, ...)

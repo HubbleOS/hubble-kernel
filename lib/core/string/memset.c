@@ -1,5 +1,17 @@
+/**
+ * @file memset.c
+ * @brief Memory fill with a byte value
+ */
+
 #include <hubble/string.h>
 
+/**
+ * @brief Fill memory region with a byte value
+ * @param dest Destination buffer
+ * @param c Byte value to fill with
+ * @param n Number of bytes to fill
+ * @return Pointer to dest
+ */
 void *memset(void *dest, int c, size_t n)
 {
 	unsigned char *s = dest;

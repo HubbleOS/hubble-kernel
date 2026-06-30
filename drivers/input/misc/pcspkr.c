@@ -1,14 +1,20 @@
-#include <sound/core/dev.h>
-#include <hubble/printk.h>
+/**
+ * @file pcspkr.c
+ * @brief PC speaker driver — PIT channel 2 tone generation
+ */
 #include <stdint.h>
+#include <hpet/hpet.h>
+#include <hubble/printk.h>
+#include <sound/core/dev.h>
 
-// PIT channel 2
-#define PIT_CHANNEL2 0x42
-#define PIT_CMD 0x43
+/* ── PIT registers ──────────────────────────────────────── */
+
+#define PIT_CHANNEL2  0x42
+#define PIT_CMD       0x43
 #define PIT_BASE_FREQ 1193180u
+#define SPEAKER_PORT  0x61
 
-// Port 0x61 — speaker gate
-#define SPEAKER_PORT 0x61
+/* ── Inline port I/O helpers ────────────────────────────── */
 
 static inline void outb(uint16_t port, uint8_t val)
 {
@@ -22,7 +28,7 @@ static inline uint8_t inb(uint16_t port)
 	return val;
 }
 
-#include <hpet/hpet.h>
+/* ── Internal helpers ───────────────────────────────────── */
 
 static void busy_wait_ms(uint32_t ms)
 {
@@ -33,12 +39,10 @@ static void pcspk_on(uint32_t freq)
 {
 	uint32_t div = PIT_BASE_FREQ / freq;
 
-	// PIT channel 2, mode 3 (square wave), binary
 	outb(PIT_CMD, 0xB6);
 	outb(PIT_CHANNEL2, (uint8_t)(div & 0xFF));
 	outb(PIT_CHANNEL2, (uint8_t)(div >> 8));
 
-	// turn on the speaker (bits 0 and 1)
 	outb(SPEAKER_PORT, inb(SPEAKER_PORT) | 0x03);
 }
 
@@ -46,6 +50,8 @@ static void pcspk_off(void)
 {
 	outb(SPEAKER_PORT, inb(SPEAKER_PORT) & ~0x03);
 }
+
+/* ── Driver ops ─────────────────────────────────────────── */
 
 static int pcspk_init(void)
 {
@@ -69,8 +75,8 @@ static void pcspk_stop(void)
 }
 
 const struct sound_driver pcspk_driver = {
-    .name = "pcspk",
-    .init = pcspk_init,
-    .play = pcspk_play,
-    .stop = pcspk_stop,
+	.name = "pcspk",
+	.init = pcspk_init,
+	.play = pcspk_play,
+	.stop = pcspk_stop,
 };

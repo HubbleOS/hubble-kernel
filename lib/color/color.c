@@ -1,5 +1,16 @@
+/**
+ * @file color.c
+ * @brief ARGB colour blending
+ */
+
 #include <hubble/color.h>
 
+/**
+ * @brief Blend two ARGB colours using alpha compositing
+ * @param src Source (foreground) colour
+ * @param dst Destination (background) colour
+ * @return Blended colour with full opacity
+ */
 color_t color_blend(color_t src, color_t dst)
 {
 	uint8_t alpha = get_alpha(src);

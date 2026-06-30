@@ -1,3 +1,8 @@
+/**
+ * @file _cheader.h
+ * @brief C++ compatibility macros for C headers
+ */
+
 #pragma once
 
 #ifdef __cplusplus

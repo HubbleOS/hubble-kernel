@@ -1,18 +1,22 @@
 /**
  * @file asm.h
- * @brief  Assembly Helper Functions for x86 Architecture
+ * @brief Assembly helper functions for x86 architecture
  *
- * Includes assembly helper functions for x86 architecture
+ * Includes inline assembly wrappers for common x86 operations
+ * such as CR3 access, TLB flushing, interrupt control, and
+ * CPU hints.
  */
 
 #pragma once
 
 #include <stdint.h>
 
+/* ── Page Table Control ──────────────────────────────────────── */
+
 /**
- * @brief Get current CR3 value (physical address of PML4)
+ * @brief Get the current CR3 value (physical address of PML4)
  *
- * @return Physical address of current page table
+ * @return Physical address of the current top-level page table
  */
 static inline uint64_t get_cr3(void)
 {
@@ -22,30 +26,31 @@ static inline uint64_t get_cr3(void)
 }
 
 /**
- * @brief Set CR3 value (switch page tables)
+ * @brief Set CR3 to switch page tables
  *
- * @param pml4_phys Physical address of new PML4
+ * @param pml4_phys Physical address of the new PML4
  */
 static inline void set_cr3(uint64_t pml4_phys)
 {
 	asm volatile("mov %0, %%cr3" : : "r"(pml4_phys) : "memory");
 }
 
+/* ── TLB Management ──────────────────────────────────────────── */
+
 /**
- * @brief Flush TLB entry for specific virtual address
+ * @brief Flush a single TLB entry for a given virtual address
  *
- * @param virt Virtual address to flush
+ * @param virt Virtual address to invalidate
  */
 static inline void invlpg(void *virt)
 {
 	asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
 }
 
+/* ── Interrupt Control ───────────────────────────────────────── */
+
 /**
- * @brief Enable CPU interrupts (set IF flag).
- *
- * Allows the CPU to receive maskable hardware interrupts (IRQ).
- * Should be called only after IDT and interrupt controllers are initialized.
+ * @brief Enable CPU interrupts (set IF flag)
  */
 static inline void sti(void)
 {
@@ -53,20 +58,17 @@ static inline void sti(void)
 }
 
 /**
- * @brief Disable CPU interrupts (clear IF flag).
- *
- * Prevents the CPU from receiving maskable interrupts.
- * Useful for critical sections.
+ * @brief Disable CPU interrupts (clear IF flag)
  */
 static inline void cli(void)
 {
 	asm volatile("cli");
 }
 
+/* ── CPU Hints ───────────────────────────────────────────────── */
+
 /**
- * @brief Halt CPU until next interrupt.
- *
- * Used for idle loops to reduce CPU usage.
+ * @brief Halt the CPU until the next interrupt
  */
 static inline void hlt(void)
 {
@@ -74,10 +76,9 @@ static inline void hlt(void)
 }
 
 /**
- * @brief CPU hint for spin-wait loops.
+ * @brief PAUSE hint for spin-wait loops
  *
- * Reduces power consumption and improves performance
- * in busy-wait (spinlock) loops on SMT CPUs.
+ * Reduces power consumption on SMT CPUs during busy-waiting.
  */
 static inline void cpu_pause(void)
 {

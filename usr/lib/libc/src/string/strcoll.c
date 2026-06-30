@@ -1,8 +1,9 @@
-#include <string.h>
+/**
+ * @file strcoll.c
+ * @brief Locale-aware string comparison (fallback to strcmp)
+ */
 
-// Temporary implementation of strcoll()
-// TODO: Implement locale-aware string comparison in the future.
-// For now, we fall back to simple binary comparison using strcmp.
+#include <string.h>
 
 int strcoll(const char *s1, const char *s2)
 {

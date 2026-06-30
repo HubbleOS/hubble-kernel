@@ -1,3 +1,9 @@
+/* ── VFS device filesystem implementation ─────────────────────────
+ * Provides a virtual filesystem for device files, allowing
+ * registered hardware devices to be accessed via standard VFS
+ * open/read/write operations.
+ * ────────────────────────────────────────────────────────────────── */
+
 #include "vfs.h"
 #include "vfs_standart_struct.h"
 #include "dev.h"
@@ -6,14 +12,15 @@
 #include <hubble/printk.h>
 #include "higher_half.h"
 
+static VFS_device_reg *dev_vfs_devices = NULL;
+
 VFS_Node *dev_vfs_open_device(VFS_FS *fs, const char *path);
 VFS_Node *dev_vfs_create_device(VFS_FS *fs, const char *path);
 int dev_vfs_write_device(VFS_File *file, const void *buf, uint32_t size);
 uint64_t mmap_device(VFS_File *file, uint64_t offset, size_t size);
 int dev_vfs_read_device(VFS_File *file, void *buf, uint32_t size);
 
-static VFS_device_reg *dev_vfs_devices = NULL;
-
+/** @brief Initialise the device VFS instance. */
 bool dev_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba)
 {
 	printk(KERN_INFO "Initializing device fs\n");
@@ -26,6 +33,7 @@ bool dev_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba)
 	return 1;
 }
 
+/** @brief Find a registered device by name. */
 VFS_device_reg *dev_vfs_find_device(VFS_FS *fs, const char *path)
 {
 	VFS_device_reg *dev = dev_vfs_devices;
@@ -38,6 +46,7 @@ VFS_device_reg *dev_vfs_find_device(VFS_FS *fs, const char *path)
 	return NULL;
 }
 
+/** @brief Read from a device file. */
 int dev_vfs_read_device(VFS_File *file, void *buf, uint32_t size)
 {
 	VFS_device_reg *dev = (VFS_device_reg *)file->node->fs_node;
@@ -48,6 +57,7 @@ int dev_vfs_read_device(VFS_File *file, void *buf, uint32_t size)
 	return ret;
 }
 
+/** @brief Write to a device file. */
 int dev_vfs_write_device(VFS_File *file, const void *buf, uint32_t size)
 {
 	VFS_device_reg *dev = (VFS_device_reg *)file->node->fs_node;
@@ -56,6 +66,7 @@ int dev_vfs_write_device(VFS_File *file, const void *buf, uint32_t size)
 	return (int)dev->write(0, size, buf);
 }
 
+/** @brief Open a device file by path. */
 VFS_Node *dev_vfs_open_device(VFS_FS *fs, const char *path)
 {
 	VFS_device_reg *dev = dev_vfs_find_device(fs, path);
@@ -72,6 +83,7 @@ VFS_Node *dev_vfs_open_device(VFS_FS *fs, const char *path)
 	return NULL;
 }
 
+/** @brief Create a new device file node. */
 VFS_Node *dev_vfs_create_device(VFS_FS *fs, const char *path)
 {
 	VFS_Node *node = kmalloc(sizeof(VFS_Node), GFP_KERNEL);
@@ -93,6 +105,7 @@ VFS_Node *dev_vfs_create_device(VFS_FS *fs, const char *path)
 	return node;
 }
 
+/** @brief Register a new device with the VFS. */
 void dev_vfs_register(const char *name,
 		      uint64_t (*mmap)(uint64_t, size_t),
 		      uint64_t (*read)(uint64_t, size_t, void *),
@@ -108,6 +121,7 @@ void dev_vfs_register(const char *name,
 	dev_vfs_devices = dev;
 }
 
+/** @brief MMAP a device file. */
 uint64_t mmap_device(VFS_File *file, uint64_t offset, size_t size)
 {
 	VFS_device_reg *dev = (VFS_device_reg *)file->node->fs_node;

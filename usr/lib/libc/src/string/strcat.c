@@ -1,3 +1,8 @@
+/**
+ * @file strcat.c
+ * @brief Concatenate strings
+ */
+
 #include <string.h>
 
 char *strcat(char *dest, const char *src)

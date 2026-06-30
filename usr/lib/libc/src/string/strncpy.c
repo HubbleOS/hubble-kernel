@@ -1,3 +1,8 @@
+/**
+ * @file strncpy.c
+ * @brief Copy a string with length limit
+ */
+
 #include <string.h>
 
 char *strncpy(char *dest, const char *src, size_t n)

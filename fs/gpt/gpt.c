@@ -1,3 +1,9 @@
+/* ── GPT partition table parser ───────────────────────────────────
+ * Reads the GPT header and partition entries from a block device,
+ * validates the signature, and populates an array of partition
+ * descriptors for use by the VFS layer.
+ * ────────────────────────────────────────────────────────────────── */
+
 #include "gpt.h"
 #include "gpt_struct.h"
 #include <hubble/printk.h>
@@ -5,15 +11,14 @@
 #include <mm/pmm.h>
 #include "higher_half.h"
 
-#include <drivers/storage/ata/ata.h>
-
 #include <stdint.h>
 #include <hubble/string.h>
 
 uint32_t first_usable_lba = 0;
 uint32_t last_usable_lba = 0;
 
-void utf16_to_ascii(uint16_t *src, char *dest, size_t max_chars)
+/** @brief Convert a UTF-16LE string to ASCII (lossy). */
+static void utf16_to_ascii(uint16_t *src, char *dest, size_t max_chars)
 {
 	for (size_t i = 0; i < max_chars; i++)
 	{
@@ -21,20 +26,25 @@ void utf16_to_ascii(uint16_t *src, char *dest, size_t max_chars)
 
 		if ((c >> 8) == 0 && (c & 0xFF) >= 0x20 && (c & 0xFF) <= 0x7F)
 		{
-			dest[i] = (char)(c & 0xFF); // OK
+			dest[i] = (char)(c & 0xFF);
 		}
 		else if ((c & 0xFF) == 0 && (c >> 8) >= 0x20 && (c >> 8) <= 0x7F)
 		{
-			dest[i] = (char)(c >> 8); // Big endian -> swap
+			dest[i] = (char)(c >> 8);
 		}
 		else
 		{
-			dest[i] = '?'; // Нерозпізнано
+			dest[i] = '?';
 		}
 	}
 	dest[max_chars] = '\0';
 }
 
+/** @brief Parse the GPT header and populate partition entries.
+ *
+ * @param partitions  Array to fill (terminated by empty entries).
+ * @return Number of valid partitions, or -1 on error.
+ */
 int gpt_init(gpt_partition_t *partitions)
 {
 	printk(KERN_INFO "sizeof(GPT_Header): %d\n", sizeof(GPT_Header));
@@ -42,7 +52,6 @@ int gpt_init(gpt_partition_t *partitions)
 
 	printk(KERN_INFO "Reading GPT header\n");
 
-	// CHECK: Make sure device and read function are valid
 	if (!partitions || !partitions->device)
 	{
 		printk(KERN_ERR "ERROR: Invalid partition structure\n");
@@ -97,9 +106,7 @@ int gpt_init(gpt_partition_t *partitions)
 	uint32_t sectors_to_read = (total_size + 511) / 512;
 
 	for (uint32_t i = 0; i < sectors_to_read; i++)
-	{
 		partitions->device->read(partitions->device->device, gpt_header->partition_entries_lba + i, entry_buf + (i * 512));
-	}
 
 	int8_t partition_count = 0;
 
@@ -135,22 +142,17 @@ int gpt_init(gpt_partition_t *partitions)
 		last_usable_lba = entry->last_lba;
 		printk(KERN_INFO "lba: %llu\n", first_usable_lba);
 
-		// SAFE: Initialize name buffer
-		char *name = kmalloc(37, GFP_KERNEL); // Allocate space for name
+		char *name = kmalloc(37, GFP_KERNEL);
 
 		printk(KERN_INFO "Raw UTF-16 name bytes:\n");
 		for (int j = 0; j < 36; j++)
-		{
-			printk(KERN_INFO "%04x ", entry->name[j]); // Print as hex words
-		}
+			printk(KERN_INFO "%04x ", entry->name[j]);
 		printk(KERN_INFO "\n");
 
-		// CRITICAL: Add bounds checking here
 		printk(KERN_INFO "About to convert UTF-16 name...\n");
 		printk(KERN_INFO "entry->name address: %p\n", entry->name);
 		printk(KERN_INFO "name buffer address: %p\n", name);
 
-		// THIS IS WHERE IT CRASHES - Check if utf16_to_ascii is safe
 		utf16_to_ascii(entry->name, name, 36);
 
 		printk(KERN_INFO "  Name: %s\n", name);
@@ -158,8 +160,6 @@ int gpt_init(gpt_partition_t *partitions)
 		partition_count++;
 	}
 
-	// FIX: You're calling kfree on physical address!
-	// kfree expects virtual address or you should use pmm_free_pages
 	pmm_free_pages((uint64_t)entry_buf_phys, (total_size + 0xFFF) / 0x1000);
 
 	printk(KERN_OK "GPT initialized, %d partitions found\n", partition_count);

@@ -1,8 +1,22 @@
+/**
+ * @file textout.c
+ * @brief Framebuffer text output — glyph rendering
+ *
+ * Looks up bitmap glyphs from the built-in font and draws them
+ * onto the linear framebuffer with per-pixel alpha blending.
+ */
+
 #include "textout.h"
 #include <hubble/color.h>
 #include <hubble/font.h>
 #include <hubble/platform.h>
 
+/**
+ * @brief Return the 8x8 glyph bitmap for a given character
+ *
+ * @param c Character code (0-127)
+ * @return Pointer to the 8-byte glyph bitmap, or NULL
+ */
 static uint8_t *get_glyph(char c)
 {
 	if ((unsigned char)c >= 128)
@@ -10,6 +24,19 @@ static uint8_t *get_glyph(char c)
 	return font[(unsigned char)c];
 }
 
+/**
+ * @brief Draw a monochrome glyph onto the framebuffer with scaling
+ *
+ * @param glyph     8-byte glyph bitmap
+ * @param pitch     Framebuffer pitch in pixels
+ * @param x         Screen X position
+ * @param y         Screen Y position
+ * @param w         Glyph width in pixels
+ * @param h         Glyph height in pixels
+ * @param scale_x   Horizontal scale factor
+ * @param scale_y   Vertical scale factor
+ * @param font_color Colour for foreground pixels
+ */
 static void draw_pixel_array_scaled(uint8_t *glyph, int pitch,
 				    int x, int y, int w, int h,
 				    int scale_x, int scale_y, color_t font_color)
@@ -39,6 +66,16 @@ static void draw_pixel_array_scaled(uint8_t *glyph, int pitch,
 	}
 }
 
+/**
+ * @brief Draw a single character on the framebuffer
+ *
+ * @param c           Character to draw
+ * @param x           Screen X position
+ * @param y           Screen Y position
+ * @param w           Character width
+ * @param h           Character height
+ * @param font_color  Colour for the character
+ */
 void draw_char(char c, int x, int y, int w, int h, color_t font_color)
 {
 	uint8_t *glyph = get_glyph(c);

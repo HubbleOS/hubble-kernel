@@ -1,3 +1,8 @@
+/**
+ * @file atoi.c
+ * @brief Convert string to integer
+ */
+
 #include <stdlib.h>
 
 int atoi(const char *str)

@@ -1,5 +1,17 @@
+/**
+ * @file memchr.c
+ * @brief Memory scanning: find first occurrence of a byte
+ */
+
 #include <hubble/string.h>
 
+/**
+ * @brief Scan memory for a byte value
+ * @param src Memory region to scan
+ * @param c Byte value to search for
+ * @param n Number of bytes to scan
+ * @return Pointer to the first occurrence of c, or NULL if not found
+ */
 void *memchr(const void *src, int c, size_t n)
 {
 	const unsigned char *s = src;
@@ -10,31 +22,3 @@ void *memchr(const void *src, int c, size_t n)
 
 	return n ? (void *)s : 0;
 }
-
-// #include <hubble/string.h>
-// #include <stdint.h>
-// #include <limits.h>
-
-// #define SS (sizeof(size_t))
-// #define ALIGN (sizeof(size_t) - 1)
-// #define ONES ((size_t)-1 / UCHAR_MAX)
-// #define HIGHS (ONES * (UCHAR_MAX / 2 + 1))
-// #define HASZERO(x) ((x) - ONES & ~(x) & HIGHS)
-
-// void *memchr(const void *src, int c, size_t n)
-// {
-// 	const unsigned char *s = src;
-// 	c = (unsigned char)c;
-// 	for (; ((uintptr_t)s & ALIGN) && n && *s != c; s++, n--)
-// 		;
-// 	if (n && *s != c)
-// 	{
-// 		const size_t *w;
-// 		size_t k = ONES * c;
-// 		for (w = (const void *)s; n >= SS && !HASZERO(*w ^ k); w++, n -= SS)
-// 			;
-// 		for (s = (const void *)w; n && *s != c; s++, n--)
-// 			;
-// 	}
-// 	return n ? (void *)s : 0;
-// }

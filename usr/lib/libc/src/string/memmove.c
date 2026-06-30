@@ -1,3 +1,8 @@
+/**
+ * @file memmove.c
+ * @brief Copy memory region (may overlap)
+ */
+
 #include <string.h>
 
 void *memmove(void *dest, const void *src, size_t n)

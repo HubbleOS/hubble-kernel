@@ -1,10 +1,15 @@
+/*
+ * Device registry — a simple flat array of registered devices.
+ */
+
 #include <hubble/device.h>
-#include <hubble/string.h>
 #include <hubble/printk.h>
+#include <hubble/string.h>
 
 #define MAX_DEVICES 32
+
 static struct device *devices[MAX_DEVICES];
-static int device_count = 0;
+static int device_count;
 
 void device_register(struct device *dev)
 {
@@ -20,15 +25,19 @@ void device_register(struct device *dev)
 struct device *device_find_by_name(const char *name)
 {
 	for (int i = 0; i < device_count; i++)
+	{
 		if (strcmp(devices[i]->name, name) == 0)
 			return devices[i];
+	}
 	return NULL;
 }
 
 struct device *device_find_by_type(uint32_t type)
 {
 	for (int i = 0; i < device_count; i++)
+	{
 		if (devices[i]->type == type)
 			return devices[i];
+	}
 	return NULL;
 }

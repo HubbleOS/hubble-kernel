@@ -1,6 +1,10 @@
+/**
+ * @file efi.h
+ * @brief UEFI protocol type definitions and structures for the bootloader
+ */
+
 #pragma once
 
-// Basic types
 typedef unsigned char UINT8;
 typedef unsigned short UINT16;
 typedef unsigned int UINT32;
@@ -16,7 +20,6 @@ typedef UINT64 EFI_VIRTUAL_ADDRESS;
 
 #define EFIAPI __attribute__((ms_abi))
 
-// Statuses
 #define EFI_SUCCESS 0ULL
 #define EFI_ERROR_BIT (1ULL << 63)
 #define EFI_ERROR(s) ((s) & EFI_ERROR_BIT)
@@ -26,7 +29,7 @@ typedef UINT64 EFI_VIRTUAL_ADDRESS;
 #define EFI_INVALID_PARAMETER (EFI_ERROR_BIT | 2)
 #define EFI_UNSUPPORTED (EFI_ERROR_BIT | 3)
 
-// GUID
+/** @brief UEFI GUID structure */
 typedef struct
 {
 	UINT32 Data1;
@@ -35,7 +38,7 @@ typedef struct
 	UINT8 Data4[8];
 } EFI_GUID;
 
-// Memory
+/** @brief UEFI memory type enumeration */
 typedef enum
 {
 	EfiReservedMemoryType,
@@ -55,6 +58,7 @@ typedef enum
 	EfiMaxMemoryType
 } EFI_MEMORY_TYPE;
 
+/** @brief UEFI memory descriptor */
 typedef struct
 {
 	UINT32 Type;
@@ -67,6 +71,7 @@ typedef struct
 
 #define EFI_PAGE_SIZE 0x1000
 
+/** @brief Allocation type */
 typedef enum
 {
 	AllocateAnyPages,
@@ -74,7 +79,6 @@ typedef enum
 	AllocateAddress,
 } EFI_ALLOCATE_TYPE;
 
-// Boot Services function types
 typedef EFI_STATUS(EFIAPI *EFI_RAISE_TPL)(UINTN new_tpl);
 typedef EFI_STATUS(EFIAPI *EFI_RESTORE_TPL)(UINTN old_tpl);
 
@@ -121,11 +125,8 @@ typedef EFI_STATUS(EFIAPI *EFI_HANDLE_PROTOCOL)(
 typedef EFI_STATUS(EFIAPI *EFI_REGISTER_PROTOCOL_NOTIFY)(void);
 
 typedef EFI_STATUS(EFIAPI *EFI_LOCATE_HANDLE)(void);
-
 typedef EFI_STATUS(EFIAPI *EFI_LOCATE_DEVICE_PATH)(void);
-
 typedef EFI_STATUS(EFIAPI *EFI_INSTALL_CONFIGURATION_TABLE)(void);
-
 typedef EFI_STATUS(EFIAPI *EFI_IMAGE_LOAD)(void);
 typedef EFI_STATUS(EFIAPI *EFI_IMAGE_START)(void);
 typedef EFI_STATUS(EFIAPI *EFI_EXIT)(void);
@@ -138,14 +139,11 @@ typedef EFI_STATUS(EFIAPI *EFI_EXIT_BOOT_SERVICES)(
 typedef EFI_STATUS(EFIAPI *EFI_GET_NEXT_MONOTONIC_COUNT)(void);
 typedef EFI_STATUS(EFIAPI *EFI_STALL)(void);
 typedef EFI_STATUS(EFIAPI *EFI_SET_WATCHDOG_TIMER)(void);
-
 typedef EFI_STATUS(EFIAPI *EFI_CONNECT_CONTROLLER)(void);
 typedef EFI_STATUS(EFIAPI *EFI_DISCONNECT_CONTROLLER)(void);
-
 typedef EFI_STATUS(EFIAPI *EFI_OPEN_PROTOCOL)(void);
 typedef EFI_STATUS(EFIAPI *EFI_CLOSE_PROTOCOL)(void);
 typedef EFI_STATUS(EFIAPI *EFI_OPEN_PROTOCOL_INFORMATION)(void);
-
 typedef EFI_STATUS(EFIAPI *EFI_PROTOCOLS_PER_HANDLE)(void);
 
 typedef EFI_STATUS(EFIAPI *EFI_LOCATE_HANDLE_BUFFER)(
@@ -162,13 +160,12 @@ typedef EFI_STATUS(EFIAPI *EFI_LOCATE_PROTOCOL)(
 
 typedef EFI_STATUS(EFIAPI *EFI_INSTALL_MULTIPLE_PROTOCOL_INTERFACES)(void);
 typedef EFI_STATUS(EFIAPI *EFI_UNINSTALL_MULTIPLE_PROTOCOL_INTERFACES)(void);
-
 typedef EFI_STATUS(EFIAPI *EFI_CALCULATE_CRC32)(void);
 typedef EFI_STATUS(EFIAPI *EFI_COPY_MEM)(void);
 typedef EFI_STATUS(EFIAPI *EFI_SET_MEM)(void);
 typedef EFI_STATUS(EFIAPI *EFI_CREATE_EVENT_EX)(void);
 
-// EFI_TABLE_HEADER
+/** @brief EFI table header */
 typedef struct
 {
 	UINT64 Signature;
@@ -178,23 +175,20 @@ typedef struct
 	UINT32 Reserved;
 } EFI_TABLE_HEADER;
 
-// Boot Services — все поля в правильном порядке (UEFI spec 2.x)
+/** @brief EFI Boot Services table (UEFI spec 2.x) */
 typedef struct
 {
 	EFI_TABLE_HEADER Hdr;
 
-	// Task Priority
 	EFI_RAISE_TPL RaiseTPL;
 	EFI_RESTORE_TPL RestoreTPL;
 
-	// Memory
 	EFI_ALLOCATE_PAGES AllocatePages;
 	EFI_FREE_PAGES FreePages;
 	EFI_GET_MEMORY_MAP GetMemoryMap;
 	EFI_ALLOCATE_POOL AllocatePool;
 	EFI_FREE_POOL FreePool;
 
-	// Events
 	EFI_CREATE_EVENT CreateEvent;
 	EFI_SET_TIMER SetTimer;
 	EFI_WAIT_FOR_EVENT WaitForEvent;
@@ -202,7 +196,6 @@ typedef struct
 	EFI_CLOSE_EVENT CloseEvent;
 	EFI_CHECK_EVENT CheckEvent;
 
-	// Protocol handlers
 	EFI_INSTALL_PROTOCOL_INTERFACE InstallProtocolInterface;
 	EFI_REINSTALL_PROTOCOL_INTERFACE ReinstallProtocolInterface;
 	EFI_UNINSTALL_PROTOCOL_INTERFACE UninstallProtocolInterface;
@@ -213,62 +206,55 @@ typedef struct
 	EFI_LOCATE_DEVICE_PATH LocateDevicePath;
 	EFI_INSTALL_CONFIGURATION_TABLE InstallConfigurationTable;
 
-	// Image
 	EFI_IMAGE_LOAD LoadImage;
 	EFI_IMAGE_START StartImage;
 	EFI_EXIT Exit;
 	EFI_IMAGE_UNLOAD UnloadImage;
 	EFI_EXIT_BOOT_SERVICES ExitBootServices;
 
-	// Misc
 	EFI_GET_NEXT_MONOTONIC_COUNT GetNextMonotonicCount;
 	EFI_STALL Stall;
 	EFI_SET_WATCHDOG_TIMER SetWatchdogTimer;
 
-	// Driver support
 	EFI_CONNECT_CONTROLLER ConnectController;
 	EFI_DISCONNECT_CONTROLLER DisconnectController;
 
-	// Open/close protocol
 	EFI_OPEN_PROTOCOL OpenProtocol;
 	EFI_CLOSE_PROTOCOL CloseProtocol;
 	EFI_OPEN_PROTOCOL_INFORMATION OpenProtocolInformation;
 
-	// Library
 	EFI_PROTOCOLS_PER_HANDLE ProtocolsPerHandle;
 	EFI_LOCATE_HANDLE_BUFFER LocateHandleBuffer;
 	EFI_LOCATE_PROTOCOL LocateProtocol;
 	EFI_INSTALL_MULTIPLE_PROTOCOL_INTERFACES InstallMultipleProtocolInterfaces;
 	EFI_UNINSTALL_MULTIPLE_PROTOCOL_INTERFACES UninstallMultipleProtocolInterfaces;
 
-	// CRC
 	EFI_CALCULATE_CRC32 CalculateCrc32;
 
-	// Memory utils
 	EFI_COPY_MEM CopyMem;
 	EFI_SET_MEM SetMem;
 	EFI_CREATE_EVENT_EX CreateEventEx;
 } EFI_BOOT_SERVICES;
 
-// ConOut
 typedef EFI_STATUS(EFIAPI *EFI_TEXT_STRING)(
     void *this,
     CHAR16 *string);
 
+/** @brief Simple text output protocol */
 typedef struct
 {
 	void *Reset;
 	EFI_TEXT_STRING OutputString;
 } EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL;
 
-// Configuration Table (для RSDP)
+/** @brief Configuration table entry (for RSDP) */
 typedef struct
 {
 	EFI_GUID VendorGuid;
 	void *VendorTable;
 } EFI_CONFIGURATION_TABLE;
 
-// System Table
+/** @brief UEFI System Table */
 typedef struct
 {
 	EFI_TABLE_HEADER Hdr;
@@ -286,7 +272,6 @@ typedef struct
 	EFI_CONFIGURATION_TABLE *ConfigurationTable;
 } EFI_SYSTEM_TABLE;
 
-// File Protocol
 typedef struct _EFI_FILE_PROTOCOL EFI_FILE_PROTOCOL;
 typedef EFI_FILE_PROTOCOL *EFI_FILE_HANDLE;
 
@@ -311,6 +296,7 @@ typedef EFI_STATUS(EFIAPI *EFI_FILE_GET_INFO)(
     UINTN *buffer_size,
     void *buffer);
 
+/** @brief EFI File Protocol */
 struct _EFI_FILE_PROTOCOL
 {
 	UINT64 Revision;
@@ -326,6 +312,7 @@ struct _EFI_FILE_PROTOCOL
 
 #define EFI_FILE_MODE_READ 0x0000000000000001ULL
 
+/** @brief EFI File Info */
 typedef struct
 {
 	UINT64 Size;
@@ -341,11 +328,11 @@ typedef struct
 #define EFI_FILE_INFO_ID \
 	{0x09576e92, 0x6d3f, 0x11d2, {0x8e, 0x39, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b}}
 
-// Simple File System Protocol
 typedef EFI_STATUS(EFIAPI *EFI_SIMPLE_FILE_SYSTEM_OPEN_VOLUME)(
     void *this,
     EFI_FILE_PROTOCOL **root);
 
+/** @brief Simple File System Protocol */
 typedef struct
 {
 	UINT64 Revision;
@@ -355,7 +342,7 @@ typedef struct
 #define EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID \
 	{0x0964e5b22, 0x6459, 0x11d2, {0x8e, 0x39, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b}}
 
-// GOP
+/** @brief Pixel bitmask for GOP */
 typedef struct
 {
 	UINT32 RedMask;
@@ -364,6 +351,7 @@ typedef struct
 	UINT32 ReservedMask;
 } EFI_PIXEL_BITMASK;
 
+/** @brief GOP pixel format */
 typedef enum
 {
 	PixelRedGreenBlueReserved8BitPerColor,
@@ -373,6 +361,7 @@ typedef enum
 	PixelFormatMax
 } EFI_GRAPHICS_PIXEL_FORMAT;
 
+/** @brief GOP mode information */
 typedef struct
 {
 	UINT32 Version;
@@ -383,6 +372,7 @@ typedef struct
 	UINT32 PixelsPerScanLine;
 } EFI_GRAPHICS_OUTPUT_MODE_INFORMATION;
 
+/** @brief GOP protocol mode */
 typedef struct
 {
 	UINT32 MaxMode;
@@ -393,6 +383,7 @@ typedef struct
 	UINTN FrameBufferSize;
 } EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE;
 
+/** @brief Graphics Output Protocol */
 typedef struct
 {
 	void *QueryMode;
@@ -403,7 +394,5 @@ typedef struct
 
 #define EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID \
 	{0x9042a9de, 0x23dc, 0x4a38, {0x96, 0xfb, 0x7a, 0xde, 0xd0, 0x80, 0x51, 0x6a}}
-
-// LocateHandleBuffer search types
 
 #define ByProtocol 2

@@ -1,11 +1,24 @@
+/**
+ * @file acpi.h
+ * @brief ACPI table structures and public API
+ *
+ * Defines the standard ACPI table headers (RSDP, RSDT, XSDT,
+ * FADT, MADT, HPET, MCFG) as packed C structs, callback type
+ * definitions for hardware enumeration, and the public function
+ * prototypes for ACPI initialisation and power management.
+ */
+
 #ifndef ACPI_H
 #define ACPI_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
-// === ACPI Table Structures ===
+/* ── ACPI SDT Header ─────────────────────────────────────────── */
 
+/**
+ * @brief Common header for all ACPI System Description Tables
+ */
 typedef struct
 {
 	char Signature[4];
@@ -19,7 +32,11 @@ typedef struct
 	uint32_t CreatorRevision;
 } __attribute__((packed)) ACPI_SDTHeader;
 
-// RSDP (Root System Description Pointer)
+/* ── RSDP ────────────────────────────────────────────────────── */
+
+/**
+ * @brief Root System Description Pointer
+ */
 typedef struct
 {
 	char Signature[8];
@@ -27,28 +44,38 @@ typedef struct
 	char OEMID[6];
 	uint8_t Revision;
 	uint32_t RsdtAddress;
-	// ACPI 2.0+
+	/* ACPI 2.0+ */
 	uint32_t Length;
 	uint64_t XsdtAddress;
 	uint8_t ExtendedChecksum;
 	uint8_t Reserved[3];
 } __attribute__((packed)) RSDP;
 
-// RSDT (Root System Description Table)
+/* ── RSDT / XSDT ─────────────────────────────────────────────── */
+
+/**
+ * @brief Root System Description Table (32-bit pointers)
+ */
 typedef struct
 {
 	ACPI_SDTHeader Header;
 	uint32_t TablePointers[];
 } __attribute__((packed)) RSDT;
 
-// XSDT (Extended System Description Table)
+/**
+ * @brief Extended System Description Table (64-bit pointers)
+ */
 typedef struct
 {
 	ACPI_SDTHeader Header;
 	uint64_t TablePointers[];
 } __attribute__((packed)) XSDT;
 
-// Generic Address Structure
+/* ── Generic Address Structure ───────────────────────────────── */
+
+/**
+ * @brief ACPI Generic Address Structure
+ */
 typedef struct
 {
 	uint8_t AddressSpace;
@@ -58,7 +85,11 @@ typedef struct
 	uint64_t Address;
 } __attribute__((packed)) GenericAddress;
 
-// FADT (Fixed ACPI Description Table)
+/* ── FADT ─────────────────────────────────────────────────────── */
+
+/**
+ * @brief Fixed ACPI Description Table
+ */
 typedef struct
 {
 	ACPI_SDTHeader Header;
@@ -115,7 +146,11 @@ typedef struct
 	GenericAddress X_GPE1Block;
 } __attribute__((packed)) FADT;
 
-// MADT (Multiple APIC Description Table)
+/* ── MADT ────────────────────────────────────────────────────── */
+
+/**
+ * @brief Multiple APIC Description Table
+ */
 typedef struct
 {
 	ACPI_SDTHeader Header;
@@ -123,13 +158,18 @@ typedef struct
 	uint32_t Flags;
 } __attribute__((packed)) MADT;
 
+/**
+ * @brief MADT entry header (Type / Length)
+ */
 typedef struct
 {
 	uint8_t Type;
 	uint8_t Length;
 } __attribute__((packed)) MADT_Entry;
 
-// Local APIC (Type 0)
+/**
+ * @brief Local APIC entry (Type 0)
+ */
 typedef struct
 {
 	MADT_Entry Header;
@@ -138,7 +178,9 @@ typedef struct
 	uint32_t Flags;
 } __attribute__((packed)) MADT_LAPIC;
 
-// I/O APIC (Type 1)
+/**
+ * @brief I/O APIC entry (Type 1)
+ */
 typedef struct
 {
 	MADT_Entry Header;
@@ -148,7 +190,9 @@ typedef struct
 	uint32_t GlobalSystemInterruptBase;
 } __attribute__((packed)) MADT_IOAPIC;
 
-// Interrupt Source Override (Type 2)
+/**
+ * @brief Interrupt Source Override entry (Type 2)
+ */
 typedef struct
 {
 	MADT_Entry Header;
@@ -158,7 +202,11 @@ typedef struct
 	uint16_t Flags;
 } __attribute__((packed)) MADT_ISO;
 
-// HPET (High Precision Event Timer)
+/* ── HPET ────────────────────────────────────────────────────── */
+
+/**
+ * @brief HPET ACPI table
+ */
 typedef struct
 {
 	ACPI_SDTHeader Header;
@@ -169,7 +217,11 @@ typedef struct
 	uint8_t PageProtection;
 } __attribute__((packed)) HPET;
 
-// MCFG (PCI Express Memory Mapped Configuration)
+/* ── MCFG ────────────────────────────────────────────────────── */
+
+/**
+ * @brief PCIe memory-mapped config space entry
+ */
 typedef struct
 {
 	uint64_t BaseAddress;
@@ -179,6 +231,9 @@ typedef struct
 	uint32_t Reserved;
 } __attribute__((packed)) MCFG_Entry;
 
+/**
+ * @brief PCI Express MCFG table
+ */
 typedef struct
 {
 	ACPI_SDTHeader Header;
@@ -186,55 +241,38 @@ typedef struct
 	MCFG_Entry Entries[];
 } __attribute__((packed)) MCFG;
 
-// === Callback Types ===
+/* ── Callback Types ──────────────────────────────────────────── */
 
 typedef void (*acpi_lapic_callback_t)(uint8_t apic_id, uint8_t processor_id, void *ctx);
 typedef void (*acpi_ioapic_callback_t)(uint8_t ioapic_id, uint32_t address, uint32_t gsi_base, void *ctx);
 typedef void (*acpi_iso_callback_t)(uint8_t irq_source, uint32_t gsi, uint16_t flags, void *ctx);
 typedef void (*acpi_mcfg_callback_t)(uint64_t base_addr, uint16_t segment, uint8_t start_bus, uint8_t end_bus, void *ctx);
 
-// === Core API ===
+/* ── Core API ────────────────────────────────────────────────── */
 
-// Initialize ACPI subsystem
 int acpi_init(void *rsdp_ptr);
-
-// Check if ACPI is initialized
 bool acpi_is_initialized(void);
-
-// Find any SDT by signature (e.g., "SSDT", "BGRT")
 void *acpi_find_sdt(const char *signature);
-
-// Power management
 void acpi_shutdown(void);
 void acpi_reboot(void);
 
-// === Table Getters ===
+/* ── Table Getters ───────────────────────────────────────────── */
 
 FADT *acpi_get_fadt(void);
 MADT *acpi_get_madt(void);
 HPET *acpi_get_hpet(void);
 MCFG *acpi_get_mcfg(void);
 
-// === Hardware Enumeration ===
+/* ── Hardware Enumeration ────────────────────────────────────── */
 
-// Enumerate Local APICs (for SMP)
 void acpi_enum_lapics(acpi_lapic_callback_t callback, void *ctx);
-
-// Enumerate I/O APICs
 void acpi_enum_ioapics(acpi_ioapic_callback_t callback, void *ctx);
-
-// Enumerate Interrupt Source Overrides
 void acpi_enum_isos(acpi_iso_callback_t callback, void *ctx);
-
-// Enumerate PCIe memory-mapped config spaces
 void acpi_enum_mcfg(acpi_mcfg_callback_t callback, void *ctx);
 
-// === Convenience Functions ===
+/* ── Convenience Functions ───────────────────────────────────── */
 
-// Get HPET base address (0 if not available)
 uint64_t acpi_get_hpet_address(void);
-
-// Get Local APIC base address
 uint64_t acpi_get_lapic_address(void);
 
-#endif // ACPI_H
+#endif /* ACPI_H */

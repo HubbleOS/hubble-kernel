@@ -1,3 +1,8 @@
+/**
+ * @file ungetc.c
+ * @brief Push back a character to a stream
+ */
+
 #include <stdio.h>
 
 int ungetc(int c, FILE *stream)

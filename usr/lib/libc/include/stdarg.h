@@ -1,3 +1,8 @@
+/**
+ * @file stdarg.h
+ * @brief Variable argument list handling
+ */
+
 #pragma once
 
 #include <_cheader.h>

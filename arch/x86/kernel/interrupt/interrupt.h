@@ -1,6 +1,10 @@
 /**
  * @file interrupt.h
- * @brief Interrupt handling functions
+ * @brief Interrupt handling functions and types
+ *
+ * Declares the register snapshot type, IRQ handler signature,
+ * and public API for PIC, IRQ management, and common handler
+ * dispatch.
  */
 
 #pragma once
@@ -8,12 +12,11 @@
 #include <stdint.h>
 
 /**
- * @brief CPU register state snapshot pushed during an interrupt/exception.
+ * @brief CPU register state snapshot pushed during an interrupt/exception
  *
- * This structure contains:
- * - General purpose registers saved manually in ISR stubs
- * - Interrupt number and optional error code
- * - CPU-pushed state (RIP, CS, RFLAGS, RSP, SS)
+ * Contains general-purpose registers saved manually in ISR stubs,
+ * the interrupt number / error code, and the CPU-pushed frame
+ * (RIP, CS, RFLAGS, RSP, SS).
  */
 typedef struct registers
 {
@@ -26,72 +29,32 @@ typedef struct registers
 } __attribute__((packed)) registers_t;
 
 /**
- * @brief Type definition for IRQ handler functions.
+ * @brief Type of an IRQ handler function
  *
  * @param regs Pointer to saved CPU register state
  */
 typedef void (*irq_handler_t)(registers_t *regs);
 
-/**
- * @brief Initialize interrupt subsystem (PIC/APIC, handlers, enable interrupts).
- */
+/* ── Initialisation ──────────────────────────────────────────── */
+
 void interrupts_init(void);
 
-/**
- * @brief Remap legacy PIC interrupt vectors to avoid CPU exception overlap.
- */
-void pic_remap(void);
+/* ── Legacy PIC ──────────────────────────────────────────────── */
 
-/**
- * @brief Send End Of Interrupt (EOI) signal to PIC.
- *
- * @param irq IRQ number that has been handled
- */
+void pic_remap(void);
 void pic_send_eoi(uint8_t irq);
 
-/**
- * @brief Mask (disable) a specific IRQ line on PIC.
- *
- * @param irq IRQ number to disable
- */
-void irq_set_mask(uint8_t irq);
+/* ── IRQ Masking ─────────────────────────────────────────────── */
 
-/**
- * @brief Unmask (enable) a specific IRQ line on PIC.
- *
- * @param irq IRQ number to enable
- */
+void irq_set_mask(uint8_t irq);
 void irq_clear_mask(uint8_t irq);
 
-/**
- * @brief Register a custom handler for a specific IRQ.
- *
- * @param irq IRQ number
- * @param handler Function to handle the interrupt
- */
-void irq_install_handler(uint8_t irq, irq_handler_t handler);
+/* ── Handler Registry ────────────────────────────────────────── */
 
-/**
- * @brief Remove handler for a specific IRQ.
- *
- * @param irq IRQ number
- */
+void irq_install_handler(uint8_t irq, irq_handler_t handler);
 void irq_uninstall_handler(uint8_t irq);
 
-/**
- * @brief Common handler for CPU exceptions (ISRs).
- *
- * Called from assembly stubs when a CPU exception occurs.
- *
- * @param regs Pointer to saved register state
- */
-void isr_handler(registers_t *regs);
+/* ── Common Handlers ─────────────────────────────────────────── */
 
-/**
- * @brief Common handler for hardware interrupts (IRQs).
- *
- * Dispatches to registered handlers and sends EOI.
- *
- * @param regs Pointer to saved register state
- */
+void isr_handler(registers_t *regs);
 void irq_handler(registers_t *regs);

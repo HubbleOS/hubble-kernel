@@ -1,3 +1,8 @@
+/* ── FAT32 directory operations ───────────────────────────────────
+ * Functions for directory cluster formatting, directory entry
+ * creation, parsing, and recursive directory deletion.
+ * ────────────────────────────────────────────────────────────────── */
+
 #include <hubble/string.h>
 
 #include <hubble/printk.h>
@@ -6,19 +11,18 @@
 #include "fat_utils.h"
 #include <mm/kmalloc.h>
 
+/** @brief Format a newly allocated directory cluster with . and .. entries. */
 void fat32_format_directory_cluster(FAT32_FS *fs, uint32_t cluster, uint32_t parent_cluster)
 {
 	uint8_t *buf = kmalloc(fs->cluster_size, GFP_KERNEL);
 	memset(buf, 0, fs->cluster_size);
 
-	// Entry "."
 	FAT32_DirectoryEntry *dot = (FAT32_DirectoryEntry *)buf;
 	memcpy(dot->name, ".          ", 11);
 	dot->attr = 0x10;
 	dot->first_cluster_high = (cluster >> 16) & 0xFFFF;
 	dot->first_cluster_low = cluster & 0xFFFF;
 
-	// Entry ".."
 	FAT32_DirectoryEntry *dotdot = (FAT32_DirectoryEntry *)(buf + sizeof(FAT32_DirectoryEntry));
 	memcpy(dotdot->name, "..         ", 11);
 	dotdot->attr = 0x10;
@@ -29,6 +33,7 @@ void fat32_format_directory_cluster(FAT32_FS *fs, uint32_t cluster, uint32_t par
 	kfree(buf);
 }
 
+/** @brief Create a directory (public interface). */
 bool fat32_create_directory(FAT32_FS *fs, const char *path)
 {
 	PathParts parts = format_folder_path(path);
@@ -46,13 +51,14 @@ bool fat32_create_directory(FAT32_FS *fs, const char *path)
 	return fat32_create_entry(fs, dir_cluster, &parts.parts[parts.count - 1], true);
 }
 
+/** @brief Parse a raw directory entry into a human-readable name. */
 bool parse_directory_entry(FAT32_DirectoryEntry *entry, char *name_out, bool *is_dir_out)
 {
 	if (entry->name[0] == 0x00 || entry->name[0] == 0xE5)
-		return false; // deleted
+		return false;
 
 	if ((entry->attr & 0x0F) == 0x0F)
-		return false; // LFN entry
+		return false;
 
 	int pos = 0;
 	for (int i = 0; i < 8 && entry->name[i] != ' '; ++i)
@@ -70,6 +76,7 @@ bool parse_directory_entry(FAT32_DirectoryEntry *entry, char *name_out, bool *is
 	return true;
 }
 
+/** @brief Add a new directory entry to a directory cluster chain. */
 bool fat32_add_directory_entry(FAT32_FS *fs, uint32_t dir_cluster, FAT32_DirectoryEntry *new_entry)
 {
 	uint8_t *buf = kmalloc(fs->cluster_size, GFP_KERNEL);
@@ -97,6 +104,8 @@ bool fat32_add_directory_entry(FAT32_FS *fs, uint32_t dir_cluster, FAT32_Directo
 	kfree(buf);
 	return false;
 }
+
+/** @brief Delete a directory (checks for empty before removal). */
 bool fat32_delete_directory(FAT32_FS *fs, const char *path)
 {
 
@@ -117,15 +126,14 @@ bool fat32_delete_directory(FAT32_FS *fs, const char *path)
 	if (dir.count > 2)
 	{
 		for (int i = 0; i < dir.count; i++)
-		{
 			printk(KERN_INFO "%s %d\n", dir.entries[i].name, dir.entries[i].is_dir);
-		}
+
 		printk(KERN_WARNING "Directory not empty\n");
 		return false;
 	}
 
 	fat32_delete_entry(fs, parent_cluster, parts.parts[parts.count - 1].sfn);
-	printk(KERN_INFO "📁 Directory deleted: %s\n", path);
+	printk(KERN_INFO "Directory deleted: %s\n", path);
 
 	fat_flush(fs);
 	return true;

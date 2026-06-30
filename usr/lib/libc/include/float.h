@@ -1,3 +1,8 @@
+/**
+ * @file float.h
+ * @brief Floating-point type limits and characteristics
+ */
+
 #pragma once
 
 #include <_cheader.h>
@@ -41,8 +46,6 @@ int __flt_rounds(void);
 
 #define LDBL_HAS_SUBNORM 1
 #define LDBL_DECIMAL_DIG DECIMAL_DIG
-
-// #include <_types/_float.h>
 
 #ifdef __FLT_EVAL_METHOD__
 #define FLT_EVAL_METHOD __FLT_EVAL_METHOD__

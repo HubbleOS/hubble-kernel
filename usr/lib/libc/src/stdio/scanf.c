@@ -1,3 +1,8 @@
+/**
+ * @file scanf.c
+ * @brief Formatted input from stdin
+ */
+
 #include <stdio.h>
 
 int scanf(const char *format, ...)

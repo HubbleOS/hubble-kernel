@@ -1,3 +1,8 @@
+/* ── FAT32 utility functions ──────────────────────────────────────
+ * Low-level helpers for cluster I/O, FAT table access, path
+ * parsing, filename formatting, and directory entry create/delete.
+ * ────────────────────────────────────────────────────────────────── */
+
 #include "fat_structs.h"
 #include "fat_utils.h"
 #include "fat.h"
@@ -7,30 +12,20 @@
 
 #include <fs/vfs/vfs.h>
 
-#include <drivers/storage/ata/ata.h>
-
 #include <hubble/string.h>
 #include <hubble/errno.h>
 #include <hubble/ctype.h>
+#include "io.h"
 
-void itos(int num, char *str);
-void stoi(char *str, int *num);
-void uint_to_str(uint32_t num, char *buf, size_t bufsize);
+/* ── Forward declarations ─────────────────────────────────────────── */
 
-// void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr);
-// uint32_t cluster_to_lba(FAT32_FS *fs, uint32_t cluster);
-// void fat32_read_cluster(FAT32_FS *fs, uint32_t cluster, uint8_t *buffer);
-// void ata_write_cluster(uint32_t cluster, const uint8_t *data);
-// uint32_t get_next_cluster(FAT32_FS *fs, uint32_t cluster);
-// void set_next_cluster(FAT32_FS *fs, uint32_t cluster, uint32_t value);
-// void fat_flush();
-// void fat_cleanup();
-// void format_filename_fat(const char *in, char *out11);
-// bool parse_directory_entry(FAT32_DirectoryEntry *entry, char *name_out, bool *is_dir_out);
-// uint32_t get_fat_entry(uint32_t cluster);
-// uint32_t find_directory_entry_cluster(uint32_t dir_cluster, const char *name11);
+static void itos(int num, char *str);
+static void stoi(char *str, int *num);
+static void uint_to_str(uint32_t num, char *buf, size_t bufsize);
 
-void itos(int num, char *str)
+/* ── Integer conversion helpers ───────────────────────────────────── */
+
+static void itos(int num, char *str)
 {
 	int i = 0;
 	do
@@ -42,7 +37,7 @@ void itos(int num, char *str)
 	str[i] = '\0';
 }
 
-void stoi(char *str, int *num)
+static void stoi(char *str, int *num)
 {
 	*num = 0;
 	while (*str >= '0' && *str <= '9')
@@ -52,7 +47,7 @@ void stoi(char *str, int *num)
 	}
 }
 
-void uint_to_str(uint32_t num, char *buf, size_t bufsize)
+static void uint_to_str(uint32_t num, char *buf, size_t bufsize)
 {
 	if (bufsize == 0)
 		return;
@@ -87,6 +82,9 @@ void uint_to_str(uint32_t num, char *buf, size_t bufsize)
 	buf[j] = '\0';
 }
 
+/* ── Mount / Unmount ──────────────────────────────────────────────── */
+
+/** @brief Mount a FAT32 filesystem. */
 bool fat32_mount(FAT32_FS *fs, VFS_Device *device, uint32_t start_lba)
 {
 	fs->device = device->device;
@@ -96,20 +94,23 @@ bool fat32_mount(FAT32_FS *fs, VFS_Device *device, uint32_t start_lba)
 
 	fat32_init_from_lba(start_lba, fs);
 	if (!fs)
-	{
 		printk(KERN_ERR "fs is null\n");
-	}
+
 	printk(KERN_INFO "here is root cluster: %d\n", fs->root_cluster);
 	return true;
 }
 
+/** @brief Unmount a FAT32 filesystem. */
 bool fat32_unmount(FAT32_FS *fs)
 {
 	fat_cleanup(fs);
 	kfree(fs);
 	return true;
 }
-#include "io.h"
+
+/* ── File open / read / write ─────────────────────────────────────── */
+
+/** @brief Open a file by path. */
 FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 {
 	if (!fs)
@@ -168,7 +169,7 @@ FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 			for (int i = 0; i < 256; i++)
 				outb(0x3f8, entry->name[i]);
 
-			*(file->entry) = *entry; // копіюємо структуру
+			*(file->entry) = *entry;
 			file->cluster = cluster;
 			file->index = i;
 
@@ -182,21 +183,18 @@ FAT32_File *fat32_open(FAT32_FS *fs, const char *path)
 	return NULL;
 }
 
+/** @brief Read from a FAT32 file with position tracking. */
 int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 {
 	FAT32_File *fat_file = file->node->fs_node;
 	FAT32_DirectoryEntry *entry = fat_file->entry;
 	FAT32_FS *fs = (FAT32_FS *)file->node->fs->fs;
 
-	// printk("cluster: %d\n", fat_file->cluster);
-	// printk("index: %d\n", fat_file->index);
-	// printk("pos: %d\n", file->pos);
-
 	size_t file_size = entry->file_size;
 	if (file->pos >= file_size)
 	{
 		printk(KERN_INFO "EOF\n");
-		return 0; // EOF
+		return 0;
 	}
 
 	size_t to_read = (file->pos + size > file_size) ? (file_size - file->pos) : size;
@@ -207,13 +205,7 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 	uint32_t in_cluster_offset = file->pos % fs->cluster_size;
 
 	for (uint32_t i = 0; i < cluster_offset && cluster < 0x0FFFFFF8; i++)
-	{
 		cluster = get_fat_entry(fs, cluster);
-	}
-
-	// printk("cluster: %d\n", cluster);
-	// printk("in_cluster_offset: %d\n", in_cluster_offset);
-	// printk("to_read: %d\n", to_read);
 
 	while (read < to_read && cluster < 0x0FFFFFF8)
 	{
@@ -223,7 +215,6 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 			return -1;
 
 		fat32_read_cluster(fs, cluster, cluster_buf);
-		// display raw data
 		printk(KERN_INFO "Cluster readed: %d ", cluster);
 		uint16_t *buf = (uint16_t *)cluster_buf;
 		for (int j = 0; j < 16; j++)
@@ -239,13 +230,14 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size)
 		kfree(cluster_buf);
 		cluster = get_fat_entry(fs, cluster);
 
-		in_cluster_offset = 0; // після першого кластера завжди читаємо з початку
+		in_cluster_offset = 0;
 	}
 
 	file->pos += read;
 	return read;
 }
 
+/** @brief Write to a FAT32 file with position tracking and cluster allocation. */
 int fat32_write(VFS_File *file, const uint8_t *buffer, uint32_t size)
 {
 	FAT32_File *fat_file = (FAT32_File *)file->node->fs_node;
@@ -280,16 +272,12 @@ int fat32_write(VFS_File *file, const uint8_t *buffer, uint32_t size)
 		if (!cluster_buf)
 			return -1;
 
-		// визначаємо позицію в кластері
 		size_t in_cluster_offset = file->pos % fs->cluster_size;
 		size_t space_in_cluster = fs->cluster_size - in_cluster_offset;
 		size_t to_write = (remaining < space_in_cluster) ? remaining : space_in_cluster;
 
-		// читаємо старі дані, якщо не перезаписуємо весь кластер
 		if (to_write < fs->cluster_size)
-		{
 			fat32_read_cluster(fs, cluster, cluster_buf);
-		}
 		else
 			memset(cluster_buf, 0, fs->cluster_size);
 
@@ -320,11 +308,8 @@ int fat32_write(VFS_File *file, const uint8_t *buffer, uint32_t size)
 		}
 	}
 
-	// оновлюємо розмір
 	if (file->pos > entry->file_size)
-	{
 		entry->file_size = file->pos;
-	}
 
 	file->node->size = entry->file_size;
 	fat32_update_fat_entry(fs, fat_file);
@@ -332,11 +317,15 @@ int fat32_write(VFS_File *file, const uint8_t *buffer, uint32_t size)
 	return buf_offset;
 }
 
+/* ── Directory / file management ──────────────────────────────────── */
+
+/** @brief Create a directory (VFS wrapper). */
 int fat32_mkdir(FAT32_FS *fs, const char *path)
 {
 	fat32_create_directory(fs, path);
 }
 
+/** @brief Delete a file or directory by path. */
 int fat32_delete(FAT32_FS *fs, const char *path)
 {
 	FAT32_File *entry = fat32_open(fs, path);
@@ -353,6 +342,9 @@ int fat32_delete(FAT32_FS *fs, const char *path)
 	return 0;
 }
 
+/* ── Initialisation / LBA → cluster geometry ──────────────────────── */
+
+/** @brief Initialise FAT32 state from the BPB at a given LBA. */
 int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 {
 	printk(KERN_INFO "Mounting FAT32 at LBA %d\n", first_lba);
@@ -403,7 +395,6 @@ int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 	fs->cluster_heap_lba = fs->fat_start_lba + bpb->num_fats * bpb->fat_size_32;
 	fs->fat_size_32 = bpb->fat_size_32;
 
-	// print all
 	printk(KERN_INFO "Total sectors: %d\n", fs->total_sectors);
 	printk(KERN_INFO "Sectors per cluster: %d\n", fs->sectors_per_cluster);
 	printk(KERN_INFO "Cluster size: %d\n", fs->cluster_size);
@@ -427,21 +418,21 @@ int fat32_init_from_lba(uint32_t first_lba, FAT32_FS *fs)
 	}
 
 	for (uint32_t i = 0; i < bpb->fat_size_32; i++)
-	{
 		fs->read_sector(fs->device, fs->fat_start_lba + i,
-						((uint8_t *)(fs->fat_cache) + i * bpb->bytes_per_sector));
-	}
+					((uint8_t *)(fs->fat_cache) + i * bpb->bytes_per_sector));
 
 	fs->fat_dirty = false;
-	kfree(bpb); // звільняємо тільки тут, після використання
+	kfree(bpb);
 	return 0;
 }
 
+/** @brief Convert a cluster number to its starting LBA. */
 uint32_t cluster_to_lba(FAT32_FS *fs, uint32_t cluster)
 {
 	return fs->cluster_heap_lba + (cluster - 2) * fs->sectors_per_cluster;
 }
 
+/** @brief Update the directory entry on disk after modifications. */
 int fat32_update_fat_entry(FAT32_FS *fs, FAT32_File *file)
 {
 	uint8_t *buf = kmalloc(fs->cluster_size, GFP_KERNEL);
@@ -469,6 +460,9 @@ int fat32_update_fat_entry(FAT32_FS *fs, FAT32_File *file)
 	return 0;
 }
 
+/* ── Cluster I/O ───────────────────────────────────────────────────── */
+
+/** @brief Read a cluster's worth of sectors into a buffer. */
 void fat32_read_cluster(FAT32_FS *fs, uint32_t cluster, uint8_t *buffer)
 {
 	uint32_t lba = cluster_to_lba(fs, cluster);
@@ -479,21 +473,22 @@ void fat32_read_cluster(FAT32_FS *fs, uint32_t cluster, uint8_t *buffer)
 	}
 }
 
+/** @brief Write a buffer to a full cluster. */
 void fat32_write_cluster(FAT32_FS *fs, uint32_t cluster, uint8_t *buffer)
 {
 	for (int i = 0; i < 256; i++)
-	{
 		printk(KERN_INFO "%c", buffer[i]);
-	}
+
 	uint32_t lba = cluster_to_lba(fs, cluster);
 	for (uint32_t i = 0; i < fs->sectors_per_cluster; i++)
-	{
 		fs->write_sector(fs->device, lba + i, buffer + i * fs->bytes_per_sector);
-	}
 
 	printk(KERN_INFO "\nWrote cluster %d\n", cluster);
 }
 
+/* ── FAT cache flush / cleanup ────────────────────────────────────── */
+
+/** @brief Flush dirty FAT cache to disk. */
 bool fat_flush(FAT32_FS *fs)
 {
 	if (!fs->fat_dirty || !fs->fat_cache)
@@ -506,16 +501,15 @@ bool fat_flush(FAT32_FS *fs)
 		for (uint32_t s = 0; s < fat_size_sectors; ++s)
 		{
 			if (!fs->write_sector(fs->device, base + s,
-								  ((uint8_t *)fs->fat_cache) + s * fs->bytes_per_sector))
-			{
-				return false; // error!
-			}
+						  ((uint8_t *)fs->fat_cache) + s * fs->bytes_per_sector))
+				return false;
 		}
 	}
 	fs->fat_dirty = false;
 	return true;
 }
 
+/** @brief Free FAT cache and flush if dirty. */
 void fat_cleanup(FAT32_FS *fs)
 {
 	if (fs->fat_cache)
@@ -526,7 +520,10 @@ void fat_cleanup(FAT32_FS *fs)
 	}
 }
 
-void format_filename_fat(const char *in, char out11[12])
+/* ── Filename formatting ──────────────────────────────────────────── */
+
+/** @brief Convert a human-readable filename to 8.3 FAT format. */
+void format_filename_fat(const char *in, char *out11)
 {
 	int i = 0, j = 0;
 	char temp_out[12];
@@ -554,13 +551,16 @@ void format_filename_fat(const char *in, char out11[12])
 		out11[i] = temp_out[i];
 }
 
+/* ── Path parsing ─────────────────────────────────────────────────── */
+
+/** @brief Split a path into its component parts, converting each to 8.3. */
 PathParts format_folder_path(const char *in)
 {
 	printk(KERN_INFO "Formatting folder path: %s\n", in);
 	PathParts result = {0};
 
 	while (*in == '/')
-		in++; // пропустити початкові '/'
+		in++;
 
 	while (*in && result.count < MAX_PARTS && *in != '\0')
 	{
@@ -575,7 +575,7 @@ PathParts format_folder_path(const char *in)
 		{
 			char *name = kmalloc(len + 1, GFP_KERNEL);
 			if (!name)
-				return result; // or panic
+				return result;
 
 			memcpy(name, in, len);
 			name[len] = '\0';
@@ -598,6 +598,7 @@ PathParts format_folder_path(const char *in)
 	return result;
 }
 
+/** @brief Free memory allocated for a PathParts structure. */
 void free_folder_path(PathParts *pp)
 {
 	for (int i = 0; i < pp->count; i++)
@@ -605,6 +606,9 @@ void free_folder_path(PathParts *pp)
 	pp->count = 0;
 }
 
+/* ── Entry create / delete ────────────────────────────────────────── */
+
+/** @brief Create a file or directory entry in a given parent cluster. */
 int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir)
 {
 	if (!fs)
@@ -661,7 +665,6 @@ int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir
 
 			kfree(buf);
 
-			// add entry to directory
 			if (is_dir)
 				fat32_format_directory_cluster(fs, new_cluster, cluster);
 			fat_flush(fs);
@@ -670,9 +673,10 @@ int fat32_create_entry(FAT32_FS *fs, uint32_t cluster, PathPart *pp, bool is_dir
 	}
 
 	kfree(buf);
-	return -ENOSPC; // нема місця в директорії
+	return -ENOSPC;
 }
 
+/** @brief Delete a named entry from a parent directory cluster. */
 int fat32_delete_entry(FAT32_FS *fs, uint32_t cluster, const char *name)
 {
 	if (cluster == 0)

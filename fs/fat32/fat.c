@@ -1,17 +1,22 @@
+/* ── FAT32 core operations ────────────────────────────────────────
+ * Lists files/directories, manages the FAT table (get/set/allocate/
+ * free), and provides the VFS-level read/write implementation.
+ * ────────────────────────────────────────────────────────────────── */
+
 #include "fat.h"
 #include <hubble/printk.h>
 #include "fat_structs.h"
 #include "fat_utils.h"
 #include <fs/vfs/vfs_standart_struct.h>
 #include <mm/kmalloc.h>
-#include <drivers/storage/ata/ata.h>
 #include <hubble/string.h>
 #include <stdbool.h>
 
+/** @brief Callback that populates a Directory listing structure. */
 void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr)
 {
 	size_t namelen = strlen(name);
-	size_t need = namelen + 2; 
+	size_t need = namelen + 2;
 	ctx_ptr->entries[ctx_ptr->count].name = kmalloc(need, GFP_KERNEL);
 	if (!ctx_ptr->entries[ctx_ptr->count].name)
 		return;
@@ -21,41 +26,38 @@ void list_files_callback(const char *name, bool is_dir, Directory *ctx_ptr)
 	ctx_ptr->count++;
 }
 
+/** @brief List files in a directory given a cluster number. */
 Directory fat32_list_files(FAT32_FS *fs, uint32_t cluster)
 {
 	Directory ctx = Directory_init((Directory){.entries = kmalloc(1024 * sizeof(Entry), GFP_KERNEL), .count = 0});
 	if (!ctx.entries)
-	{
 		return (Directory){0};
-	}
+
 	iterate_directory(fs, cluster, list_files_callback, &ctx);
 	return ctx;
 }
 
+/** @brief List files by path. */
 Directory fat32_list_files_from_path(FAT32_FS *fs, const char *path)
 {
 	if (!path)
-	{
 		return (Directory){.entries = NULL, .count = 0};
-	}
 
 	uint32_t cluster = fat32_resolve_path(fs, path);
 	if (cluster == 0)
-	{
 		return (Directory){.entries = NULL, .count = 0};
-	}
+
 	return fat32_list_files(fs, cluster);
 }
 
+/** @brief Read a FAT entry from the cache or disk. */
 uint32_t get_fat_entry(FAT32_FS *fs, uint32_t cluster)
 {
 	if (cluster >= fs->total_fat_entries)
 		return 0x0FFFFFFF;
 
 	if (fs->fat_cache)
-	{
 		return fs->fat_cache[cluster] & 0x0FFFFFFF;
-	}
 
 	uint32_t fat_offset = cluster * 4;
 	uint32_t fat_sector = fs->fat_start_lba + (fat_offset / fs->bytes_per_sector);
@@ -77,6 +79,7 @@ uint32_t get_fat_entry(FAT32_FS *fs, uint32_t cluster)
 	return entry & 0x0FFFFFFF;
 }
 
+/** @brief Write a FAT entry value. */
 void set_fat_entry(FAT32_FS *fs, uint32_t cluster, uint32_t value)
 {
 	value &= 0x0FFFFFFF;
@@ -95,15 +98,16 @@ void set_fat_entry(FAT32_FS *fs, uint32_t cluster, uint32_t value)
 	fs->write_sector(fs->device, fat_sector, sector);
 }
 
+/** @brief Free (zero) a cluster in the FAT. */
 void fat32_free_cluster(FAT32_FS *fs, uint32_t cluster)
 {
 	if (cluster < 2 || cluster >= fs->total_fat_entries)
-	{
 		return;
-	}
+
 	set_fat_entry(fs, cluster, 0x00000000);
 }
 
+/** @brief Allocate a new cluster in the FAT (returns cluster number or 0). */
 uint32_t fat32_allocate_cluster(FAT32_FS *fs)
 {
 	if (!(fs->fat_cache))

@@ -1,3 +1,8 @@
+/**
+ * @file memset.c
+ * @brief Fill memory with a constant byte
+ */
+
 #include <string.h>
 
 void *memset(void *dest, int c, size_t n)
