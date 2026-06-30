@@ -1,6 +1,7 @@
 #include "argparser.h"
 #include "buildconfig.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 void print_usage(const char *prog)
@@ -25,6 +26,7 @@ void print_usage(const char *prog)
 	printf("  --type <type>        Output type: archive, exe, module (default: archive)\n");
 	printf("  --log-dir <dir>      Directory for log files (creates YYYY-MM-DD.log)\n");
 	printf("  --log-file <file>    Specific log file path\n");
+	printf("  -j, --jobs <n>       Number of parallel compile jobs (default: 1)\n");
 	printf("  -v, --verbose        Verbose output\n");
 	printf("  -f, --force          Force rebuild all files\n");
 	printf("  -h, --help           Show this help\n");
@@ -107,6 +109,11 @@ int parse_arguments(int argc, char **argv, BuildConfig *cfg, char *cxx_compiler,
 		{
 			strncpy(cfg->log_file, argv[++i], sizeof(cfg->log_file) - 1);
 			cfg->enable_log = 1;
+		}
+		else if ((strcmp(argv[i], "-j") == 0 || strcmp(argv[i], "--jobs") == 0) && i + 1 < argc)
+		{
+			cfg->jobs = atoi(argv[++i]);
+			if (cfg->jobs < 1) cfg->jobs = 1;
 		}
 		else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0)
 		{

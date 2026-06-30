@@ -20,9 +20,19 @@ ifneq ($(ARCH),$(filter $(ARCH),$(SUPPORTED_ARCHES)))
   $(error Unsupported architecture: $(ARCH). Supported: $(SUPPORTED_ARCHES))
 endif
 
+# Build mode: set RELEASE=1 for optimized builds without debug symbols
+RELEASE ?= 0
+
+# Parallel jobs: defaults to number of CPUs
+JOBS ?= $(shell sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
+
 # Compiler flags
 
+ifeq ($(RELEASE),1)
+CFLAGS = -ffreestanding -O3 -Wall -Wextra
+else
 CFLAGS = -ffreestanding -O2 -Wall -Wextra -g
+endif
 
 ifeq ($(ARCH),x86)
     CFLAGS += -mcmodel=kernel -m64 -mno-mmx -mno-sse -mno-sse2 -mno-sse3 -mno-avx -mno-avx2 -mno-red-zone
@@ -123,7 +133,7 @@ export KCOMMON_BUILD_DIR KCOMMON_OBJS
 
 # Build tool flags
 
-BUILD_TOOL_FLAGS = --log-file $(LOG_FILE) -v
+BUILD_TOOL_FLAGS = --log-file $(LOG_FILE) -v --jobs $(JOBS)
 
 # Build macros
 
@@ -275,7 +285,7 @@ export USR_DIR
 
 USR_BUILD :=
 ifneq ($(ARCH),arm64)
-USR_BUILD := $(MAKE) -C $(USR_DIR)
+USR_BUILD := $(MAKE) -C $(USR_DIR) -j$(JOBS)
 endif
 
 # Targets

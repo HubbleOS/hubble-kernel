@@ -28,4 +28,5 @@ typedef struct
 	int verbose;
 	int force_rebuild;
 	int enable_log;
+	int jobs;
 } BuildConfig;
