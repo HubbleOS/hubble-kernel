@@ -1,6 +1,6 @@
 #include <drivers/input/serio/mouse.h>
 #include <fs/vfs/dev.h>
-#include <hubble/init.h>
+#include <hubble/module.h>
 
 static int mouse__init(void)
 {
@@ -8,4 +8,5 @@ static int mouse__init(void)
 	return 0;
 }
 
-device_initcall(mouse__init);
+module_init(mouse__init);
+MODULE_NAME("mouse");

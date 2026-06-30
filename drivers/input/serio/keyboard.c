@@ -217,7 +217,7 @@
 
 #include <stddef.h>
 #include <hubble/string.h>
-#include <hubble/init.h>
+#include <hubble/module.h>
 #include <hubble/printk.h>
 #include <hubble/input.h>
 
@@ -358,4 +358,5 @@ static int keyboard_initcall(void)
 	return 0;
 }
 
-device_initcall(keyboard_initcall);
+module_init(keyboard_initcall);
+MODULE_NAME("serio_keyboard");

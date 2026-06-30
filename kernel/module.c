@@ -20,6 +20,14 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#include <interrupt/interrupt.h>
+#include <drivers/pci/pci.h>
+#include <fs/vfs/dev.h>
+#include <hubble/platform.h>
+
+
+/* ── helpers ─────────────────────────────────────────────────────────────── */
+
 static int local_strcasecmp(const char *s1, const char *s2)
 {
 	while (*s1 && (tolower((unsigned char)*s1) == tolower((unsigned char)*s2)))
@@ -30,75 +38,20 @@ static int local_strcasecmp(const char *s1, const char *s2)
 	return (int)(tolower((unsigned char)*s1) - tolower((unsigned char)*s2));
 }
 
+/* ── externs for symbols needed by modules ────────────────────────────────── */
+extern void early_putchar(void);
+extern void hpet_delay_ms(void);
+extern void waitqueue_init(void);
+extern void waitqueue_sleep(void);
+extern void waitqueue_wake_all(void);
+
+/* ── kernel exported symbol table ────────────────────────────────────────── */
+
 typedef struct
 {
 	const char *name;
 	uint64_t addr;
 } module_export_t;
-
-typedef struct
-{
-	const char *name;
-	uint64_t base;
-	uint64_t size;
-	uint64_t flags;
-	uint32_t sh_type;
-	uint64_t sh_addralign;
-} module_section_t;
-
-#define MODULE_VIRT_BASE (KERNEL_VIRT_BASE + 0x10000000ULL)
-#define MODULE_VIRT_LIMIT (MODULE_VIRT_BASE + 0x10000000ULL)
-
-static uint64_t g_module_next_virt = MODULE_VIRT_BASE;
-
-extern void printk(const char *fmt, ...);
-
-extern void *kmalloc(size_t size, kmalloc_flags_t flags);
-extern void kfree(void *ptr);
-extern void *kzalloc(size_t size);
-extern void *krealloc(void *ptr, size_t new_size, kmalloc_flags_t flags);
-extern void *kcalloc(size_t n, size_t size);
-extern size_t ksize(void *ptr);
-
-extern VFS_File *vfs_open(const char *path, int flags);
-extern int vfs_read(VFS_File *file, void *buf, uint32_t size);
-extern int vfs_lseek(VFS_File *file, int offset, int whence);
-extern int vfs_close(VFS_File *file);
-extern Directory vfs_readdir(const char *path);
-
-extern void device_register(struct device *dev);
-extern struct device *device_find_by_name(const char *name);
-extern struct device *device_find_by_type(uint32_t type);
-
-extern uint64_t pmm_alloc_page(void);
-extern uint64_t pmm_alloc_pages(size_t count);
-extern void pmm_free_page(uint64_t phys_addr);
-extern void pmm_free_pages(uint64_t phys_addr, size_t count);
-
-extern void *memcpy(void *dest, const void *src, size_t n);
-extern void *memset(void *s, int c, size_t n);
-extern void *memmove(void *dest, const void *src, size_t n);
-extern int memcmp(const void *s1, const void *s2, size_t n);
-extern void *memchr(const void *s, int c, size_t n);
-extern size_t strlen(const char *s);
-extern char *strcpy(char *dest, const char *src);
-extern char *strncpy(char *dest, const char *src, size_t n);
-extern char *strcat(char *dest, const char *src);
-extern char *strncat(char *dest, const char *src, size_t n);
-extern int strcmp(const char *s1, const char *s2);
-extern int strncmp(const char *s1, const char *s2, size_t n);
-extern char *strchr(const char *s, int c);
-extern char *strrchr(const char *s, int c);
-
-extern int vmm_map_page(uint64_t virt, uint64_t phys, uint64_t flags);
-extern void vmm_unmap_page(uint64_t virt);
-extern int vmm_set_flags(uint64_t virt, uint64_t flags);
-extern uint64_t vmm_get_phys(uint64_t virt);
-extern bool vmm_is_mapped(uint64_t va);
-extern void vmm_unmap_user_page(uint64_t va);
-extern int vmm_map_page_into(uint64_t *pml4_phys, uint64_t va, uint64_t pa, uint64_t flags);
-extern uint64_t vmm_get_phys_from(uint64_t *pml4_phys, uint64_t va);
-extern uint64_t *vmm_create_user_pagemap(void);
 
 static const module_export_t g_exports[] = {
 	{"printk", (uint64_t)(uintptr_t)printk},
@@ -143,7 +96,115 @@ static const module_export_t g_exports[] = {
 	{"strncmp", (uint64_t)(uintptr_t)strncmp},
 	{"strchr", (uint64_t)(uintptr_t)strchr},
 	{"strrchr", (uint64_t)(uintptr_t)strrchr},
+	{"pci_register_driver", (uint64_t)(uintptr_t)pci_register_driver},
+	{"irq_install_handler", (uint64_t)(uintptr_t)irq_install_handler},
+	{"pci_read_config", (uint64_t)(uintptr_t)pci_read_config},
+	{"pci_write_config", (uint64_t)(uintptr_t)pci_write_config},
+	{"pci_set_command", (uint64_t)(uintptr_t)pci_set_command},
+	{"dev_vfs_register", (uint64_t)(uintptr_t)dev_vfs_register},
+	{"early_putchar", (uint64_t)(uintptr_t)early_putchar},
+	{"hpet_delay_ms", (uint64_t)(uintptr_t)hpet_delay_ms},
+	{"waitqueue_init", (uint64_t)(uintptr_t)waitqueue_init},
+	{"waitqueue_sleep", (uint64_t)(uintptr_t)waitqueue_sleep},
+	{"waitqueue_wake_all", (uint64_t)(uintptr_t)waitqueue_wake_all},
+	{"g_platform", (uint64_t)(uintptr_t)&g_platform},
+	{"isalpha", (uint64_t)(uintptr_t)isalpha},
+	{"tolower", (uint64_t)(uintptr_t)tolower},
+	{"toupper", (uint64_t)(uintptr_t)toupper},
 };
+
+#define EXPORT_COUNT (sizeof(g_exports) / sizeof(g_exports[0]))
+
+/* ── section tracking for loading ────────────────────────────────────────── */
+
+typedef struct
+{
+	const char *name;
+	uint64_t base;
+	uint64_t size;
+	uint64_t flags;
+	uint32_t sh_type;
+	uint64_t sh_addralign;
+} module_section_t;
+
+#define MODULE_VIRT_BASE (KERNEL_VIRT_BASE + 0x10000000ULL)
+#define MODULE_VIRT_LIMIT (MODULE_VIRT_BASE + 0x10000000ULL)
+
+static uint64_t g_module_next_virt = MODULE_VIRT_BASE;
+
+/* ── per-module symbol export ────────────────────────────────────────────── */
+
+#define MODULE_MAX_EXPORTS 512
+
+typedef struct
+{
+	char name[64];
+	uint64_t addr;
+} module_sym_export_t;
+
+/* ── module data structures ────────────────────────────────────────────────── */
+
+typedef struct module_section_info
+{
+	char name[64];
+	uint64_t base;
+	uint64_t size;
+} module_section_info_t;
+
+#define MODULE_MAX_SECTIONS 128
+
+struct module
+{
+	char name[64];
+	char path[256];
+	uint64_t base;
+	size_t size;
+	void (*exit_fn)(void);
+	struct module *next;
+	module_section_info_t sections[MODULE_MAX_SECTIONS];
+	int section_count;
+	int export_count;
+	module_sym_export_t exports[MODULE_MAX_EXPORTS];
+};
+
+static module_t *g_modules_list = NULL;
+
+/* ── symbol resolution (with loaded-module fallback) ──────────────────────── */
+
+static uint64_t module_resolve_kernel_export(const char *name)
+{
+	for (size_t i = 0; i < EXPORT_COUNT; i++)
+	{
+		if (strcmp(g_exports[i].name, name) == 0)
+			return g_exports[i].addr;
+	}
+	return 0;
+}
+
+static uint64_t module_resolve_module_export(const char *name)
+{
+	module_t *cur = g_modules_list;
+	while (cur)
+	{
+		for (int i = 0; i < cur->export_count; i++)
+		{
+			if (strcmp(cur->exports[i].name, name) == 0)
+				return cur->exports[i].addr;
+		}
+		cur = cur->next;
+	}
+	return 0;
+}
+
+static uint64_t module_resolve_export(const char *name)
+{
+	uint64_t addr = module_resolve_kernel_export(name);
+	if (addr)
+		return addr;
+	return module_resolve_module_export(name);
+}
+
+/* ── helpers ─────────────────────────────────────────────────────────────── */
 
 static size_t module_align_up(size_t value, size_t align)
 {
@@ -166,15 +227,12 @@ static const char *module_section_name(const char *shstrtab, const Elf64_Shdr *s
 	return shstrtab + shdr->sh_name;
 }
 
-static uint64_t module_resolve_export(const char *name)
+static bool section_name_eq(const char *name, const char *prefix)
 {
-	for (size_t i = 0; i < sizeof(g_exports) / sizeof(g_exports[0]); i++)
-	{
-		if (strcmp(g_exports[i].name, name) == 0)
-			return g_exports[i].addr;
-	}
-	return 0;
+	return strncmp(name, prefix, strlen(prefix)) == 0;
 }
+
+/* ── symbol resolution for relocations ────────────────────────────────────── */
 
 static uint64_t module_resolve_symbol(const Elf64_Sym *sym,
 				      const module_section_t *sections,
@@ -203,6 +261,8 @@ static uint64_t module_resolve_symbol(const Elf64_Sym *sym,
 
 	return sections[sym->st_shndx].base + sym->st_value;
 }
+
+/* ── relocation ──────────────────────────────────────────────────────────── */
 
 static int module_apply_relocation(uint64_t target_base,
 				   size_t target_size,
@@ -305,6 +365,8 @@ static int module_apply_relocation(uint64_t target_base,
 	}
 }
 
+/* ── memory mapping ──────────────────────────────────────────────────────── */
+
 static uint64_t module_map_region(size_t size, uint64_t sh_flags, uint64_t sh_addralign)
 {
 	bool executable = (sh_flags & SHF_EXECINSTR) != 0;
@@ -358,48 +420,42 @@ fail:
 	return 0;
 }
 
-typedef struct module
+void module_unmap_region(uint64_t base, size_t size)
 {
-	char name[64];
-	uint64_t base;
-	size_t size;
-	struct module *next;
-} module_t;
-
-static module_t *g_modules_list = NULL;
-
-static void module_register(const char *path, uint64_t base, size_t size)
-{
-	module_t *mod = kzalloc(sizeof(module_t));
-	if (!mod)
-		return;
-
-	const char *filename = strrchr(path, '/');
-	if (filename)
-		filename++;
-	else
-		filename = path;
-
-	strncpy(mod->name, filename, sizeof(mod->name) - 1);
-	mod->base = base;
-	mod->size = size;
-	mod->next = g_modules_list;
-	g_modules_list = mod;
+	size = module_align_up(size, PAGE_SIZE);
+	for (uint64_t va = base; va < base + size; va += PAGE_SIZE)
+	{
+		uint64_t phys = vmm_get_phys(va);
+		if (phys)
+		{
+			vmm_unmap_page(va);
+			pmm_free_page(phys);
+		}
+	}
 }
 
-bool module_is_loaded(const char *name)
+/* ── module registry ─────────────────────────────────────────────────────── */
+
+module_t *module_find(const char *name)
 {
 	module_t *curr = g_modules_list;
 	while (curr)
 	{
 		if (local_strcasecmp(curr->name, name) == 0)
-			return true;
+			return curr;
 		curr = curr->next;
 	}
-	return false;
+	return NULL;
 }
 
-static int module_load_buffer(const char *path, uint8_t *image, size_t image_size)
+bool module_is_loaded(const char *name)
+{
+	return module_find(name) != NULL;
+}
+
+/* ── module loader ───────────────────────────────────────────────────────── */
+
+int module_load_buffer(const void *image, size_t image_size)
 {
 	if (image_size < sizeof(Elf64_Ehdr))
 		return -ENOEXEC;
@@ -419,7 +475,7 @@ static int module_load_buffer(const char *path, uint8_t *image, size_t image_siz
 	if (sh_end > image_size)
 		return -ENOEXEC;
 
-	Elf64_Shdr *shdrs = (Elf64_Shdr *)(image + ehdr->e_shoff);
+	Elf64_Shdr *shdrs = (Elf64_Shdr *)((uint8_t *)image + ehdr->e_shoff);
 	if (ehdr->e_shstrndx >= ehdr->e_shnum)
 		return -ENOEXEC;
 
@@ -427,7 +483,7 @@ static int module_load_buffer(const char *path, uint8_t *image, size_t image_siz
 	if (shstr_shdr->sh_offset + shstr_shdr->sh_size > image_size)
 		return -ENOEXEC;
 
-	const char *shstrtab = (const char *)(image + shstr_shdr->sh_offset);
+	const char *shstrtab = (const char *)((uint8_t *)image + shstr_shdr->sh_offset);
 
 	size_t section_count = ehdr->e_shnum;
 	module_section_t *sections = kzalloc(section_count * sizeof(module_section_t));
@@ -438,6 +494,8 @@ static int module_load_buffer(const char *path, uint8_t *image, size_t image_siz
 	size_t sym_count = 0;
 	const char *strtab = NULL;
 	size_t strtab_size = 0;
+
+	void (*mod_exit_fn)(void) = NULL;
 
 	for (size_t i = 0; i < section_count; i++)
 	{
@@ -451,7 +509,7 @@ static int module_load_buffer(const char *path, uint8_t *image, size_t image_siz
 				kfree(sections);
 				return -ENOEXEC;
 			}
-			symtab = (const Elf64_Sym *)(image + shdr->sh_offset);
+			symtab = (const Elf64_Sym *)((uint8_t *)image + shdr->sh_offset);
 			sym_count = shdr->sh_size / shdr->sh_entsize;
 			if (shdr->sh_link >= section_count)
 			{
@@ -464,9 +522,8 @@ static int module_load_buffer(const char *path, uint8_t *image, size_t image_siz
 				kfree(sections);
 				return -ENOEXEC;
 			}
-			strtab = (const char *)(image + linked->sh_offset);
+			strtab = (const char *)((uint8_t *)image + linked->sh_offset);
 			strtab_size = linked->sh_size;
-			(void)sec_name;
 			continue;
 		}
 
@@ -494,7 +551,7 @@ static int module_load_buffer(const char *path, uint8_t *image, size_t image_siz
 				kfree(sections);
 				return -ENOEXEC;
 			}
-			memcpy((void *)base, image + shdr->sh_offset, shdr->sh_size);
+			memcpy((void *)base, (uint8_t *)image + shdr->sh_offset, shdr->sh_size);
 		}
 		else if (shdr->sh_type == SHT_NOBITS)
 		{
@@ -521,6 +578,7 @@ static int module_load_buffer(const char *path, uint8_t *image, size_t image_siz
 		return -ENOEXEC;
 	}
 
+	/* Apply relocations */
 	for (size_t i = 0; i < section_count; i++)
 	{
 		Elf64_Shdr *shdr = &shdrs[i];
@@ -537,7 +595,7 @@ static int module_load_buffer(const char *path, uint8_t *image, size_t image_siz
 			return -ENOEXEC;
 		}
 
-		const Elf64_Rela *relas = (const Elf64_Rela *)(image + shdr->sh_offset);
+		const Elf64_Rela *relas = (const Elf64_Rela *)((uint8_t *)image + shdr->sh_offset);
 		size_t rela_count = shdr->sh_size / sizeof(Elf64_Rela);
 		uint64_t target_base = sections[shdr->sh_info].base;
 		for (size_t j = 0; j < rela_count; j++)
@@ -554,15 +612,96 @@ static int module_load_buffer(const char *path, uint8_t *image, size_t image_siz
 		}
 	}
 
-	bool ran_initcalls = false;
+	/* Scan for module metadata */
+	uint64_t mod_base = 0;
+	size_t mod_size = 0;
+
+	/* Collect exported symbols from the symtab for this module */
+	module_sym_export_t mod_exports[MODULE_MAX_EXPORTS];
+	int mod_export_count = 0;
+
+	for (size_t i = 1; i < sym_count && mod_export_count < MODULE_MAX_EXPORTS; i++)
+	{
+		const Elf64_Sym *sym = &symtab[i];
+		if (sym->st_name >= strtab_size)
+			continue;
+
+		uint8_t bind = ELF64_ST_BIND(sym->st_info);
+
+		/* Export global defined symbols (not undefined) */
+		if (bind != STB_GLOBAL)
+			continue;
+
+		if (sym->st_shndx == SHN_UNDEF)
+			continue;
+
+		const char *sym_name = strtab + sym->st_name;
+
+		uint64_t sym_addr;
+		if (sym->st_shndx == SHN_ABS)
+			sym_addr = sym->st_value;
+		else if (sym->st_shndx < section_count && sections[sym->st_shndx].base)
+			sym_addr = sections[sym->st_shndx].base + sym->st_value;
+		else
+			continue;
+
+		strncpy(mod_exports[mod_export_count].name, sym_name,
+			sizeof(mod_exports[mod_export_count].name) - 1);
+		mod_exports[mod_export_count].addr = sym_addr;
+		mod_export_count++;
+	}
+
+	/* Scan for .module.exit section */
 	for (size_t i = 0; i < section_count; i++)
 	{
 		if (!sections[i].base || !sections[i].name)
 			continue;
-		if (strncmp(sections[i].name, ".initcalls.", 11) != 0)
+
+		if (section_name_eq(sections[i].name, ".module.exit"))
+		{
+			if (sections[i].size >= sizeof(void (*)(void)))
+				mod_exit_fn = *(void (**)(void))sections[i].base;
+			continue;
+		}
+
+		if (section_name_eq(sections[i].name, ".text") ||
+		    section_name_eq(sections[i].name, ".data") ||
+		    section_name_eq(sections[i].name, ".rodata") ||
+		    section_name_eq(sections[i].name, ".bss"))
+		{
+			if (mod_base == 0 || sections[i].base < mod_base)
+				mod_base = sections[i].base;
+			uint64_t end = sections[i].base + sections[i].size;
+			if (end > mod_size)
+				mod_size = end - mod_base;
+		}
+	}
+
+	/* Register module before running init so its exports are available */
+	module_t *mod = kzalloc(sizeof(module_t));
+	if (!mod)
+	{
+		kfree(sections);
+		return -ENOMEM;
+	}
+
+	strncpy(mod->name, "anonymous", sizeof(mod->name) - 1);
+	mod->base = mod_base;
+	mod->size = mod_size;
+	mod->exit_fn = mod_exit_fn;
+	memcpy(mod->exports, mod_exports, sizeof(module_sym_export_t) * mod_export_count);
+	mod->export_count = mod_export_count;
+	mod->next = g_modules_list;
+	g_modules_list = mod;
+
+	/* Run module.init sections */
+	for (size_t i = 0; i < section_count; i++)
+	{
+		if (!sections[i].base || !sections[i].name)
+			continue;
+		if (!section_name_eq(sections[i].name, ".module.init"))
 			continue;
 
-		ran_initcalls = true;
 		size_t count = sections[i].size / sizeof(initcall_t);
 		initcall_t *calls = (initcall_t *)sections[i].base;
 		for (size_t j = 0; j < count; j++)
@@ -572,43 +711,93 @@ static int module_load_buffer(const char *path, uint8_t *image, size_t image_siz
 			int ret = calls[j]();
 			if (ret != 0)
 			{
-				printk(KERN_ERR "[module] initcall failed in %s: %d\n", path, ret);
+				printk(KERN_ERR "[module] module_init failed: %d\n", ret);
+				g_modules_list = mod->next;
+				module_unmap_region(mod_base, mod_size);
+				kfree(mod);
 				kfree(sections);
 				return ret;
 			}
 		}
+
+		goto load_done;
 	}
 
-	if (!ran_initcalls)
+	/* Fallback: look for initcall sections */
+	for (size_t i = 0; i < section_count; i++)
 	{
-		for (size_t i = 0; i < sym_count; i++)
+		if (!sections[i].base || !sections[i].name)
+			continue;
+		if (strncmp(sections[i].name, ".initcalls.", 11) != 0)
+			continue;
+
+		size_t count = sections[i].size / sizeof(initcall_t);
+		initcall_t *calls = (initcall_t *)sections[i].base;
+		for (size_t j = 0; j < count; j++)
 		{
-			if (symtab[i].st_name >= strtab_size)
+			if (!calls[j])
 				continue;
-			const char *sym_name = strtab + symtab[i].st_name;
-			if (strcmp(sym_name, "module_init") != 0)
-				continue;
-
-			uint64_t entry = module_resolve_symbol(&symtab[i], sections,
-							      section_count, strtab, strtab_size);
-			if (entry == 0)
-				break;
-
-			int (*module_init_fn)(void) = (int (*)(void))(uintptr_t)entry;
-			int ret = module_init_fn();
+			int ret = calls[j]();
 			if (ret != 0)
 			{
-				printk(KERN_ERR "[module] module_init failed in %s: %d\n", path, ret);
+				printk(KERN_ERR "[module] initcall failed: %d\n", ret);
+				g_modules_list = mod->next;
+				module_unmap_region(mod_base, mod_size);
+				kfree(mod);
 				kfree(sections);
 				return ret;
 			}
-			break;
 		}
+
+		goto load_done;
 	}
 
+	/* Fallback: look for module_init symbol */
+	for (size_t i = 0; i < sym_count; i++)
+	{
+		if (symtab[i].st_name >= strtab_size)
+			continue;
+		const char *sym_name = strtab + symtab[i].st_name;
+		if (strcmp(sym_name, "module_init") != 0)
+			continue;
+
+		uint64_t entry = module_resolve_symbol(&symtab[i], sections,
+						      section_count, strtab, strtab_size);
+		if (entry == 0)
+			break;
+
+		int (*module_init_fn)(void) = (int (*)(void))(uintptr_t)entry;
+		int ret = module_init_fn();
+		if (ret != 0)
+		{
+			printk(KERN_ERR "[module] module_init symbol failed: %d\n", ret);
+			g_modules_list = mod->next;
+			module_unmap_region(mod_base, mod_size);
+			kfree(mod);
+			kfree(sections);
+			return ret;
+		}
+		break;
+	}
+
+load_done:
 	kfree(sections);
 	return 0;
 }
+
+/* ── update module name and metadata after loading ───────────────────────── */
+
+static void module_set_name(const char *name)
+{
+	/* The most recently loaded module is at the head of the list */
+	if (!g_modules_list)
+		return;
+
+	strncpy(g_modules_list->name, name, sizeof(g_modules_list->name) - 1);
+	strncpy(g_modules_list->path, name, sizeof(g_modules_list->path) - 1);
+}
+
+/* ── public API ──────────────────────────────────────────────────────────── */
 
 int module_load(const char *path)
 {
@@ -643,25 +832,35 @@ int module_load(const char *path)
 	}
 
 	vfs_close(file);
-	int ret = module_load_buffer(path, image, size);
-	kfree(image);
+	int ret = module_load_buffer(image, size);
 
 	if (ret == 0)
 	{
-		module_register(path, 0, size); // base 0 for now as we don't have a single base
+		const char *filename = strrchr(path, '/');
+		if (filename)
+			filename++;
+		else
+			filename = path;
+
+		char mod_name[64];
+		strncpy(mod_name, filename, sizeof(mod_name) - 1);
+		char *dot = strrchr(mod_name, '.');
+		if (dot && local_strcasecmp(dot, ".ko") == 0)
+			*dot = '\0';
+
+		module_set_name(mod_name);
 		printk(KERN_OK "[module] loaded %s\n", path);
 	}
 	else
 	{
-		// Don't log error for common non-module metadata files
 		const char *filename = strrchr(path, '/');
 		if (filename) filename++; else filename = path;
-		
-		if (strncmp(filename, "._", 2) != 0 && filename[0] != '.') {
+
+		if (strncmp(filename, "._", 2) != 0 && filename[0] != '.')
 			printk(KERN_ERR "[module] failed to load %s: %d\n", path, ret);
-		}
 	}
 
+	kfree(image);
 	return ret;
 }
 
@@ -680,11 +879,10 @@ int module_load_directory(const char *path)
 		Entry *entry = &dir.entries[i];
 		if (!entry->name || entry->is_dir)
 			continue;
-			
-		// Skip hidden files and AppleDouble metadata
+
 		if (entry->name[0] == '.' || (entry->name[0] == '_' && strchr(entry->name, '~')))
 			continue;
-			
+
 		if (!module_name_ends_with(entry->name, ".ko"))
 			continue;
 
@@ -711,4 +909,41 @@ int module_load_directory(const char *path)
 		dir.free_entries(&dir);
 
 	return loaded > 0 ? loaded : -ENOENT;
+}
+
+int module_unload(const char *name)
+{
+	if (!name)
+		return -EINVAL;
+
+	module_t *prev = NULL;
+	module_t *curr = g_modules_list;
+
+	while (curr)
+	{
+		if (local_strcasecmp(curr->name, name) == 0)
+		{
+			if (curr->exit_fn)
+				curr->exit_fn();
+
+			if (prev)
+				prev->next = curr->next;
+			else
+				g_modules_list = curr->next;
+
+			module_unmap_region(curr->base, curr->size);
+			kfree(curr);
+			printk(KERN_OK "[module] unloaded %s\n", name);
+			return 0;
+		}
+		prev = curr;
+		curr = curr->next;
+	}
+
+	return -ENOENT;
+}
+
+int module_refresh_symbols(void)
+{
+	return 0;
 }

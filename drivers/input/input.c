@@ -24,9 +24,12 @@ static void attach_device_to_handlers(input_dev_t *dev)
 	{
 		if (h->match && !h->match(h, dev))
 			continue;
-		/* connect() сам створює handle і викликає input_link_handle() */
+		/* connect() сам створює handle і викликає input_link_handle(),
+		 * який вимагає devices_lock від callера */
+		irqlock_acquire(&devices_lock);
 		if (h->connect)
 			h->connect(h, dev);
+		irqlock_release(&devices_lock);
 	}
 
 	irqlock_release(&handlers_lock);
@@ -183,10 +186,10 @@ void input_link_handle(input_handle_t *handle)
 	if (!handle || !handle->dev)
 		return;
 
-	irqlock_acquire(&devices_lock);
+	/* Caller MUST hold devices_lock (e.g. from attach_handler_to_devices
+	 * or attach_device_to_handlers which already acquired it) */
 	handle->next = handle->dev->handles;
 	handle->dev->handles = handle;
-	irqlock_release(&devices_lock);
 }
 
 void input_unlink_handle(input_handle_t *handle)
@@ -194,15 +197,12 @@ void input_unlink_handle(input_handle_t *handle)
 	if (!handle || !handle->dev)
 		return;
 
-	irqlock_acquire(&devices_lock);
-
+	/* Caller MUST hold devices_lock */
 	input_handle_t **hp = &handle->dev->handles;
 	while (*hp && *hp != handle)
 		hp = &(*hp)->next;
 	if (*hp)
 		*hp = handle->next;
-
-	irqlock_release(&devices_lock);
 }
 
 /* ── input_report ────────────────────────────────────────────────────────── */

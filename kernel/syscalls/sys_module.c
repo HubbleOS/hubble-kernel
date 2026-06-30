@@ -9,3 +9,11 @@ long sys_module_load(const char *path)
 
 	return module_load(path);
 }
+
+long sys_module_unload(const char *name)
+{
+	if (!name)
+		return -EINVAL;
+
+	return module_unload(name);
+}

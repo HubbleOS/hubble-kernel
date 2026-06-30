@@ -25,6 +25,7 @@ int lseek(int fd, uint64_t offset, int whence) { return syscall3(8, fd, offset, 
 int spawn(void *entry_point, void *arg, uint32_t priority) { return syscall3(6, (long)entry_point, (long)arg, priority); }
 
 int module_load(const char *path) { return syscall1(9, (long)path); }
+int module_unload(const char *name) { return syscall1(10, (long)name); }
 
 typedef struct
 {
@@ -87,7 +88,7 @@ void terminal(void)
 	{
 		// read() блокується поки не прийде \n
 		// ядро вже зробило echo і backspace
-		int n = read_file(tty_fd, buf, sizeof(buf));
+		int n = read_file(tty_fd, buf, sizeof(buf) - 1);
 		if (n <= 0)
 			continue;
 		buf[n] = '\0';
@@ -107,7 +108,7 @@ void handle_command(char *cmd)
 
 	if (strcmp(cmd, "help") == 0)
 	{
-		printf("Available commands: help, echo, clear, hello\n");
+		printf("Available commands: help, echo, clear, hello, lsmod, modprobe, rmmod\n");
 	}
 	else if (strncmp(cmd, "echo ", 5) == 0)
 	{
@@ -126,9 +127,83 @@ void handle_command(char *cmd)
 			printf("Failed to load module: %d\n", ret);
 		}
 	}
+	else if (strcmp(cmd, "lsmod") == 0)
+	{
+		int fd = open("/proc/modules", 0);
+		if (fd >= 0)
+		{
+			char buf[256];
+			int n;
+			while ((n = read_file(fd, buf, sizeof(buf) - 1)) > 0)
+			{
+				buf[n] = '\0';
+				printf("%s", buf);
+			}
+		}
+		else
+		{
+			printf("No /proc/modules available\n");
+		}
+	}
+	else if (strncmp(cmd, "modprobe ", 9) == 0)
+	{
+		char *modname = cmd + 9;
+		/* Skip leading spaces */
+		while (*modname == ' ') modname++;
+		if (*modname == '\0')
+		{
+			printf("usage: modprobe <module>\n");
+		}
+		else
+		{
+			char path[256] = "/modules/";
+			strcat(path, modname);
+			strcat(path, ".ko");
+			printf("Loading %s...\n", path);
+			int ret = module_load(path);
+			if (ret == 0)
+				printf("Loaded %s\n", path);
+			else
+				printf("Failed to load %s: %d\n", path, ret);
+		}
+	}
+	else if (strncmp(cmd, "rmmod ", 6) == 0)
+	{
+		char *modname = cmd + 6;
+		while (*modname == ' ') modname++;
+		if (*modname == '\0')
+		{
+			printf("usage: rmmod <module>\n");
+		}
+		else
+		{
+			printf("Unloading %s...\n", modname);
+			int ret = module_unload(modname);
+			if (ret == 0)
+				printf("Unloaded %s\n", modname);
+			else
+				printf("Failed to unload %s: %d\n", modname, ret);
+		}
+	}
 	else
 	{
 		printf("Unknown command: %s\n", cmd);
+	}
+}
+
+void load_essential_modules(void)
+{
+	const char *modules[] = {
+		"/modules/input.ko",
+		"/modules/tty.ko",
+	};
+	for (size_t i = 0; i < sizeof(modules) / sizeof(modules[0]); i++)
+	{
+		int ret = module_load(modules[i]);
+		if (ret == 0)
+			printf("Auto-loaded %s\n", modules[i]);
+		else
+			printf("Note: %s (%d)\n", modules[i], ret);
 	}
 }
 
@@ -136,6 +211,7 @@ void _start(void)
 {
 	libc_init();
 	printf("Hello from user space 2!\n");
+	load_essential_modules();
 	// int pid = spawn(test, NULL, 0);
 	int pid2 = spawn(terminal, NULL, 0);
 	while (1)

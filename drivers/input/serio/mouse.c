@@ -1,6 +1,6 @@
 #include <hubble/string.h>
 #include <hubble/printk.h>
-#include <hubble/init.h>
+#include <hubble/module.h>
 
 #include <interrupt/interrupt.h>
 #include <stdint.h>
