@@ -92,11 +92,12 @@ isr128:
     push    qword 128           ; Interrupt number
     jmp     syscall_common_stub
 
-; ── Common ISR Handler ─────────────────────────────────────────
-; Saves all registers, sets kernel segments, calls the C handler,
-; restores registers, and returns via IRETQ.
-; ──────────────────────────────────────────────────────────────
-isr_common_stub:
+; Macro for common ISR/IRQ/Syscall stubs
+; %1 = stub label suffix
+; %2 = handler function name
+; %3 = load fs segment (1 = yes, 0 = no)
+%macro COMMON_STUB 3
+%1_stub:
     ; Save all registers
     push    rax
     push    rbx
@@ -115,18 +116,21 @@ isr_common_stub:
     push    r15
 
     ; Set kernel data segments
-    mov     ax, 0x10            ; GDT_KERNEL_DATA
-    mov     ds, ax
-    mov     es, ax
+    mov     ax, 0x10
+    ; mov     ds, ax
+    ; mov     es, ax
+    %if %3
     mov     fs, ax
+    %endif
 
     ; Align stack to 16 bytes for ABI
-    mov     rbp, rsp            ; Save original RSP
-    and     rsp, ~0xF           ; Align stack
+    mov     rbp, rsp
+    and     rsp, ~0xF
+    sub     rsp, 8
 
     ; Call C handler
-    mov     rdi, rbp            ; Pass pointer to registers_t
-    call    isr_handler
+    mov     rdi, rbp
+    call    %2
 
     ; Restore original stack
     mov     rsp, rbp
@@ -153,126 +157,9 @@ isr_common_stub:
 
     ; Return from interrupt
     iretq
+%endmacro
 
-; ── Common IRQ Handler ─────────────────────────────────────────
-; Saves all registers, sets kernel segments, calls the C handler,
-; restores registers, and returns via IRETQ.
-; ──────────────────────────────────────────────────────────────
-irq_common_stub:
-    ; Save all registers
-    push    rax
-    push    rbx
-    push    rcx
-    push    rdx
-    push    rsi
-    push    rdi
-    push    rbp
-    push    r8
-    push    r9
-    push    r10
-    push    r11
-    push    r12
-    push    r13
-    push    r14
-    push    r15
-
-    ; Set kernel data segments
-    mov     ax, 0x10            ; GDT_KERNEL_DATA
-    mov     ds, ax
-    mov     es, ax
-    mov     fs, ax
-
-    ; Align stack to 16 bytes for ABI
-    mov     rbp, rsp            ; Save original RSP
-    and     rsp, ~0xF           ; Align stack
-
-    ; Call C handler
-    mov     rdi, rbp            ; Pass pointer to registers_t
-    call    irq_handler
-
-    ; Restore original stack
-    mov     rsp, rbp
-
-    ; Restore all registers
-    pop     r15
-    pop     r14
-    pop     r13
-    pop     r12
-    pop     r11
-    pop     r10
-    pop     r9
-    pop     r8
-    pop     rbp
-    pop     rdi
-    pop     rsi
-    pop     rdx
-    pop     rcx
-    pop     rbx
-    pop     rax
-
-    ; Clear stack of int_no and err_code
-    add     rsp, 16
-
-    ; Return from interrupt
-    iretq
-
-; ── Syscall Handler ────────────────────────────────────────────
-; Saves all registers, sets kernel segments, calls the C syscall
-; handler, restores registers, and returns via IRETQ.
-; ──────────────────────────────────────────────────────────────
-syscall_common_stub:
-    ; Save all registers
-    push    rax
-    push    rbx
-    push    rcx
-    push    rdx
-    push    rsi
-    push    rdi
-    push    rbp
-    push    r8
-    push    r9
-    push    r10
-    push    r11
-    push    r12
-    push    r13
-    push    r14
-    push    r15
-
-    ; Set kernel data segments
-    mov     ax, 0x10            ; GDT_KERNEL_DATA
-    mov     ds, ax
-    mov     es, ax
-
-    ; Align stack to 16 bytes for ABI
-    mov     rbp, rsp            ; Save original RSP
-    and     rsp, ~0xF           ; Align stack
-
-    ; Call C wrapper
-    mov     rdi, rbp            ; Pass pointer to registers_t
-    call    syscall_handler_wrapper
-
-    ; Restore original stack
-    mov     rsp, rbp
-
-    ; Restore all registers
-    pop     r15
-    pop     r14
-    pop     r13
-    pop     r12
-    pop     r11
-    pop     r10
-    pop     r9
-    pop     r8
-    pop     rbp
-    pop     rdi
-    pop     rsi
-    pop     rdx
-    pop     rcx
-    pop     rbx
-    pop     rax                 ; return value
-
-    ; Clear stack of int_no and err_code
-    add     rsp, 16
-
-    ; Return from interrupt
-    iretq
+; Generate common stubs
+COMMON_STUB isr_common, isr_handler, 1
+COMMON_STUB irq_common, irq_handler, 1
+COMMON_STUB syscall_common, syscall_handler_wrapper, 0
