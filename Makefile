@@ -121,45 +121,16 @@ ifeq ($(ARCH),arm64)
 endif
 
 # ---------------------------------------------------------------------------
-# Library paths
+# Build graph: auto-collected outputs from declarative module declarations
 # ---------------------------------------------------------------------------
 
-# $(BUILD_DIR)/<relpath>/lib<name>.a
+# obj-y directories: compiled .o files are auto-discovered for kernel link
+__obj_y_dirs :=
+
+# lib-y directories: archive paths are auto-resolved at link time
 define lib-path
 $(BUILD_DIR)/$(1)/lib$(notdir $(1)).a
 endef
-
-NET_LIB     := $(call lib-path,net)
-FS_LIB      := $(call lib-path,fs)
-DRIVERS_LIB := $(call lib-path,drivers)
-SOUND_LIB   := $(call lib-path,sound)
-FONT_LIB    := $(call lib-path,lib/fonts)
-COLOR_LIB   := $(call lib-path,lib/color)
-CORE_LIB    := $(call lib-path,lib/core)
-
-export NET_LIB FS_LIB DRIVERS_LIB FONT_LIB COLOR_LIB CORE_LIB
-
-LIBS := $(NET_LIB) $(FS_LIB) $(SOUND_LIB) \
-	$(DRIVERS_LIB) $(FONT_LIB) $(COLOR_LIB) $(CORE_LIB)
-export LIBS
-
-# ---------------------------------------------------------------------------
-# Kernel common objects
-# ---------------------------------------------------------------------------
-
-KCOMMON_BUILD_DIR := $(BUILD_DIR)/kernel
-
-ifeq ($(ARCH),x86)
-	KCOMMON_OBJS += $(BUILD_DIR)/init/main.o
-	KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/module.o
-	KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/device/device.o
-	KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/init/fs.o
-	KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/printk.o
-	KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/syscalls/syscall.o
-	KCOMMON_OBJS += $(KCOMMON_BUILD_DIR)/syscalls/sys_module.o
-endif
-
-export KCOMMON_BUILD_DIR KCOMMON_OBJS
 
 # ---------------------------------------------------------------------------
 # Build tool flags
@@ -208,10 +179,34 @@ define build-obj-module
 		--asmflags  "$(ASMFLAGS) $(asflags-y)" \
 		--includes  "$(INCLUDES)" \
 		--type objects
+	$(eval __obj_y_dirs += $(d))
 endef
 
 define build-exe-module
-	$(Q)$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
+	$(Q)__obj_files=""; \
+	for __dir in $(__obj_y_dirs); do \
+		for __f in $$(find $(BUILD_DIR)/$$__dir -name '*.o' 2>/dev/null); do \
+			__obj_files="$$__obj_files $$__f"; \
+		done; \
+	done; \
+	__whole_archive=""; \
+	for __mod in $(exe-whole-archive); do \
+		__base=$$(basename $$__mod); \
+		__whole_archive="$$__whole_archive $(BUILD_DIR)/$$__mod/lib$$__base.a"; \
+	done; \
+	__libs=""; \
+	for __mod in $(exe-libs); do \
+		__base=$$(basename $$__mod); \
+		__libs="$$__libs $(BUILD_DIR)/$$__mod/lib$$__base.a"; \
+	done; \
+	__libs_arg=""; \
+	if [ -n "$$__whole_archive" ]; then \
+		__libs_arg="--whole-archive $$__whole_archive"; \
+	fi; \
+	if [ -n "$$__libs" ]; then \
+		__libs_arg="$$__libs_arg --no-whole-archive $$__libs"; \
+	fi; \
+	$(BUILD_TOOL) $(BUILD_TOOL_FLAGS) \
 		--src-dir   $(ROOT_DIR)/$(d) \
 		--build-dir $(BUILD_DIR)/$(d) \
 		--cc $(CC) \
@@ -222,9 +217,9 @@ define build-exe-module
 		--output    $(exe-output-y) \
 		--type exe \
 		--ld $(LD) \
-		$(if $(exe-ldflags-y), --ldflags  "$(exe-ldflags-y)") \
-		$(if $(exe-objs-y),    --obj-files "$(exe-objs-y)") \
-		$(if $(exe-libs-y),    --libs      "$(exe-libs-y)")
+		$(if $(exe-ldflags-y), --ldflags "$(exe-ldflags-y)") \
+		--obj-files "$$__obj_files" \
+		--libs "$$__libs_arg"
 endef
 
 define build-mod-module
@@ -245,25 +240,25 @@ define build-mod-module
 endef
 
 define reset-module-vars
-	$(eval lib-y        :=)
-	$(eval lib-asm-y    :=)
-	$(eval obj-y        :=)
-	$(eval exe-y        :=)
-	$(eval exe-output-y :=)
-	$(eval exe-ldflags-y :=)
-	$(eval exe-objs-y   :=)
-	$(eval exe-libs-y   :=)
-	$(eval mod-y        :=)
-	$(eval mod-output-y :=)
-	$(eval mod-ldflags-y :=)
-	$(eval mod-objs-y   :=)
-	$(eval mod-libs-y   :=)
-	$(eval subdir-y     :=)
-	$(eval always-y     :=)
-	$(eval ccflags-y    :=)
-	$(eval asflags-y    :=)
-	$(eval cppflags-y   :=)
-	$(eval ldflags-y    :=)
+	$(eval lib-y            :=)
+	$(eval lib-asm-y        :=)
+	$(eval obj-y            :=)
+	$(eval exe-y            :=)
+	$(eval exe-output-y     :=)
+	$(eval exe-ldflags-y    :=)
+	$(eval exe-whole-archive :=)
+	$(eval exe-libs         :=)
+	$(eval mod-y            :=)
+	$(eval mod-output-y     :=)
+	$(eval mod-ldflags-y    :=)
+	$(eval mod-objs-y       :=)
+	$(eval mod-libs-y       :=)
+	$(eval subdir-y         :=)
+	$(eval always-y         :=)
+	$(eval ccflags-y        :=)
+	$(eval asflags-y        :=)
+	$(eval cppflags-y       :=)
+	$(eval ldflags-y        :=)
 endef
 
 define load-module
@@ -380,9 +375,8 @@ PHONY += mkvars
 mkvars:
 	@echo "ARCH         = $(ARCH)"
 	@echo "BUILD_DIR    = $(BUILD_DIR)"
-	@echo "LIBS         = $(LIBS)"
-	@echo "KCOMMON_OBJS = $(KCOMMON_OBJS)"
 	@echo "MODULES      = $(MODULES)"
+	@echo "__obj_y_dirs = $(__obj_y_dirs)"
 	@echo "subdirs      = $(subdirs)"
 
 PHONY += help
