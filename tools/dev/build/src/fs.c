@@ -59,12 +59,75 @@ time_t get_mtime(const char *path)
  */
 int needs_rebuild(const char *src, const char *obj)
 {
-	time_t src_time = get_mtime(src);
 	time_t obj_time = get_mtime(obj);
 
 	if (obj_time == 0)
 		return 1; // object file does not exist
-	return src_time > obj_time;
+
+	if (get_mtime(src) > obj_time)
+		return 1;
+
+	// Check header dependencies from .d file
+	char dep_file[MAX_PATH];
+	strncpy(dep_file, obj, sizeof(dep_file) - 1);
+	char *dot = strrchr(dep_file, '.');
+	if (!dot)
+		return 0;
+	strcpy(dot, ".d");
+
+	FILE *f = fopen(dep_file, "r");
+	if (!f)
+		return 0;
+
+	// Concatenate all dependency lines (handling backslash continuations)
+	char all_deps[65536] = {0};
+	char buf[8192];
+	int past_colon = 0;
+
+	while (fgets(buf, sizeof(buf), f))
+	{
+		size_t blen = strlen(buf);
+		while (blen > 0 && (buf[blen - 1] == '\n' || buf[blen - 1] == '\r'))
+			buf[--blen] = '\0';
+		if (blen == 0)
+			continue;
+
+		int has_cont = (blen > 0 && buf[blen - 1] == '\\');
+		if (has_cont)
+			buf[--blen] = '\0';
+
+		if (!past_colon)
+		{
+			char *colon = strchr(buf, ':');
+			if (!colon)
+				continue;
+			past_colon = 1;
+			strncat(all_deps, colon + 1, sizeof(all_deps) - strlen(all_deps) - 1);
+		}
+		else
+		{
+			strncat(all_deps, buf, sizeof(all_deps) - strlen(all_deps) - 1);
+		}
+		strncat(all_deps, " ", sizeof(all_deps) - strlen(all_deps) - 1);
+
+		if (!has_cont)
+			break;
+	}
+	fclose(f);
+
+	// Tokenize and check each dependency
+	char *token = strtok(all_deps, " \t");
+	while (token)
+	{
+		if (strlen(token) > 0 && token[0] != '\0')
+		{
+			if (get_mtime(token) > obj_time)
+				return 1;
+		}
+		token = strtok(NULL, " \t");
+	}
+
+	return 0;
 }
 
 #include <string.h>
