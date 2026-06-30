@@ -1,5 +1,12 @@
 #pragma once
 
+/**
+ * @brief Loadable kernel module interface.
+ *
+ * Defines macros for module initialisation/exit functions and metadata,
+ * as well as the public API for loading, unloading, and querying modules.
+ */
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <hubble/init.h>
@@ -7,10 +14,22 @@
 #define __init
 #define __exit
 
+/**
+ * @brief Declare a module initialisation function.
+ *
+ * The function is placed in the .module.init ELF section and called
+ * automatically when the module is loaded.
+ */
 #define module_init(fn) \
 	initcall_t __module_init_##fn \
 	__attribute__((section(".module.init"), used)) = fn
 
+/**
+ * @brief Declare a module exit (cleanup) function.
+ *
+ * The function is placed in the .module.exit ELF section and called
+ * automatically when the module is unloaded.
+ */
 #define module_exit(fn) \
 	void (*__module_exit_##fn)(void) \
 	__attribute__((section(".module.exit"), used)) = fn

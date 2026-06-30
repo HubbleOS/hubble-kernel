@@ -1,5 +1,5 @@
 /**
- * @file misk.k.h
+ * @file misc.k.h
  * @brief Miscellaneous utility macros for kernel development
  *
  * @note This header is intended for internal kernel usage and should
@@ -53,10 +53,10 @@
  *
  * @param VALUE The value to divide
  * @param DIV The divisor
- * @return The smallest integer ≥ VALUE / DIV
+ * @return The smallest integer >= VALUE / DIV
  *
  * This macro ensures that partial divisions are rounded up.
- * It’s often used to compute the number of pages, blocks, or chunks
+ * It is often used to compute the number of pages, blocks, or chunks
  * required to store a given size.
  *
  * Example:

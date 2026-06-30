@@ -1,45 +1,61 @@
-#include "pmm.h"
-#include <hubble/string.h>
+/**
+ * @file pmm.c
+ * @brief Physical Memory Manager implementation
+ *
+ * Manages physical memory pages using a bitmap allocator.
+ * Tracks allocated and free pages in the physical address space.
+ */
+
 #include <stdbool.h>
-#include "higher_half.h"
-#include "lib/bitmap.h"
-#include <hubble/printk.h>
 
 #include <bootinfo/bootinfo.h>
+#include <hubble/string.h>
+
+#include "higher_half.h"
+#include "lib/bitmap.h"
+
+#include "pmm.h"
+
+/* ── Global State ────────────────────────────────────────────────────────── */
 
 static pmm_info_t g_pmm_info = {0};
 static uint64_t g_heap_phys_start = 0;
 static uint64_t g_heap_phys_end = 0;
 static uint64_t g_last_search_index = 0;
 
-// Converting page index to physical address
-static inline uint64_t page_index_to_phys(uint64_t index)
-{
+/* ── Internal Helpers ────────────────────────────────────────────────────── */
+
+/**
+ * @brief Convert a page index to a physical address
+ *
+ * @param index Page index
+ * @return Physical address
+ */
+static inline uint64_t page_index_to_phys(uint64_t index) {
 	return g_heap_phys_start + (index * PAGE_SIZE);
 }
 
-// Marking pages as busy/free
-static void mark_pages(uint64_t start_index, size_t count, bool used)
-{
-	for (size_t i = 0; i < count; i++)
-	{
+/**
+ * @brief Mark pages as used or free in the bitmap
+ *
+ * @param start_index Starting page index
+ * @param count Number of pages
+ * @param used true to mark as used, false to mark as free
+ */
+static void mark_pages(uint64_t start_index, size_t count, bool used) {
+	for (size_t i = 0; i < count; i++) {
 		uint64_t idx = start_index + i;
 		if (idx >= g_pmm_info.total_pages)
 			break;
 
-		if (used)
-		{
-			if (!bitmap_test(g_pmm_info.bitmap, idx))
-			{
+		if (used) {
+			if (!bitmap_test(g_pmm_info.bitmap, idx)) {
 				bitmap_set(g_pmm_info.bitmap, idx);
 				g_pmm_info.used_pages++;
 				g_pmm_info.used_memory += PAGE_SIZE;
 			}
-		}
-		else
-		{
-			if (bitmap_test(g_pmm_info.bitmap, idx))
-			{
+		} else {
+			if (bitmap_test(g_pmm_info.bitmap, idx)) {
 				bitmap_clear(g_pmm_info.bitmap, idx);
 				g_pmm_info.used_pages--;
 				g_pmm_info.used_memory -= PAGE_SIZE;
@@ -50,40 +66,46 @@ static void mark_pages(uint64_t start_index, size_t count, bool used)
 		g_last_search_index = start_index;
 }
 
-// Allocation
+/* ── Page Allocation ─────────────────────────────────────────────────────── */
 
-static int find_consecutive_free_pages(uint64_t count, uint64_t *start_index)
-{
+/**
+ * @brief Find a range of consecutive free pages
+ *
+ * @param count Number of pages needed
+ * @param start_index Output: starting page index of the found range
+ * @return 0 on success, -1 on failure
+ */
+static int find_consecutive_free_pages(uint64_t count, uint64_t *start_index) {
 	if (count == 0 || count > g_pmm_info.total_pages)
 		return -1;
 
 	uint64_t consecutive = 0;
 	uint64_t first_index = 0;
 
-	for (uint64_t i = g_last_search_index; i < g_pmm_info.total_pages + g_last_search_index; i++)
-	{
+	for (uint64_t i = g_last_search_index; i < g_pmm_info.total_pages + g_last_search_index; i++) {
 		uint64_t idx = i % g_pmm_info.total_pages;
-		if (!bitmap_test(g_pmm_info.bitmap, idx))
-		{
+		if (!bitmap_test(g_pmm_info.bitmap, idx)) {
 			if (consecutive == 0)
 				first_index = idx;
 			consecutive++;
-			if (consecutive == count)
-			{
+			if (consecutive == count) {
 				*start_index = first_index;
 				return 0;
 			}
-		}
-		else
-		{
+		} else {
 			consecutive = 0;
 		}
 	}
 	return -1;
 }
 
-uint64_t pmm_alloc_pages(size_t count)
-{
+/**
+ * @brief Allocate multiple consecutive physical pages
+ *
+ * @param count Number of pages to allocate
+ * @return Physical address of the first page, or 0 on failure
+ */
+uint64_t pmm_alloc_pages(size_t count) {
 	if (count == 0)
 		return 0;
 
@@ -96,31 +118,36 @@ uint64_t pmm_alloc_pages(size_t count)
 
 	uint64_t phys_addr = page_index_to_phys(start_index);
 
-	if (phys_addr & (PAGE_SIZE - 1))
-	{
+	if (phys_addr & (PAGE_SIZE - 1)) {
 		mark_pages(start_index, count, false);
 		return 0;
 	}
-	// printk("Allocated %d pages at 0x%lx\n", count, phys_addr);
 	return phys_addr;
 }
 
-uint64_t pmm_alloc_page(void)
-{
+/**
+ * @brief Allocate a single physical page
+ *
+ * @return Physical address of the page, or 0 on failure
+ */
+uint64_t pmm_alloc_page(void) {
 	return pmm_alloc_pages(1);
 }
 
-// Free
+/* ── Page Deallocation ───────────────────────────────────────────────────── */
 
-void pmm_free_pages(uint64_t phys_addr, size_t count)
-{
+/**
+ * @brief Free multiple consecutive physical pages
+ *
+ * @param phys_addr Physical address of the first page
+ * @param count Number of pages to free
+ */
+void pmm_free_pages(uint64_t phys_addr, size_t count) {
 	if (phys_addr == 0 || count == 0)
 		return;
 
 	if (phys_addr % PAGE_SIZE != 0)
 		return;
-
-	// phys_addr is already physical, no conversion needed
 
 	if (phys_addr < g_heap_phys_start || phys_addr >= g_heap_phys_end)
 		return;
@@ -133,17 +160,25 @@ void pmm_free_pages(uint64_t phys_addr, size_t count)
 	mark_pages(start_index, count, false);
 }
 
-void pmm_free_page(uint64_t phys_addr)
-{
+/**
+ * @brief Free a single physical page
+ *
+ * @param phys_addr Physical address of the page to free
+ */
+void pmm_free_page(uint64_t phys_addr) {
 	pmm_free_pages(phys_addr, 1);
 }
 
-// Initialization
+/* ── Initialization ──────────────────────────────────────────────────────── */
 
-void pmm_init()
-{
-	uint64_t heap_virt_start = g_boot_info->memory_map.heap_start; // is already virtual
-	uint64_t heap_phys_start = virt_to_phys(heap_virt_start);      // physical
+/**
+ * @brief Initialize the Physical Memory Manager
+ *
+ * Sets up the bitmap from boot info and calculates the heap boundaries.
+ */
+void pmm_init(void) {
+	uint64_t heap_virt_start = g_boot_info->memory_map.heap_start;
+	uint64_t heap_phys_start = virt_to_phys(heap_virt_start);
 	uint64_t heap_size = g_boot_info->memory_map.heap_size;
 
 	heap_virt_start = PAGE_ALIGN_UP(heap_virt_start);

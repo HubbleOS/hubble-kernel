@@ -1,3 +1,8 @@
+/**
+ * @file putc.c
+ * @brief Write a character to a stream
+ */
+
 #include <stdio.h>
 
 int putc(int c, FILE *stream)

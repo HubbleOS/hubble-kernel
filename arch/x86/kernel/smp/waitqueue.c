@@ -1,22 +1,37 @@
+/**
+ * @file waitqueue.c
+ * @brief Wait queue implementation for task blocking and waking
+ */
 
 #include <smp/scheduler.h>
 #include <smp/spinlock.h>
+
 #include "waitqueue.h"
-// Initialize wait queue
+
+/* ── Initialization ───────────────────────────────────────────────────── */
+
+/**
+ * @brief Initialize a wait queue
+ * @param wq Pointer to wait queue
+ */
 void waitqueue_init(wait_queue_t *wq)
 {
 	wq->count = 0;
 	wq->lock = SPINLOCK_INIT("waitqueue");
 }
 
-// Sleep on wait queue
+/* ── Sleep / Wake ─────────────────────────────────────────────────────── */
+
+/**
+ * @brief Sleep on a wait queue (blocks current task)
+ * @param wq Pointer to wait queue
+ */
 void waitqueue_sleep(wait_queue_t *wq)
 {
 	task_t *current = get_current_task();
 
 	spinlock_acquire(&wq->lock);
 
-	// Add to wait queue
 	wq->tasks[wq->count++] = current;
 
 	spinlock_release(&wq->lock);
@@ -24,7 +39,10 @@ void waitqueue_sleep(wait_queue_t *wq)
 	task_sleep();
 }
 
-// Wake all tasks on wait queue
+/**
+ * @brief Wake all tasks sleeping on a wait queue
+ * @param wq Pointer to wait queue
+ */
 void waitqueue_wake_all(wait_queue_t *wq)
 {
 	spinlock_acquire(&wq->lock);

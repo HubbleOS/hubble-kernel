@@ -1,175 +1,162 @@
 /**
  * @file slab.h
- * @brief Slab Allocator - Efficient Kernel Memory Allocator
+ * @brief Slab Allocator - Efficient kernel memory allocator for fixed-size
+ *        objects
  *
- * Slab allocator для швидкого виділення об'єктів фіксованого розміру.
- * Підтримує різні розміри кешів та зменшує фрагментацію пам'яті.
+ * Provides caches for different object sizes to reduce fragmentation and
+ * improve allocation performance.
  */
 
 #pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+
 #include <_cheader.h>
 
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
+/* ── Configuration ───────────────────────────────────────────────────────── */
 
-// ============================================================================
-// Configuration
-// ============================================================================
+#define SLAB_MIN_SIZE 8
+#define SLAB_MAX_SIZE 1024
 
-#define SLAB_MIN_SIZE 8	   // Мінімальний розмір об'єкта
-#define SLAB_MAX_SIZE 1024 // Максимальний розмір об'єкта
-
-// ============================================================================
-// Slab Structures
-// ============================================================================
+/* ── Slab Structures ─────────────────────────────────────────────────────── */
 
 /**
- * @brief Один slab (сторінка з об'єктами)
+ * @brief A single slab (one page of objects)
  */
-typedef struct slab
-{
-	struct slab *next; // Наступний slab в списку
-	struct slab *prev; // Попередній slab
-	void *free_list;   // Список вільних об'єктів
-	uint32_t in_use;   // Кількість використаних об'єктів
-	uint32_t capacity; // Загальна кількість об'єктів
-	void *start;	   // Початок даних
+typedef struct slab {
+	struct slab *next;
+	struct slab *prev;
+	void *free_list;
+	uint32_t in_use;
+	uint32_t capacity;
+	void *start;
 } slab_t;
 
 /**
- * @brief Slab cache (кеш для об'єктів певного розміру)
+ * @brief Slab cache for objects of a specific size
  */
-typedef struct slab_cache
-{
-	size_t object_size; // Розмір об'єкта
-	size_t align;	    // Вирівнювання
+typedef struct slab_cache {
+	size_t object_size;
+	size_t align;
 
-	slab_t *slabs_full;    // Повністю зайняті slabs
-	slab_t *slabs_partial; // Частково зайняті slabs
-	slab_t *slabs_free;    // Вільні slabs
+	slab_t *slabs_full;
+	slab_t *slabs_partial;
+	slab_t *slabs_free;
 
-	uint32_t objects_per_slab; // Об'єктів на slab
-	uint32_t total_slabs;	   // Загальна кількість slabs
-	uint32_t total_objects;	   // Загальна кількість об'єктів
-	uint32_t used_objects;	   // Використано об'єктів
+	uint32_t objects_per_slab;
+	uint32_t total_slabs;
+	uint32_t total_objects;
+	uint32_t used_objects;
 
-	struct slab_cache *next; // Наступний кеш
+	struct slab_cache *next;
 } slab_cache_t;
 
 /**
  * @brief Slab allocator statistics
  */
-typedef struct
-{
-	uint64_t total_memory;	    // Загальна пам'ять під slab
-	uint64_t used_memory;	    // Використана пам'ять
-	uint64_t wasted_memory;	    // Витрачена пам'ять (fragmentation)
-	uint32_t cache_count;	    // Кількість кешів
-	uint32_t total_slabs;	    // Загальна кількість slabs
-	uint32_t total_allocations; // Загальна кількість виділень
-	uint32_t total_frees;	    // Загальна кількість звільнень
-	uint32_t cache_hits;	    // Влучання в кеш
-	uint32_t cache_misses;	    // Промахи кешу
+typedef struct {
+	uint64_t total_memory;
+	uint64_t used_memory;
+	uint64_t wasted_memory;
+	uint32_t cache_count;
+	uint32_t total_slabs;
+	uint32_t total_allocations;
+	uint32_t total_frees;
+	uint32_t cache_hits;
+	uint32_t cache_misses;
 } slab_info_t;
 
 _Begin_C_Header;
 
-// ============================================================================
-// Function Declarations
-// ============================================================================
+/* ── Core Functions ──────────────────────────────────────────────────────── */
 
 /**
- * @brief Find cache for given pointer
+ * @brief Initialize the slab allocator
  *
- * @param ptr
- * @return slab_cache_t*
- */
-slab_cache_t *find_cache_for_ptr(void *ptr);
-
-// ============================================================================
-// Core Functions
-// ============================================================================
-
-/**
- * @brief Initialize slab allocator
- *
- * Створює стандартні кеші для розмірів: 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096
+ * Creates standard caches for sizes: 8, 16, 32, 64, 128, 256, 512, 1024
  */
 void slab_init(void);
 
 /**
- * @brief Allocate memory from slab
+ * @brief Allocate memory from the slab allocator
  *
  * @param size Size in bytes
- * @return Pointer to allocated memory or NULL
- *
- * Example:
- *   void *ptr = slab_alloc(64);
+ * @return Pointer to the allocated memory, or NULL on failure
  */
 void *slab_alloc(size_t size);
 
 /**
- * @brief Free memory allocated by slab
+ * @brief Free memory allocated by the slab allocator
  *
- * @param ptr Pointer to memory
- *
- * Example:
- *   slab_free(ptr);
+ * @param ptr Pointer to the memory to free
  */
 void slab_free(void *ptr);
 
 /**
- * @brief Allocate zeroed memory
+ * @brief Allocate zero-initialized memory
  *
  * @param size Size in bytes
- * @return Pointer to zeroed memory or NULL
+ * @return Pointer to zeroed memory, or NULL on failure
  */
 void *slab_calloc(size_t size);
 
 /**
- * @brief Reallocate memory
+ * @brief Reallocate memory from the slab allocator
  *
  * @param ptr Old pointer
- * @param new_size New size
- * @return New pointer or NULL
+ * @param new_size New size in bytes
+ * @return New pointer, or NULL on failure
  */
 void *slab_realloc(void *ptr, size_t new_size);
 
-// ============================================================================
-// Cache Management
-// ============================================================================
+/* ── Cache Management ────────────────────────────────────────────────────── */
 
 /**
- * @brief Create custom cache
+ * @brief Find the slab cache that owns a given pointer
+ *
+ * @param ptr Pointer to look up
+ * @return Cache containing the pointer, or NULL
+ */
+slab_cache_t *find_cache_for_ptr(void *ptr);
+
+/**
+ * @brief Create a custom slab cache
  *
  * @param size Object size
- * @param align Alignment (must be power of 2)
- * @return Pointer to cache or NULL
- *
- * Example:
- *   slab_cache_t *task_cache = slab_cache_create(512, 8);
+ * @param align Alignment (must be a power of 2)
+ * @return Pointer to the new cache, or NULL on failure
  */
 slab_cache_t *slab_cache_create(size_t size, size_t align);
 
 /**
- * @brief Allocate from specific cache
+ * @brief Allocate an object from a specific cache
  *
  * @param cache Cache to allocate from
- * @return Pointer to object or NULL
+ * @return Pointer to the allocated object, or NULL on failure
  */
 void *slab_cache_alloc(slab_cache_t *cache);
 
 /**
- * @brief Free to specific cache
+ * @brief Free an object back to its specific cache
  *
  * @param cache Cache to free to
- * @param ptr Pointer to object
+ * @param ptr Pointer to the object
  */
 void slab_cache_free(slab_cache_t *cache, void *ptr);
 
+/**
+ * @brief Allocate a page for slab use
+ *
+ * @return Virtual address of the page, or NULL on failure
+ */
 void *slab_alloc_page(void);
+
+/**
+ * @brief Free a page allocated by slab
+ *
+ * @param addr Virtual address of the page
+ */
 void slab_free_page(void *addr);
 
 _End_C_Header;

@@ -1,62 +1,78 @@
+/**
+ * @file tty.h
+ * @brief TTY abstraction — canonical line-discipline, console ops, read/write
+ */
 #pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
 #include <smp/waitqueue.h>
 
-/* ── Console output abstraction ──────────────────────────────────────────── */
+/* ── Console output abstraction ────────────────────────── */
+
 /*
- * tty не знає про VGA/framebuffer — він викликає console_ops.
- * Конкретний драйвер (vga_console, fb_console) реєструє свої ops.
+ * The TTY does not know about VGA or framebuffer details — it
+ * calls into console_ops provided by the platform driver.
  */
 typedef struct
 {
 	void (*putchar)(char c);
-	void (*clear)(void); /* CTRL+L */
+	void (*clear)(void);
 } tty_console_ops_t;
 
-/* ── TTY buffer sizes ────────────────────────────────────────────────────── */
-#define TTY_LINE_BUF_SIZE 256  /* рядок що редагується зараз       */
-#define TTY_READ_BUF_SIZE 4096 /* готові рядки чекають на read()   */
+/* ── Buffer sizes ───────────────────────────────────────── */
 
-/* ── TTY struct ──────────────────────────────────────────────────────────── */
+#define TTY_LINE_BUF_SIZE 256
+#define TTY_READ_BUF_SIZE 4096
+
+/* ── TTY instance ───────────────────────────────────────── */
+
 typedef struct
 {
-	/* --- line buffer (canonical mode) ---
-	 * Сюди йдуть символи поки не прийде \n.
-	 * Backspace видаляє звідси.
-	 */
 	char line_buf[TTY_LINE_BUF_SIZE];
 	size_t line_len;
 
-	/* --- read buffer ---
-	 * Завершені рядки (після \n) чекають тут на read().
-	 * Ring buffer.
-	 */
 	char read_buf[TTY_READ_BUF_SIZE];
 	volatile size_t read_head;
 	volatile size_t read_tail;
 
-	/* --- output --- */
 	const tty_console_ops_t *console;
 
-	/* --- waitqueue для read() --- */
 	wait_queue_t read_wq;
 } tty_t;
 
-/* ── API ─────────────────────────────────────────────────────────────────── */
+/* ── API ────────────────────────────────────────────────── */
 
-/* Ініціалізація */
+/**
+ * @brief Initialise a TTY instance
+ * @param tty      Pointer to the TTY to initialise
+ * @param console  Console operations (putchar, clear)
+ */
 void tty_init(tty_t *tty, const tty_console_ops_t *console);
 
-/* Надходить символ з клавіатури (викликається з tty keyboard handler) */
+/**
+ * @brief Feed a character into the TTY line discipline
+ * @param tty  Target TTY
+ * @param c    Incoming character
+ */
 void tty_input_char(tty_t *tty, char c);
 
-/* read() syscall — блокуючий, чекає на завершений рядок */
+/**
+ * @brief Blocking read — returns one canonical line at a time
+ * @param tty   Source TTY
+ * @param buf   Destination buffer
+ * @param size  Maximum bytes to read
+ * @return Number of bytes actually read
+ */
 size_t tty_read(tty_t *tty, char *buf, size_t size);
 
-/* write() syscall — пише в console */
+/**
+ * @brief Write characters to the console via the TTY
+ * @param tty   Target TTY
+ * @param buf   Source buffer
+ * @param size  Number of bytes to write
+ * @return Number of bytes actually written
+ */
 size_t tty_write(tty_t *tty, const char *buf, size_t size);
 
-/* Глобальний tty (одна консоль поки що) */
 extern tty_t *tty_current;

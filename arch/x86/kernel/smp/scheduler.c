@@ -1,40 +1,51 @@
-#include "task.h"
-#include "scheduler.h"
+/**
+ * @file scheduler.c
+ * @brief SMP task scheduler implementation
+ *
+ * Implements a round-robin scheduler with per-CPU run queues,
+ * task creation/destruction, context saving, and LAPIC timer dispatch.
+ */
 
 #include <mm/kmalloc.h>
-#include <mm/vmm.h>
 #include <mm/pmm.h>
 #include <mm/slab.h>
+#include <mm/vmm.h>
 
-#include <hubble/string.h>
 #include <apic/apic.h>
-#include <interrupt/interrupt.h>
-#include <hubble/printk.h>
-#include <hpet/hpet.h>
-#include "io.h"
-
+#include <asm.h>
 #include <gdt/gdt.h>
-
+#include <hubble/printk.h>
+#include <hubble/string.h>
+#include <interrupt/interrupt.h>
+#include <smp/smp.h>
 #include <syscalls/syscall_entry.h>
 
-#include <smp/smp.h>
+#include "io.h"
+#include "scheduler.h"
+#include "task.h"
 
-#include <asm.h>
+/* ── Constants ────────────────────────────────────────────────────────── */
+
 #define CANARY 0xDEADBEEFCAFEBABEULL
 #define MAX_PRIO 255
 #define BASE_SLICE 5
+#define USER_STACK_SIZE 0x10000
+
+/* ── Static data ──────────────────────────────────────────────────────── */
 
 static task_t *current_task[MAX_CPUS];
-
 static cpu_runqueue_t runqueues[MAX_CPUS];
 static bool initialized = false;
-
 static __thread bool dirty_queue = false;
 
-bool is_scheduler_initialized(void)
-{
-	return initialized;
-}
+static slab_cache_t *fpu_cache = NULL;
+
+static uint64_t next_user_stack = 0x6ff00000ULL;
+
+/* ── Forward declarations ────────────────────────────────────────────── */
+
+static void task_state_load(task_t *task, registers_t *regs);
+static uint64_t alloc_user_stack(void);
 
 task_t *get_next_task(uint8_t cpu_id);
 void scheduler_add_task(task_t *task);
@@ -42,21 +53,41 @@ void task_wrapper(void);
 void schedule(registers_t *regs);
 void save_context(task_t *current, registers_t *regs);
 void free_context(task_t *task);
-static void task_state_load(task_t *task, registers_t *regs);
 
-static slab_cache_t *fpu_cache = NULL;
+/* ── Scheduler state ──────────────────────────────────────────────────── */
 
-static uint64_t next_user_stack = 0x6ff00000ULL;
-#define USER_STACK_SIZE 0x10000 // 64KB per task
+/**
+ * @brief Check if the scheduler has been initialized
+ * @return true if initialized
+ */
+bool is_scheduler_initialized(void)
+{
+	return initialized;
+}
 
+/* ── Stack management ─────────────────────────────────────────────────── */
+
+/**
+ * @brief Allocate a user stack region (descending from a fixed high address)
+ * @return Base address of the allocated stack
+ */
 static uint64_t alloc_user_stack(void)
 {
 	uint64_t base = next_user_stack;
-	next_user_stack -= USER_STACK_SIZE + PAGE_SIZE; // PAGE_SIZE gap as guard
+	next_user_stack -= USER_STACK_SIZE + PAGE_SIZE;
 	return base;
 }
 
-// Initialize a new task
+/* ── Task creation ────────────────────────────────────────────────────── */
+
+/**
+ * @brief Create a new task with an argument
+ * @param entry_point Entry function pointer
+ * @param entry_arg Argument passed to entry function
+ * @param priority Task priority (0 = highest)
+ * @param userspace true if this is a user-space task
+ * @return Pointer to new task, or NULL on failure
+ */
 task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority, bool userspace)
 {
 	printk(KERN_INFO "Creating task\n");
@@ -66,12 +97,10 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 
 	memset(task, 0, sizeof(task_t));
 
-	// Assign PID
 	printk(KERN_INFO "Assigning PID\n");
 	static uint32_t next_pid = 1;
 	task->pid = __atomic_fetch_add(&next_pid, 1, __ATOMIC_SEQ_CST);
 
-	// Set state
 	printk(KERN_INFO "Setting state\n");
 	task->state = TASK_READY;
 	task->priority = priority;
@@ -80,12 +109,10 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	task->context_saved = false;
 	task->in_syscall = false;
 
-	// Set page table
 	uint64_t cr3;
 	asm volatile("mov %%cr3, %0" : "=r"(cr3));
 	task->page_table = (uint64_t *)cr3;
 
-	// Allocate kernel stack (rsp0 is always in kernel space)
 	task->rsp0_size = 64 * 1024;
 	task->rsp0 = (uint64_t)kmalloc(task->rsp0_size, GFP_KERNEL);
 	if (!task->rsp0)
@@ -99,7 +126,7 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	if (!userspace)
 	{
 		printk(KERN_INFO "Allocating kernel task stack\n");
-		task->stack_size = 16384; // 16 KB
+		task->stack_size = 16384;
 		task->kernel_stack = (uint64_t)kmalloc(task->stack_size, GFP_KERNEL);
 		if (!task->kernel_stack)
 		{
@@ -110,17 +137,13 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	}
 	else
 	{
-		// For user tasks, kernel_stack is the USER stack address.
-		// Mapping must be done by the caller using task_map_user_stack!
 		task->kernel_stack = alloc_user_stack();
 		task->stack_size = USER_STACK_SIZE;
 	}
 
-	// Set up initial stack
 	printk(KERN_INFO "Setting up initial stack\n");
 	uint64_t *stack_top = (uint64_t *)(((task->kernel_stack + task->stack_size) & ~0xFULL) - 8);
 
-	// Initialize context
 	printk(KERN_INFO "Initializing context\n");
 	if (!userspace)
 	{
@@ -155,13 +178,11 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	task->entry_point = entry_point;
 	task->entry_arg = entry_arg;
 
-	// print all
 	printk(KERN_INFO "RSP: %p\n", task->context.rsp);
 	printk(KERN_INFO "RIP: %p\n", task->context.rip);
 	printk(KERN_INFO "CS: %p\n", task->context.cs);
 	printk(KERN_INFO "SS: %p\n", task->context.ss);
 
-	// Allocate FPU state (512 bytes, 16-byte aligned)
 	printk(KERN_INFO "Allocating FPU state\n");
 	if (!fpu_cache)
 		fpu_cache = slab_cache_create(512, 16);
@@ -169,7 +190,6 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 
 	if (task->context.fpu_state)
 	{
-		// Initialize with default FPU state
 		printk(KERN_INFO "Initializing FPU state\n");
 		asm volatile("fxsave %0" : "=m"(*(char *)task->context.fpu_state));
 	}
@@ -179,6 +199,11 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
 	return task;
 }
 
+/**
+ * @brief Map user stack pages into the task's page table
+ * @param task Task whose stack to map
+ * @param pml4_phys Physical address of target PML4
+ */
 void task_map_user_stack(task_t *task, uint64_t *pml4_phys)
 {
 	uint64_t stack_base = task->kernel_stack;
@@ -195,13 +220,25 @@ void task_map_user_stack(task_t *task, uint64_t *pml4_phys)
 	}
 }
 
-// Create a new idle task
+/**
+ * @brief Create a new task without an argument
+ * @param entry_point Entry function pointer
+ * @param priority Task priority (0 = highest)
+ * @param userspace true if this is a user-space task
+ * @return Pointer to new task, or NULL on failure
+ */
 task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority, bool userspace)
 {
-	// void *arg = NULL;
 	return _task_create_with_arg((void (*)(void *))entry_point, NULL, priority, userspace);
 }
 
+/* ── Context management ──────────────────────────────────────────────── */
+
+/**
+ * @brief Load CPU register state from a task into the interrupt frame
+ * @param task Task whose context to load
+ * @param regs Register frame to populate
+ */
 static void task_state_load(task_t *task, registers_t *regs)
 {
 	if (!task)
@@ -228,6 +265,71 @@ static void task_state_load(task_t *task, registers_t *regs)
 	regs->ss = (uint16_t)task->context.ss;
 }
 
+/**
+ * @brief Save current CPU register state into a task's context
+ * @param current Task whose context to save
+ * @param regs Register frame to save from
+ */
+void save_context(task_t *current, registers_t *regs)
+{
+	if (!current)
+	{
+		return;
+	}
+	if (current->context_saved)
+	{
+		return;
+	}
+
+	current->context.r15 = regs->r15;
+	current->context.r14 = regs->r14;
+	current->context.r13 = regs->r13;
+	current->context.r12 = regs->r12;
+	current->context.r11 = regs->r11;
+	current->context.r10 = regs->r10;
+	current->context.r9 = regs->r9;
+	current->context.r8 = regs->r8;
+	current->context.rbp = regs->rbp;
+	current->context.rdi = regs->rdi;
+	current->context.rsi = regs->rsi;
+	current->context.rdx = regs->rdx;
+	current->context.rcx = regs->rcx;
+	current->context.rbx = regs->rbx;
+	current->context.rax = regs->rax;
+
+	current->context.rip = regs->rip;
+	current->context.rsp = regs->rsp;
+	current->context.rflags = regs->rflags;
+	current->context.cs = regs->cs;
+	current->context.ss = regs->ss;
+
+	if (current->context.fpu_state)
+	{
+		asm volatile("fxsave (%0)" ::"r"(current->context.fpu_state) : "memory");
+	}
+}
+
+/**
+ * @brief Free resources associated with a task
+ * @param task Task whose resources to free
+ */
+void free_context(task_t *task)
+{
+	if (task->kernel_stack)
+	{
+		kfree((void *)task->kernel_stack);
+	}
+
+	if (task->context.fpu_state)
+		slab_cache_free(fpu_cache, task->context.fpu_state);
+}
+
+/* ── Task lifecycle ───────────────────────────────────────────────────── */
+
+/**
+ * @brief Mark the current task as exited and trigger reschedule
+ * @param exit_code Exit status code
+ */
 void task_exit(int exit_code)
 {
 	uint8_t cpu_id = lapic_get_id();
@@ -241,10 +343,8 @@ void task_exit(int exit_code)
 	task->exit_code = exit_code;
 	task->state = TASK_DEAD;
 
-	// Remove task from runqueue
 	spinlock_acquire(&runqueues[cpu_id].lock);
 
-	// Find task in queue
 	size_t task_index = 0;
 	for (size_t i = 0; i < runqueues[cpu_id].count; i++)
 	{
@@ -255,7 +355,6 @@ void task_exit(int exit_code)
 		}
 	}
 
-	// Shift remaining tasks down
 	for (size_t i = task_index; i < runqueues[cpu_id].count - 1; i++)
 	{
 		runqueues[cpu_id].queue[i] = runqueues[cpu_id].queue[i + 1];
@@ -266,16 +365,15 @@ void task_exit(int exit_code)
 	free_context(task);
 	current_task[cpu_id] = NULL;
 
-	// Force immediate reschedule to idle or another task
-	// schedule();
-
 	asm volatile("int $32");
 
-	// Should never reach here
 	while (1)
 		hlt();
 }
 
+/**
+ * @brief Put the current task to sleep (blocked state)
+ */
 void task_sleep(void)
 {
 	task_t *current = get_current_task();
@@ -300,6 +398,10 @@ void task_sleep(void)
 		asm volatile("swapgs");
 }
 
+/**
+ * @brief Wake a blocked task
+ * @param task Task to wake
+ */
 void task_wake(task_t *task)
 {
 	if (!task || task->state != TASK_BLOCKED)
@@ -309,6 +411,11 @@ void task_wake(task_t *task)
 	task->state = TASK_READY;
 }
 
+/* ── Task wrapper ─────────────────────────────────────────────────────── */
+
+/**
+ * @brief Wrapper that calls the task's entry point and exits on return
+ */
 __attribute__((noreturn)) void task_wrapper(void)
 {
 	register task_t *current asm("rdi");
@@ -319,16 +426,74 @@ __attribute__((noreturn)) void task_wrapper(void)
 	__builtin_unreachable();
 }
 
+/* ── Task termination ─────────────────────────────────────────────────── */
+
+/**
+ * @brief Kill a task by task pointer
+ * @param task Task to kill
+ */
 void task_kill_by_task(task_t *task)
 {
 	task->state = TASK_ZOMBIE;
 }
+
+/**
+ * @brief Kill a task by PID
+ * @param pid PID of task to kill
+ */
 void task_kill_by_pid(uint32_t pid)
 {
-	// not implemented yet)
 }
 
-// Schedule next task on current CPU
+/* ── Scheduling ───────────────────────────────────────────────────────── */
+
+/**
+ * @brief Select the next task to run on a given CPU
+ * @param cpu_id Logical CPU ID
+ * @return Next task to run, or idle task if none available
+ */
+task_t *get_next_task(uint8_t cpu_id)
+{
+	cpu_runqueue_t *rq = &runqueues[cpu_id];
+
+	spinlock_acquire(&rq->lock);
+
+	if (rq->count == 0)
+	{
+		spinlock_release(&rq->lock);
+		return rq->idle_task;
+	}
+
+	for (size_t i = 0; i < rq->count; i++)
+	{
+		size_t index = (rq->next_index + i) % rq->count;
+		if (rq->queue[index]->state == TASK_READY || rq->queue[index]->state == TASK_ZOMBIE)
+		{
+			rq->next_index = (index + 1) % rq->count;
+			task_t *next = rq->queue[index];
+			spinlock_release(&rq->lock);
+			return next;
+		}
+	}
+
+	spinlock_release(&rq->lock);
+	return rq->idle_task;
+}
+
+/**
+ * @brief Get the currently running task on this CPU
+ * @return Pointer to current task, or NULL if none
+ */
+task_t *get_current_task(void)
+{
+	uint8_t cpu_id = lapic_get_id();
+	return current_task[cpu_id];
+}
+
+/**
+ * @brief Switch to the next task (called from timer interrupt)
+ * @param regs Register state at interrupt time
+ */
 void schedule(registers_t *regs)
 {
 	uint8_t cpu_id = lapic_get_id();
@@ -357,7 +522,6 @@ void schedule(registers_t *regs)
 
 	if (new_task->page_table != (old_task ? old_task->page_table : NULL))
 	{
-
 		asm volatile("mov %0, %%cr3" ::"r"(new_task->page_table) : "memory");
 	}
 	if (new_task->in_syscall)
@@ -370,13 +534,21 @@ void schedule(registers_t *regs)
 	return;
 }
 
+/* ── Timer handler ────────────────────────────────────────────────────── */
+
+/**
+ * @brief LAPIC timer interrupt handler
+ * @param regs Register state at interrupt time
+ *
+ * Saves context, decrements time slice, and schedules next task when
+ * the current task's slice expires.
+ */
 void lapic_timer_handler(registers_t *regs)
 {
 	if (!initialized)
 	{
 		return;
 	}
-	// outb(0x3f8, 'T');
 	task_t *current = get_current_task();
 
 	if (current)
@@ -431,113 +603,25 @@ void lapic_timer_handler(registers_t *regs)
 	lapic_eoi();
 }
 
-void save_context(task_t *current, registers_t *regs)
-{
-	if (!current)
-	{
-		return;
-	}
-	if (current->context_saved)
-	{
-		return;
-	}
+/* ── Idle task ────────────────────────────────────────────────────────── */
 
-	current->context.r15 = regs->r15;
-	current->context.r14 = regs->r14;
-	current->context.r13 = regs->r13;
-	current->context.r12 = regs->r12;
-	current->context.r11 = regs->r11;
-	current->context.r10 = regs->r10;
-	current->context.r9 = regs->r9;
-	current->context.r8 = regs->r8;
-	current->context.rbp = regs->rbp;
-	current->context.rdi = regs->rdi;
-	current->context.rsi = regs->rsi;
-	current->context.rdx = regs->rdx;
-	current->context.rcx = regs->rcx;
-	current->context.rbx = regs->rbx;
-	current->context.rax = regs->rax;
-
-	current->context.rip = regs->rip;
-	current->context.rsp = regs->rsp;
-	current->context.rflags = regs->rflags;
-	current->context.cs = regs->cs;
-	current->context.ss = regs->ss;
-
-	// Save FPU state
-	if (current->context.fpu_state)
-	{
-		asm volatile("fxsave (%0)" ::"r"(current->context.fpu_state) : "memory");
-	}
-}
-
-void free_context(task_t *task)
-{
-
-	// Free kernel stack
-	if (task->kernel_stack)
-	{
-		kfree((void *)task->kernel_stack);
-	}
-
-	// free fpu state
-	// if (task->context.fpu_state)
-	// {
-	// 	kfree(task->context.fpu_state);
-	// }
-
-	if (task->context.fpu_state)
-		slab_cache_free(fpu_cache, task->context.fpu_state);
-}
-
-task_t *get_next_task(uint8_t cpu_id)
-{
-	cpu_runqueue_t *rq = &runqueues[cpu_id];
-
-	spinlock_acquire(&rq->lock);
-
-	if (rq->count == 0)
-	{
-		spinlock_release(&rq->lock);
-		return rq->idle_task;
-	}
-
-	// Find next READY task using runqueue's index
-	for (size_t i = 0; i < rq->count; i++)
-	{
-		size_t index = (rq->next_index + i) % rq->count;
-		if (rq->queue[index]->state == TASK_READY || rq->queue[index]->state == TASK_ZOMBIE)
-		{
-			rq->next_index = (index + 1) % rq->count;
-			task_t *next = rq->queue[index];
-			spinlock_release(&rq->lock);
-			return next;
-		}
-	}
-
-	spinlock_release(&rq->lock);
-	return rq->idle_task;
-}
-
-task_t *get_current_task(void)
-{
-	uint8_t cpu_id = lapic_get_id();
-	return current_task[cpu_id];
-}
-
-// Example: kernel thread entry point
+/**
+ * @brief Idle task that runs when no other task is ready
+ */
 void idle_task(void)
 {
 	uint16_t count = 0;
 	while (1)
 	{
-		// printk("CPU %d idle, time: %d\n", lapic_get_id(), count++);
-		// hpet_delay_ms(1000);
 		hlt();
 	}
 }
 
-// Initialize scheduler
+/* ── Initialization ───────────────────────────────────────────────────── */
+
+/**
+ * @brief Initialize the scheduler and create idle tasks for each CPU
+ */
 void scheduler_init(void)
 {
 	printk(KERN_INFO "Initializing scheduler\n");
@@ -562,9 +646,12 @@ void scheduler_init(void)
 	}
 }
 
+/**
+ * @brief Add a task to the least-loaded CPU's run queue
+ * @param task Task to add
+ */
 void scheduler_add_task(task_t *task)
 {
-	// Find CPU with fewest tasks
 	int target_cpu = 0;
 	size_t min_load = runqueues[0].count;
 

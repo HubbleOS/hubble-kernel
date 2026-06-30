@@ -1,63 +1,73 @@
+/**
+ * @file apic.c
+ * @brief APIC / LAPIC / I/O APIC driver and SMP startup
+ *
+ * Implements xAPIC and x2APIC initialisation, Local APIC timer
+ * calibration and configuration, IPI delivery (INIT, STARTUP,
+ * fixed), I/O APIC redirection entry programming with ISO
+ * support, and the BSP/AP bring-up sequence for SMP.
+ */
+
 #include "apic.h"
 #include <acpi/acpi.h>
-#include "higher_half.h"
+#include <asm.h>
+#include <hpet/hpet.h>
 #include <hubble/printk.h>
-#include <io.h>
-#include <hubble/string.h>
 #include <mm/vmm.h>
 #include <msr.h>
-#include <hpet/hpet.h>
 #include <smp/scheduler.h>
 
-#include <asm.h>
+#include "higher_half.h"
 
-// Local APIC register offsets
-#define LAPIC_ID 0x020
-#define LAPIC_VERSION 0x030
-#define LAPIC_TPR 0x080	      // Task Priority Register
-#define LAPIC_EOI 0x0B0	      // End of Interrupt
-#define LAPIC_SVR 0x0F0	      // Spurious Interrupt Vector Register
-#define LAPIC_ESR 0x280	      // Error Status Register
-#define LAPIC_ICR_LOW 0x300   // Interrupt Command Register (low)
-#define LAPIC_ICR_HIGH 0x310  // Interrupt Command Register (high)
-#define LAPIC_TIMER 0x320     // LVT Timer Register
-#define LAPIC_LINT0 0x350     // LVT LINT0 Register
-#define LAPIC_LINT1 0x360     // LVT LINT1 Register
-#define LAPIC_ERROR 0x370     // LVT Error Register
-#define LAPIC_TIMER_ICR 0x380 // Timer Initial Count
-#define LAPIC_TIMER_CCR 0x390 // Timer Current Count
-#define LAPIC_TIMER_DCR 0x3E0 // Timer Divide Configuration
+/* ── Local APIC Register Offsets ─────────────────────────────── */
+
+#define LAPIC_ID          0x020
+#define LAPIC_VERSION     0x030
+#define LAPIC_TPR         0x080
+#define LAPIC_EOI         0x0B0
+#define LAPIC_SVR         0x0F0
+#define LAPIC_ESR         0x280
+#define LAPIC_ICR_LOW     0x300
+#define LAPIC_ICR_HIGH    0x310
+#define LAPIC_TIMER       0x320
+#define LAPIC_LINT0       0x350
+#define LAPIC_LINT1       0x360
+#define LAPIC_ERROR       0x370
+#define LAPIC_TIMER_ICR   0x380
+#define LAPIC_TIMER_CCR   0x390
+#define LAPIC_TIMER_DCR   0x3E0
 
 #define LAPIC_TIMER_PERIODIC (1 << 17)
-#define LAPIC_TIMER_VECTOR 32
+#define LAPIC_TIMER_VECTOR   32
 
-// I/O APIC register offsets
-#define IOAPIC_REG_ID 0x00
-#define IOAPIC_REG_VER 0x01
-#define IOAPIC_REG_ARB 0x02
-#define IOAPIC_REDTBL_BASE 0x10
+/* ── I/O APIC Register Offsets ───────────────────────────────── */
 
-#define IA32_APIC_BASE_MSR 0x1B
-#define LAPIC_BASE_MASK 0xFFFFF000ULL
+#define IOAPIC_REG_ID       0x00
+#define IOAPIC_REG_VER      0x01
+#define IOAPIC_REG_ARB      0x02
+#define IOAPIC_REDTBL_BASE  0x10
 
-#define IA32_X2APIC_ICR 0x830
+#define IA32_APIC_BASE_MSR  0x1B
+#define LAPIC_BASE_MASK     0xFFFFF000ULL
+#define IA32_X2APIC_ICR     0x830
 
 #define VMM_MAP_MMIO (VMM_MAP_NO_CACHE)
 
-// Global state
+/* ── Global State ────────────────────────────────────────────── */
+
 static struct
 {
 	volatile uint32_t *lapic_base;
 	volatile uint32_t *ioapic_base;
-	uint8_t bsp_id;
+	uint8_t  bsp_id;
 	uint32_t ioapic_gsi_base;
 	uint32_t ioapic_max_redirect;
-	bool initialized;
+	bool     initialized;
 } apic_state = {0};
 
 enum
 {
-	APIC_INIT_NONE = 0,
+	APIC_INIT_NONE   = 0,
 	APIC_INIT_LAPIC,
 	APIC_INIT_IOAPIC,
 	APIC_INIT_X2APIC,
@@ -66,6 +76,14 @@ enum
 
 static uint8_t apic_mode = APIC_INIT_NONE;
 
+/* ── MMIO Helpers (static) ───────────────────────────────────── */
+
+/**
+ * @brief Check whether a virtual address has a full page-table walk
+ *
+ * @param virt Virtual address to check
+ * @return true if a page is mapped at @p virt
+ */
 static bool apic_mmio_is_mapped(uint64_t virt)
 {
 	uint64_t *pml4 = pml4_table();
@@ -87,6 +105,12 @@ static bool apic_mmio_is_mapped(uint64_t virt)
 	return pt[PT_INDEX(virt)] & PTE_PRESENT;
 }
 
+/**
+ * @brief Map one page of APIC MMIO space uncacheable
+ *
+ * @param phys Physical address to map
+ * @return 0 on success, -1 on failure
+ */
 static int map_apic_mmio_page(uint64_t phys)
 {
 	uint64_t page = phys & ~0xFFFULL;
@@ -105,6 +129,11 @@ static int map_apic_mmio_page(uint64_t phys)
 	return 0;
 }
 
+/**
+ * @brief Check CPUID for x2APIC support
+ *
+ * @return true if the CPU supports x2APIC
+ */
 static inline bool cpu_has_x2apic(void)
 {
 	uint32_t eax, ebx, ecx, edx;
@@ -114,8 +143,16 @@ static inline bool cpu_has_x2apic(void)
 	return ecx & (1 << 21);
 }
 
-// === Local APIC Functions ===
+/* ── LAPIC Register Access (inline) ──────────────────────────── */
 
+/**
+ * @brief Read a Local APIC register
+ *
+ * Dispatches to MSR (x2APIC) or MMIO (xAPIC) access.
+ *
+ * @param reg Register offset
+ * @return 32-bit register value
+ */
 static inline uint32_t lapic_read(uint32_t reg)
 {
 	if (apic_mode == APIC_INIT_X2APIC)
@@ -129,6 +166,12 @@ static inline uint32_t lapic_read(uint32_t reg)
 	}
 }
 
+/**
+ * @brief Write a Local APIC register
+ *
+ * @param reg Register offset
+ * @param val 32-bit value to write
+ */
 static inline void lapic_write(uint32_t reg, uint32_t val)
 {
 	if (apic_mode == APIC_INIT_X2APIC)
@@ -142,6 +185,11 @@ static inline void lapic_write(uint32_t reg, uint32_t val)
 	}
 }
 
+/* ── Local APIC Public API ───────────────────────────────────── */
+
+/**
+ * @brief Signal End-Of-Interrupt to the Local APIC
+ */
 void lapic_eoi(void)
 {
 	if (apic_mode == APIC_INIT_X2APIC)
@@ -154,6 +202,11 @@ void lapic_eoi(void)
 	lapic_write(LAPIC_EOI, 0);
 }
 
+/**
+ * @brief Get the APIC ID of the current CPU
+ *
+ * @return APIC ID
+ */
 uint32_t lapic_get_id(void)
 {
 	if (apic_mode == APIC_INIT_X2APIC)
@@ -166,12 +219,15 @@ uint32_t lapic_get_id(void)
 	}
 }
 
+/**
+ * @brief Enable the Local APIC on the current CPU
+ */
 void lapic_enable(void)
 {
 	if (apic_mode == APIC_INIT_X2APIC)
 	{
 		uint64_t svr = rdmsr(0x80F);
-		svr |= 0x100; // enable
+		svr |= 0x100;
 		svr = (svr & ~0xFF) | 0xFF;
 		wrmsr(0x80F, svr);
 	}
@@ -184,6 +240,14 @@ void lapic_enable(void)
 	}
 }
 
+/**
+ * @brief Calibrate and start the LAPIC timer in periodic mode
+ *
+ * Uses HPET as a reference to measure the LAPIC timer frequency,
+ * then programs the timer to fire at @p frequency_hz.
+ *
+ * @param frequency_hz Desired interrupt frequency
+ */
 void lapic_timer_init(uint32_t frequency_hz)
 {
 	if (!apic_state.lapic_base && apic_mode != APIC_INIT_X2APIC)
@@ -200,23 +264,17 @@ void lapic_timer_init(uint32_t frequency_hz)
 
 	lapic_write(LAPIC_TIMER_DCR, 0x3);
 
-	// CRITICAL: Put timer in ONE-SHOT mode for calibration
-	// (vector doesn't matter, we're not letting it fire)
-	lapic_write(LAPIC_TIMER, 0xFF | (1 << 16)); // Masked, vector 0xFF
+	lapic_write(LAPIC_TIMER, 0xFF | (1 << 16));
 
-	// NOW start counting
 	lapic_write(LAPIC_TIMER_ICR, 0xFFFFFFFF);
 
 	uint32_t ccr_start = lapic_read(LAPIC_TIMER_CCR);
 	printk(KERN_INFO "Timer started, CCR = 0x%08x\n", ccr_start);
 
-	// Wait 10ms
 	hpet_delay_ms(10);
 
-	// Read final value BEFORE stopping
 	uint32_t ccr_final = lapic_read(LAPIC_TIMER_CCR);
 
-	// Stop timer
 	lapic_write(LAPIC_TIMER_ICR, 0);
 
 	uint32_t elapsed = ccr_start - ccr_final;
@@ -230,7 +288,6 @@ void lapic_timer_init(uint32_t frequency_hz)
 		return;
 	}
 
-	// elapsed ticks in 10ms -> ticks per second = elapsed * 100
 	uint32_t ticks_per_interrupt = (elapsed * 100) / frequency_hz;
 
 	if (ticks_per_interrupt == 0)
@@ -241,16 +298,13 @@ void lapic_timer_init(uint32_t frequency_hz)
 
 	printk(KERN_INFO "Calculated: %u ticks for %u Hz interrupt\n", ticks_per_interrupt, frequency_hz);
 
-	// Setup timer in periodic mode
 	lapic_write(LAPIC_TIMER, LAPIC_TIMER_VECTOR | LAPIC_TIMER_PERIODIC);
 	lapic_write(LAPIC_TIMER_DCR, 0x3);
 	lapic_write(LAPIC_TIMER_ICR, ticks_per_interrupt);
 
-	// verify ticks
 	uint32_t icr = lapic_read(LAPIC_TIMER_ICR);
 	printk(KERN_INFO "LAPIC timer ICR: 0x%08x\n", icr);
 
-	// Verify it's configured correctly
 	uint32_t lvt = lapic_read(LAPIC_TIMER);
 	printk(KERN_INFO "LVT Timer: 0x%08x (Vector=%u, Periodic=%s, Masked=%s)\n",
 	       lvt, lvt & 0xFF,
@@ -261,6 +315,14 @@ void lapic_timer_init(uint32_t frequency_hz)
 	       frequency_hz, ticks_per_interrupt);
 }
 
+/* ── IPI Functions ───────────────────────────────────────────── */
+
+/**
+ * @brief Send a fixed IPI to a destination APIC ID
+ *
+ * @param dest   Destination APIC ID (xAPIC) or x2APIC ID
+ * @param vector Interrupt vector
+ */
 void lapic_send_ipi(uint32_t dest, uint8_t vector)
 {
 	if (!apic_state.lapic_base && apic_mode != APIC_INIT_X2APIC)
@@ -271,23 +333,26 @@ void lapic_send_ipi(uint32_t dest, uint8_t vector)
 
 	if (apic_mode == APIC_INIT_X2APIC)
 	{
-		// x2APIC: Fixed delivery mode
 		uint64_t icr = ((uint64_t)dest << 32) |
 			       (uint64_t)vector |
-			       (0 << 8) | // Delivery Mode: Fixed
-			       (1 << 14); // Level: Assert
+			       (0 << 8) |
+			       (1 << 14);
 		wrmsr(0x830, icr);
 	}
 	else
 	{
-		// xAPIC mode
 		lapic_write(LAPIC_ICR_HIGH, dest << 24);
-		lapic_write(LAPIC_ICR_LOW, vector | (1 << 14)); // Fixed delivery + Assert
+		lapic_write(LAPIC_ICR_LOW, vector | (1 << 14));
 		while (lapic_read(LAPIC_ICR_LOW) & (1 << 12))
 			;
 	}
 }
 
+/**
+ * @brief Send an INIT IPI to bring an AP into wait-for-SIPI state
+ *
+ * @param dest_apic_id Target APIC ID
+ */
 void lapic_send_init_ipi(uint8_t dest_apic_id)
 {
 	if (!apic_state.lapic_base && apic_mode != APIC_INIT_X2APIC)
@@ -300,36 +365,31 @@ void lapic_send_init_ipi(uint8_t dest_apic_id)
 
 	if (apic_mode == APIC_INIT_X2APIC)
 	{
-		// INIT ASSERT (level = 1, trigger = level)
 		uint64_t icr =
 		    ((uint64_t)dest_apic_id << 32) |
-		    (5 << 8) |	// INIT
-		    (1 << 14) | // Level = 1 (assert)
-		    (1 << 15);	// Trigger = level
+		    (5 << 8) |
+		    (1 << 14) |
+		    (1 << 15);
 
 		wrmsr(IA32_X2APIC_ICR, icr);
 
 		hpet_delay_ms(10);
 
-		// INIT DEASSERT (level = 0, trigger = level)
 		icr =
 		    ((uint64_t)dest_apic_id << 32) |
-		    (5 << 8) | // INIT
-		    (1 << 15); // Trigger = level
+		    (5 << 8) |
+		    (1 << 15);
 
 		wrmsr(IA32_X2APIC_ICR, icr);
 	}
 	else
 	{
-		// xAPIC mode
 		lapic_write(LAPIC_ICR_HIGH, ((uint32_t)dest_apic_id) << 24);
 
-		// INIT, Level, Assert
 		lapic_write(LAPIC_ICR_LOW, 0x4500);
 		while (lapic_read(LAPIC_ICR_LOW) & (1 << 12))
 			;
 
-		// Deassert
 		lapic_write(LAPIC_ICR_LOW, 0x4500 | (1 << 15));
 		while (lapic_read(LAPIC_ICR_LOW) & (1 << 12))
 			;
@@ -338,6 +398,12 @@ void lapic_send_init_ipi(uint8_t dest_apic_id)
 	printk(KERN_INFO "INIT IPI sent\n");
 }
 
+/**
+ * @brief Send a STARTUP IPI to wake an AP
+ *
+ * @param dest_apic_id Target APIC ID
+ * @param vector       Page number of the trampoline (addr >> 12)
+ */
 void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 {
 	if (!apic_state.lapic_base && apic_mode != APIC_INIT_X2APIC)
@@ -352,7 +418,6 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 	printk(KERN_INFO "Target physical address: 0x%05x\n", (uint32_t)vector << 12);
 	printk(KERN_INFO "APIC Mode: %s\n", apic_mode == APIC_INIT_X2APIC ? "x2APIC" : "xAPIC");
 
-	// Check LAPIC is enabled
 	uint32_t svr = lapic_read(LAPIC_SVR);
 	printk(KERN_INFO "LAPIC SVR: 0x%08x %s\n", svr,
 	       (svr & 0x100) ? "[ENABLED]" : "[DISABLED!]");
@@ -363,20 +428,16 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 		return;
 	}
 
-	// Check error status before sending
 	uint32_t esr_before = lapic_read(LAPIC_ESR);
 	printk(KERN_INFO "ESR before: 0x%08x\n", esr_before);
 
-	// x2APIC uses a single 64-bit ICR write, xAPIC uses two 32-bit writes
 	if (apic_mode == APIC_INIT_X2APIC)
 	{
-		// x2APIC: Single 64-bit MSR write to ICR (MSR 0x830)
-		// Format: [63:32] = destination, [31:0] = ICR_LOW fields
-		uint64_t icr = ((uint64_t)dest_apic_id << 32) | // Destination
-			       (vector & 0xFF) |		// Vector
-			       (6 << 8) |			// Delivery Mode: STARTUP (110b)
-			       (0 << 11) |			// Destination Mode: Physical
-			       (1 << 14) |			// Level: Assert
+		uint64_t icr = ((uint64_t)dest_apic_id << 32) |
+			       (vector & 0xFF) |
+			       (6 << 8) |
+			       (0 << 11) |
+			       (1 << 14) |
 			       (0 << 15);
 
 		printk(KERN_INFO "Writing x2APIC ICR (single 64-bit MSR):\n");
@@ -385,25 +446,20 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 		printk(KERN_INFO "  Delivery mode (bits 8-10): %u (STARTUP)\n", 6);
 		printk(KERN_INFO "  Full ICR value:           0x%016llx\n", icr);
 
-		// Write ICR as a single atomic operation
 		wrmsr(0x830, icr);
 
-		// x2APIC ICR writes are self-synchronizing, no busy-wait needed
 		printk(KERN_OK "x2APIC ICR write completed (self-synchronizing)\n");
 	}
 	else
 	{
-		// xAPIC: Traditional two-register write (ICR_HIGH then ICR_LOW)
 		uint32_t icr_high = ((uint32_t)dest_apic_id) << 24;
 		printk(KERN_INFO "Writing xAPIC ICR_HIGH: 0x%08x\n", icr_high);
 		lapic_write(LAPIC_ICR_HIGH, icr_high);
 
-		// Verify write
 		uint32_t icr_high_read = lapic_read(LAPIC_ICR_HIGH);
 		printk(KERN_INFO "ICR_HIGH readback: 0x%08x %s\n", icr_high_read,
 		       (icr_high_read == icr_high) ? "[OK]" : "[MISMATCH!]");
 
-		// Memory barrier
 		asm volatile("mfence" ::: "memory");
 
 		uint32_t icr_low = (vector & 0xFF) | (6 << 8);
@@ -416,13 +472,11 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 
 		lapic_write(LAPIC_ICR_LOW, icr_low);
 
-		// Immediate readback
 		uint32_t icr_low_read = lapic_read(LAPIC_ICR_LOW);
 		printk(KERN_INFO "ICR_LOW readback: 0x%08x\n", icr_low_read);
 		printk(KERN_INFO "  Delivery Status (bit 12): %s\n",
 		       (icr_low_read & (1 << 12)) ? "Send Pending" : "Idle");
 
-		// Wait for delivery to complete
 		int timeout = 100000;
 		while ((lapic_read(LAPIC_ICR_LOW) & (1 << 12)) && timeout > 0)
 		{
@@ -440,39 +494,28 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 		}
 	}
 
-	// Check error status after
 	uint32_t esr_after = lapic_read(LAPIC_ESR);
 	printk(KERN_INFO "ESR after: 0x%08x\n", esr_after);
 
 	if (esr_after != 0)
 	{
 		printk(KERN_ERR "ERROR: LAPIC errors detected!\n");
-		if (esr_after & 0x01)
-			printk(KERN_ERR "  - Send Checksum Error\n");
-		if (esr_after & 0x02)
-			printk(KERN_ERR "  - Receive Checksum Error\n");
-		if (esr_after & 0x04)
-			printk(KERN_ERR "  - Send Accept Error\n");
-		if (esr_after & 0x08)
-			printk(KERN_ERR "  - Receive Accept Error\n");
-		if (esr_after & 0x20)
-			printk(KERN_INFO "  - Send Illegal Vector\n");
-		if (esr_after & 0x40)
-			printk(KERN_INFO "  - Receive Illegal Vector\n");
-		if (esr_after & 0x80)
-			printk(KERN_INFO "  - Illegal Register Address\n");
+		if (esr_after & 0x01) printk(KERN_ERR "  - Send Checksum Error\n");
+		if (esr_after & 0x02) printk(KERN_ERR "  - Receive Checksum Error\n");
+		if (esr_after & 0x04) printk(KERN_ERR "  - Send Accept Error\n");
+		if (esr_after & 0x08) printk(KERN_ERR "  - Receive Accept Error\n");
+		if (esr_after & 0x20) printk(KERN_INFO "  - Send Illegal Vector\n");
+		if (esr_after & 0x40) printk(KERN_INFO "  - Receive Illegal Vector\n");
+		if (esr_after & 0x80) printk(KERN_INFO "  - Illegal Register Address\n");
 	}
 
 	printk(KERN_OK "STARTUP IPI Complete\n");
 
-	// At the END of lapic_send_startup_ipi(), add:
 	printk(KERN_INFO "POST-SIPI VERIFICATION");
 
-	// Small delay to let SIPI process
 	for (volatile int i = 0; i < 100000; i++)
 		cpu_pause();
 
-	// Read ICR to check delivery status
 	if (apic_mode == APIC_INIT_X2APIC)
 	{
 		uint64_t icr = rdmsr(0x830);
@@ -486,7 +529,6 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 		}
 	}
 
-	// Check errors again
 	uint32_t esr = lapic_read(LAPIC_ESR);
 	if (esr != 0)
 	{
@@ -500,6 +542,12 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector)
 
 	printk(KERN_INFO "END POST-SIPI VERIFICATION\n");
 }
+
+/* ── Debug ───────────────────────────────────────────────────── */
+
+/**
+ * @brief Dump LAPIC state for debugging
+ */
 void apic_debug_check(void)
 {
 	printk(KERN_INFO "LAPIC Debug Check");
@@ -522,7 +570,6 @@ void apic_debug_check(void)
 		return;
 	}
 
-	// xAPIC mode - MMIO access
 	uint64_t lapic_phys = acpi_get_lapic_address();
 	printk(KERN_INFO "LAPIC physical: 0x%lx\n", lapic_phys);
 	printk(KERN_INFO "apic_state.lapic_base: %p\n", apic_state.lapic_base);
@@ -533,7 +580,6 @@ void apic_debug_check(void)
 		return;
 	}
 
-	// Try to read LAPIC ID
 	volatile uint32_t *lapic_id_reg = apic_state.lapic_base + (LAPIC_ID / 4);
 	printk(KERN_INFO "Reading from: %p\n", lapic_id_reg);
 
@@ -546,13 +592,11 @@ void apic_debug_check(void)
 		printk(KERN_ERR "       Either not mapped or wrong address\n");
 	}
 
-	// Check if page is mapped
 	printk(KERN_INFO "\nChecking page table mapping:\n");
 	uint64_t virt = (uint64_t)apic_state.lapic_base;
 	printk(KERN_INFO "Virtual address: 0x%lx\n", virt);
 
-	// Try direct physical access (if identity mapped)
-	volatile uint32_t *direct = (volatile uint32_t *)(0xFFFF800000000000ULL + lapic_phys);
+	volatile uint32_t *direct = (volatile uint32_t *)(0xFFFF800000000000ULL + (uint64_t)lapic_phys);
 	printk(KERN_INFO "Direct mapping attempt: %p\n", direct);
 	uint32_t direct_read = *direct;
 	printk(KERN_INFO "Direct read: 0x%08x\n", direct_read);
@@ -560,20 +604,42 @@ void apic_debug_check(void)
 	printk(KERN_INFO "End LAPIC Debug\n");
 }
 
-// === I/O APIC Functions ===
+/* ── I/O APIC Register Access (inline) ───────────────────────── */
 
+/**
+ * @brief Read an I/O APIC register via the indirect index/data pair
+ *
+ * @param reg 8-bit register index
+ * @return 32-bit register value
+ */
 static inline uint32_t ioapic_read(uint8_t reg)
 {
 	apic_state.ioapic_base[0] = reg;
 	return apic_state.ioapic_base[4];
 }
 
+/**
+ * @brief Write an I/O APIC register
+ *
+ * @param reg   8-bit register index
+ * @param value 32-bit value
+ */
 static inline void ioapic_write(uint8_t reg, uint32_t value)
 {
 	apic_state.ioapic_base[0] = reg;
 	apic_state.ioapic_base[4] = value;
 }
 
+/* ── I/O APIC Public API ─────────────────────────────────────── */
+
+/**
+ * @brief Program an I/O APIC redirection entry
+ *
+ * @param irq          IRQ line index
+ * @param vector       Interrupt vector
+ * @param dest_apic_id Target CPU APIC ID
+ * @param masked       true to initially mask the entry
+ */
 void ioapic_set_redirect(uint8_t irq, uint8_t vector, uint8_t dest_apic_id, bool masked)
 {
 	if (!apic_state.ioapic_base)
@@ -583,9 +649,8 @@ void ioapic_set_redirect(uint8_t irq, uint8_t vector, uint8_t dest_apic_id, bool
 	uint32_t high = ((uint32_t)dest_apic_id) << 24;
 
 	if (masked)
-		low |= (1 << 16); // Mask bit
+		low |= (1 << 16);
 
-	// Active high, edge triggered (can be changed based on ISO flags)
 	uint8_t reg_low = IOAPIC_REDTBL_BASE + (irq * 2);
 	uint8_t reg_high = IOAPIC_REDTBL_BASE + (irq * 2) + 1;
 
@@ -593,6 +658,11 @@ void ioapic_set_redirect(uint8_t irq, uint8_t vector, uint8_t dest_apic_id, bool
 	ioapic_write(reg_low, low);
 }
 
+/**
+ * @brief Mask (disable) an IRQ on the I/O APIC
+ *
+ * @param irq IRQ line index
+ */
 void ioapic_mask_irq(uint8_t irq)
 {
 	if (!apic_state.ioapic_base)
@@ -603,6 +673,11 @@ void ioapic_mask_irq(uint8_t irq)
 	ioapic_write(reg, val | (1 << 16));
 }
 
+/**
+ * @brief Unmask (enable) an IRQ on the I/O APIC
+ *
+ * @param irq IRQ line index
+ */
 void ioapic_unmask_irq(uint8_t irq)
 {
 	if (!apic_state.ioapic_base)
@@ -613,8 +688,14 @@ void ioapic_unmask_irq(uint8_t irq)
 	ioapic_write(reg, val & ~(1 << 16));
 }
 
+/* ── ISO Setup (static) ──────────────────────────────────────── */
+
+/**
+ * @brief Callback for acpi_enum_isos — program an override entry
+ */
 static void setup_iso_callback(uint8_t irq_source, uint32_t gsi, uint16_t flags, void *ctx)
 {
+	(void)ctx;
 	uint8_t vector = 32 + irq_source;
 
 	bool active_low = flags & 0x2;
@@ -628,7 +709,7 @@ static void setup_iso_callback(uint8_t irq_source, uint32_t gsi, uint16_t flags,
 	if (level_triggered)
 		low |= (1 << 15);
 
-	low |= (1 << 16); //  MASK
+	low |= (1 << 16);
 
 	uint8_t reg_low = IOAPIC_REDTBL_BASE + (gsi * 2);
 	uint8_t reg_high = IOAPIC_REDTBL_BASE + (gsi * 2) + 1;
@@ -637,13 +718,17 @@ static void setup_iso_callback(uint8_t irq_source, uint32_t gsi, uint16_t flags,
 	ioapic_write(reg_low, low);
 }
 
+/* ── LAPIC Initialisation Modes ──────────────────────────────── */
+
+/**
+ * @brief Enable x2APIC mode on the current CPU
+ *
+ * @return 0 on success
+ */
 int lapic_init_x2apic(void)
 {
-	// printk("x2APIC mode enabled\n");
-
 	uint64_t apic_base = rdmsr(IA32_APIC_BASE_MSR);
 
-	// enable APIC + x2APIC
 	apic_base |= (1ULL << 11);
 	apic_base |= (1ULL << 10);
 
@@ -652,16 +737,19 @@ int lapic_init_x2apic(void)
 	apic_mode = APIC_INIT_X2APIC;
 	apic_state.lapic_base = NULL;
 
-	// SVR via MSR
 	wrmsr(0x80F, 0x100 | 0xFF);
 
-	// clear ESR
 	wrmsr(0x828, 0);
 	wrmsr(0x828, 0);
 
 	return 0;
 }
 
+/**
+ * @brief Enable xAPIC (MMIO) mode on the current CPU
+ *
+ * @return 0 on success, -1 on failure
+ */
 int lapic_init_xapic(void)
 {
 	printk(KERN_OK "xAPIC mode enabled\n");
@@ -681,7 +769,12 @@ int lapic_init_xapic(void)
 	return 0;
 }
 
-void find_ioapic(uint8_t id, uint32_t addr, uint32_t gsi, void *ctx)
+/* ── APIC Initialisation ─────────────────────────────────────── */
+
+/**
+ * @brief Callback to locate the first I/O APIC
+ */
+static void find_ioapic(uint8_t id, uint32_t addr, uint32_t gsi, void *ctx)
 {
 	struct
 	{
@@ -698,6 +791,15 @@ void find_ioapic(uint8_t id, uint32_t addr, uint32_t gsi, void *ctx)
 	}
 }
 
+/**
+ * @brief Full APIC initialisation for the BSP
+ *
+ * Detects x2APIC vs xAPIC, sets up the Local APIC, locates
+ * the I/O APIC, programs default redirections, and applies
+ * interrupt-source overrides from the MADT.
+ *
+ * @return 0 on success, -1 on failure
+ */
 int apic_init(void)
 {
 	if (!acpi_is_initialized())
@@ -735,7 +837,6 @@ int apic_init(void)
 
 	lapic_enable();
 
-	// Find I/O APIC
 	struct
 	{
 		bool found;
@@ -782,34 +883,51 @@ int apic_init(void)
 	return 0;
 }
 
+/**
+ * @brief Initialise the Local APIC on an Application Processor
+ *
+ * APs must not touch the I/O APIC or ACPI — they only enable
+ * their own Local APIC.
+ */
 void apic_init_ap(void)
 {
-	// APs just need to enable their local APIC
-	// They DON'T touch I/O APIC or ACPI
-
 	if (cpu_has_x2apic())
 	{
-		lapic_init_x2apic(); // Enable x2APIC mode on this AP
+		lapic_init_x2apic();
 	}
 	else
 	{
-		lapic_init_xapic(); // Enable xAPIC mode on this AP
+		lapic_init_xapic();
 	}
 
-	lapic_enable(); // Enable this AP's local APIC
-
-	// Optional: get and print this AP's ID
-	uint8_t apic_id = lapic_get_id();
-	// printk("AP %u APIC initialized\n", apic_id);
+	lapic_enable();
 }
 
+/**
+ * @brief Check whether the APIC subsystem has been initialised
+ *
+ * @return true if initialised
+ */
 bool apic_is_initialized(void)
 {
 	return apic_state.initialized;
 }
 
-// === SMP Support ===
+/* ── SMP Support ─────────────────────────────────────────────── */
 
+/**
+ * @brief Start an Application Processor
+ *
+ * Follows the Intel MP initialisation sequence:
+ *  - INIT IPI
+ *  - 10 ms wait
+ *  - First STARTUP IPI
+ *  - 200 us wait
+ *  - Second STARTUP IPI
+ *
+ * @param apic_id        Target APIC ID
+ * @param trampoline_addr Physical address of the 16-bit boot code
+ */
 void apic_start_ap(uint8_t apic_id, uint32_t trampoline_addr)
 {
 	if (!apic_state.initialized)
@@ -821,33 +939,33 @@ void apic_start_ap(uint8_t apic_id, uint32_t trampoline_addr)
 	uint8_t vector = (trampoline_addr >> 12) & 0xFF;
 	printk(KERN_INFO "SIPI vector: 0x%02x (starts at 0x%05x)\n", vector, vector << 12);
 
-	// === STEP 1: INIT IPI (puts AP in wait-for-SIPI state) ===
 	printk(KERN_INFO "\nStep 1: Sending INIT IPI...\n");
-
 	lapic_send_init_ipi(apic_id);
-	// === STEP 2: Wait 10ms for INIT to take effect ===
+
 	printk(KERN_INFO "Step 2: Waiting 10ms...\n");
 	for (volatile int i = 0; i < 10000000; i++)
 		cpu_pause();
 
-	// === STEP 3: First STARTUP IPI ===
 	printk(KERN_INFO "Step 3: Sending first SIPI...\n");
 	lapic_send_startup_ipi(apic_id, vector);
 
-	// === STEP 4: Wait 200us ===
 	printk(KERN_INFO "Step 4: Waiting 200us...\n");
 	for (volatile int i = 0; i < 200000; i++)
 		cpu_pause();
 
-	// === STEP 5: Second STARTUP IPI (per Intel MP spec) ===
 	printk(KERN_INFO "Step 5: Sending second SIPI...\n");
 	lapic_send_startup_ipi(apic_id, vector);
 
 	printk(KERN_OK "AP startup sequence complete\n");
 }
 
-static bool using_apic = false;
-
+/**
+ * @brief Convenience: full BSP init and timer start
+ *
+ * Calls apic_init(), enables the LAPIC, unmasks keyboard-
+ * related IRQs, starts the LAPIC timer at 100 Hz, and
+ * installs the timer handler.
+ */
 void apic_init_bsp(void)
 {
 	apic_init();
@@ -857,5 +975,4 @@ void apic_init_bsp(void)
 	ioapic_unmask_irq(12);
 	lapic_timer_init(100);
 	irq_install_handler(0, lapic_timer_handler);
-	using_apic = true;
 }

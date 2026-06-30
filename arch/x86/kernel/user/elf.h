@@ -1,15 +1,18 @@
 /**
  * @file elf.h
- * @brief ELF file format definitions
+ * @brief ELF64 structures and loader declarations
  *
- * This file contains definitions for the ELF (Executable and Linkable Format)
- * file format used in the x86 architecture.
+ * Defines the ELF64 header and program header structures
+ * and declares the public ELF loader interface.
  */
 
 #pragma once
 
 #include <stdint.h>
 
+/**
+ * @brief ELF64 file header
+ */
 typedef struct
 {
 	unsigned char e_ident[16];
@@ -25,6 +28,9 @@ typedef struct
 	uint16_t e_phnum;
 } __attribute__((packed)) Elf64_Ehdr;
 
+/**
+ * @brief ELF64 program header
+ */
 typedef struct
 {
 	uint32_t p_type;

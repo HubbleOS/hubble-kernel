@@ -1,3 +1,8 @@
+/**
+ * @file iso646.h
+ * @brief Alternative operator spellings
+ */
+
 #pragma once
 
 #ifdef __cplusplus

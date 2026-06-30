@@ -1,3 +1,8 @@
+/**
+ * @file bwfvideo.h
+ * @brief Black-and-white frame video player header
+ */
+
 #pragma once
 
 #include <_cheader.h>

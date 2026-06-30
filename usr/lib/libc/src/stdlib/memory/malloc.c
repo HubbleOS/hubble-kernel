@@ -1,6 +1,10 @@
+/**
+ * @file malloc.c
+ * @brief Allocate memory
+ */
+
 #include <stdlib.h>
 #include "mem.h"
-
 #include <sys/syscall.h>
 
 void *mmap(uint64_t addr, size_t length, int prot, int flags,
@@ -16,7 +20,6 @@ void *malloc(size_t size)
 
 	heap_block_t *block = heap_start;
 
-	// searching for a suitable free block
 	while (block)
 	{
 		if (block->free && block->size >= size)
@@ -27,15 +30,14 @@ void *malloc(size_t size)
 		block = block->next;
 	}
 
-	// there is no suitable block - select via mmap
 	size_t total_size = HEAP_BLOCK_SIZE + size;
 	void *mem = mmap(
-	    0,		// address = 0 -> kernel/VM itself will find a free area
-	    total_size, // size of allocated memory
-	    0x3,	// PROT_READ | PROT_WRITE
-	    0x22,	// MAP_ANONYMOUS | MAP_PRIVATE
-	    -1,		// fd = -1 for anonymous mmap
-	    0		// offset = 0 for anonymous mmap
+	    0,
+	    total_size,
+	    0x3,
+	    0x22,
+	    -1,
+	    0
 	);
 	if (!mem)
 		return NULL;
@@ -45,7 +47,6 @@ void *malloc(size_t size)
 	block->free = false;
 	block->next = NULL;
 
-	// цепляем в список
 	if (!heap_start)
 	{
 		heap_start = block;

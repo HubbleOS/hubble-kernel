@@ -1,17 +1,23 @@
+/**
+ * @file keyboard.c
+ * @brief TTY keyboard handler — keymap, modifier tracking, input core handler
+ */
+#include <stdbool.h>
+#include <stddef.h>
+#include <hubble/ctype.h>
+#include <hubble/input.h>
+#include <hubble/module.h>
+#include <smp/scheduler.h>
+#include <smp/waitqueue.h>
+#include <lib/misc.k.h>
+#include <drivers/tty/tty.h>
+#include <drivers/tty/keyboard.h>
+#include <drivers/tty/keymap.h>
 #include "keymap.h"
 #include "keyboard.h"
 
-#include <stdbool.h>
-#include <stddef.h>
+/* ── Keymap table ───────────────────────────────────────── */
 
-#include <hubble/ctype.h>
-
-#include <smp/scheduler.h>
-#include <smp/waitqueue.h>
-
-#include <lib/misc.k.h>
-
-// Existing keymap (keep as is)
 const keymap_entry_t keymap[] = {
     {.id = {KEY_A, false}, 'a', 'A'},
     {.id = {KEY_B, false}, 'b', 'B'},
@@ -80,7 +86,8 @@ const keymap_entry_t keymap[] = {
 
 const size_t keymap_size = SIZEOF_ARRAY(keymap);
 
-// Existing keymap_lookup_char (keep as is)
+/* ── Keymap lookup ──────────────────────────────────────── */
+
 char keymap_lookup_char(uint8_t scancode, bool extended, bool shift, bool caps)
 {
 	for (size_t i = 0; i < keymap_size; ++i)
@@ -96,143 +103,8 @@ char keymap_lookup_char(uint8_t scancode, bool extended, bool shift, bool caps)
 	return 0;
 }
 
-// input_event_t keyboard_get_input(void)
-// {
-// 	while (true)
-// 	{
-// 		key_event_t evt = keyboard_get_event();
+/* ── Modifier state tracking ────────────────────────────── */
 
-// 		// input_event_t input = {0};
-
-// 		input_event_t input = {
-// 		    .type = KEY_TYPE_UNKNOWN,
-// 		    .shift = evt.is_shift,
-// 		    .ctrl = evt.is_ctrl,
-// 		    .alt = evt.is_alt,
-// 		    .character = 0,
-// 		    .action = KEY_ACTION_NONE};
-
-// 		// Skip modifier keys themselves
-// 		if (evt.id.scancode == KEY_LEFT_SHIFT ||
-// 		    evt.id.scancode == KEY_RIGHT_SHIFT ||
-// 		    evt.id.scancode == KEY_LEFT_CTRL ||
-// 		    (evt.id.scancode == KEY_RIGHT_CTRL && evt.id.extended) ||
-// 		    evt.id.scancode == KEY_LEFT_ALT ||
-// 		    (evt.id.scancode == KEY_RIGHT_ALT && evt.id.extended) ||
-// 		    evt.id.scancode == KEY_CAPS_LOCK)
-// 		{
-// 			input.type = KEY_TYPE_MODIFIER;
-// 			continue;
-// 		}
-
-// 		// Handle function keys
-// 		if (!evt.id.extended && evt.id.scancode >= KEY_F1 && evt.id.scancode <= KEY_F12)
-// 		{
-// 			input.type = KEY_TYPE_FUNCTION;
-// 			if (evt.id.scancode <= KEY_F10)
-// 				input.function_key = evt.id.scancode - KEY_F1 + 1;
-// 			else
-// 				input.function_key = evt.id.scancode - KEY_F11 + 11;
-// 			return input;
-// 		}
-
-// 		// Handle extended special keys (arrows, navigation)
-// 		if (evt.id.extended)
-// 		{
-// 			input.type = KEY_TYPE_SPECIAL;
-
-// 			switch (evt.id.scancode)
-// 			{
-// 			case KEY_UP:
-// 				input.action = KEY_ACTION_UP;
-// 				return input;
-// 			case KEY_DOWN:
-// 				input.action = KEY_ACTION_DOWN;
-// 				return input;
-// 			case KEY_LEFT:
-// 				input.action = KEY_ACTION_LEFT;
-// 				return input;
-// 			case KEY_RIGHT:
-// 				input.action = KEY_ACTION_RIGHT;
-// 				return input;
-// 			case KEY_HOME:
-// 				input.action = KEY_ACTION_HOME;
-// 				return input;
-// 			case KEY_END:
-// 				input.action = KEY_ACTION_END;
-// 				return input;
-// 			case KEY_INSERT:
-// 				input.action = KEY_ACTION_INSERT;
-// 				return input;
-// 			case KEY_DELETE:
-// 				input.action = KEY_ACTION_DELETE;
-// 				return input;
-// 			case KEY_PAGEUP:
-// 				input.action = KEY_ACTION_PAGE_UP;
-// 				return input;
-// 			case KEY_PAGEDOWN:
-// 				input.action = KEY_ACTION_PAGE_DOWN;
-// 				return input;
-// 			default:
-// 				// Unknown extended key
-// 				continue;
-// 			}
-// 		}
-
-// 		// Try to get a character from keymap
-// 		char c = keymap_lookup_char(evt.id.scancode, evt.id.extended,
-// 					    evt.is_shift, evt.is_caps_lock);
-
-// 		if (c != 0)
-// 		{
-// 			// Check if it's a special character that needs special handling
-// 			if (c == '\b')
-// 			{
-// 				input.type = KEY_TYPE_SPECIAL;
-// 				input.action = KEY_ACTION_BACKSPACE;
-// 				return input;
-// 			}
-// 			if (c == '\n')
-// 			{
-// 				input.type = KEY_TYPE_SPECIAL;
-// 				input.action = KEY_ACTION_ENTER;
-// 				return input;
-// 			}
-// 			if (c == '\t')
-// 			{
-// 				input.type = KEY_TYPE_SPECIAL;
-// 				input.action = KEY_ACTION_TAB;
-// 				return input;
-// 			}
-// 			if (c == 27)
-// 			{ // ESC
-// 				input.type = KEY_TYPE_SPECIAL;
-// 				input.action = KEY_ACTION_ESC;
-// 				return input;
-// 			}
-
-// 			// Regular printable character
-// 			input.type = KEY_TYPE_CHAR;
-// 			input.character = c;
-// 			return input;
-// 		}
-
-// 		// Unknown key, continue waiting
-// 	}
-// }
-
-#include <drivers/tty/tty.h>
-#include <drivers/tty/keyboard.h>
-#include <drivers/tty/keymap.h>
-
-#include <hubble/input.h>
-#include <hubble/module.h>
-
-/*
- * Стан модифікаторів — відновлюємо з input_raw_event_t.
- * input core передає кожну клавішу окремо, тому треба
- * відстежувати стан shift/ctrl/alt/caps самостійно.
- */
 typedef struct
 {
 	bool shift;
@@ -243,11 +115,8 @@ typedef struct
 
 static kbd_state_t kbd_state = {0};
 
-/* ── Розпізнати модифікатор за code ──────────────────────────────────────── */
-
 static void update_modifiers(uint16_t code, bool pressed)
 {
-	/* code = scancode | 0x100 якщо extended (дивись keyboard.c) */
 	uint8_t sc = code & 0xFF;
 	bool extended = code & 0x100;
 
@@ -263,14 +132,13 @@ static void update_modifiers(uint16_t code, bool pressed)
 		kbd_state.caps_lock = !kbd_state.caps_lock;
 }
 
-/* ── Головна функція обробки події ───────────────────────────────────────── */
+/* ── Key event handler ──────────────────────────────────── */
 
 static void tty_handle_key(uint16_t code, bool pressed)
 {
 	uint8_t sc = code & 0xFF;
 	bool extended = code & 0x100;
 
-	/* --- CTRL+C, CTRL+D, CTRL+L --- */
 	if (kbd_state.ctrl && !extended)
 	{
 		if (!pressed)
@@ -279,23 +147,21 @@ static void tty_handle_key(uint16_t code, bool pressed)
 		{
 		case KEY_C:
 			tty_input_char(tty_current, 0x03);
-			return; /* ETX */
+			return;
 		case KEY_D:
 			tty_input_char(tty_current, 0x04);
-			return; /* EOT */
+			return;
 		case KEY_L:
 			tty_input_char(tty_current, '\f');
-			return; /* FF  */
+			return;
 		}
 	}
 
 	if (!pressed)
-		return; /* решту release ігноруємо */
+		return;
 
-	/* --- Стрілки та навігація (extended) --- */
 	if (extended)
 	{
-		/* tty в canonical режимі генерує VT100 escape sequences */
 		switch (sc)
 		{
 		case KEY_UP:
@@ -333,20 +199,15 @@ static void tty_handle_key(uint16_t code, bool pressed)
 		}
 	}
 
-	/* --- Функціональні клавіші --- */
 	if (sc >= KEY_F1 && sc <= KEY_F10)
-	{
-		/* VT100: F1=\x1bOP, F2=\x1bOQ, ... — поки просто ігноруємо */
 		return;
-	}
 
-	/* --- Звичайний символ через keymap --- */
 	char c = keymap_lookup_char(sc, extended, kbd_state.shift, kbd_state.caps_lock);
 	if (c != 0)
 		tty_input_char(tty_current, c);
 }
 
-/* ── input_handler ───────────────────────────────────────────────────────── */
+/* ── Input handler ──────────────────────────────────────── */
 
 static bool tty_kbd_match(input_handler_t *handler, input_dev_t *dev)
 {
@@ -354,7 +215,7 @@ static bool tty_kbd_match(input_handler_t *handler, input_dev_t *dev)
 	return input_test_bit(EV_KEY, dev->evbit);
 }
 
-static input_handle_t tty_kbd_handle; /* статичний — один tty, одна клава */
+static input_handle_t tty_kbd_handle;
 
 static int tty_kbd_connect(input_handler_t *handler, input_dev_t *dev)
 {
@@ -380,7 +241,7 @@ static void tty_kbd_event(input_handle_t *handle, input_raw_event_t *ev)
 	if (!tty_current)
 		return;
 
-	bool pressed = ev->value == 1; /* 1=press, 0=release, 2=repeat */
+	bool pressed = ev->value == 1;
 	bool repeat = ev->value == 2;
 
 	update_modifiers(ev->code, pressed);
@@ -399,7 +260,7 @@ static input_handler_t tty_kbd_handler = {
     .event = tty_kbd_event,
 };
 
-/* ── initcall ────────────────────────────────────────────────────────────── */
+/* ── Initcall ───────────────────────────────────────────── */
 
 static int tty_keyboard_initcall(void)
 {

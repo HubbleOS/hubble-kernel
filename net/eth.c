@@ -1,9 +1,17 @@
-#include "eth.h"
+/**
+ * @file eth.c
+ * @brief Ethernet protocol implementation
+ *
+ * Provides functions to send and receive Ethernet frames
+ * and dispatches ARP/internal packets as needed.
+ */
+
 #include <hubble/device.h>
-#include <net/netdev.h>
-#include <net/arp.h>
-#include <mm/kmalloc.h>
 #include <hubble/string.h>
+#include <mm/kmalloc.h>
+#include <net/arp.h>
+#include <net/netdev.h>
+#include "eth.h"
 
 struct eth_hdr
 {
@@ -12,11 +20,22 @@ struct eth_hdr
 	uint16_t type;
 } __attribute__((packed));
 
+/**
+ * @brief Find the Ethernet network device
+ * @return Pointer to the device, or NULL if not found
+ */
 static struct device *eth_dev(void)
 {
 	return device_find_by_type(DEV_NET);
 }
-#include <hubble/printk.h>
+
+/**
+ * @brief Send an Ethernet frame
+ * @param dst Destination MAC address
+ * @param type Ethernet type (host byte order)
+ * @param payload Payload data
+ * @param len Payload length
+ */
 void eth_send(uint8_t dst[6], uint16_t type, const void *payload, uint16_t len)
 {
 	struct device *dev = eth_dev();
@@ -39,6 +58,13 @@ void eth_send(uint8_t dst[6], uint16_t type, const void *payload, uint16_t len)
 	kfree(buf);
 }
 
+/**
+ * @brief Receive an Ethernet frame
+ * @param payload_out Buffer for the payload data
+ * @param len_out Length of the received payload
+ * @param type_out Ethernet type of the received frame
+ * @return 0 on success, -1 on error
+ */
 int eth_recv(uint8_t *payload_out, uint16_t *len_out, uint16_t *type_out)
 {
 	struct device *dev = eth_dev();

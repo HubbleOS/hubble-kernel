@@ -1,9 +1,14 @@
+/* ── GPT structure definitions ────────────────────────────────────
+ * Data structures for GPT partition table entries, headers, and
+ * the logical partition abstraction used by the VFS layer.
+ * ────────────────────────────────────────────────────────────────── */
+
 #pragma once
 
 #include <stdint.h>
-// #include <utils/vfs/vfs.h>
 #include <fs/vfs/vfs_standart_struct.h>
 
+/** @brief GPT partition entry (packed, 128 bytes). */
 typedef struct __attribute__((packed))
 {
 	uint8_t partition_type_guid[16];
@@ -14,6 +19,7 @@ typedef struct __attribute__((packed))
 	uint16_t name[36]; // UTF-16LE
 } GPT_Partition_Entry;
 
+/** @brief GPT header (packed, 92 bytes + reserved padding). */
 typedef struct __attribute__((packed))
 {
 	uint64_t signature;
@@ -33,15 +39,11 @@ typedef struct __attribute__((packed))
 	uint8_t reserved2[420]; // 512 - 92 = 420
 } GPT_Header;
 
+/** @brief Logical partition descriptor used by the VFS layer. */
 typedef struct
 {
 	uint64_t first_lba;
 	uint64_t last_lba;
 	char name[37];
 	VFS_Device *device;
-	// DeviceType type;
-	// int (*read)(void *device, uint32_t lba, void *buffer);
-	// int (*write)(void *device, uint32_t lba, const void *buffer);
-	// void *device;
-
 } gpt_partition_t;

@@ -1,3 +1,8 @@
+/**
+ * @file stdbool.h
+ * @brief Boolean type and values
+ */
+
 #pragma once
 
 #ifndef __cplusplus

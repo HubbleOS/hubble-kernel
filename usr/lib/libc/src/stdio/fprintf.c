@@ -1,3 +1,8 @@
+/**
+ * @file fprintf.c
+ * @brief Formatted print to a stream
+ */
+
 #include <stdio.h>
 
 int fprintf(FILE *stream, const char *format, ...)

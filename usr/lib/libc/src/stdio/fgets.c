@@ -1,3 +1,8 @@
+/**
+ * @file fgets.c
+ * @brief Read a line from a stream
+ */
+
 #include <stdio.h>
 
 char *fgets(char *s, int size, FILE *stream)

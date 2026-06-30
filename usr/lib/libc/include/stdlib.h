@@ -1,3 +1,8 @@
+/**
+ * @file stdlib.h
+ * @brief General utility functions
+ */
+
 #pragma once
 
 #include <_cheader.h>
@@ -5,38 +10,25 @@
 
 _Begin_C_Header;
 
-// double atof(const char *nptr);
+/** @brief Convert string to integer */
 int atoi(const char *);
-// long atol(const char *nptr);
 
-// double strtod(const char *nptr, char **endptr);
-// long strtol(const char *nptr, char **endptr, int base);
-// unsigned long strtoul(const char *nptr, char **endptr, int base);
-
-// int rand(void);
-// void srand(unsigned int seed);
-
-// void *calloc(size_t nmemb, size_t size);
+/** @brief Allocate memory */
 void *malloc(size_t);
+
+/** @brief Resize memory allocation */
 void *realloc(void *ptr, size_t size);
+
+/** @brief Free allocated memory */
 void free(void *);
-// void *aligned_alloc(size_t, size_t);
 
-// void abort(void);
-// void exit(int status);
-
-// int atexit(void (*func)(void));
-// int system(const char *command);
-
-// char *getenv(const char *name);
-// void *bsearch(const void *key, const void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
-// void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
-
+/** @brief Compute absolute value of an int */
 int abs(int);
-long labs(long);
-long long llabs(long long x);
 
-// div_t div(int numer, int denom); ??
-// ldiv_t ldiv(long numer, long denom); ??
+/** @brief Compute absolute value of a long */
+long labs(long);
+
+/** @brief Compute absolute value of a long long */
+long long llabs(long long x);
 
 _End_C_Header;

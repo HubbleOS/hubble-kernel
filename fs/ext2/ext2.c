@@ -1,3 +1,8 @@
+/* ── EXT2 filesystem implementation ───────────────────────────────
+ * Core EXT2 driver providing superblock/group descriptor reading,
+ * inode I/O, block I/O, directory listing, path resolution, and
+ * file/directory creation primitives.
+ * ────────────────────────────────────────────────────────────────── */
 
 #include <hubble/printk.h>
 
@@ -8,43 +13,57 @@
 #include <fs/vfs/vfs.h>
 #include <fs/vfs/vfs_standart_struct.h>
 
-#include <drivers/storage/ata/ata.h>
-
 #include "ext2.h"
 #include "ext2_struct.h"
 
 #include <hubble/string.h>
+
+/* ── Forward declarations ─────────────────────────────────────────── */
+
+static void ext2_read_block(EXT2_FS *fs, uint32_t block_number, void *buf);
+static void ext2_write_block(EXT2_FS *fs, uint32_t block_number, void *buf);
+static int IS_DIR(uint16_t mode);
+static PathParts_ext format_folder_path_ext(const char *in);
+static int ext2_read_group_desc(EXT2_FS *fs);
+static int ext2_read_superblock(EXT2_FS *fs);
+static uint32_t ext2_allocate_inode(EXT2_FS *fs, uint32_t group);
+static uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t group);
+static int ext2_write_inode(EXT2_FS *fs, uint32_t inode_num, Ext2Inode *inode);
+static int ext2_add_dir_entry(EXT2_FS *fs, uint32_t dir_inode_num, const char *name, uint32_t inode_num, uint8_t file_type);
+
+/* ── Block I/O ────────────────────────────────────────────────────── */
+
 static void ext2_read_block(EXT2_FS *fs, uint32_t block_number, void *buf)
 {
 	uint32_t sectors_per_block = fs->block_size / 512;
 	uint32_t lba = fs->first_lba + block_number * sectors_per_block;
 
 	for (uint32_t i = 0; i < sectors_per_block; i++)
-	{
 		fs->read_sector(fs->device, lba + i, ((uint8_t *)buf) + i * 512);
-	}
 }
+
 static void ext2_write_block(EXT2_FS *fs, uint32_t block_number, void *buf)
 {
 	uint32_t sectors_per_block = fs->block_size / 512;
 	uint32_t lba = fs->first_lba + block_number * sectors_per_block;
 
 	for (uint32_t i = 0; i < sectors_per_block; i++)
-	{
 		fs->write_sector(fs->device, lba + i, ((uint8_t *)buf) + i * 512);
-	}
 }
-int IS_DIR(uint16_t mode)
+
+/* ── Helpers ──────────────────────────────────────────────────────── */
+
+static int IS_DIR(uint16_t mode)
 {
 	return (mode & 0xF000) == 0x4000;
 }
 
-PathParts_ext format_folder_path_ext(const char *in)
+static PathParts_ext format_folder_path_ext(const char *in)
 {
 	PathParts_ext result = {0};
 
 	while (*in == '/')
-		in++; // пропустити початкові '/'
+		in++;
 
 	while (*in && result.count < MAX_PARTS && *in != '\0')
 	{
@@ -72,18 +91,17 @@ PathParts_ext format_folder_path_ext(const char *in)
 	return result;
 }
 
-int ext2_read_group_desc(EXT2_FS *fs)
+/* ── Superblock / Group descriptor reading ────────────────────────── */
+
+static int ext2_read_group_desc(EXT2_FS *fs)
 {
-	// block where group descriptors start:
 	uint32_t desc_block = (fs->block_size == 1024) ? 2 : 0;
 
 	uint32_t groups_count = (fs->blocks_count + fs->blocks_per_group - 1) / fs->blocks_per_group;
 	uint32_t desc_size = sizeof(Ext2GroupDesc) * groups_count;
 
-	// скільки блоків треба, щоб прочитати всю таблицю дескрипторів:
 	uint32_t blocks_needed = (desc_size + fs->block_size - 1) / fs->block_size;
 
-	// читаємо всі блоки таблиці
 	uint8_t *buf = kmalloc(blocks_needed * fs->block_size, GFP_KERNEL);
 	if (!buf)
 	{
@@ -92,9 +110,7 @@ int ext2_read_group_desc(EXT2_FS *fs)
 	}
 
 	for (uint32_t i = 0; i < blocks_needed; i++)
-	{
 		ext2_read_block(fs, desc_block + i, buf + i * fs->block_size);
-	}
 
 	fs->groups = kmalloc(sizeof(Ext2GroupDesc) * groups_count, GFP_KERNEL);
 	if (!fs->groups)
@@ -112,20 +128,20 @@ int ext2_read_group_desc(EXT2_FS *fs)
 	return 0;
 }
 
-int ext2_read_superblock(EXT2_FS *fs)
+static int ext2_read_superblock(EXT2_FS *fs)
 {
 	uint8_t buf[1024];
 	printk(KERN_INFO "Reading superblock\n");
-	// Суперблок завжди починається через 1024 байти після початку розділу
-	uint32_t superblock_lba = fs->first_lba + 2; // 1024 / 512 = 2 секторa
+	uint32_t superblock_lba = fs->first_lba + 2;
 	printk(KERN_INFO "Superblock LBA: %u\n", superblock_lba);
 	if (!fs->read_sector)
 	{
 		printk(KERN_ERR "EXT2: read_sector is NULL\n");
 		return -1;
 	}
-	for (int i = 0; i < 2; i++) // читаємо 1024 байти (2×512)
+	for (int i = 0; i < 2; i++)
 		fs->read_sector(fs->device, superblock_lba + i, buf + i * 512);
+
 	printk(KERN_INFO "EXT2: read superblock\n");
 	Ext2Superblock *sb = (Ext2Superblock *)buf;
 
@@ -153,6 +169,31 @@ int ext2_read_superblock(EXT2_FS *fs)
 
 	return 0;
 }
+
+/* ── Public API ────────────────────────────────────────────────────── */
+
+/** @brief Initialise the EXT2 filesystem by reading superblock and group descriptors. */
+int ext2_init(EXT2_FS *fs)
+{
+	printk(KERN_INFO "Initializing EXT2\n");
+	printk(KERN_INFO "Reading superblock\n");
+	if (ext2_read_superblock(fs) < 0)
+		return -1;
+	printk(KERN_INFO "Reading group descriptors\n");
+	if (ext2_read_group_desc(fs) < 0)
+		return -1;
+	Ext2Inode root_inode;
+	printk(KERN_INFO "Reading root inode\n");
+	ext2_read_inode(fs, 2, &root_inode);
+
+	printk(KERN_INFO "Root inode size = %u bytes\n", root_inode.size);
+	printk(KERN_INFO "Root inode first block = %u\n", root_inode.block[0]);
+	printk(KERN_INFO "inode blocks count = %u\n", root_inode.blocks);
+	ext2_list_dir(fs, &root_inode);
+	return 0;
+}
+
+/** @brief Read an inode from disk. */
 int ext2_read_inode(EXT2_FS *fs, uint32_t inode_number, Ext2Inode *out_inode)
 {
 	printk(KERN_INFO "Reading inode in func %u\n", inode_number);
@@ -184,12 +225,13 @@ int ext2_read_inode(EXT2_FS *fs, uint32_t inode_number, Ext2Inode *out_inode)
 	printk(KERN_INFO "inode_table_block=%u block_offset=%u offset_in_block=%u\n", inode_table_block, block_offset, offset_in_block);
 	ext2_read_block(fs, inode_table_block + block_offset, block_buf);
 	printk(KERN_INFO "inode_size=%u\n", inode_size);
-	memcpy(out_inode, block_buf + offset_in_block, sizeof(Ext2Inode)); // переконайсь, що sizeof(Ext2Inode) <= inode_size
+	memcpy(out_inode, block_buf + offset_in_block, sizeof(Ext2Inode));
 	printk(KERN_INFO "inode read\n");
 	kfree(block_buf);
 	return 0;
 }
 
+/** @brief List the contents of a directory inode. */
 Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode)
 {
 	if (!IS_DIR(dir_inode->mode))
@@ -204,7 +246,7 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode)
 
 	Directory dir = Directory_init((Directory){.entries = kmalloc(1024, GFP_KERNEL), .count = 0});
 
-	for (int i = 0; i < 12 && dir_inode->block[i]; i++) // тільки прямі блоки для простої версії
+	for (int i = 0; i < 12 && dir_inode->block[i]; i++)
 	{
 		printk(KERN_INFO "read in for");
 		ext2_read_block(fs, dir_inode->block[i], block_buf);
@@ -218,9 +260,8 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode)
 				break;
 			dir.entries[dir.count].name = kmalloc(entry->name_len + 1, GFP_KERNEL);
 			if (!dir.entries[dir.count].name)
-			{
 				printk(KERN_ERR "failed");
-			}
+
 			printk(KERN_INFO "teto 2");
 			memcpy(dir.entries[dir.count].name, entry->name, entry->name_len);
 			printk(KERN_INFO "teto3 count - %d\n", dir.count);
@@ -230,20 +271,19 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode)
 			dir.entries[dir.count].cluster = entry->inode;
 			dir.count++;
 
-			// printk(" - %s (inode=%u, type=%u)\n", name, entry->inode, entry->file_type);
-
 			offset += entry->rec_len;
 			if (entry->rec_len == 0)
-			{
 				break;
-			}
 		}
 	}
 	printk(KERN_INFO "teto ultima");
 	kfree(block_buf);
 	return dir;
 }
-uint32_t ext2_allocate_inode(EXT2_FS *fs, uint32_t group)
+
+/* ── Inode / block allocation ──────────────────────────────────────── */
+
+static uint32_t ext2_allocate_inode(EXT2_FS *fs, uint32_t group)
 {
 	uint8_t *bitmap = kmalloc(fs->block_size, GFP_KERNEL);
 	ext2_read_block(fs, fs->groups[group].inode_bitmap, bitmap);
@@ -254,18 +294,18 @@ uint32_t ext2_allocate_inode(EXT2_FS *fs, uint32_t group)
 		uint8_t bit = 1 << (i % 8);
 		if (!(bitmap[byte] & bit))
 		{
-			bitmap[byte] |= bit; // помічаємо inode як зайнятий
+			bitmap[byte] |= bit;
 			ext2_write_block(fs, fs->groups[group].inode_bitmap, bitmap);
 			kfree(bitmap);
-			return i + 1 + group * fs->inodes_per_group; // глобальний номер inode
+			return i + 1 + group * fs->inodes_per_group;
 		}
 	}
 
 	kfree(bitmap);
-	return 0; // немає вільних inode
+	return 0;
 }
 
-uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t group)
+static uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t group)
 {
 	uint8_t *bitmap = kmalloc(fs->block_size, GFP_KERNEL);
 	ext2_read_block(fs, fs->groups[group].block_bitmap, bitmap);
@@ -287,7 +327,9 @@ uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t group)
 	return 0;
 }
 
-int ext2_write_inode(EXT2_FS *fs, uint32_t inode_num, Ext2Inode *inode)
+/* ── Inode write / directory entry management ──────────────────────── */
+
+static int ext2_write_inode(EXT2_FS *fs, uint32_t inode_num, Ext2Inode *inode)
 {
 	uint32_t group = (inode_num - 1) / fs->inodes_per_group;
 	uint32_t index = (inode_num - 1) % fs->inodes_per_group;
@@ -307,7 +349,8 @@ int ext2_write_inode(EXT2_FS *fs, uint32_t inode_num, Ext2Inode *inode)
 	kfree(buf);
 	return 0;
 }
-int ext2_add_dir_entry(EXT2_FS *fs, uint32_t dir_inode_num, const char *name, uint32_t inode_num, uint8_t file_type)
+
+static int ext2_add_dir_entry(EXT2_FS *fs, uint32_t dir_inode_num, const char *name, uint32_t inode_num, uint8_t file_type)
 {
 	Ext2Inode dir_inode;
 	ext2_read_inode(fs, dir_inode_num, &dir_inode);
@@ -342,43 +385,28 @@ int ext2_add_dir_entry(EXT2_FS *fs, uint32_t dir_inode_num, const char *name, ui
 	kfree(block);
 	return -1;
 }
+
+/** @brief Create a new file under a parent inode. */
 uint32_t ext2_create_file(EXT2_FS *fs, uint32_t parent_inode, const char *name)
 {
 	uint32_t new_inode = ext2_allocate_inode(fs, 0);
 	uint32_t new_block = ext2_allocate_block(fs, 0);
 
 	Ext2Inode inode = {0};
-	inode.mode = 0x8000 | 0644; // звичайний файл
+	inode.mode = 0x8000 | 0644;
 	inode.size = 0;
-	inode.blocks = 2; // у 512-блоках
+	inode.blocks = 2;
 	inode.block[0] = new_block;
 
 	ext2_write_inode(fs, new_inode, &inode);
-	ext2_add_dir_entry(fs, parent_inode, name, new_inode, 1); // 1 = файл
+	ext2_add_dir_entry(fs, parent_inode, name, new_inode, 1);
 
 	return new_inode;
 }
 
-int ext2_init(EXT2_FS *fs)
-{
-	printk(KERN_INFO "Initializing EXT2\n");
-	printk(KERN_INFO "Reading superblock\n");
-	if (ext2_read_superblock(fs) < 0)
-		return -1;
-	printk(KERN_INFO "Reading group descriptors\n");
-	if (ext2_read_group_desc(fs) < 0)
-		return -1;
-	Ext2Inode root_inode;
-	printk(KERN_INFO "Reading root inode\n");
-	ext2_read_inode(fs, 2, &root_inode);
+/* ── Path resolution ───────────────────────────────────────────────── */
 
-	printk(KERN_INFO "Root inode size = %u bytes\n", root_inode.size);
-	printk(KERN_INFO "Root inode first block = %u\n", root_inode.block[0]);
-	// display all info
-	printk(KERN_INFO "inode blocks count = %u\n", root_inode.blocks);
-	ext2_list_dir(fs, &root_inode);
-	return 0;
-}
+/** @brief Find a directory entry by name within a given inode. */
 uint32_t ext2_find_dir_entry(EXT2_FS *fs, uint32_t inode, const char *name)
 {
 	Ext2Inode dir_inode;
@@ -403,6 +431,8 @@ uint32_t ext2_find_dir_entry(EXT2_FS *fs, uint32_t inode, const char *name)
 	kfree(block_buf);
 	return 0;
 }
+
+/** @brief Resolve a path to an inode number. */
 uint32_t ext2_parse_path(EXT2_FS *fs, uint32_t inode, const char *path)
 {
 	PathParts_ext parts = format_folder_path_ext(path);
@@ -414,72 +444,3 @@ uint32_t ext2_parse_path(EXT2_FS *fs, uint32_t inode, const char *path)
 	}
 	return inode;
 }
-
-// void ext2_init(gpt_partition_t part)
-// {
-// 	printk("Initializing EXT2 on partition starting at LBA %lu\n\n", part.first_lba);
-
-// 	VFS_Device *device = part.device;
-
-// 	uint8_t *buf = kmalloc(1024 * 2);
-
-// 	device->read(device->device, part.first_lba, buf);
-// 	device->read(device->device, part.first_lba + 1, buf + 512);
-// 	device->read(device->device, part.first_lba + 2, buf + 1024);
-
-// 	Ext2Superblock *superblock = (Ext2Superblock *)(buf + 1024);
-
-// 	if (superblock->s_magic != 0xEF53)
-// 	{
-// 		printk("Superblock magic number: 0x%x (invalid)\n", superblock->s_magic);
-// 		return;
-// 	}
-
-// 	printk("EXT2 Superblock OK (magic 0x%x)\n", superblock->s_magic);
-// 	printk("Block size: %u\n", 1024 << superblock->s_log_block_size);
-// 	printk("Inodes count: %u\n", superblock->s_inodes_count);
-// 	printk("Blocks count: %u\n", superblock->s_blocks_count);
-// 	printk("Blocks per group: %u\n", superblock->s_blocks_per_group);
-// 	printk("Inodes per group: %u\n", superblock->s_inodes_per_group);
-// 	printk("First data block: %u\n", superblock->s_first_data_block);
-// 	printk("Volume name: %.16s\n", superblock->s_volume_name);
-
-// 	EXT2_FS *fs = kmalloc(sizeof(EXT2_FS));
-// 	if (!fs)
-// 	{
-// 		printk("Failed to allocate EXT2_FS\n");
-// 		return;
-// 	}
-
-// 	fs->device = device->device;
-// 	fs->start_lba = part.first_lba;
-// 	fs->read_sector = device->read;
-// 	fs->write_sector = device->write;
-
-// 	fs->block_size = 1024 << superblock->s_log_block_size;
-// 	fs->blocks_per_group = superblock->s_blocks_per_group;
-// 	fs->inodes_per_group = superblock->s_inodes_per_group;
-// 	fs->first_data_block = superblock->s_first_data_block;
-// 	fs->blocks_count = superblock->s_blocks_count;
-// 	fs->inodes_count = superblock->s_inodes_count;
-
-// 	uint32_t group_desc_lba = (fs->first_data_block + 1) * (fs->block_size / 512);
-
-// 	uint8_t *buffer = kmalloc(fs->block_size);
-
-// 	device->read(device->device, group_desc_lba, buffer);
-
-// 	for (int i = 0; i < fs->inodes_per_group; i++)
-// 	{
-// 		Ext2Inode *inode = (Ext2Inode *)(buffer + i * sizeof(Ext2Inode));
-
-// 		if (inode->i_mode == 0)
-// 		{
-// 			continue;
-// 		}
-
-// 		fs->inodes[i] = inode;
-// 	}
-
-// 	kfree(buf);
-// }

@@ -1,4 +1,9 @@
-#include "e1000.h"
+/**
+ * @file e1000.c
+ * @brief Intel e1000 network adapter driver — MMIO rings, PCI probe, netdev
+ */
+#include <stdint.h>
+#include <higher_half.h>
 #include <hubble/device.h>
 #include <hubble/module.h>
 #include <hubble/printk.h>
@@ -6,13 +11,17 @@
 #include <mm/kmalloc.h>
 #include <mm/vmm.h>
 #include <drivers/pci/pci.h>
-#include <higher_half.h>
 #include <net/netdev.h>
+#include "e1000.h"
+
+/* ── MMIO access ────────────────────────────────────────── */
 
 static volatile uint32_t *e1000_base = NULL;
 
 static inline uint32_t e1000_read(uint32_t reg) { return e1000_base[reg / 4]; }
 static inline void e1000_write(uint32_t reg, uint32_t val) { e1000_base[reg / 4] = val; }
+
+/* ── Page-table helpers ─────────────────────────────────── */
 
 static bool e1000_mmio_is_mapped(uint64_t virt)
 {
@@ -58,6 +67,8 @@ static int e1000_map_mmio_range(uint64_t phys, uint64_t size)
 	return 0;
 }
 
+/* ── Global state ───────────────────────────────────────── */
+
 static struct e1000_rx_desc *rx_descs = NULL;
 static struct e1000_tx_desc *tx_descs = NULL;
 static uint8_t *rx_buffers[E1000_RX_DESC_COUNT];
@@ -65,18 +76,13 @@ static uint32_t rx_tail = 0;
 static uint32_t tx_tail = 0;
 static uint8_t mac_addr[6];
 
-// bus/slot/func теперь приходят снаружи через pci_device
 static uint8_t e1000_pci_bus, e1000_pci_slot, e1000_pci_func;
 
-// PCI find e1000
-// Global coordinates of the PCI device
-static uint8_t e1000_pci_bus, e1000_pci_slot, e1000_pci_func;
+/* ── RX init ────────────────────────────────────────────── */
 
 static void e1000_rx_init(void)
 {
 	rx_descs = kmalloc(sizeof(struct e1000_rx_desc) * E1000_RX_DESC_COUNT + 16, GFP_KERNEL);
-
-	// Align manually
 	rx_descs = (struct e1000_rx_desc *)(((uint64_t)rx_descs + 15) & ~15ULL);
 
 	memset(rx_descs, 0, sizeof(struct e1000_rx_desc) * E1000_RX_DESC_COUNT);
@@ -99,10 +105,11 @@ static void e1000_rx_init(void)
 	e1000_write(E1000_RCTL, E1000_RCTL_EN | E1000_RCTL_BAM | E1000_RCTL_BSIZE_2048);
 }
 
+/* ── TX init ────────────────────────────────────────────── */
+
 static void e1000_tx_init(void)
 {
 	tx_descs = kmalloc(sizeof(struct e1000_tx_desc) * E1000_TX_DESC_COUNT + 16, GFP_KERNEL);
-	// Align manually
 	tx_descs = (struct e1000_tx_desc *)(((uint64_t)tx_descs + 15) & ~15ULL);
 
 	memset(tx_descs, 0, sizeof(struct e1000_tx_desc) * E1000_TX_DESC_COUNT);
@@ -117,6 +124,8 @@ static void e1000_tx_init(void)
 
 	e1000_write(E1000_TCTL, E1000_TCTL_EN | E1000_TCTL_PSP | E1000_TCTL_CT | E1000_TCTL_COLD);
 }
+
+/* ── MAC address ────────────────────────────────────────── */
 
 static void e1000_read_mac(void)
 {
@@ -140,6 +149,8 @@ void e1000_get_mac(uint8_t out[6])
 	for (int i = 0; i < 6; i++)
 		out[i] = mac_addr[i];
 }
+
+/* ── Transmit ───────────────────────────────────────────── */
 
 int e1000_send(const void *data, uint16_t len)
 {
@@ -174,6 +185,8 @@ int e1000_send(const void *data, uint16_t len)
 	return 0;
 }
 
+/* ── Receive ────────────────────────────────────────────── */
+
 int e1000_recv(void *buf, uint16_t *len_out)
 {
 	uint32_t idx = rx_tail % E1000_RX_DESC_COUNT;
@@ -204,14 +217,13 @@ int e1000_recv(void *buf, uint16_t *len_out)
 
 	rx_descs[idx].status = 0;
 
-	// We return the NIC descriptor - we write the CURRENT idx, not the next one
 	e1000_write(E1000_RDT, idx);
 	rx_tail = (rx_tail + 1) % E1000_RX_DESC_COUNT;
 
 	return 0;
 }
 
-#define E1000_MMIO_SIZE 0x20000
+/* ── PCI probe ──────────────────────────────────────────── */
 
 static int e1000_probe(struct pci_device *pci_dev)
 {
@@ -265,6 +277,8 @@ static int e1000_probe(struct pci_device *pci_dev)
 	printk(KERN_OK "[e1000] init OK\n");
 	return 0;
 }
+
+/* ── Driver registration ────────────────────────────────── */
 
 static const struct pci_device_id e1000_ids[] = {
     {E1000_VENDOR_ID, E1000_DEVICE_ID},

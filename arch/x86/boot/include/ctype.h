@@ -1,43 +1,48 @@
+/**
+ * @file ctype.h
+ * @brief Character type classification and conversion functions for the bootloader
+ */
+
 #pragma once
 
-// Returns non-zero if c is alphanumeric (letter or digit).
+/** @brief Check if character is alphanumeric */
 int isalnum(int);
 
-// Returns non-zero if c is alphabetic letter.
+/** @brief Check if character is alphabetic */
 int isalpha(int);
 
-// Returns non-zero if c is a blank character (' ' or '\t').
+/** @brief Check if character is a blank (' ' or '\t') */
 int isblank(int);
 
-// Returns non-zero if c is a control character.
+/** @brief Check if character is a control character */
 int iscntrl(int);
 
-// Returns non-zero if c is a decimal digit ('0'..'9').
+/** @brief Check if character is a decimal digit */
 int isdigit(int);
 
-// Returns non-zero if c has a graphical representation excluding space.
+/** @brief Check if character has graphical representation (excluding space) */
 int isgraph(int);
 
-// Returns non-zero if c is a lowercase letter.
+/** @brief Check if character is a lowercase letter */
 int islower(int);
 
-// Returns non-zero if c is printable including space.
+/** @brief Check if character is printable (including space) */
 int isprint(int);
 
-// Returns non-zero if c is a punctuation character.
+/** @brief Check if character is punctuation */
 int ispunct(int);
 
-// Returns non-zero if c is a whitespace character (space, tab, newline, etc.).
+/** @brief Check if character is whitespace */
 int isspace(int);
 
-// Returns non-zero if c is an uppercase letter.
+/** @brief Check if character is an uppercase letter */
 int isupper(int);
 
-// Returns non-zero if c is a hexadecimal digit (0-9, a-f, A-F).
+/** @brief Check if character is a hexadecimal digit */
 int isxdigit(int);
 
-// Converts c to lowercase if it is uppercase.
+/** @brief Convert character to lowercase */
 int tolower(int);
 
-// Converts c to uppercase if it is lowercase.
+/** @brief Convert character to uppercase */
 int toupper(int);

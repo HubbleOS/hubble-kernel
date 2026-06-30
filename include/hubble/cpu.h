@@ -1,3 +1,7 @@
 #pragma once
 
-extern void boot_cpu_init(void);
+/**
+ * @brief CPU initialisation.
+ */
+
+void boot_cpu_init(void);

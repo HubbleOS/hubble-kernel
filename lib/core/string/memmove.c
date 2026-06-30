@@ -1,5 +1,17 @@
+/**
+ * @file memmove.c
+ * @brief Memory copy (supports overlapping regions)
+ */
+
 #include <hubble/string.h>
 
+/**
+ * @brief Copy memory region (safe for overlapping regions)
+ * @param dest Destination buffer
+ * @param src Source buffer
+ * @param n Number of bytes to copy
+ * @return Pointer to dest
+ */
 void *memmove(void *dest, const void *src, size_t n)
 {
 	char *d = dest;

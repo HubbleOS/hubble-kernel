@@ -1,9 +1,16 @@
-#include "arp.h"
+/**
+ * @file arp.c
+ * @brief ARP (Address Resolution Protocol) implementation
+ *
+ * Handles ARP requests, replies, and maintains a small cache mapping
+ * IP addresses to MAC addresses.
+ */
 
+#include <hubble/printk.h>
+#include <hubble/string.h>
 #include <drivers/net/e1000/e1000.h>
 #include <net/eth.h>
-#include <hubble/string.h>
-#include <hubble/printk.h>
+#include "arp.h"
 
 #define ARP_CACHE_SIZE 16
 
@@ -16,10 +23,14 @@ static struct
 
 static uint8_t broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
-// Our IP is in the SLIRP network
 #define MY_IP ARP_IP(10, 0, 2, 15)
 #define GW_IP ARP_IP(10, 0, 2, 2)
 
+/**
+ * @brief Send an ARP request for a given IP address
+ * @param target_ip Target IP address (network byte order)
+ * @return 0 on success
+ */
 int arp_request(uint32_t target_ip)
 {
 	struct arp_pkt pkt;
@@ -46,6 +57,11 @@ int arp_request(uint32_t target_ip)
 	return 0;
 }
 
+/**
+ * @brief Handle an incoming ARP packet (cache replies)
+ * @param pkt Pointer to the ARP packet data
+ * @param len Length of the ARP packet
+ */
 void arp_handle(const uint8_t *pkt, uint16_t len)
 {
 	if (len < sizeof(struct arp_pkt))
@@ -55,7 +71,6 @@ void arp_handle(const uint8_t *pkt, uint16_t len)
 
 	if (__builtin_bswap16(a->oper) == ARP_REPLY)
 	{
-		// Save to cache
 		for (int i = 0; i < ARP_CACHE_SIZE; i++)
 		{
 			if (!arp_cache[i].valid || arp_cache[i].ip == a->spa)
@@ -74,6 +89,12 @@ void arp_handle(const uint8_t *pkt, uint16_t len)
 	}
 }
 
+/**
+ * @brief Look up a MAC address for an IP in the ARP cache
+ * @param ip IP address to look up
+ * @param mac_out Buffer for the MAC address (6 bytes)
+ * @return 0 on success, -1 if not found
+ */
 int arp_lookup(uint32_t ip, uint8_t mac_out[6])
 {
 	for (int i = 0; i < ARP_CACHE_SIZE; i++)
@@ -84,5 +105,5 @@ int arp_lookup(uint32_t ip, uint8_t mac_out[6])
 			return 0;
 		}
 	}
-	return -1; // not found
+	return -1;
 }

@@ -1,3 +1,8 @@
+/**
+ * @file strchr.c
+ * @brief Find a character in a string
+ */
+
 #include <string.h>
 
 char *strchr(const char *s, int c)

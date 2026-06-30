@@ -1,16 +1,24 @@
+/**
+ * @file keyboard.h
+ * @brief TTY keyboard types — key events, keymap lookup, and input events
+ */
 #pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
 
-// Basic key structure
+/**
+ * @brief Scancode-based key identifier
+ */
 typedef struct
 {
 	uint8_t scancode;
 	bool extended;
 } key_id_t;
 
-// Keymap entry for character keys
+/**
+ * @brief Keymap entry mapping a key to its normal and shifted characters
+ */
 typedef struct
 {
 	key_id_t id;
@@ -18,7 +26,9 @@ typedef struct
 	char shifted;
 } keymap_entry_t;
 
-// Raw key event from keyboard
+/**
+ * @brief Raw key event produced by the PS/2 handler
+ */
 typedef struct
 {
 	key_id_t id;
@@ -29,20 +39,24 @@ typedef struct
 	bool is_caps_lock;
 } key_event_t;
 
-// Key types for high-level processing
+/**
+ * @brief High-level key type classification
+ */
 typedef enum
 {
-	KEY_TYPE_CHAR,	   // Printable character
-	KEY_TYPE_SPECIAL,  // Arrow keys, navigation, etc.
-	KEY_TYPE_FUNCTION, // F1-F12
-	KEY_TYPE_MODIFIER, // Shift, Ctrl, Alt (usually skipped)
-	KEY_TYPE_UNKNOWN   // Unknown key
+	KEY_TYPE_CHAR,
+	KEY_TYPE_SPECIAL,
+	KEY_TYPE_FUNCTION,
+	KEY_TYPE_MODIFIER,
+	KEY_TYPE_UNKNOWN
 } key_type_t;
 
-// Special key actions
+/**
+ * @brief Special key action identifiers
+ */
 typedef enum
 {
-	KEY_ACTION_NONE = 0,
+	KEY_ACTION_NONE,
 	KEY_ACTION_UP,
 	KEY_ACTION_DOWN,
 	KEY_ACTION_LEFT,
@@ -59,29 +73,54 @@ typedef enum
 	KEY_ACTION_ESC,
 } key_action_t;
 
-// High-level input event
+/**
+ * @brief High-level input event delivered to consumers
+ */
 typedef struct
 {
 	key_type_t type;
 	union
 	{
-		char character;	      // For KEY_TYPE_CHAR
-		key_action_t action;  // For KEY_TYPE_SPECIAL
-		uint8_t function_key; // For KEY_TYPE_FUNCTION (1-12)
+		char character;
+		key_action_t action;
+		uint8_t function_key;
 	};
 	bool shift;
 	bool ctrl;
 	bool alt;
 } input_event_t;
 
+/**
+ * @brief Get the next keyboard event (blocking)
+ * @return key_event_t The next available event
+ */
 key_event_t keyboard_get_event(void);
+
+/**
+ * @brief Non-blocking keyboard event poll
+ * @param ev  Output event pointer
+ * @return true if an event was available, false otherwise
+ */
 bool keyboard_poll_event(key_event_t *ev);
 
-// Character mapping (already exists)
+/**
+ * @brief Look up the character for a given scancode + modifiers
+ * @param scancode  Raw scancode
+ * @param extended  Whether the 0xE0 prefix was received
+ * @param shift     Shift held
+ * @param caps      Caps lock active
+ * @return The mapped character, or 0 if unmapped
+ */
 char keymap_lookup_char(uint8_t scancode, bool extended, bool shift, bool caps);
 
-// Low-level keyboard functions (already exist)
+/**
+ * @brief Block until a printable character is received
+ * @return char The received character
+ */
 char keyboard_get_char(void);
 
-// Enhanced high-level input function
+/**
+ * @brief Get a high-level processed input event (blocking)
+ * @return input_event_t The processed event
+ */
 input_event_t keyboard_get_input(void);

@@ -1,3 +1,8 @@
+/**
+ * @file stdio.h
+ * @brief Standard input/output declarations
+ */
+
 #pragma once
 
 #include <_cheader.h>
@@ -20,17 +25,16 @@
 
 _Begin_C_Header;
 
+/** @brief File stream structure */
 typedef struct FILE
 {
 	void *device;
 	int (*write)(struct FILE *stream, const char *buffer, int len);
 	int (*read)(struct FILE *stream, char *buffer, int len);
 
-	// ungetc support
 	int ungetc_buf;
 	int has_ungetc;
 
-	// buffering
 	char buf[FILE_BUFSIZE];
 	int buf_len;
 	int buf_pos;
@@ -46,24 +50,43 @@ extern FILE *__stderrp;
 #define stdin __stdinp
 #define stderr __stderrp
 
-// output
+/** @brief Formatted print to a stream */
 int fprintf(FILE *, const char *, ...);
+
+/** @brief Formatted print to a stream (va_list) */
 int vfprintf(FILE *, const char *, va_list);
-// int vsprintf(char *buffer, const char *, va_list );
+
+/** @brief Formatted print to stdout */
 int printf(const char *, ...);
 
+/** @brief Write a character to a stream */
 int putc(int, FILE *);
+
+/** @brief Write a character to stdout */
 int putchar(int);
 
-// input
+/** @brief Formatted input from a stream */
 int fscanf(FILE *, const char *, ...);
+
+/** @brief Formatted input from stdin */
 int scanf(const char *, ...);
+
+/** @brief Formatted input from stdin (va_list) */
 int vscanf(const char *, va_list);
+
+/** @brief Read a character from a stream */
 int getc(FILE *);
+
+/** @brief Read a line from a stream */
 char *fgets(char *, int, FILE *);
+
+/** @brief Read a line from stdin */
 char *gets(char *);
+
+/** @brief Read a character from stdin */
 int getchar(void);
 
+/** @brief Push back a character to a stream */
 int ungetc(int c, FILE *);
 
 _End_C_Header;

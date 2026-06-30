@@ -1,3 +1,8 @@
+/* ── FAT32 path resolution and directory iteration ────────────────
+ * Core functions for resolving paths to clusters, finding directory
+ * entries, and iterating over directory contents.
+ * ────────────────────────────────────────────────────────────────── */
+
 #include "fat_utils.h"
 #include "fat_structs.h"
 #include "fat.h"
@@ -5,8 +10,7 @@
 #include <mm/kmalloc.h>
 #include <hubble/string.h>
 
-typedef void (*directory_entry_callback_t)(const char *name, bool is_dir, Directory *context);
-
+/** @brief Resolve a path to its final cluster (public interface). */
 uint32_t fat32_resolve_path(FAT32_FS *fs, const char *path)
 {
 	if (!path || *path == '\0' || strcmp(path, "/") == 0)
@@ -29,6 +33,7 @@ uint32_t fat32_resolve_path(FAT32_FS *fs, const char *path)
 	return cluster;
 }
 
+/** @brief Resolve the parent path to a cluster. */
 uint32_t resolve_path_to_cluster(FAT32_FS *fs, const char *path)
 {
 	printk(KERN_INFO "Resolving path to cluster: %s\n", path);
@@ -44,7 +49,7 @@ uint32_t resolve_path_to_cluster(FAT32_FS *fs, const char *path)
 		if (cluster == 0 || cluster >= 0x0FFFFFF8)
 		{
 			free_folder_path(&parts);
-			return 0; // cluster not found
+			return 0;
 		}
 	}
 
@@ -53,21 +58,18 @@ uint32_t resolve_path_to_cluster(FAT32_FS *fs, const char *path)
 	return cluster;
 }
 
+/** @brief Find a directory entry's cluster in a directory chain. */
 uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const char *name11)
 {
 	if (!fs || !name11)
-	{
 		return 0;
-	}
 
 	if (dir_cluster == 0)
 		dir_cluster = 2;
 
 	uint8_t *buffer = kmalloc(fs->cluster_size, GFP_KERNEL);
 	if (!buffer)
-	{
 		return 0;
-	}
 
 	int steps = 0;
 	while (dir_cluster < 0x0FFFFFF8 && steps++ < MAX_CLUSTER_CHAIN)
@@ -97,12 +99,14 @@ uint32_t find_directory_entry_cluster(FAT32_FS *fs, uint32_t dir_cluster, const 
 	return 0;
 }
 
+/** @brief Walk a directory cluster chain, calling callback for each entry. */
 void iterate_directory(FAT32_FS *fs, uint32_t cluster, directory_entry_callback_t callback, void *ctx)
 {
 	int steps = 0;
 	uint8_t *data = kmalloc(fs->cluster_size, GFP_KERNEL);
 	if (!data)
 		return;
+
 	while (cluster < 0x0FFFFFF8 && steps++ < MAX_CLUSTER_CHAIN && cluster != 0)
 	{
 		fat32_read_cluster(fs, cluster, data);
@@ -114,9 +118,7 @@ void iterate_directory(FAT32_FS *fs, uint32_t cluster, directory_entry_callback_
 			char name[20];
 			bool is_dir;
 			if (parse_directory_entry(entry, name, &is_dir))
-			{
 				callback(name, is_dir, ctx);
-			}
 		}
 
 		cluster = get_fat_entry(fs, cluster);

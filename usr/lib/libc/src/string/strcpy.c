@@ -1,3 +1,8 @@
+/**
+ * @file strcpy.c
+ * @brief Copy a string
+ */
+
 #include <string.h>
 
 char *strcpy(char *dest, const char *src)

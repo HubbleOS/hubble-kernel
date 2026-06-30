@@ -1,3 +1,8 @@
+/**
+ * @file getc.c
+ * @brief Read a character from a stream
+ */
+
 #include <stdio.h>
 
 int getc(FILE *stream)
@@ -6,10 +11,9 @@ int getc(FILE *stream)
 		return -1;
 
 	int c = FILE_GETC_UNGETC(stream);
-	if (c != -2) // -2: there is no symbol
+	if (c != -2)
 		return c;
 
-	// static char input_buf[128];
 	static int buf_len = 0;
 	static int buf_pos = 0;
 

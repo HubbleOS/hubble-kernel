@@ -1,3 +1,8 @@
+/**
+ * @file strdup.c
+ * @brief Duplicate a string
+ */
+
 #include <string.h>
 #include <stdlib.h>
 

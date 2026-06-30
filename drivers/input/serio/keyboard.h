@@ -1,14 +1,16 @@
 /**
  * @file keyboard.h
- * @brief
+ * @brief PS/2 keyboard driver — IRQ handler and device registration
  */
-
 #pragma once
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-
 #include <interrupt/interrupt.h>
 
-// void keyboard_init();
-// void keyboard_irq(registers_t *r);
+/**
+ * @brief PS/2 keyboard IRQ handler
+ * @param r Register state at the time of the interrupt
+ */
+void keyboard_irq(registers_t *r);

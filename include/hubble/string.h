@@ -1,30 +1,31 @@
 #pragma once
 
+/**
+ * @brief String and memory operations (kernel-internal).
+ */
+
 #include <_cheader.h>
 #include <stddef.h>
 #include <stdint.h>
 
 _Begin_C_Header;
 
-// Memory manipulation
-void *memset(void *, int, size_t);
-void *memcpy(void *, const void *, size_t);
-void *memmove(void *, const void *, size_t);
-int memcmp(const void *, const void *, size_t);
-void *memchr(const void *, int, size_t);
+void  *memset(void *s, int c, size_t n);
+void  *memcpy(void *dest, const void *src, size_t n);
+void  *memmove(void *dest, const void *src, size_t n);
+int    memcmp(const void *s1, const void *s2, size_t n);
+void  *memchr(const void *s, int c, size_t n);
 
-// String manipulation
-char *strcpy(char *, const char *);
-char *strncpy(char *, const char *, size_t);
-char *strcat(char *, const char *);
-char *strncat(char *, const char *, size_t);
-char *strdup(const char *);
+char  *strcpy(char *dest, const char *src);
+char  *strncpy(char *dest, const char *src, size_t n);
+char  *strcat(char *dest, const char *src);
+char  *strncat(char *dest, const char *src, size_t n);
+char  *strdup(const char *s);
 
-// String examination
-size_t strlen(const char *);
-int strcmp(const char *, const char *);
-int strncmp(const char *, const char *, size_t);
-char *strchr(const char *, int);
-char *strrchr(const char *, int);
+size_t strlen(const char *s);
+int    strcmp(const char *s1, const char *s2);
+int    strncmp(const char *s1, const char *s2, size_t n);
+char  *strchr(const char *s, int c);
+char  *strrchr(const char *s, int c);
 
 _End_C_Header;

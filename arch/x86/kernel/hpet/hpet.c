@@ -1,46 +1,67 @@
+/**
+ * @file hpet.c
+ * @brief HPET (High Precision Event Timer) driver
+ *
+ * Implements initialisation from the ACPI HPET table, MMIO
+ * mapping, counter read, time conversion, busy-wait delays,
+ * and one-shot / periodic timer configuration.
+ */
+
 #include "hpet.h"
 #include <acpi/acpi.h>
-#include "higher_half.h"
 #include <apic/apic.h>
+#include <asm.h>
 #include <hubble/printk.h>
-#include <stddef.h>
-
 #include <mm/vmm.h>
 
-#include <asm.h>
+#include "higher_half.h"
 
-// HPET Register Offsets
-#define HPET_GENERAL_CAPS 0x000
-#define HPET_GENERAL_CONFIG 0x010
+#include <stddef.h>
+
+/* ── HPET Register Offsets ───────────────────────────────────── */
+
+#define HPET_GENERAL_CAPS       0x000
+#define HPET_GENERAL_CONFIG     0x010
 #define HPET_GENERAL_INT_STATUS 0x020
-#define HPET_MAIN_COUNTER 0x0F0
-#define HPET_TIMER_CONFIG(n) (0x100 + (n) * 0x20)
+#define HPET_MAIN_COUNTER       0x0F0
+#define HPET_TIMER_CONFIG(n)    (0x100 + (n) * 0x20)
 #define HPET_TIMER_COMPARATOR(n) (0x108 + (n) * 0x20)
 
-// Configuration bits
-#define HPET_ENABLE_CNF (1 << 0)
-#define HPET_LEG_RT_CNF (1 << 1) // Legacy Replacement Route
+/* ── Configuration Bits ──────────────────────────────────────── */
 
-// Timer configuration bits
-#define HPET_Tn_INT_TYPE_CNF (1 << 1)	  // 1=level, 0=edge
-#define HPET_Tn_INT_ENB_CNF (1 << 2)	  // Enable interrupt
-#define HPET_Tn_TYPE_CNF (1 << 3)	  // 1=periodic, 0=one-shot
-#define HPET_Tn_PER_INT_CAP (1 << 4)	  // Periodic capable (RO)
-#define HPET_Tn_SIZE_CAP (1 << 5)	  // 64-bit capable (RO)
-#define HPET_Tn_VAL_SET_CNF (1 << 6)	  // Set accumulator
-#define HPET_Tn_32MODE_CNF (1 << 8)	  // Force 32-bit mode
-#define HPET_Tn_FSB_INT_DEL_CAP (1 << 15) // FSB interrupt capable (RO)
+#define HPET_ENABLE_CNF  (1 << 0)
+#define HPET_LEG_RT_CNF  (1 << 1)
 
-// Global HPET state
+/* ── Timer Configuration Bits ────────────────────────────────── */
+
+#define HPET_Tn_INT_TYPE_CNF  (1 << 1)
+#define HPET_Tn_INT_ENB_CNF   (1 << 2)
+#define HPET_Tn_TYPE_CNF      (1 << 3)
+#define HPET_Tn_PER_INT_CAP   (1 << 4)
+#define HPET_Tn_SIZE_CAP      (1 << 5)
+#define HPET_Tn_VAL_SET_CNF   (1 << 6)
+#define HPET_Tn_32MODE_CNF    (1 << 8)
+#define HPET_Tn_FSB_INT_DEL_CAP (1 << 15)
+
+/* ── Global HPET State ───────────────────────────────────────── */
+
 static struct
 {
 	volatile uint64_t *base;
-	uint64_t frequency; // Hz
-	uint64_t period_fs; // femtoseconds per tick
+	uint64_t frequency;
+	uint64_t period_fs;
 	uint8_t num_timers;
 	bool initialized;
 } hpet_state = {0};
 
+/* ── MMIO Helpers (static) ───────────────────────────────────── */
+
+/**
+ * @brief Check whether a virtual address is already page-mapped
+ *
+ * @param virt Virtual address to check
+ * @return true if mapped, false otherwise
+ */
 static bool hpet_mmio_is_mapped(uint64_t virt)
 {
 	uint64_t *pml4 = pml4_table();
@@ -62,6 +83,12 @@ static bool hpet_mmio_is_mapped(uint64_t virt)
 	return pt[PT_INDEX(virt)] & PTE_PRESENT;
 }
 
+/**
+ * @brief Map one 4 KiB page of HPET MMIO space uncacheable
+ *
+ * @param phys Physical address of the HPET base
+ * @return 0 on success, -1 on failure
+ */
 static int hpet_map_mmio_page(uint64_t phys)
 {
 	uint64_t page = phys & ~0xFFFULL;
@@ -80,19 +107,35 @@ static int hpet_map_mmio_page(uint64_t phys)
 	return 0;
 }
 
-// Read/Write helpers
+/**
+ * @brief Read a 64-bit HPET MMIO register
+ *
+ * @param offset Byte offset from the HPET base
+ * @return Register value
+ */
 static inline uint64_t hpet_read(uint32_t offset)
 {
-	// printk("hpet_read(%d) = 0x%lx\n", offset, hpet_state.base[offset / 8]);
 	return hpet_state.base[offset / 8];
 }
 
+/**
+ * @brief Write a 64-bit HPET MMIO register
+ *
+ * @param offset Byte offset from the HPET base
+ * @param value  Value to write
+ */
 static inline void hpet_write(uint32_t offset, uint64_t value)
 {
 	hpet_state.base[offset / 8] = value;
 }
 
-// Get main counter value
+/* ── Counter Access ──────────────────────────────────────────── */
+
+/**
+ * @brief Read the HPET main counter
+ *
+ * @return Current counter value in ticks, or 0 if not initialised
+ */
 uint64_t hpet_get_counter(void)
 {
 	if (!hpet_state.initialized)
@@ -100,29 +143,47 @@ uint64_t hpet_get_counter(void)
 	return hpet_read(HPET_MAIN_COUNTER);
 }
 
-// Convert counter ticks to nanoseconds
-uint64_t hpet_ticks_to_ns(uint64_t ticks)
-{
-	// period_fs is in femtoseconds (10^-15 seconds)
-	// Convert to nanoseconds (10^-9 seconds)
-	// ns = ticks * period_fs / 1000000
-	return (ticks * hpet_state.period_fs) / 1000000;
-}
-
-// Convert nanoseconds to counter ticks
-uint64_t hpet_ns_to_ticks(uint64_t ns)
-{
-	// ticks = ns * 1000000 / period_fs
-	return (ns * 1000000) / hpet_state.period_fs;
-}
-
-// Get current time in nanoseconds
+/**
+ * @brief Get the current time in nanoseconds since HPET init
+ *
+ * @return Nanoseconds
+ */
 uint64_t hpet_get_time_ns(void)
 {
 	return hpet_ticks_to_ns(hpet_get_counter());
 }
 
-// Busy-wait delay in nanoseconds
+/* ── Time Conversion ─────────────────────────────────────────── */
+
+/**
+ * @brief Convert HPET ticks to nanoseconds
+ *
+ * @param ticks Counter ticks
+ * @return Equivalent nanoseconds
+ */
+uint64_t hpet_ticks_to_ns(uint64_t ticks)
+{
+	return (ticks * hpet_state.period_fs) / 1000000;
+}
+
+/**
+ * @brief Convert nanoseconds to HPET ticks
+ *
+ * @param ns Nanoseconds
+ * @return Equivalent counter ticks
+ */
+uint64_t hpet_ns_to_ticks(uint64_t ns)
+{
+	return (ns * 1000000) / hpet_state.period_fs;
+}
+
+/* ── Delays (Busy-Wait) ──────────────────────────────────────── */
+
+/**
+ * @brief Busy-wait for a given number of nanoseconds
+ *
+ * @param ns Delay duration in nanoseconds
+ */
 void hpet_delay_ns(uint64_t ns)
 {
 	if (!hpet_state.initialized)
@@ -135,38 +196,51 @@ void hpet_delay_ns(uint64_t ns)
 		cpu_pause();
 }
 
-// Busy-wait delay in microseconds
+/**
+ * @brief Busy-wait for a given number of microseconds
+ *
+ * @param us Delay duration in microseconds
+ */
 void hpet_delay_us(uint64_t us)
 {
 	hpet_delay_ns(us * 1000);
 }
 
-// Busy-wait delay in milliseconds
+/**
+ * @brief Busy-wait for a given number of milliseconds
+ *
+ * @param ms Delay duration in milliseconds
+ */
 void hpet_delay_ms(uint64_t ms)
 {
 	hpet_delay_ns(ms * 1000000);
 }
 
-// Setup timer for one-shot interrupt
+/* ── Timer Setup ─────────────────────────────────────────────── */
+
+/**
+ * @brief Configure an HPET timer in one-shot mode
+ *
+ * @param timer_num Timer index (0 .. num_timers - 1)
+ * @param ns        Delay in nanoseconds
+ * @param vector    Interrupt vector (32-255)
+ * @return 0 on success, -1 on failure
+ */
 int hpet_timer_oneshot(uint8_t timer_num, uint64_t ns, uint8_t vector)
 {
 	if (!hpet_state.initialized || timer_num >= hpet_state.num_timers)
 		return -1;
 
-	// Disable timer first
 	uint64_t config = hpet_read(HPET_TIMER_CONFIG(timer_num));
 	config &= ~HPET_Tn_INT_ENB_CNF;
 	hpet_write(HPET_TIMER_CONFIG(timer_num), config);
 
-	// Set comparator value (current counter + desired ticks)
 	uint64_t ticks = hpet_ns_to_ticks(ns);
 	uint64_t target = hpet_get_counter() + ticks;
 	hpet_write(HPET_TIMER_COMPARATOR(timer_num), target);
 
-	// Configure: edge-triggered, one-shot, interrupts enabled
-	config = (uint64_t)vector << 9; // Set interrupt vector
-	config |= HPET_Tn_INT_ENB_CNF;	// Enable interrupt
-	// One-shot is default (HPET_Tn_TYPE_CNF = 0)
+	config = (uint64_t)vector << 9;
+	config |= HPET_Tn_INT_ENB_CNF;
 
 	hpet_write(HPET_TIMER_CONFIG(timer_num), config);
 
@@ -175,13 +249,19 @@ int hpet_timer_oneshot(uint8_t timer_num, uint64_t ns, uint8_t vector)
 	return 0;
 }
 
-// Setup timer for periodic interrupts
+/**
+ * @brief Configure an HPET timer in periodic mode
+ *
+ * @param timer_num  Timer index (0 .. num_timers - 1)
+ * @param period_ns  Period in nanoseconds
+ * @param vector     Interrupt vector (32-255)
+ * @return 0 on success, -1 on failure
+ */
 int hpet_timer_periodic(uint8_t timer_num, uint64_t period_ns, uint8_t vector)
 {
 	if (!hpet_state.initialized || timer_num >= hpet_state.num_timers)
 		return -1;
 
-	// Check if timer supports periodic mode
 	uint64_t caps = hpet_read(HPET_TIMER_CONFIG(timer_num));
 	if (!(caps & HPET_Tn_PER_INT_CAP))
 	{
@@ -189,27 +269,22 @@ int hpet_timer_periodic(uint8_t timer_num, uint64_t period_ns, uint8_t vector)
 		return -1;
 	}
 
-	// Disable timer first
 	uint64_t config = hpet_read(HPET_TIMER_CONFIG(timer_num));
 	config &= ~HPET_Tn_INT_ENB_CNF;
 	hpet_write(HPET_TIMER_CONFIG(timer_num), config);
 
-	// Calculate period in ticks
 	uint64_t period_ticks = hpet_ns_to_ticks(period_ns);
 
-	// Set comparator to (current counter + period)
 	uint64_t target = hpet_get_counter() + period_ticks;
 	hpet_write(HPET_TIMER_COMPARATOR(timer_num), target);
 
-	// Configure: periodic mode
-	config = (uint64_t)vector << 9; // Set interrupt vector
-	config |= HPET_Tn_TYPE_CNF;	// Periodic mode
-	config |= HPET_Tn_VAL_SET_CNF;	// Set accumulator
-	config |= HPET_Tn_INT_ENB_CNF;	// Enable interrupt
+	config = (uint64_t)vector << 9;
+	config |= HPET_Tn_TYPE_CNF;
+	config |= HPET_Tn_VAL_SET_CNF;
+	config |= HPET_Tn_INT_ENB_CNF;
 
 	hpet_write(HPET_TIMER_CONFIG(timer_num), config);
 
-	// Write period to comparator again (required for periodic)
 	hpet_write(HPET_TIMER_COMPARATOR(timer_num), period_ticks);
 
 	printk(KERN_INFO "HPET timer %u: periodic every %lu ns (vector %u)\n",
@@ -217,7 +292,11 @@ int hpet_timer_periodic(uint8_t timer_num, uint64_t period_ns, uint8_t vector)
 	return 0;
 }
 
-// Stop a timer
+/**
+ * @brief Stop an HPET timer
+ *
+ * @param timer_num Timer index to stop
+ */
 void hpet_timer_stop(uint8_t timer_num)
 {
 	if (!hpet_state.initialized || timer_num >= hpet_state.num_timers)
@@ -228,7 +307,16 @@ void hpet_timer_stop(uint8_t timer_num)
 	hpet_write(HPET_TIMER_CONFIG(timer_num), config);
 }
 
-// Initialize HPET
+/* ── Initialisation ──────────────────────────────────────────── */
+
+/**
+ * @brief Initialise the HPET from ACPI-provided information
+ *
+ * Maps the HPET MMIO region, reads capabilities, resets the
+ * counter, disables all timers, and enables the HPET.
+ *
+ * @return 0 on success, -1 on failure
+ */
 int hpet_init(void)
 {
 	if (!acpi_is_initialized())
@@ -285,19 +373,38 @@ int hpet_init(void)
 	return 0;
 }
 
+/* ── Public Helpers ──────────────────────────────────────────── */
+
+/**
+ * @brief Check whether HPET has been initialised
+ *
+ * @return true if initialised, false otherwise
+ */
 bool hpet_is_initialized(void)
 {
 	return hpet_state.initialized;
 }
 
-// Get HPET frequency
+/**
+ * @brief Get the HPET clock frequency in Hz
+ *
+ * @return Frequency in Hz
+ */
 uint64_t hpet_get_frequency(void)
 {
 	return hpet_state.frequency;
 }
 
-// Calibrate another timer using HPET (e.g., TSC, LAPIC timer)
-// Returns ticks of the target timer that correspond to 'ms' milliseconds
+/**
+ * @brief Calibrate an external timer against the HPET
+ *
+ * Reads the target counter before and after an HPET-based delay
+ * and returns the difference.
+ *
+ * @param counter_fn Pointer to the external timer counter (volatile)
+ * @param ms         Calibration period in milliseconds
+ * @return Ticks of the external timer during the period, or 0 on failure
+ */
 uint64_t hpet_calibrate_timer(volatile uint64_t *counter_fn, uint32_t ms)
 {
 	if (!hpet_state.initialized)
@@ -306,13 +413,11 @@ uint64_t hpet_calibrate_timer(volatile uint64_t *counter_fn, uint32_t ms)
 	uint64_t start_hpet = hpet_get_counter();
 	uint64_t start_counter = *counter_fn;
 
-	// Wait for specified time
 	hpet_delay_ms(ms);
 
 	uint64_t end_hpet = hpet_get_counter();
 	uint64_t end_counter = *counter_fn;
 
-	// Verify HPET actually advanced
 	uint64_t hpet_ticks = end_hpet - start_hpet;
 	if (hpet_ticks == 0)
 		return 0;

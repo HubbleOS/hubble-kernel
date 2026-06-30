@@ -1,3 +1,9 @@
+/* ── VFS pipe (named pipe) filesystem implementation ──────────────
+ * Provides a virtual filesystem for named pipes, allowing
+ * inter-process communication via standard VFS open/read/write
+ * operations with blocking semantics and bounded buffers.
+ * ────────────────────────────────────────────────────────────────── */
+
 #include "vfs.h"
 #include "vfs_standart_struct.h"
 #include "dev.h"
@@ -11,15 +17,7 @@
 #include <smp/scheduler.h>
 #include <smp/task.h>
 
-// VFS_Node *dev_vfs_open_device(VFS_FS *fs, const char *path);
-// VFS_Node *dev_vfs_create_device(VFS_FS *fs, const char *path);
-// int dev_vfs_write_device(VFS_File *file, const void *buf, uint32_t size);
-// uint64_t mmap_device(VFS_File *file, uint64_t offset, size_t size);
-// int dev_vfs_read_device(VFS_File *file, void *buf, uint32_t size);
-// tree structure
-
 #define PIPE_BUFFER_SIZE 4096
-
 #define MAX_PARTS 16
 
 typedef struct VFS_pipes_node VFS_pipes_node;
@@ -27,7 +25,7 @@ typedef struct VFS_pipes_tree VFS_pipes_tree;
 
 typedef struct
 {
-	char *name; // оригінальне ім’я (якщо треба для LFN)
+	char *name;
 } PathPart;
 
 typedef struct
@@ -71,7 +69,8 @@ VFS_Node *pipe_vfs_create_pipe(VFS_FS *fs, const char *path);
 int pipe_write(VFS_File *file, const void *buf, uint32_t size);
 int pipe_read(VFS_File *file, void *buf, uint32_t size);
 
-PathParts format_pipe_path(const char *in)
+/** @brief Split a pipe path into components. */
+static PathParts format_pipe_path(const char *in)
 {
 	printk(KERN_INFO "Formatting folder path: %s\n", in);
 	PathParts result = {0};
@@ -92,7 +91,7 @@ PathParts format_pipe_path(const char *in)
 		{
 			char *name = kmalloc(len + 1, GFP_KERNEL);
 			if (!name)
-				return result; // or panic
+				return result;
 
 			memcpy(name, in, len);
 			name[len] = '\0';
@@ -109,8 +108,7 @@ PathParts format_pipe_path(const char *in)
 	return result;
 }
 
-// static VFS_device_reg *dev_vfs_devices = NULL;
-
+/** @brief Initialise the pipe VFS instance. */
 bool pipe_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba)
 {
 	printk(KERN_INFO "Initializing device fs\n");
@@ -126,18 +124,16 @@ bool pipe_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba)
 	return 1;
 }
 
-VFS_pipes_tree *pipe_vfs_find_pipe(const char *path, PathParts *parts)
+/** @brief Find a pipe tree node by path. */
+static VFS_pipes_tree *pipe_vfs_find_pipe(const char *path, PathParts *parts)
 {
 
 	VFS_pipes_tree *current = VFS_pipes;
 	if (!current)
-	{
 		return NULL;
-	}
+
 	if (parts->count <= 0)
-	{
 		return VFS_pipes;
-	}
 
 	for (int i = 0; i < parts->count; ++i)
 	{
@@ -155,25 +151,26 @@ VFS_pipes_tree *pipe_vfs_find_pipe(const char *path, PathParts *parts)
 	return current;
 }
 
-VFS_pipes_node *pipe_vfs_find_pipe_node(VFS_pipes_tree *pipe_tree, const char *name)
+/** @brief Find a pipe node by name within a tree node. */
+static VFS_pipes_node *pipe_vfs_find_pipe_node(VFS_pipes_tree *pipe_tree, const char *name)
 {
 
 	VFS_pipes_node *current = pipe_tree->childs_node;
 	if (!current)
-	{
 		return NULL;
-	}
+
 	do
 	{
 		if (strcmp(name, current->pipe->name) == 0)
-		{
 			return current;
-		}
+
 		current = current->next;
 	} while (current);
+
 	return NULL;
 }
 
+/** @brief Open an existing pipe by path. */
 VFS_Node *pipe_vfs_open_pipe(VFS_FS *fs, const char *path)
 {
 	VFS_Node *node = kmalloc(sizeof(VFS_Node), GFP_KERNEL);
@@ -196,6 +193,7 @@ VFS_Node *pipe_vfs_open_pipe(VFS_FS *fs, const char *path)
 	return NULL;
 }
 
+/** @brief Create a new named pipe. */
 VFS_Node *pipe_vfs_create_pipe(VFS_FS *fs, const char *path)
 {
 
@@ -208,9 +206,8 @@ VFS_Node *pipe_vfs_create_pipe(VFS_FS *fs, const char *path)
 	{
 		VFS_pipes_node *pipe_node = kmalloc(sizeof(VFS_pipes_node), GFP_KERNEL);
 		if (!pipe_node)
-		{
 			return NULL;
-		}
+
 		memset(pipe_node, 0, sizeof(VFS_pipes_node));
 		pipe_node->pipe = kmalloc(sizeof(pipe_t), GFP_KERNEL);
 		memset(pipe_node->pipe, 0, sizeof(pipe_t));
@@ -229,14 +226,13 @@ VFS_Node *pipe_vfs_create_pipe(VFS_FS *fs, const char *path)
 	return NULL;
 }
 
+/** @brief Write data to a pipe (blocking, bounded buffer). */
 int pipe_write(VFS_File *file, const void *buf, uint32_t size)
 {
 	pipe_t *pipe = (pipe_t *)file->node->fs_node;
 	pipe->write_pos = file->pos % PIPE_BUFFER_SIZE;
 	if (!pipe)
-	{
 		return -1;
-	}
 
 	size_t written = 0;
 	while (written < size)
@@ -246,20 +242,18 @@ int pipe_write(VFS_File *file, const void *buf, uint32_t size)
 		if (pipe->read_closed)
 		{
 			spinlock_release(&pipe->lock);
-			return -1; // broken pipe
+			return -1;
 		}
 
 		size_t space = PIPE_BUFFER_SIZE - pipe->count;
 		if (space == 0)
 		{
-			// Buffer full — block
 			spinlock_release(&pipe->lock);
 			waitqueue_sleep(&pipe->writer);
 			continue;
 		}
 
 		size_t chunk = (size - written < space) ? size - written : space;
-		// printk("pipe write %d\n", chunk);
 		for (size_t i = 0; i < chunk; i++)
 		{
 			const char *cbuf = (const char *)buf;
@@ -269,8 +263,6 @@ int pipe_write(VFS_File *file, const void *buf, uint32_t size)
 		pipe->count += chunk;
 		written += chunk;
 
-		// Wake reader if waiting
-
 		waitqueue_wake_all(&pipe->reader);
 
 		spinlock_release(&pipe->lock);
@@ -279,14 +271,13 @@ int pipe_write(VFS_File *file, const void *buf, uint32_t size)
 	return written;
 }
 
+/** @brief Read data from a pipe (blocking, bounded buffer). */
 int pipe_read(VFS_File *file, void *buf, uint32_t size)
 {
 	pipe_t *pipe = (pipe_t *)file->node->fs_node;
 	pipe->read_pos = file->pos % PIPE_BUFFER_SIZE;
 	if (!pipe)
-	{
 		return -1;
-	}
 
 	while (1)
 	{
@@ -297,9 +288,8 @@ int pipe_read(VFS_File *file, void *buf, uint32_t size)
 			if (pipe->write_closed)
 			{
 				spinlock_release(&pipe->lock);
-				return 0; // EOF
+				return 0;
 			}
-			// No data — block
 			spinlock_release(&pipe->lock);
 			waitqueue_sleep(&pipe->reader);
 			continue;
@@ -315,12 +305,10 @@ int pipe_read(VFS_File *file, void *buf, uint32_t size)
 		}
 		pipe->count -= chunk;
 
-		// Wake writer if waiting
 		waitqueue_wake_all(&pipe->writer);
 
 		spinlock_release(&pipe->lock);
 		file->pos += chunk;
-		// printk("pipe read %d, pos %d\n", chunk, file->pos);
 		return chunk;
 	}
 }

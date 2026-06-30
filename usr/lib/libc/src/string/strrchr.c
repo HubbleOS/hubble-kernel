@@ -1,3 +1,8 @@
+/**
+ * @file strrchr.c
+ * @brief Find a character in a string (reverse)
+ */
+
 #include <string.h>
 
 char *strrchr(const char *s, int c)

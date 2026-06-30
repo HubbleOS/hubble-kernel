@@ -1,11 +1,19 @@
+/* ── VFS standard type definitions ────────────────────────────────
+ * Common types, enumerations, and helper macros shared across all
+ * VFS implementations (FAT32, EXT2, device, pipe).
+ * ────────────────────────────────────────────────────────────────── */
+
 #pragma once
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <mm/kmalloc.h>
 
+/** @brief Forward declaration of Directory. */
 typedef struct Directory Directory;
 
+/** @brief Directory entry for readdir results. */
 typedef struct
 {
 	uint32_t cluster;
@@ -13,6 +21,7 @@ typedef struct
 	bool is_dir;
 } Entry;
 
+/** @brief Directory listing structure. */
 struct Directory
 {
 	Entry *entries;
@@ -20,6 +29,7 @@ struct Directory
 	bool (*free_entries)(Directory *ctx);
 };
 
+/** @brief File open flags. */
 typedef enum
 {
 	OPEN_READ = 'r',
@@ -29,6 +39,7 @@ typedef enum
 	OPEN_CREATE = '+'
 } OpenFlags;
 
+/** @brief Filesystem type identifiers. */
 typedef enum
 {
 	FS_NONE,
@@ -36,8 +47,9 @@ typedef enum
 	FS_EXT2,
 	FS_DEV,
 	FS_PIPE
-	// інші
 } FileSystemType;
+
+/** @brief Abstract block device descriptor. */
 typedef struct
 {
 	void *device;
@@ -49,44 +61,42 @@ typedef struct
 #define PTR_ERR(p) ((int)(intptr_t)(p))
 #define IS_ERR(p) ((uintptr_t)(p) >= (uintptr_t)-4095)
 
-// Open modes
-#define VFS_O_RDONLY 0x01 // RD
-#define VFS_O_WRONLY 0x02 // WR
-#define VFS_O_RDWR 0x03	  // RD | WR
+/* ── Open modes ──────────────────────────────────────────────────── */
+#define VFS_O_RDONLY 0x01
+#define VFS_O_WRONLY 0x02
+#define VFS_O_RDWR 0x03
 
-#define VFS_O_CREAT 0x10  // Create file if not exist
-#define VFS_O_EXCL 0x20	  // Error if file exist
-#define VFS_O_TRUNC 0x40  // Truncate file
-#define VFS_O_APPEND 0x80 // Append to file
-// Standart file modes
-#define MODE_FILE 0x1000    // File
-#define MODE_DIR 0x2000	    // Directory
-#define MODE_CHAR 0x3000    // Character device
-#define MODE_BLOCK 0x4000   // Block device
-#define MODE_PIPE 0x5000    // Pipe
-#define MODE_SYMLINK 0x6000 // Symbolic link
+#define VFS_O_CREAT 0x10
+#define VFS_O_EXCL 0x20
+#define VFS_O_TRUNC 0x40
+#define VFS_O_APPEND 0x80
 
-// Access modes
-#define MODE_READ 0x0004  // Read access
-#define MODE_WRITE 0x0002 // Write access
-#define MODE_EXEC 0x0001  // Execute access
+/* ── Standard file modes ──────────────────────────────────────────── */
+#define MODE_FILE 0x1000
+#define MODE_DIR 0x2000
+#define MODE_CHAR 0x3000
+#define MODE_BLOCK 0x4000
+#define MODE_PIPE 0x5000
+#define MODE_SYMLINK 0x6000
 
-// Seek modes
-#define SEEK_SET 0 // Set position
-#define SEEK_CUR 1 // Current position
-#define SEEK_END 2 // End position
+/* ── Access modes ─────────────────────────────────────────────────── */
+#define MODE_READ 0x0004
+#define MODE_WRITE 0x0002
+#define MODE_EXEC 0x0001
 
-// extern void *fb;
+/* ── Seek modes ───────────────────────────────────────────────────── */
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
 
+/** @brief Free all entry names in a Directory structure. */
 static bool free_entries(Directory *dir)
 {
 	if (!dir || !dir->entries)
 		return false;
 
 	for (int i = 0; i < dir->count; i++)
-	{
 		kfree(dir->entries[i].name);
-	}
 
 	kfree(dir->entries);
 	dir->entries = NULL;
@@ -95,6 +105,7 @@ static bool free_entries(Directory *dir)
 	return true;
 }
 
+/** @brief Initialise a Directory structure with default values. */
 static Directory Directory_init(Directory dir)
 {
 	dir.free_entries = free_entries;

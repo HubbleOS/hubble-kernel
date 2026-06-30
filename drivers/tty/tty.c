@@ -1,10 +1,14 @@
-#include <drivers/tty/tty.h>
+/**
+ * @file tty.c
+ * @brief TTY core — canonical line discipline, read/write, ring buffer
+ */
 #include <hubble/string.h>
 #include <smp/waitqueue.h>
+#include <drivers/tty/tty.h>
 
 tty_t *tty_current = NULL;
 
-/* ── Read ring buffer helpers ────────────────────────────────────────────── */
+/* ── Read ring-buffer helpers ───────────────────────────── */
 
 static inline size_t read_buf_len(const tty_t *tty)
 {
@@ -20,7 +24,7 @@ static void read_buf_push(tty_t *tty, char c)
 {
 	size_t next = (tty->read_head + 1) % TTY_READ_BUF_SIZE;
 	if (next == tty->read_tail)
-		return; /* переповнення — втрачаємо символ */
+		return;
 	tty->read_buf[tty->read_head] = c;
 	tty->read_head = next;
 }
@@ -32,7 +36,7 @@ static char read_buf_pop(tty_t *tty)
 	return c;
 }
 
-/* ── Init ────────────────────────────────────────────────────────────────── */
+/* ── Initialisation ─────────────────────────────────────── */
 
 void tty_init(tty_t *tty, const tty_console_ops_t *console)
 {
@@ -47,23 +51,18 @@ void tty_init(tty_t *tty, const tty_console_ops_t *console)
 		tty_current = tty;
 }
 
-/* ── tty_input_char ──────────────────────────────────────────────────────── */
-/*
- * Canonical mode line discipline.
- * Викликається з tty keyboard handler для кожного символу.
- */
+/* ── Line discipline ────────────────────────────────────── */
+
 void tty_input_char(tty_t *tty, char c)
 {
 	if (!tty)
 		return;
 
-	/* --- Backspace --- */
 	if (c == '\b')
 	{
 		if (tty->line_len > 0)
 		{
 			tty->line_len--;
-			/* echo: затерти символ на екрані */
 			if (tty->console && tty->console->putchar)
 			{
 				tty->console->putchar('\b');
@@ -74,23 +73,19 @@ void tty_input_char(tty_t *tty, char c)
 		return;
 	}
 
-	/* --- CTRL+L: clear screen --- */
 	if (c == '\f')
-	{ /* \f = 0x0C = CTRL+L */
+	{
 		if (tty->console && tty->console->clear)
 			tty->console->clear();
 		return;
 	}
 
-	/* --- Echo символу --- */
 	if (tty->console && tty->console->putchar)
 		tty->console->putchar(c);
 
-	/* --- Додаємо в line buffer --- */
 	if (tty->line_len < TTY_LINE_BUF_SIZE - 1)
 		tty->line_buf[tty->line_len++] = c;
 
-	/* --- Enter: переносимо рядок в read buffer --- */
 	if (c == '\n')
 	{
 		for (size_t i = 0; i < tty->line_len; i++)
@@ -101,14 +96,13 @@ void tty_input_char(tty_t *tty, char c)
 	}
 }
 
-/* ── tty_read ────────────────────────────────────────────────────────────── */
+/* ── Blocking read ──────────────────────────────────────── */
 
 size_t tty_read(tty_t *tty, char *buf, size_t size)
 {
 	if (!tty || !buf || size == 0)
 		return -1;
 
-	/* Чекаємо поки в read buffer з'явиться хоч щось */
 	while (read_buf_empty(tty))
 		waitqueue_sleep(&tty->read_wq);
 
@@ -117,13 +111,13 @@ size_t tty_read(tty_t *tty, char *buf, size_t size)
 	{
 		buf[n] = read_buf_pop(tty);
 		if (buf[n++] == '\n')
-			break; /* canonical: повертаємо по одному рядку */
+			break;
 	}
 
 	return (size_t)n;
 }
 
-/* ── tty_write ───────────────────────────────────────────────────────────── */
+/* ── Write to console ───────────────────────────────────── */
 
 size_t tty_write(tty_t *tty, const char *buf, size_t size)
 {

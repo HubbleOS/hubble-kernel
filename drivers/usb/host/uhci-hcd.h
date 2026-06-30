@@ -1,21 +1,30 @@
-#pragma once
-
 /**
  * @file uhci-hcd.h
- * @brief Universal Host Controller Interface for Host Controller Driver
+ * @brief UHCI host controller register offsets and bit definitions
  */
+#pragma once
 
-#define USBCMD 0x00    // USB Command
-#define USBSTS 0x02    // USB Status
-#define USBINTR 0x04   // USB Interrupt
-#define FRNUM 0x06     // Frame Number
-#define FRBASEADD 0x08 // Frame List Base Address
-#define SOFMOD 0x0C    // Start Of Frame Modify
-#define PORTSC1 0x10   // Port 1 Status/Control
-#define PORTSC2 0x12   // Port 2 Status/Control
+/* ── I/O register offsets (from I/O base) ───────────────── */
 
-// Command Register
-/* bits 8–15 reserved */
-#define GRESET (1 << 2)	 // Global Reset
-#define HCRESET (1 << 1) // Host Controller Reset
-#define RS (1 << 0)	 // Run/Stop
+#define USBCMD    0x00
+#define USBSTS    0x02
+#define USBINTR   0x04
+#define FRNUM     0x06
+#define FRBASEADD 0x08
+#define SOFMOD    0x0C
+#define PORTSC1   0x10
+#define PORTSC2   0x12
+
+/* ── Command register (USBCMD) bits ─────────────────────── */
+
+#define GRESET   (1 << 2)
+#define HCRESET  (1 << 1)
+#define RS       (1 << 0)
+#define USBCMD_RS (1 << 0)
+
+/* ── Port status / control bits ─────────────────────────── */
+
+#define PORTSC_CSC   (1 << 1)
+#define PORTSC_CS    (1 << 0)
+#define PORTSC_PE    (1 << 2)
+#define PORTSC_RESET (1 << 9)

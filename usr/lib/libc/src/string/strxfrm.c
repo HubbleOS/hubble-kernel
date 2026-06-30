@@ -1,8 +1,9 @@
-#include <string.h>
+/**
+ * @file strxfrm.c
+ * @brief Transform a string for locale-aware comparison (fallback to byte-wise copy)
+ */
 
-// Temporary implementation of strxfrm()
-// TODO: Implement locale-aware transformation in the future.
-// For now, we fall back to a simple byte-wise copy suitable for strcmp-based sorting.
+#include <string.h>
 
 size_t strxfrm(char *dest, const char *src, size_t n)
 {
@@ -10,7 +11,6 @@ size_t strxfrm(char *dest, const char *src, size_t n)
 
 	if (n != 0)
 	{
-		// Copy at most n-1 characters and null-terminate
 		size_t copy_len = (len < n - 1) ? len : n - 1;
 		memcpy(dest, src, copy_len);
 		dest[copy_len] = '\0';

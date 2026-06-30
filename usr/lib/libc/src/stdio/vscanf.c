@@ -1,7 +1,12 @@
+/**
+ * @file vscanf.c
+ * @brief Formatted input from stdin (va_list version)
+ */
+
 #include <stdio.h>
 #include <ctype.h>
 
-static void skip_whitespace()
+static void skip_whitespace(void)
 {
 	int c;
 	do
@@ -11,6 +16,7 @@ static void skip_whitespace()
 	ungetc(c, stdin);
 }
 
+/** @brief Formatted input from stdin using va_list */
 int vscanf(const char *format, va_list args)
 {
 	int assigned = 0;

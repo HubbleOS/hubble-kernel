@@ -1,11 +1,14 @@
+/**
+ * @file pci.c
+ * @brief PCI configuration-space access and driver registration
+ */
 #include <stdint.h>
-
+#include <io.h>
 #include <hubble/printk.h>
+#include <mm/kmalloc.h>
 #include "pci.h"
 
-#include <mm/kmalloc.h>
-
-#include <io.h>
+/* ── Configuration space helpers ────────────────────────── */
 
 uint32_t pci_read_config(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset)
 {
@@ -31,12 +34,16 @@ void pci_write_config(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset, u
 	outl(0xCFC, val);
 }
 
+/* ── Command register helpers ───────────────────────────── */
+
 void pci_set_command(struct pci_device *dev, uint16_t flags)
 {
 	uint32_t cmd = pci_read_config(dev->bus, dev->slot, dev->func, PCI_COMMAND);
 	cmd |= flags;
 	pci_write_config(dev->bus, dev->slot, dev->func, PCI_COMMAND, cmd);
 }
+
+/* ── Device structure allocation ────────────────────────── */
 
 static struct pci_device *allocate_pci_device_struct(uint8_t bus, uint8_t slot, uint8_t func)
 {
@@ -46,7 +53,6 @@ static struct pci_device *allocate_pci_device_struct(uint8_t bus, uint8_t slot, 
 	dev->slot = slot;
 	dev->func = func;
 
-	/* Class / Subclass / ProgIF */
 	uint32_t reg = pci_read_config(bus, slot, func, PCI_REVISION_ID);
 
 	dev->class_code =
@@ -54,13 +60,13 @@ static struct pci_device *allocate_pci_device_struct(uint8_t bus, uint8_t slot, 
 	    (PCI_GET_SUBCLASS(reg) << 8) |
 	    PCI_GET_PROGIF(reg);
 
-	/* BAR0 */
 	uint32_t bar0 = pci_read_config(bus, slot, func, PCI_BAR0);
-
 	dev->bar0 = bar0 & PCI_BAR_ADDR_MASK;
 
 	return dev;
 }
+
+/* ── Driver registration and bus scan ───────────────────── */
 
 int pci_register_driver(struct pci_driver *drv)
 {

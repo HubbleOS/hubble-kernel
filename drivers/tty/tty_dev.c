@@ -1,23 +1,26 @@
-#include <drivers/tty/tty.h>
-#include <fs/vfs/dev.h>
-#include <hubble/module.h>
+/**
+ * @file tty_dev.c
+ * @brief TTY VFS device — registers tty0 as a character device
+ */
 #include <hubble/string.h>
+#include <hubble/module.h>
+#include <fs/vfs/dev.h>
+#include <drivers/tty/tty.h>
 
-/* ── tty instance ────────────────────────────────────────────────────────── */
+/* ── TTY instance ───────────────────────────────────────── */
 
 static tty_t tty0;
 
-/* ── Console ops ─────────────────────────────────────────────────────────── */
+/* ── Console ops ────────────────────────────────────────── */
 
-/* early_putchar з textout.c — вже обробляє \n, \b, scroll */
 extern void early_putchar(char c);
 
 static const tty_console_ops_t tty0_console_ops = {
-    .putchar = early_putchar,
-    .clear = NULL, /* TODO: реалізувати clear screen якщо потрібно */
+	.putchar = early_putchar,
+	.clear = NULL,
 };
 
-/* ── VFS callbacks ───────────────────────────────────────────────────────── */
+/* ── VFS callbacks ──────────────────────────────────────── */
 
 static uint64_t tty_vfs_read(uint64_t offset, size_t size, void *buf)
 {
@@ -33,7 +36,7 @@ static uint64_t tty_vfs_write(uint64_t offset, size_t size, const void *buf)
 	return n < 0 ? 0 : (uint64_t)n;
 }
 
-/* ── initcall ────────────────────────────────────────────────────────────── */
+/* ── Initcall ───────────────────────────────────────────── */
 
 static int tty_dev_init(void)
 {

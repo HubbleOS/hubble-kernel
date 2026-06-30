@@ -1,10 +1,16 @@
+/**
+ * @file loader_context.h
+ * @brief Bootloader context structure — resources passed from EFI to the kernel entry
+ */
+
 #pragma once
+
 #include <stdint.h>
 
-// Один дескриптор пам'яті (EFI-незалежний)
+/** @brief Memory region type (EFI-independent) */
 typedef enum
 {
-	MEM_CONVENTIONAL = 0, // вільна RAM
+	MEM_CONVENTIONAL = 0,
 	MEM_RESERVED,
 	MEM_LOADER_CODE,
 	MEM_LOADER_DATA,
@@ -13,6 +19,7 @@ typedef enum
 	MEM_OTHER,
 } mem_type_t;
 
+/** @brief Single memory region descriptor */
 typedef struct
 {
 	uint64_t phys_start;
@@ -20,6 +27,7 @@ typedef struct
 	mem_type_t type;
 } mem_descriptor_t;
 
+/** @brief Framebuffer information */
 typedef struct
 {
 	void *base;
@@ -29,29 +37,22 @@ typedef struct
 	uint32_t bpp;
 } fb_info_t;
 
-// Всі ресурси, які efi_main передає boot_main
+/** @brief All resources passed from efi_main to boot_main */
 typedef struct
 {
 	void *elf_buf;
-	// UINTN elf_size;
 	unsigned long long elf_size;
 
-	// Пам'ять
-	mem_descriptor_t *mem_map; // масив дескрипторів
+	mem_descriptor_t *mem_map;
 	uint64_t mem_map_count;
 
-	// Фреймбуфер
 	fb_info_t framebuffer;
 
-	// ACPI
 	void *rsdp;
 
-	// Ядро (вже завантажене)
-	uint64_t kernel_phys; // фізична адреса ELF/flat binary
+	uint64_t kernel_phys;
 	uint64_t kernel_size;
 
-	// Де виділяти сторінки для page tables / стека / boot_info
-	// (boot_main сам будує page tables)
-	uint64_t free_phys_base; // найбільший вільний регіон
+	uint64_t free_phys_base;
 	uint64_t free_phys_size;
 } loader_context_t;
