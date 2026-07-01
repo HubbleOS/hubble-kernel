@@ -106,10 +106,10 @@ void do_initcalls(void)
  */
 void start_kernel(void)
 {
-	g_platform.fb_base   = (uint64_t)g_boot_info->framebuffer.base;
-	g_platform.fb_width  = g_boot_info->framebuffer.width;
+	g_platform.fb_base = (uint64_t)g_boot_info->framebuffer.base;
+	g_platform.fb_width = g_boot_info->framebuffer.width;
 	g_platform.fb_height = g_boot_info->framebuffer.height;
-	g_platform.fb_pitch  = g_boot_info->framebuffer.pitch;
+	g_platform.fb_pitch = g_boot_info->framebuffer.pitch;
 
 	printk_init(&g_boot_info->framebuffer);
 

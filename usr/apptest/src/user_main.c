@@ -83,7 +83,7 @@ void terminal(void)
 	char buf[256];
 	int tty_fd = open("/dev/tty0", 0);
 
-	printf("> ");
+	printf("/> ");
 	while (1)
 	{
 		// read() блокується поки не прийде \n
@@ -108,7 +108,7 @@ void handle_command(char *cmd)
 
 	if (strcmp(cmd, "help") == 0)
 	{
-		printf("Available commands: help, echo, clear, hello, lsmod, modprobe, rmmod\n");
+		printf("Available commands: help, echo, clear, hello, lsmod, modprobe, rmmod, net\n");
 	}
 	else if (strncmp(cmd, "echo ", 5) == 0)
 	{
@@ -121,6 +121,19 @@ void handle_command(char *cmd)
 		if (ret == 0)
 		{
 			printf("Module hello.ko loaded successfully!\n");
+		}
+		else
+		{
+			printf("Failed to load module: %d\n", ret);
+		}
+	}
+	else if (strcmp(cmd, "net") == 0)
+	{
+		printf("Loading net.ko...\n");
+		int ret = module_load("/modules/net.ko");
+		if (ret == 0)
+		{
+			printf("Module net.ko loaded successfully!\n");
 		}
 		else
 		{
@@ -149,7 +162,8 @@ void handle_command(char *cmd)
 	{
 		char *modname = cmd + 9;
 		/* Skip leading spaces */
-		while (*modname == ' ') modname++;
+		while (*modname == ' ')
+			modname++;
 		if (*modname == '\0')
 		{
 			printf("usage: modprobe <module>\n");
@@ -170,7 +184,8 @@ void handle_command(char *cmd)
 	else if (strncmp(cmd, "rmmod ", 6) == 0)
 	{
 		char *modname = cmd + 6;
-		while (*modname == ' ') modname++;
+		while (*modname == ' ')
+			modname++;
 		if (*modname == '\0')
 		{
 			printf("usage: rmmod <module>\n");
@@ -194,8 +209,8 @@ void handle_command(char *cmd)
 void load_essential_modules(void)
 {
 	const char *modules[] = {
-		"/modules/input.ko",
-		"/modules/tty.ko",
+	    "/modules/input.ko",
+	    "/modules/tty.ko",
 	};
 	for (size_t i = 0; i < sizeof(modules) / sizeof(modules[0]); i++)
 	{

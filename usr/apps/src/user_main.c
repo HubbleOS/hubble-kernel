@@ -35,8 +35,6 @@ typedef struct
 
 uint32_t open(const char *path, int flags) { return syscall2(SYS_open, (long)path, flags); }
 
-void test(void);
-
 void _start(void)
 {
 	libc_init();
@@ -67,7 +65,7 @@ void _start(void)
 	cursor_t *cursor = cursor_create(16, 16, rgb(0, 0, 0), rgb(255, 255, 255));
 	window_t *win = window_create(0, 0, 400, 300);
 
-	int pid = spawn(test, NULL, 0);
+	// int pid = spawn(test, NULL, 0);
 	// int pid_file = spawn_file("/usr/bin/user1.elf", NULL, 0);
 	while (1)
 	{
@@ -94,16 +92,4 @@ void _start(void)
 
 		compositor_render();
 	}
-}
-void test(void)
-{
-	printf("Test task!\n");
-	char c;
-	int kbd_file = open("/dev/kbd", 0);
-	while (1)
-	{
-		read_file(kbd_file, &c, 1);
-		printf("key 1: %c\n", c);
-	}
-	// printf("Test task!\n");
 }
