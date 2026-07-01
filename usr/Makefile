@@ -25,6 +25,7 @@ all: build
 
 build: build-tool
 	@set -e; \
+	mkdir -p $(OUT_DIR)/logs; \
 	for dir in $(subdirs); do \
 		$(MAKE) -C $$dir BUILD_TOOL_FLAGS="$(BUILD_TOOL_FLAGS)"; \
 	done

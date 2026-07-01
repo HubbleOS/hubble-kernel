@@ -108,8 +108,16 @@ static uint8_t mouse_read(void)
 	return inb(PS2_DATA);
 }
 
-static void mouse_init_hw(void)
+void mouse_init(void)
 {
+	mouse_g = kmalloc(sizeof(mouse_t), GFP_KERNEL);
+	if (!mouse_g)
+	{
+		printk(KERN_ERR "[MOUSE] Failed to allocate mouse state\n");
+		return;
+	}
+	memset(mouse_g, 0, sizeof(mouse_t));
+
 	__asm__ volatile("cli");
 
 	ps2_wait_input();

@@ -294,7 +294,6 @@ else
 	MODULES += lib
 	MODULES += sound
 	MODULES += kernel
-	MODULES += modules
 	MODULES += arch/$(ARCH)
 endif
 
@@ -324,7 +323,7 @@ export USR_DIR
 
 USR_BUILD :=
 ifneq ($(ARCH),arm64)
-	USR_BUILD := $(MAKE) -C $(USR_DIR) -j$(JOBS)
+  USR_BUILD := $(MAKE) -C $(USR_DIR) -j$(JOBS) BUILD_TOOL_FLAGS="--log-file $(OUT_DIR)/logs/usr_build.log -v --jobs $(JOBS)"
 endif
 
 # ---------------------------------------------------------------------------
@@ -334,6 +333,11 @@ endif
 PHONY += build-tool
 build-tool:
 	@$(MAKE) -C $(DEV_TOOLS_DIR)/build build
+
+# PHONY += usr-build
+# usr-build: build-tool
+# 	@mkdir -p $(OUT_DIR)/logs
+# 	@$(MAKE) -C $(USR_DIR) -j$(JOBS) BUILD_TOOL_FLAGS="--log-file $(OUT_DIR)/logs/usr_build.log -v --jobs $(JOBS)"
 
 PHONY += build
 build: build-tool
@@ -382,7 +386,7 @@ mkvars:
 PHONY += help
 help:
 	@echo "Usage: make [TARGET] [ARCH=<arch>]"
-	@echo "Targets: build, run, disk, clean, rebuild, mkvars"
-	@echo "Arches:  x86, x86_64, arm64"
+	@echo "Targets: ${PHONY}"
+	@echo "Arches:  ${SUPPORTED_ARCHES}"
 
 .PHONY: $(PHONY)

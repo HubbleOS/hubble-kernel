@@ -383,32 +383,11 @@ uint64_t *vmm_create_user_pagemap(void) {
 			pml4[i] = current_pml4[i];
 	}
 
-	for (int i = 0; i < 256; i++) {
-		if (!(current_pml4[i] & PTE_PRESENT))
-			continue;
-
-		uint64_t *new_pdpt = vmm_alloc_table();
-		uint64_t *old_pdpt = (uint64_t *)phys_to_virt(pte_addr(current_pml4[i]));
-
-		for (int j = 0; j < 512; j++) {
-			if (!(old_pdpt[j] & PTE_PRESENT))
-				continue;
-			if (old_pdpt[j] & PTE_HUGE) {
-				new_pdpt[j] = old_pdpt[j];
-				continue;
-			}
-
-			uint64_t *new_pd = vmm_alloc_table();
-			uint64_t *old_pd = (uint64_t *)phys_to_virt(pte_addr(old_pdpt[j]));
-
-			for (int k = 0; k < 512; k++)
-				new_pd[k] = old_pd[k];
-
-			new_pdpt[j] = pte_make(virt_to_phys((uint64_t)new_pd), old_pdpt[j] & 0xFFF);
-		}
-
-		pml4[i] = pte_make(virt_to_phys((uint64_t)new_pdpt), current_pml4[i] & 0xFFF);
-	}
+	/* User entries (indices 0-255) are NOT copied from the kernel PML4.
+	 * The kernel PML4 may contain bootloader identity mappings for low
+	 * physical memory — those must never appear in a user address space.
+	 * User mappings are created on demand by elf_load_segment() and
+	 * sys_mmap() via vmm_map_page_into() / vmm_map_page(). */
 
 	uint64_t new_phys = virt_to_phys((uint64_t)pml4);
 	pml4[RECURSIVE_PML4_INDEX] = pte_make(new_phys, PTE_PRESENT | PTE_WRITE);
