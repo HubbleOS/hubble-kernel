@@ -27,7 +27,7 @@ signal.signal(signal.SIGINT, signal_handler)
 
 
 class QemuOptions:
-    def __init__(self, arch="x86_64", mem=256, smp=2, debug_port=1000, iso_path="out/build/x86/iso/"):
+    def __init__(self, arch="x86_64", mem=256, smp=1, debug_port=1000, iso_path="out/build/x86/iso/"):
         self.arch = arch
         self.mem = mem
         self.smp = smp
@@ -136,7 +136,10 @@ def build_qemu_command(opts: QemuOptions):
     cmd += [
         # "-S", "-s", "-d cpu_reset", "-no-reboot", "-no-shutdown"
         # "-S -s -d int,cpu_reset -no-reboot -no-shutdown"
-        "-S", "-s"
+        # "-S", "-s"
+        "-d", "int",
+        "-D", "/tmp/qemu.log",
+        "-no-reboot", "-no-shutdown"
     ]
 
     #

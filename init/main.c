@@ -102,11 +102,13 @@ void do_initcalls(void) {
  *   6. Scheduler start
  */
 void start_kernel(void) {
-  g_platform.fb_base = (uint64_t)g_boot_info->framebuffer.base;
+  uint64_t fb_phys = (uint64_t)(uintptr_t)g_boot_info->framebuffer.base;
+  g_platform.fb_base = phys_to_virt(fb_phys);
   g_platform.fb_width = g_boot_info->framebuffer.width;
   g_platform.fb_height = g_boot_info->framebuffer.height;
   g_platform.fb_pitch = g_boot_info->framebuffer.pitch;
 
+  g_boot_info->framebuffer.base = (void *)phys_to_virt(fb_phys);
   printk_init(&g_boot_info->framebuffer);
 
   boot_cpu_init();

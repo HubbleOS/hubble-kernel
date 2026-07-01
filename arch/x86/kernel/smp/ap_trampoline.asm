@@ -74,17 +74,34 @@ long_mode_64:
     mov     ds, ax
     mov     es, ax
 
-    lgdt    [0x8000 + (ap_data_gdt_desc - ap_trampoline_start)]
+    ; Step 1: Load TEMPORARY GDT from identity-mapped trampoline area.
+    ; CPU is still in 32-bit compatibility mode (CS.L=0, CS.D=1), so
+    ; lgdt reads a 6-byte descriptor (2-byte limit + 4-byte base).
+    lgdt    [0x8000 + (ap_temp_gdt_desc - ap_trampoline_start)]
 
-    ; Reload code segment with kernel's GDT
+    ; Far return to true 64-bit long mode via temp GDT's 64-bit code segment
+    push    0x08
+    push    qword (0x8000 + (.load_kernel_gdt - ap_trampoline_start))
+    retfq
+
+.load_kernel_gdt:
+    mov     rbx, 0x8000
+
+    ; Step 2: Load REAL kernel GDT. Now in true 64-bit mode (CS.L=1),
+    ; lgdt reads the full 10-byte descriptor (2-byte limit + 8-byte base).
+    lgdt    [rbx + (ap_data_gdt_desc - ap_trampoline_start)]
+
+    ; Reload CS with kernel GDT's 64-bit code segment
     push    0x08
     push    qword (0x8000 + (.reload_cs - ap_trampoline_start))
     retfq
 
 .reload_cs:
-
-    ; Set up base pointer to trampoline data area
-    mov     rbx, 0x8000
+    ; Set up data segments from kernel GDT
+    mov     ax, 0x10
+    mov     ds, ax
+    mov     es, ax
+    mov     ss, ax
 
     call    enable_sse
 
@@ -180,6 +197,19 @@ ap_data_entry:                  ; offset 538
 
 ap_data_ready:                  ; offset 546
     dd      0                   ; uint32_t ap_ready
+
+; Temporary GDT descriptor for the 32→64 bit mode transition.
+; Located at an identity-mapped address (trampoline at 0x8000) so that
+; lgdt in 32-bit compatibility mode can read it (2-byte limit + 4-byte base).
+ap_temp_gdt_desc:               ; offset 550
+    dw      (ap_temp_gdt_end - ap_temp_gdt_start - 1)  ; limit
+    dd      0x8000 + (ap_temp_gdt_start - ap_trampoline_start)  ; base (identity)
+
+ap_temp_gdt_start:              ; offset 556
+    dq      0x0000000000000000  ; null descriptor (index 0)
+    dq      0x00AF9A000000FFFF  ; 64-bit code (index 1, selector 0x08)
+    dq      0x00AF92000000FFFF  ; 64-bit data (index 2, selector 0x10)
+ap_temp_gdt_end:
 
 ap_data_end:
 

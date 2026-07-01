@@ -358,9 +358,11 @@ int make_pd_entry_user(uint64_t va) {
 /* -- User Page Table Management -------------------------------------------- */
 
 /**
- * @brief Create a user-space page table cloned from the kernel
+ * @brief Create a user-space page table
  *
- * Copies kernel entries (indices 256-511) and deep-copies user entries.
+ * Copies kernel entries (indices 256-511). User entries (indices 0-255)
+ * are left empty — they are populated on demand by elf_load_segment()
+ * and sys_mmap() via vmm_map_page_into() / vmm_map_page().
  *
  * @return Physical address of the new PML4, or NULL on failure
  */
@@ -379,7 +381,7 @@ uint64_t *vmm_create_user_pagemap(void) {
       pml4[i] = current_pml4[i];
   }
 
-  /* User entries (indices 0-255) are NOT copied from the kernel PML4.
+  /* User entries (indices 0-255) are intentionally left empty.
    * The kernel PML4 may contain bootloader identity mappings for low
    * physical memory — those must never appear in a user address space.
    * User mappings are created on demand by elf_load_segment() and
@@ -410,6 +412,8 @@ int vmm_map_page_into(uint64_t *pml4_phys, uint64_t va, uint64_t pa,
 
   if (!pte_present(pml4[PML4_INDEX(va)])) {
     uint64_t *t = vmm_alloc_table();
+    if (!t)
+      return -1;
     pml4[PML4_INDEX(va)] = pte_make(virt_to_phys((uint64_t)t), tf);
   } else if (flags & PTE_USER) {
     pml4[PML4_INDEX(va)] |= PTE_USER;
@@ -419,6 +423,8 @@ int vmm_map_page_into(uint64_t *pml4_phys, uint64_t va, uint64_t pa,
 
   if (!pte_present(pdpt[PDPT_INDEX(va)])) {
     uint64_t *t = vmm_alloc_table();
+    if (!t)
+      return -1;
     pdpt[PDPT_INDEX(va)] = pte_make(virt_to_phys((uint64_t)t), tf);
   } else if (flags & PTE_USER) {
     pdpt[PDPT_INDEX(va)] |= PTE_USER;
@@ -428,11 +434,15 @@ int vmm_map_page_into(uint64_t *pml4_phys, uint64_t va, uint64_t pa,
 
   if (!pte_present(pd[PD_INDEX(va)])) {
     uint64_t *t = vmm_alloc_table();
+    if (!t)
+      return -1;
     pd[PD_INDEX(va)] = pte_make(virt_to_phys((uint64_t)t), tf);
   } else if (pd[PD_INDEX(va)] & PTE_HUGE) {
     uint64_t huge_phys = pte_addr(pd[PD_INDEX(va)]);
     uint64_t huge_flags = pd[PD_INDEX(va)] & 0xFFF & ~PTE_HUGE;
     uint64_t *new_pt = vmm_alloc_table();
+    if (!new_pt)
+      return -1;
     for (int i = 0; i < 512; i++)
       new_pt[i] = pte_make(huge_phys + i * PAGE_SIZE,
                            huge_flags | PTE_PRESENT | PTE_WRITE);
