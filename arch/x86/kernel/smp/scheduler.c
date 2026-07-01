@@ -477,16 +477,16 @@ void schedule(registers_t *regs) {
 
   extern cpu_local_t cpu_locals[];
 
-  if (new_task->page_table != (old_task ? old_task->page_table : NULL)) {
-    asm volatile("mov %0, %%cr3" ::"r"(new_task->page_table) : "memory");
-  }
   if (new_task->in_syscall) {
     cpu_locals[cpu_id].cpu_id = new_task->in_syscall_rsp;
   }
   cpu_locals[cpu_id].rsp0 = new_task->rsp0 + new_task->rsp0_size;
   tss_set_rsp0(new_task->rsp0 + new_task->rsp0_size);
+
+  if (new_task->page_table != (old_task ? old_task->page_table : NULL)) {
+    asm volatile("mov %0, %%cr3" ::"r"(new_task->page_table) : "memory");
+  }
   task_state_load(new_task, regs);
-  return;
 }
 
 /* -- Timer handler ------------------------------------------------------ */

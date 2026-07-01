@@ -155,7 +155,7 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id,
   data->pml4_phys = cr3;
 
   data->gdt_limit = get_gdt_limit();
-  data->gdt_base = virt_to_phys((uint64_t)get_gdt_base());
+  data->gdt_base = (uint64_t)get_gdt_base();
 
   data->stack_top = (uint64_t)stack_top;
   data->entry_point = (uint64_t)ap_entry;
