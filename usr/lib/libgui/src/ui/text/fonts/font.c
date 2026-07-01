@@ -1,10 +1,9 @@
 #include "font.h"
 
-uint8_t *get_glyph(char c)
-{
-	if ((unsigned char)c >= 128)
-		return 0;		     // Limit check
-	return font_glyph[(unsigned char)c]; // Return the glyph for the symbol
+uint8_t *get_glyph(char c) {
+  if ((unsigned char)c >= 128)
+    return 0;                          // Limit check
+  return font_glyph[(unsigned char)c]; // Return the glyph for the symbol
 }
 
 const uint8_t font_glyph[256][8] = {

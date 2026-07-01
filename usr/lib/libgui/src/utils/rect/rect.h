@@ -2,9 +2,8 @@
 
 #include <stdbool.h>
 
-typedef struct
-{
-	int x, y, w, h;
+typedef struct {
+  int x, y, w, h;
 } rect_t;
 
 void merge_dirty_rects(rect_t *dirty, int *count);

@@ -6,9 +6,8 @@
 
 #include <core/element/element.h>
 
-typedef struct
-{
-	element_t *focused_el;
+typedef struct {
+  element_t *focused_el;
 } local_keyboard_t;
 
 extern local_keyboard_t g_keyboard;

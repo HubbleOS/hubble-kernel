@@ -12,15 +12,14 @@
  * @param n Maximum number of characters to append
  * @return Pointer to dest
  */
-char *strncat(char *dest, const char *src, size_t n)
-{
-	char *a = dest;
+char *strncat(char *dest, const char *src, size_t n) {
+  char *a = dest;
 
-	dest += strlen(dest);
-	while (n-- && *src)
-		*dest++ = *src++;
+  dest += strlen(dest);
+  while (n-- && *src)
+    *dest++ = *src++;
 
-	*dest = '\0';
+  *dest = '\0';
 
-	return a;
+  return a;
 }

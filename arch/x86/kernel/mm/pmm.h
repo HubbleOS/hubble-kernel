@@ -8,29 +8,29 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* ── Page Constants ──────────────────────────────────────────────────────── */
+/* -- Page Constants -------------------------------------------------------- */
 
 #define PAGE_SIZE 4096
 
-#define PAGE_ALIGN_UP(addr)  (((addr) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
+#define PAGE_ALIGN_UP(addr) (((addr) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
 #define PAGE_ALIGN_DOWN(addr) ((addr) & ~(PAGE_SIZE - 1))
 
-/* ── PMM State ───────────────────────────────────────────────────────────── */
+/* -- PMM State ------------------------------------------------------------- */
 
 /**
  * @brief Physical Memory Manager state information
  */
 typedef struct {
-	uint64_t total_memory;
-	uint64_t usable_memory;
-	uint64_t used_memory;
-	uint64_t total_pages;
-	uint64_t used_pages;
-	uint8_t *bitmap;
-	uint64_t bitmap_size;
+  uint64_t total_memory;
+  uint64_t usable_memory;
+  uint64_t used_memory;
+  uint64_t total_pages;
+  uint64_t used_pages;
+  uint8_t *bitmap;
+  uint64_t bitmap_size;
 } pmm_info_t;
 
-/* ── Public API ──────────────────────────────────────────────────────────── */
+/* -- Public API ------------------------------------------------------------ */
 
 /**
  * @brief Initialize the Physical Memory Manager

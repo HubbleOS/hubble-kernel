@@ -10,14 +10,14 @@
 #include <stdint.h>
 
 #define DEV_SOUND 1
-#define DEV_NET   2
+#define DEV_NET 2
 #define DEV_OTHER 3
 
 struct device {
-	const char *name;   /**< Human-readable device name. */
-	uint32_t    type;   /**< One of DEV_*.              */
-	void       *ops;    /**< Driver operations struct.   */
-	void       *priv;   /**< Driver-private data.        */
+  const char *name; /**< Human-readable device name. */
+  uint32_t type;    /**< One of DEV_*.              */
+  void *ops;        /**< Driver operations struct.   */
+  void *priv;       /**< Driver-private data.        */
 };
 
 void device_register(struct device *dev);

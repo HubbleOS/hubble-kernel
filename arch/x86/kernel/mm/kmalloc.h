@@ -14,29 +14,29 @@
 
 #include <_cheader.h>
 
-/* ── Allocation Flags ────────────────────────────────────────────────────── */
+/* -- Allocation Flags ------------------------------------------------------ */
 
 /**
  * @brief Allocation flags (similar to Linux GFP flags)
  */
 typedef enum {
-	KMALLOC_KERNEL  = 0x00,
-	KMALLOC_ATOMIC  = 0x01,
-	KMALLOC_ZERO    = 0x02,
-	KMALLOC_DMA     = 0x04,
-	KMALLOC_NOWAIT  = 0x08,
-	KMALLOC_NORETRY = 0x10,
-	KMALLOC_USER    = 0x20,
+  KMALLOC_KERNEL = 0x00,
+  KMALLOC_ATOMIC = 0x01,
+  KMALLOC_ZERO = 0x02,
+  KMALLOC_DMA = 0x04,
+  KMALLOC_NOWAIT = 0x08,
+  KMALLOC_NORETRY = 0x10,
+  KMALLOC_USER = 0x20,
 } kmalloc_flags_t;
 
 #define GFP_KERNEL KMALLOC_KERNEL
 #define GFP_ATOMIC KMALLOC_ATOMIC
-#define GFP_ZERO   (KMALLOC_KERNEL | KMALLOC_ZERO)
-#define GFP_DMA    KMALLOC_DMA
+#define GFP_ZERO (KMALLOC_KERNEL | KMALLOC_ZERO)
+#define GFP_DMA KMALLOC_DMA
 
 _Begin_C_Header;
 
-/* ── Core Functions ──────────────────────────────────────────────────────── */
+/* -- Core Functions -------------------------------------------------------- */
 
 /**
  * @brief Allocate kernel memory
@@ -103,7 +103,7 @@ void *krealloc(void *ptr, size_t new_size, kmalloc_flags_t flags);
  */
 size_t ksize(void *ptr);
 
-/* ── Utility Functions ───────────────────────────────────────────────────── */
+/* -- Utility Functions ----------------------------------------------------- */
 
 /**
  * @brief Duplicate a memory region

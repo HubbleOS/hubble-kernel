@@ -1,9 +1,9 @@
-; ── AP Trampoline ─────────────────────────────────────────────
+; -- AP Trampoline ---------------------------------------------
 ; Application Processor startup code. This code is copied to
 ; physical address 0x8000. APs start execution here in 16-bit
 ; real mode, transition through protected mode to long mode,
 ; and finally jump to the kernel entry point.
-; ──────────────────────────────────────────────────────────────
+; --------------------------------------------------------------
 
 [BITS 16]
 

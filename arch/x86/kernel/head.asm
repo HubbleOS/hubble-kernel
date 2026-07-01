@@ -1,7 +1,7 @@
-; ── Kernel Head ───────────────────────────────────────────────
+; -- Kernel Head -----------------------------------------------
 ; Initial entry point for the kernel. Saves the boot info
 ; pointer and calls the C start_kernel function.
-; ──────────────────────────────────────────────────────────────
+; --------------------------------------------------------------
 
 section .text.boot
 

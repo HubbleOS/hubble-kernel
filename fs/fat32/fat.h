@@ -1,22 +1,23 @@
-/* ── FAT32 public API ─────────────────────────────────────────────
+/* -- FAT32 public API ---------------------------------------------
  * High-level interface for FAT32 filesystem operations including
  * file/directory creation, deletion, reading, writing, and mount.
- * ────────────────────────────────────────────────────────────────── */
+ * ------------------------------------------------------------------ */
 
 #pragma once
 
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
-#include <fs/gpt/gpt_struct.h>
 #include "fat_structs.h"
+#include <fs/gpt/gpt_struct.h>
 #include <fs/vfs/vfs.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 /** @brief Initialise a FAT32 filesystem from a ramdisk base address. */
 int fat32_init(void *ramdisk_base);
 
 /** @brief Read a file's contents into a buffer. */
-size_t fat32_read_file(FAT32_FS *fs, const char *path, const char *filename11, uint8_t *out_buf, size_t max_size);
+size_t fat32_read_file(FAT32_FS *fs, const char *path, const char *filename11,
+                       uint8_t *out_buf, size_t max_size);
 
 /** @brief Create a new file. */
 bool fat32_create_file(FAT32_FS *fs, const char *path);
@@ -28,7 +29,8 @@ bool fat32_delete_file(FAT32_FS *fs, const char *path);
 int fat32_rename_file(const char *oldname, const char *newname);
 
 /** @brief Write data to a file. */
-bool fat32_write_file(FAT32_FS *fs, const char *path, const char *filename11, const uint8_t *data, size_t size);
+bool fat32_write_file(FAT32_FS *fs, const char *path, const char *filename11,
+                      const uint8_t *data, size_t size);
 
 /** @brief List files in a directory given a cluster number. */
 Directory fat32_list_files(FAT32_FS *fs, uint32_t cluster);

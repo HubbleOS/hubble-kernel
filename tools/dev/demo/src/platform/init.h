@@ -8,12 +8,11 @@
 
 #include "fb.h"
 
-typedef struct
-{
-	SDL_Window *window;
-	SDL_Renderer *renderer;
-	SDL_Texture *texture;
-	framebuffer_info_t *fb;
+typedef struct {
+  SDL_Window *window;
+  SDL_Renderer *renderer;
+  SDL_Texture *texture;
+  framebuffer_info_t *fb;
 } demo_ctx_t;
 
 /**

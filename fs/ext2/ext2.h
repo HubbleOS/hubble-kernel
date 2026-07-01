@@ -1,14 +1,14 @@
-/* ── EXT2 public API ──────────────────────────────────────────────
+/* -- EXT2 public API ----------------------------------------------
  * High-level interface for EXT2 filesystem operations including
  * initialisation, inode reading, path resolution, and directory
  * listing.
- * ────────────────────────────────────────────────────────────────── */
+ * ------------------------------------------------------------------ */
 
 #pragma once
 
-#include <stdint.h>
-#include <stddef.h>
 #include <fs/ext2/ext2_struct.h>
+#include <stddef.h>
+#include <stdint.h>
 
 /** @brief Initialise EXT2 filesystem state. */
 int ext2_init(EXT2_FS *fs);

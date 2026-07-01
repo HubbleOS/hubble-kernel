@@ -1,7 +1,7 @@
-; ── User Mode Entry ───────────────────────────────────────────
+; -- User Mode Entry -------------------------------------------
 ; Enters user mode from kernel mode via IRETQ.
 ; Arguments: rdi = entry point, rsi = user stack top
-; ──────────────────────────────────────────────────────────────
+; --------------------------------------------------------------
 
 [BITS 64]
 global user_enter

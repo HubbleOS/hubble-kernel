@@ -9,13 +9,13 @@
 #include <stdarg.h>
 
 #define FILE_HAS_UNGETC(stream) ((stream)->has_ungetc)
-#define FILE_GETC_UNGETC(stream) ((stream)->has_ungetc ? ((stream)->has_ungetc = 0, (stream)->ungetc_buf) : -2)
-#define FILE_SET_UNGETC(stream, c)          \
-	do                                  \
-	{                                   \
-		(stream)->ungetc_buf = (c); \
-		(stream)->has_ungetc = 1;   \
-	} while (0)
+#define FILE_GETC_UNGETC(stream)                                               \
+  ((stream)->has_ungetc ? ((stream)->has_ungetc = 0, (stream)->ungetc_buf) : -2)
+#define FILE_SET_UNGETC(stream, c)                                             \
+  do {                                                                         \
+    (stream)->ungetc_buf = (c);                                                \
+    (stream)->has_ungetc = 1;                                                  \
+  } while (0)
 
 #define FILE_BUFSIZE 128
 
@@ -26,18 +26,17 @@
 _Begin_C_Header;
 
 /** @brief File stream structure */
-typedef struct FILE
-{
-	void *device;
-	int (*write)(struct FILE *stream, const char *buffer, int len);
-	int (*read)(struct FILE *stream, char *buffer, int len);
+typedef struct FILE {
+  void *device;
+  int (*write)(struct FILE *stream, const char *buffer, int len);
+  int (*read)(struct FILE *stream, char *buffer, int len);
 
-	int ungetc_buf;
-	int has_ungetc;
+  int ungetc_buf;
+  int has_ungetc;
 
-	char buf[FILE_BUFSIZE];
-	int buf_len;
-	int buf_pos;
+  char buf[FILE_BUFSIZE];
+  int buf_len;
+  int buf_pos;
 } FILE;
 
 extern FILE *__stdoutp;

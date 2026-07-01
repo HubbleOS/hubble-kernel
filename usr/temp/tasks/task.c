@@ -1,37 +1,37 @@
-#include <stdint.h>
 #include "lab/tasks.h"
+#include <stdint.h>
 
-#include <core/screen/screen.h>
-#include <core/object/object.h>
 #include <core/compositor/compositor.h>
+#include <core/object/object.h>
+#include <core/screen/screen.h>
 
-#include <ui/button/button.h>
-#include <ui/сursor/cursor.h>
-#include <ui/window/window.h>
-#include <ui/text/text.h>
-#include <ui/canvas/canvas.h>
 #include <ui/background/background.h>
+#include <ui/button/button.h>
+#include <ui/canvas/canvas.h>
+#include <ui/text/text.h>
+#include <ui/window/window.h>
+#include <ui/сursor/cursor.h>
 
-#include <dev/mouse/mouse.h>
 #include <dev/keyboard/keyboard.h>
+#include <dev/mouse/mouse.h>
 
 #include <utils/color/color.h>
 
 #ifdef GUI_DEMO
+#include "platform/mouse.h"
 #include <SDL2/SDL.h>
 #include <pthread.h>
-#include "platform/mouse.h"
 static inline void platform_delay(uint32_t ms) { SDL_Delay(ms); }
 
 static pthread_mutex_t gui_lock = PTHREAD_MUTEX_INITIALIZER;
 #define LOCK() pthread_mutex_lock(&gui_lock)
 #define UNLOCK() pthread_mutex_unlock(&gui_lock)
 #else
-#include <smp/scheduler.h>
-#include <smp/spinlock.h>
-#include <smp/smp.h>
-#include <hpet/hpet.h>
 #include <dev/mouse.h>
+#include <hpet/hpet.h>
+#include <smp/scheduler.h>
+#include <smp/smp.h>
+#include <smp/spinlock.h>
 static inline void platform_delay(uint32_t ms) { hpet_delay_ms(ms); }
 
 static spinlock_t gui_lock;
@@ -46,40 +46,37 @@ extern window_t *g_win_;
 
 static ui_editor_t g_editor;
 
-void tasks_init(void)
-{
-	compositor_init();
-	background_create(rgb(20, 20, 20));
-	// graph_app_init();
-	// geometry_app_init();
-	// app_init();
+void tasks_init(void) {
+  compositor_init();
+  background_create(rgb(20, 20, 20));
+  // graph_app_init();
+  // geometry_app_init();
+  // app_init();
 
-	geometry3d_app_init();
-	surface_app_init();
+  geometry3d_app_init();
+  surface_app_init();
 
-	ui_editor_init(&g_editor, g_win_);
+  ui_editor_init(&g_editor, g_win_);
 }
 
-void tasks_render(void)
-{
-	// graph_app_render();
-	// geometry_app_render();
-	// app_render();
+void tasks_render(void) {
+  // graph_app_render();
+  // geometry_app_render();
+  // app_render();
 
-	geometry3d_app_render();
-	surface_app_render();
+  geometry3d_app_render();
+  surface_app_render();
 
-	if (g_editor.active)
-		ui_editor_render(&g_editor, g_cnv_);
+  if (g_editor.active)
+    ui_editor_render(&g_editor, g_cnv_);
 
-	compositor_render();
+  compositor_render();
 }
 
-static void fps_delay(uint32_t fps)
-{
-	if (fps == 0)
-		return;
-	platform_delay(1000 / fps);
+static void fps_delay(uint32_t fps) {
+  if (fps == 0)
+    return;
+  platform_delay(1000 / fps);
 }
 
 // void maximize_button_click(object_t *obj, int screen_w, int screen_h)
@@ -96,48 +93,42 @@ static void *update_thread(void *arg)
 void update_task(void)
 #endif
 {
-	mouse_t *mouse = get_mouse_info();
+  mouse_t *mouse = get_mouse_info();
 
-	while (1)
-	{
-		LOCK();
-		mouse_update(mouse->x, mouse->y, mouse->left);
-		keyboard_update();
+  while (1) {
+    LOCK();
+    mouse_update(mouse->x, mouse->y, mouse->left);
+    keyboard_update();
 
-		if (g_editor.active)
-		{
-			/* editor перехоплює весь drag і selection */
-			ui_editor_update(&g_editor, &g_mouse);
-		}
-		else
-		{
-			/* звичайна логіка — без змін */
-			if (g_mouse.drag_obj)
-			{
-				int drag_x = g_mouse.x - g_mouse.drag_offset_x;
-				int drag_y = g_mouse.y - g_mouse.drag_offset_y;
+    if (g_editor.active) {
+      /* editor перехоплює весь drag і selection */
+      ui_editor_update(&g_editor, &g_mouse);
+    } else {
+      /* звичайна логіка — без змін */
+      if (g_mouse.drag_obj) {
+        int drag_x = g_mouse.x - g_mouse.drag_offset_x;
+        int drag_y = g_mouse.y - g_mouse.drag_offset_y;
 
-				if (g_mouse.drag_el)
-					object_move_element(g_mouse.drag_obj, g_mouse.drag_el,
-							    drag_x - g_mouse.drag_obj->x,
-							    drag_y - g_mouse.drag_obj->y);
-				else
-				{
-					compositor_move_object(g_mouse.drag_obj, drag_x, drag_y);
-					compositor_bring_to_front(g_mouse.drag_obj, LAYER_WINDOWS);
-				}
-			}
-		}
+        if (g_mouse.drag_el)
+          object_move_element(g_mouse.drag_obj, g_mouse.drag_el,
+                              drag_x - g_mouse.drag_obj->x,
+                              drag_y - g_mouse.drag_obj->y);
+        else {
+          compositor_move_object(g_mouse.drag_obj, drag_x, drag_y);
+          compositor_bring_to_front(g_mouse.drag_obj, LAYER_WINDOWS);
+        }
+      }
+    }
 
-		/* overlay рендериться завжди поверх */
-		if (g_editor.active)
-			ui_editor_render(&g_editor, g_cnv_);
+    /* overlay рендериться завжди поверх */
+    if (g_editor.active)
+      ui_editor_render(&g_editor, g_cnv_);
 
-		UNLOCK();
-		fps_delay(240);
-	}
+    UNLOCK();
+    fps_delay(240);
+  }
 #ifdef GUI_DEMO
-	return NULL;
+  return NULL;
 #endif
 }
 
@@ -149,36 +140,34 @@ static void *render_thread(void *arg)
 void render_task(void)
 #endif
 {
-	tasks_init();
+  tasks_init();
 
-	mouse_t *mouse = get_mouse_info();
+  mouse_t *mouse = get_mouse_info();
 
-	cursor_t *cursor = cursor_create(16, 16, rgb(0, 0, 0), rgb(255, 255, 255));
+  cursor_t *cursor = cursor_create(16, 16, rgb(0, 0, 0), rgb(255, 255, 255));
 
-	while (1)
-	{
-		LOCK();
-		if (cursor->surface->x != mouse->x || cursor->surface->y != mouse->y)
-			cursor_move(cursor, mouse->x, mouse->y);
-		tasks_render();
-		UNLOCK();
-		fps_delay(60);
-	}
+  while (1) {
+    LOCK();
+    if (cursor->surface->x != mouse->x || cursor->surface->y != mouse->y)
+      cursor_move(cursor, mouse->x, mouse->y);
+    tasks_render();
+    UNLOCK();
+    fps_delay(60);
+  }
 #ifdef GUI_DEMO
-	return NULL;
+  return NULL;
 #endif
 }
 
 //  entry point
 
 #ifdef GUI_DEMO
-void kmain_thread(void)
-{
-	pthread_t render, update;
-	pthread_create(&render, NULL, render_thread, NULL);
-	pthread_create(&update, NULL, update_thread, NULL);
-	pthread_detach(render);
-	pthread_detach(update);
+void kmain_thread(void) {
+  pthread_t render, update;
+  pthread_create(&render, NULL, render_thread, NULL);
+  pthread_create(&update, NULL, update_thread, NULL);
+  pthread_detach(render);
+  pthread_detach(update);
 }
 #else
 // void kmain_thread(void)

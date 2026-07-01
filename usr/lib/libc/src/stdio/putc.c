@@ -5,15 +5,14 @@
 
 #include <stdio.h>
 
-int putc(int c, FILE *stream)
-{
-	if (!stream)
-		return EOF;
+int putc(int c, FILE *stream) {
+  if (!stream)
+    return EOF;
 
-	char ch = (char)c;
-	int written = stream->write(stream, &ch, 1);
-	if (written != 1)
-		return EOF;
+  char ch = (char)c;
+  int written = stream->write(stream, &ch, 1);
+  if (written != 1)
+    return EOF;
 
-	return (unsigned char)c;
+  return (unsigned char)c;
 }

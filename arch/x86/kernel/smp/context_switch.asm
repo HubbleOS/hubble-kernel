@@ -1,8 +1,8 @@
-; ── Context Switch ────────────────────────────────────────────
+; -- Context Switch --------------------------------------------
 ; Assembly routines for task context switching.
 ; switch_to_task loads a new task context and performs IRETQ
 ; to transfer control to the new task.
-; ──────────────────────────────────────────────────────────────
+; --------------------------------------------------------------
 
 [BITS 64]
 

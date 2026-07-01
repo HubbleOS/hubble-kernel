@@ -4,90 +4,83 @@
  */
 #pragma once
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 /**
  * @brief Scancode-based key identifier
  */
-typedef struct
-{
-	uint8_t scancode;
-	bool extended;
+typedef struct {
+  uint8_t scancode;
+  bool extended;
 } key_id_t;
 
 /**
  * @brief Keymap entry mapping a key to its normal and shifted characters
  */
-typedef struct
-{
-	key_id_t id;
-	char normal;
-	char shifted;
+typedef struct {
+  key_id_t id;
+  char normal;
+  char shifted;
 } keymap_entry_t;
 
 /**
  * @brief Raw key event produced by the PS/2 handler
  */
-typedef struct
-{
-	key_id_t id;
-	bool released;
-	bool is_shift;
-	bool is_ctrl;
-	bool is_alt;
-	bool is_caps_lock;
+typedef struct {
+  key_id_t id;
+  bool released;
+  bool is_shift;
+  bool is_ctrl;
+  bool is_alt;
+  bool is_caps_lock;
 } key_event_t;
 
 /**
  * @brief High-level key type classification
  */
-typedef enum
-{
-	KEY_TYPE_CHAR,
-	KEY_TYPE_SPECIAL,
-	KEY_TYPE_FUNCTION,
-	KEY_TYPE_MODIFIER,
-	KEY_TYPE_UNKNOWN
+typedef enum {
+  KEY_TYPE_CHAR,
+  KEY_TYPE_SPECIAL,
+  KEY_TYPE_FUNCTION,
+  KEY_TYPE_MODIFIER,
+  KEY_TYPE_UNKNOWN
 } key_type_t;
 
 /**
  * @brief Special key action identifiers
  */
-typedef enum
-{
-	KEY_ACTION_NONE,
-	KEY_ACTION_UP,
-	KEY_ACTION_DOWN,
-	KEY_ACTION_LEFT,
-	KEY_ACTION_RIGHT,
-	KEY_ACTION_HOME,
-	KEY_ACTION_END,
-	KEY_ACTION_INSERT,
-	KEY_ACTION_DELETE,
-	KEY_ACTION_PAGE_UP,
-	KEY_ACTION_PAGE_DOWN,
-	KEY_ACTION_BACKSPACE,
-	KEY_ACTION_ENTER,
-	KEY_ACTION_TAB,
-	KEY_ACTION_ESC,
+typedef enum {
+  KEY_ACTION_NONE,
+  KEY_ACTION_UP,
+  KEY_ACTION_DOWN,
+  KEY_ACTION_LEFT,
+  KEY_ACTION_RIGHT,
+  KEY_ACTION_HOME,
+  KEY_ACTION_END,
+  KEY_ACTION_INSERT,
+  KEY_ACTION_DELETE,
+  KEY_ACTION_PAGE_UP,
+  KEY_ACTION_PAGE_DOWN,
+  KEY_ACTION_BACKSPACE,
+  KEY_ACTION_ENTER,
+  KEY_ACTION_TAB,
+  KEY_ACTION_ESC,
 } key_action_t;
 
 /**
  * @brief High-level input event delivered to consumers
  */
-typedef struct
-{
-	key_type_t type;
-	union
-	{
-		char character;
-		key_action_t action;
-		uint8_t function_key;
-	};
-	bool shift;
-	bool ctrl;
-	bool alt;
+typedef struct {
+  key_type_t type;
+  union {
+    char character;
+    key_action_t action;
+    uint8_t function_key;
+  };
+  bool shift;
+  bool ctrl;
+  bool alt;
 } input_event_t;
 
 /**

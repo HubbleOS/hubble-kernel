@@ -11,11 +11,11 @@
 
 #include <stdint.h>
 
-/* ── Physical Memory Layout ──────────────────────────────────── */
+/* -- Physical Memory Layout ------------------------------------ */
 
 #define KERNEL_PHYS_BASE 0x100000ULL
 
-/* ── Virtual Memory Layout ───────────────────────────────────── */
+/* -- Virtual Memory Layout ------------------------------------- */
 
 #define KERNEL_VIRT_BASE 0xFFFFFFFF80000000ULL
 #define DIRECT_MAP_BASE 0xFFFF800000000000ULL
@@ -26,9 +26,8 @@
  * @param phys Physical address
  * @return Virtual address in the direct map region
  */
-static inline uint64_t phys_to_virt(uint64_t phys)
-{
-	return phys + DIRECT_MAP_BASE;
+static inline uint64_t phys_to_virt(uint64_t phys) {
+  return phys + DIRECT_MAP_BASE;
 }
 
 /**
@@ -39,13 +38,12 @@ static inline uint64_t phys_to_virt(uint64_t phys)
  * @param virt Virtual address
  * @return Corresponding physical address
  */
-static inline uint64_t virt_to_phys(uint64_t virt)
-{
-	if (virt >= KERNEL_VIRT_BASE)
-		return virt - KERNEL_VIRT_BASE + KERNEL_PHYS_BASE;
+static inline uint64_t virt_to_phys(uint64_t virt) {
+  if (virt >= KERNEL_VIRT_BASE)
+    return virt - KERNEL_VIRT_BASE + KERNEL_PHYS_BASE;
 
-	if (virt >= DIRECT_MAP_BASE)
-		return virt - DIRECT_MAP_BASE;
+  if (virt >= DIRECT_MAP_BASE)
+    return virt - DIRECT_MAP_BASE;
 
-	return virt;
+  return virt;
 }

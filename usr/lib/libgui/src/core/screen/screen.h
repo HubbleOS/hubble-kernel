@@ -1,17 +1,16 @@
 #pragma once
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <utils/color/color.h>
 #ifndef GUI_DEMO
 // #include <bootinfo/framebuffer.h>
 
-typedef struct
-{
-	void *base;
-	unsigned int width;
-	unsigned int height;
-	unsigned int pitch;
-	unsigned int bpp;
+typedef struct {
+  void *base;
+  unsigned int width;
+  unsigned int height;
+  unsigned int pitch;
+  unsigned int bpp;
 } framebuffer_info_t;
 
 #else

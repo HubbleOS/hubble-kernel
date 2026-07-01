@@ -4,19 +4,18 @@
  */
 #pragma once
 
+#include <mm/vmm.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <mm/vmm.h>
 
 /**
  * @brief Mouse state structure
  */
-typedef struct
-{
-	int32_t x, y;
-	bool left, right, middle;
-	bool left_clicked;
-	bool right_clicked;
+typedef struct {
+  int32_t x, y;
+  bool left, right, middle;
+  bool left_clicked;
+  bool right_clicked;
 } mouse_t;
 
 /**

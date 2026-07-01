@@ -1,8 +1,8 @@
-; ── Interrupt Service Routines ────────────────────────────────
+; -- Interrupt Service Routines --------------------------------
 ; Assembly stubs for interrupt service routines (ISRs) and IRQs.
 ; Provides macros for generating interrupt entries and common
 ; handlers for CPU exceptions, hardware interrupts, and syscalls.
-; ──────────────────────────────────────────────────────────────
+; --------------------------------------------------------------
 
 [BITS 64]
 
@@ -19,7 +19,7 @@ extern isr_handler
 extern irq_handler
 extern syscall_handler_wrapper
 
-; ── ISR Macros ─────────────────────────────────────────────────
+; -- ISR Macros -------------------------------------------------
 
 ; Macro for interrupts WITHOUT error code
 %macro ISR_NOERRCODE 1
@@ -44,7 +44,7 @@ irq%1:
     jmp     irq_common_stub
 %endmacro
 
-; ── CPU Exceptions (0-21) ──────────────────────────────────────
+; -- CPU Exceptions (0-21) --------------------------------------
 ISR_NOERRCODE 0                 ; Division By Zero
 ISR_NOERRCODE 1                 ; Debug
 ISR_NOERRCODE 2                 ; Non Maskable Interrupt
@@ -68,7 +68,7 @@ ISR_NOERRCODE 19                ; SIMD Floating-Point Exception
 ISR_NOERRCODE 20                ; Virtualization Exception
 ISR_ERRCODE   21                ; Control Protection Exception (with error code)
 
-; ── Hardware Interrupts (IRQ 0-15 -> INT 32-47) ──────────────
+; -- Hardware Interrupts (IRQ 0-15 -> INT 32-47) --------------
 IRQ 0,  32                      ; Timer
 IRQ 1,  33                      ; Keyboard
 IRQ 2,  34                      ; Cascade
@@ -86,7 +86,7 @@ IRQ 13, 45                      ; FPU
 IRQ 14, 46                      ; Primary ATA
 IRQ 15, 47                      ; Secondary ATA
 
-; ── System Call (INT 0x80 = 128) ──────────────────────────────
+; -- System Call (INT 0x80 = 128) ------------------------------
 isr128:
     push    qword 0             ; Dummy error code
     push    qword 128           ; Interrupt number

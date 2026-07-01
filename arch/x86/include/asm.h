@@ -11,18 +11,17 @@
 
 #include <stdint.h>
 
-/* ── Page Table Control ──────────────────────────────────────── */
+/* -- Page Table Control ---------------------------------------- */
 
 /**
  * @brief Get the current CR3 value (physical address of PML4)
  *
  * @return Physical address of the current top-level page table
  */
-static inline uint64_t get_cr3(void)
-{
-	uint64_t cr3;
-	asm volatile("mov %%cr3, %0" : "=r"(cr3));
-	return cr3;
+static inline uint64_t get_cr3(void) {
+  uint64_t cr3;
+  asm volatile("mov %%cr3, %0" : "=r"(cr3));
+  return cr3;
 }
 
 /**
@@ -30,57 +29,43 @@ static inline uint64_t get_cr3(void)
  *
  * @param pml4_phys Physical address of the new PML4
  */
-static inline void set_cr3(uint64_t pml4_phys)
-{
-	asm volatile("mov %0, %%cr3" : : "r"(pml4_phys) : "memory");
+static inline void set_cr3(uint64_t pml4_phys) {
+  asm volatile("mov %0, %%cr3" : : "r"(pml4_phys) : "memory");
 }
 
-/* ── TLB Management ──────────────────────────────────────────── */
+/* -- TLB Management -------------------------------------------- */
 
 /**
  * @brief Flush a single TLB entry for a given virtual address
  *
  * @param virt Virtual address to invalidate
  */
-static inline void invlpg(void *virt)
-{
-	asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
+static inline void invlpg(void *virt) {
+  asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
 }
 
-/* ── Interrupt Control ───────────────────────────────────────── */
+/* -- Interrupt Control ----------------------------------------- */
 
 /**
  * @brief Enable CPU interrupts (set IF flag)
  */
-static inline void sti(void)
-{
-	asm volatile("sti");
-}
+static inline void sti(void) { asm volatile("sti"); }
 
 /**
  * @brief Disable CPU interrupts (clear IF flag)
  */
-static inline void cli(void)
-{
-	asm volatile("cli");
-}
+static inline void cli(void) { asm volatile("cli"); }
 
-/* ── CPU Hints ───────────────────────────────────────────────── */
+/* -- CPU Hints ------------------------------------------------- */
 
 /**
  * @brief Halt the CPU until the next interrupt
  */
-static inline void hlt(void)
-{
-	asm volatile("hlt");
-}
+static inline void hlt(void) { asm volatile("hlt"); }
 
 /**
  * @brief PAUSE hint for spin-wait loops
  *
  * Reduces power consumption on SMT CPUs during busy-waiting.
  */
-static inline void cpu_pause(void)
-{
-	asm volatile("pause");
-}
+static inline void cpu_pause(void) { asm volatile("pause"); }

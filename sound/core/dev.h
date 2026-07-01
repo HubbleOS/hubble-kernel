@@ -10,16 +10,15 @@
 /**
  * @brief Sound driver operations
  */
-struct sound_driver
-{
-	const char *name;
+struct sound_driver {
+  const char *name;
 
-	/** @brief Initialize the sound hardware */
-	int (*init)(void);
-	/** @brief Play a tone at a given frequency for a duration */
-	void (*play)(uint32_t freq, uint32_t duration_ms);
-	/** @brief Stop playback */
-	void (*stop)(void);
+  /** @brief Initialize the sound hardware */
+  int (*init)(void);
+  /** @brief Play a tone at a given frequency for a duration */
+  void (*play)(uint32_t freq, uint32_t duration_ms);
+  /** @brief Stop playback */
+  void (*stop)(void);
 };
 
 /**

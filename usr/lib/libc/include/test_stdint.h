@@ -1,13 +1,13 @@
 #pragma once
 
-#include <_types/_int8_t.h>
 #include <_types/_int16_t.h>
 #include <_types/_int32_t.h>
 #include <_types/_int64_t.h>
-#include <_types/_uint8_t.h>
+#include <_types/_int8_t.h>
 #include <_types/_uint16_t.h>
 #include <_types/_uint32_t.h>
 #include <_types/_uint64_t.h>
+#include <_types/_uint8_t.h>
 
 typedef int8_t int_fast8_t;
 typedef int16_t int_fast16_t;
