@@ -4,35 +4,35 @@
  */
 #pragma once
 
-#define KEY_RELEASE      0x80
-#define KEY_EXTENDED     0xE0
+#define KEY_RELEASE 0x80
+#define KEY_EXTENDED 0xE0
 #define KEY_SCANCODE_MASK 0x7F
 
-#define IS_RELEASED(sc)    (((sc) & KEY_RELEASE) != 0)
-#define IS_EXTENDED(sc)    ((sc) == KEY_EXTENDED)
-#define GET_SCANCODE(sc)   ((sc) & KEY_SCANCODE_MASK)
+#define IS_RELEASED(sc) (((sc) & KEY_RELEASE) != 0)
+#define IS_EXTENDED(sc) ((sc) == KEY_EXTENDED)
+#define GET_SCANCODE(sc) ((sc) & KEY_SCANCODE_MASK)
 
-/* ── Control keys ───────────────────────────────────────── */
+/* -- Control keys ----------------------------------------- */
 
-#define KEY_ESC         0x01
-#define KEY_BACKSPACE   0x0E
-#define KEY_TAB         0x0F
-#define KEY_ENTER       0x1C
-#define KEY_SPACE       0x39
-#define KEY_CAPS_LOCK   0x3A
+#define KEY_ESC 0x01
+#define KEY_BACKSPACE 0x0E
+#define KEY_TAB 0x0F
+#define KEY_ENTER 0x1C
+#define KEY_SPACE 0x39
+#define KEY_CAPS_LOCK 0x3A
 #define KEY_SCROLL_LOCK 0x46
-#define KEY_NUMLOCK     0x45
+#define KEY_NUMLOCK 0x45
 
-/* ── Modifier keys ──────────────────────────────────────── */
+/* -- Modifier keys ---------------------------------------- */
 
-#define KEY_LEFT_SHIFT  0x2A
+#define KEY_LEFT_SHIFT 0x2A
 #define KEY_RIGHT_SHIFT 0x36
-#define KEY_LEFT_CTRL   0x1D
-#define KEY_RIGHT_CTRL  0x1D /* extended */
-#define KEY_LEFT_ALT    0x38
-#define KEY_RIGHT_ALT   0x38 /* extended */
+#define KEY_LEFT_CTRL 0x1D
+#define KEY_RIGHT_CTRL 0x1D /* extended */
+#define KEY_LEFT_ALT 0x38
+#define KEY_RIGHT_ALT 0x38 /* extended */
 
-/* ── Alphabetic keys ────────────────────────────────────── */
+/* -- Alphabetic keys -------------------------------------- */
 
 #define KEY_A 0x1E
 #define KEY_B 0x30
@@ -61,7 +61,7 @@
 #define KEY_Y 0x15
 #define KEY_Z 0x2C
 
-/* ── Numeric keys ───────────────────────────────────────── */
+/* -- Numeric keys ----------------------------------------- */
 
 #define KEY_1 0x02
 #define KEY_2 0x03
@@ -74,92 +74,92 @@
 #define KEY_9 0x0A
 #define KEY_0 0x0B
 
-/* ── Symbol keys ────────────────────────────────────────── */
+/* -- Symbol keys ------------------------------------------ */
 
-#define KEY_MINUS         0x0C
-#define KEY_EQUAL         0x0D
-#define KEY_LEFT_BRACKET  0x1A
+#define KEY_MINUS 0x0C
+#define KEY_EQUAL 0x0D
+#define KEY_LEFT_BRACKET 0x1A
 #define KEY_RIGHT_BRACKET 0x1B
-#define KEY_SEMICOLON     0x27
-#define KEY_APOSTROPHE    0x28
-#define KEY_GRAVE         0x29
-#define KEY_BACKSLASH     0x2B
-#define KEY_COMMA         0x33
-#define KEY_PERIOD        0x34
-#define KEY_SLASH         0x35
-#define KEY_ASTERISK      0x37
+#define KEY_SEMICOLON 0x27
+#define KEY_APOSTROPHE 0x28
+#define KEY_GRAVE 0x29
+#define KEY_BACKSLASH 0x2B
+#define KEY_COMMA 0x33
+#define KEY_PERIOD 0x34
+#define KEY_SLASH 0x35
+#define KEY_ASTERISK 0x37
 
-/* ── Function keys ──────────────────────────────────────── */
+/* -- Function keys ---------------------------------------- */
 
-#define KEY_F1  0x3B
-#define KEY_F2  0x3C
-#define KEY_F3  0x3D
-#define KEY_F4  0x3E
-#define KEY_F5  0x3F
-#define KEY_F6  0x40
-#define KEY_F7  0x41
-#define KEY_F8  0x42
-#define KEY_F9  0x43
+#define KEY_F1 0x3B
+#define KEY_F2 0x3C
+#define KEY_F3 0x3D
+#define KEY_F4 0x3E
+#define KEY_F5 0x3F
+#define KEY_F6 0x40
+#define KEY_F7 0x41
+#define KEY_F8 0x42
+#define KEY_F9 0x43
 #define KEY_F10 0x44
 #define KEY_F11 0x57
 #define KEY_F12 0x58
 
-/* ── Numeric keypad ─────────────────────────────────────── */
+/* -- Numeric keypad --------------------------------------- */
 
-#define KEY_NUM_1     0x4F
-#define KEY_NUM_2     0x50
-#define KEY_NUM_3     0x51
-#define KEY_NUM_4     0x4B
-#define KEY_NUM_5     0x4C
-#define KEY_NUM_6     0x4D
-#define KEY_NUM_7     0x47
-#define KEY_NUM_8     0x48
-#define KEY_NUM_9     0x49
-#define KEY_NUM_0     0x52
+#define KEY_NUM_1 0x4F
+#define KEY_NUM_2 0x50
+#define KEY_NUM_3 0x51
+#define KEY_NUM_4 0x4B
+#define KEY_NUM_5 0x4C
+#define KEY_NUM_6 0x4D
+#define KEY_NUM_7 0x47
+#define KEY_NUM_8 0x48
+#define KEY_NUM_9 0x49
+#define KEY_NUM_0 0x52
 #define KEY_NUM_MINUS 0x4A
-#define KEY_NUM_PLUS  0x4E
+#define KEY_NUM_PLUS 0x4E
 #define KEY_NUM_PERIOD 0x53
 
-/* ── Arrow keys (extended) ──────────────────────────────── */
+/* -- Arrow keys (extended) -------------------------------- */
 
-#define KEY_UP    0x48
-#define KEY_LEFT  0x4B
+#define KEY_UP 0x48
+#define KEY_LEFT 0x4B
 #define KEY_RIGHT 0x4D
-#define KEY_DOWN  0x50
+#define KEY_DOWN 0x50
 
-/* ── Navigation keys (extended) ─────────────────────────── */
+/* -- Navigation keys (extended) --------------------------- */
 
-#define KEY_PAGEUP    0x49
-#define KEY_PAGEDOWN  0x51
-#define KEY_HOME      0x32
-#define KEY_END       0x4F
-#define KEY_INSERT    0x52
-#define KEY_DELETE    0x53
-#define KEY_MENU      0x5D
-#define KEY_GUI_LEFT  0x5B
+#define KEY_PAGEUP 0x49
+#define KEY_PAGEDOWN 0x51
+#define KEY_HOME 0x32
+#define KEY_END 0x4F
+#define KEY_INSERT 0x52
+#define KEY_DELETE 0x53
+#define KEY_MENU 0x5D
+#define KEY_GUI_LEFT 0x5B
 #define KEY_GUI_RIGHT 0x5C
-#define KEY_POWER     0x5E
-#define KEY_SLEEP     0x5F
-#define KEY_WAKE      0x63
+#define KEY_POWER 0x5E
+#define KEY_SLEEP 0x5F
+#define KEY_WAKE 0x63
 
-/* ── Multimedia keys (extended) ─────────────────────────── */
+/* -- Multimedia keys (extended) --------------------------- */
 
-#define KEY_PREV_TRACK   0x10
-#define KEY_NEXT_TRACK   0x19
-#define KEY_MUTE         0x20
-#define KEY_CALCULATOR   0x21
-#define KEY_PLAY         0x22
-#define KEY_STOP         0x24
-#define KEY_VOLUME_DOWN  0x2E
-#define KEY_VOLUME_UP    0x30
+#define KEY_PREV_TRACK 0x10
+#define KEY_NEXT_TRACK 0x19
+#define KEY_MUTE 0x20
+#define KEY_CALCULATOR 0x21
+#define KEY_PLAY 0x22
+#define KEY_STOP 0x24
+#define KEY_VOLUME_DOWN 0x2E
+#define KEY_VOLUME_UP 0x30
 
-#define KEY_WWW_SEARCH    0x65
+#define KEY_WWW_SEARCH 0x65
 #define KEY_WWW_FAVORITES 0x66
-#define KEY_WWW_REFRESH   0x67
-#define KEY_WWW_STOP      0x68
-#define KEY_WWW_FORWARD   0x69
-#define KEY_WWW_BACK      0x6A
+#define KEY_WWW_REFRESH 0x67
+#define KEY_WWW_STOP 0x68
+#define KEY_WWW_FORWARD 0x69
+#define KEY_WWW_BACK 0x6A
 
-#define KEY_MY_COMPUTER  0x6B
-#define KEY_MAIL         0x6C
+#define KEY_MY_COMPUTER 0x6B
+#define KEY_MAIL 0x6C
 #define KEY_MEDIA_SELECT 0x6D

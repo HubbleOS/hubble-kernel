@@ -12,13 +12,12 @@
  * @param n Number of bytes to scan
  * @return Pointer to the first occurrence of c, or NULL if not found
  */
-void *memchr(const void *src, int c, size_t n)
-{
-	const unsigned char *s = src;
-	c = (unsigned char)c;
+void *memchr(const void *src, int c, size_t n) {
+  const unsigned char *s = src;
+  c = (unsigned char)c;
 
-	while (n && *s != c)
-		s++, n--;
+  while (n && *s != c)
+    s++, n--;
 
-	return n ? (void *)s : 0;
+  return n ? (void *)s : 0;
 }

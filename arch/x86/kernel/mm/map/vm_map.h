@@ -13,54 +13,54 @@
 
 #include <smp/spinlock.h>
 
-/* ── VMA Types ───────────────────────────────────────────────────────────── */
+/* -- VMA Types ------------------------------------------------------------- */
 
 /**
  * @brief Type of a virtual memory area
  */
 typedef enum {
-	VMA_ANONYMOUS,
-	VMA_FILE,
-	VMA_DEVICE,
+  VMA_ANONYMOUS,
+  VMA_FILE,
+  VMA_DEVICE,
 } vma_type_t;
 
-/* ── VMA Flags ───────────────────────────────────────────────────────────── */
+/* -- VMA Flags ------------------------------------------------------------- */
 
-#define VM_READ  (1 << 0)
+#define VM_READ (1 << 0)
 #define VM_WRITE (1 << 1)
-#define VM_EXEC  (1 << 2)
+#define VM_EXEC (1 << 2)
 
-/* ── Default Mapping Base ────────────────────────────────────────────────── */
+/* -- Default Mapping Base -------------------------------------------------- */
 
 #define MMAP_BASE 0x0000700000000000ULL
 
-/* ── VMA and VM Map Structures ───────────────────────────────────────────── */
+/* -- VMA and VM Map Structures --------------------------------------------- */
 
 /**
  * @brief A single virtual memory area
  */
 typedef struct vm_area {
-	uint64_t base;
-	size_t size;
-	uint32_t flags;
+  uint64_t base;
+  size_t size;
+  uint32_t flags;
 
-	vma_type_t type;
-	uint64_t phys_base;
+  vma_type_t type;
+  uint64_t phys_base;
 
-	struct vm_area *next;
-	struct vm_area *prev;
+  struct vm_area *next;
+  struct vm_area *prev;
 } vm_area_t;
 
 /**
  * @brief A virtual memory map (address space)
  */
 typedef struct {
-	vm_area_t *areas;
-	uint64_t mmap_base;
-	spinlock_t lock;
+  vm_area_t *areas;
+  uint64_t mmap_base;
+  spinlock_t lock;
 } vm_map_t;
 
-/* ── Public API ──────────────────────────────────────────────────────────── */
+/* -- Public API ------------------------------------------------------------ */
 
 /**
  * @brief Create a new virtual memory map

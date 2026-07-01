@@ -22,11 +22,12 @@
  *   int x = 5, y = 10;
  *   int m = MIN(x++, y); // m = 5, x becomes 6
  */
-#define MIN(A, B) ({               \
-	__auto_type MIN_a = A;         \
-	__auto_type MIN_b = B;         \
-	MIN_a < MIN_b ? MIN_a : MIN_b; \
-})
+#define MIN(A, B)                                                              \
+  ({                                                                           \
+    __auto_type MIN_a = A;                                                     \
+    __auto_type MIN_b = B;                                                     \
+    MIN_a < MIN_b ? MIN_a : MIN_b;                                             \
+  })
 
 /**
  * @brief Return the larger of two values
@@ -42,11 +43,12 @@
  *   int a = 3, b = 7;
  *   int max_val = MAX(a, b); // 7
  */
-#define MAX(A, B) ({               \
-	__auto_type MAX_a = A;         \
-	__auto_type MAX_b = B;         \
-	MAX_a > MAX_b ? MAX_a : MAX_b; \
-})
+#define MAX(A, B)                                                              \
+  ({                                                                           \
+    __auto_type MAX_a = A;                                                     \
+    __auto_type MAX_b = B;                                                     \
+    MAX_a > MAX_b ? MAX_a : MAX_b;                                             \
+  })
 
 /**
  * @brief Divide and round up the result
@@ -62,11 +64,12 @@
  * Example:
  *   size_t pages = DIV_ROUNDUP(5000, 4096); // -> 2
  */
-#define DIV_ROUNDUP(VALUE, DIV) ({                                 \
-	__auto_type DIV_ROUNDUP_value = VALUE;                         \
-	__auto_type DIV_ROUNDUP_div = DIV;                             \
-	(DIV_ROUNDUP_value + (DIV_ROUNDUP_div - 1)) / DIV_ROUNDUP_div; \
-})
+#define DIV_ROUNDUP(VALUE, DIV)                                                \
+  ({                                                                           \
+    __auto_type DIV_ROUNDUP_value = VALUE;                                     \
+    __auto_type DIV_ROUNDUP_div = DIV;                                         \
+    (DIV_ROUNDUP_value + (DIV_ROUNDUP_div - 1)) / DIV_ROUNDUP_div;             \
+  })
 
 /**
  * @brief Align value upwards to the nearest multiple of ALIGN
@@ -81,11 +84,12 @@
  * Example:
  *   size_t aligned = ALIGN_UP(5000, 4096); // -> 8192
  */
-#define ALIGN_UP(VALUE, ALIGN) ({                                 \
-	__auto_type ALIGN_UP_value = VALUE;                           \
-	__auto_type ALIGN_UP_align = ALIGN;                           \
-	DIV_ROUNDUP(ALIGN_UP_value, ALIGN_UP_align) * ALIGN_UP_align; \
-})
+#define ALIGN_UP(VALUE, ALIGN)                                                 \
+  ({                                                                           \
+    __auto_type ALIGN_UP_value = VALUE;                                        \
+    __auto_type ALIGN_UP_align = ALIGN;                                        \
+    DIV_ROUNDUP(ALIGN_UP_value, ALIGN_UP_align) * ALIGN_UP_align;              \
+  })
 
 /**
  * @brief Align value downwards to the nearest multiple of ALIGN
@@ -100,11 +104,12 @@
  * Example:
  *   size_t aligned = ALIGN_DOWN(5000, 4096); // -> 4096
  */
-#define ALIGN_DOWN(VALUE, ALIGN) ({                           \
-	__auto_type ALIGN_DOWN_value = VALUE;                     \
-	__auto_type ALIGN_DOWN_align = ALIGN;                     \
-	(ALIGN_DOWN_value / ALIGN_DOWN_align) * ALIGN_DOWN_align; \
-})
+#define ALIGN_DOWN(VALUE, ALIGN)                                               \
+  ({                                                                           \
+    __auto_type ALIGN_DOWN_value = VALUE;                                      \
+    __auto_type ALIGN_DOWN_align = ALIGN;                                      \
+    (ALIGN_DOWN_value / ALIGN_DOWN_align) * ALIGN_DOWN_align;                  \
+  })
 
 /**
  * @brief Get the number of elements in an array

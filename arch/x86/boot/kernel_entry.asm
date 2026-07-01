@@ -1,7 +1,7 @@
-; ── Kernel Entry Jump ─────────────────────────────────────────
+; -- Kernel Entry Jump -----------------------------------------
 ; Jumps to the kernel entry point with a clean register state.
 ; Arguments (ms_abi): rcx = boot_info, rdx = entry, r8 = stack
-; ──────────────────────────────────────────────────────────────
+; --------------------------------------------------------------
 
 section .text
 

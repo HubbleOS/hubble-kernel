@@ -1,41 +1,49 @@
 // user_main.c
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "libc.h"
 #include <stdio.h>
 
 #include <sys/syscall.h>
 
-void *mmap_(uint64_t addr, size_t length, int prot, int flags,
-	    int fd, uint64_t offset)
-{
-	return (uint64_t *)syscall6(3, addr, length, prot, flags, fd, offset);
+void *mmap_(uint64_t addr, size_t length, int prot, int flags, int fd,
+            uint64_t offset) {
+  return (uint64_t *)syscall6(3, addr, length, prot, flags, fd, offset);
 }
 
-int read_file(int fd, void *buf, size_t size) { return syscall3(2, fd, (long)buf, size); }
+int read_file(int fd, void *buf, size_t size) {
+  return syscall3(2, fd, (long)buf, size);
+}
 
-int write_file(int fd, void *buf, size_t size) { return syscall3(1, fd, (long)buf, size); }
+int write_file(int fd, void *buf, size_t size) {
+  return syscall3(1, fd, (long)buf, size);
+}
 
-int lseek(int fd, uint64_t offset, int whence) { return syscall3(8, fd, offset, whence); }
+int lseek(int fd, uint64_t offset, int whence) {
+  return syscall3(8, fd, offset, whence);
+}
 
-int spawn(void *entry_point, void *arg, uint32_t priority) { return syscall3(6, (long)entry_point, (long)arg, priority); }
+int spawn(void *entry_point, void *arg, uint32_t priority) {
+  return syscall3(6, (long)entry_point, (long)arg, priority);
+}
 
 int module_load(const char *path) { return syscall1(9, (long)path); }
 int module_unload(const char *name) { return syscall1(10, (long)name); }
 
-typedef struct
-{
-	int32_t x, y;
-	bool left, right, middle; // current held state
-	bool left_clicked;	  // set on press, you clear it after handling
-	bool right_clicked;
+typedef struct {
+  int32_t x, y;
+  bool left, right, middle; // current held state
+  bool left_clicked;        // set on press, you clear it after handling
+  bool right_clicked;
 } mouse_t;
 
-uint32_t open(const char *path, int flags) { return syscall2(4, (long)path, flags); }
+uint32_t open(const char *path, int flags) {
+  return syscall2(4, (long)path, flags);
+}
 
 void test(void);
 void handle_command(char *cmd);
@@ -78,182 +86,142 @@ void handle_command(char *cmd);
 // 	}
 // }
 
-void terminal(void)
-{
-	char buf[256];
-	int tty_fd = open("/dev/tty0", 0);
+void terminal(void) {
+  char buf[256];
+  int tty_fd = open("/dev/tty0", 0);
 
-	printf("/> ");
-	while (1)
-	{
-		// read() блокується поки не прийде \n
-		// ядро вже зробило echo і backspace
-		int n = read_file(tty_fd, buf, sizeof(buf) - 1);
-		if (n <= 0)
-			continue;
-		buf[n] = '\0';
+  printf("/> ");
+  while (1) {
+    // read() блокується поки не прийде \n
+    // ядро вже зробило echo і backspace
+    int n = read_file(tty_fd, buf, sizeof(buf) - 1);
+    if (n <= 0)
+      continue;
+    buf[n] = '\0';
 
-		handle_command(buf);
-		printf("> ");
-	}
+    handle_command(buf);
+    printf("> ");
+  }
 }
 
-void handle_command(char *cmd)
-{
-	int len = strlen(cmd);
-	while (len > 0 && (cmd[len - 1] == '\n' || cmd[len - 1] == '\r'))
-	{
-		cmd[--len] = '\0';
-	}
+void handle_command(char *cmd) {
+  int len = strlen(cmd);
+  while (len > 0 && (cmd[len - 1] == '\n' || cmd[len - 1] == '\r')) {
+    cmd[--len] = '\0';
+  }
 
-	if (strcmp(cmd, "help") == 0)
-	{
-		printf("Available commands: help, echo, clear, hello, lsmod, modprobe, rmmod, net\n");
-	}
-	else if (strncmp(cmd, "echo ", 5) == 0)
-	{
-		printf("%s\n", cmd + 5);
-	}
-	else if (strcmp(cmd, "hello") == 0)
-	{
-		printf("Loading hello.ko...\n");
-		int ret = module_load("/modules/hello.ko");
-		if (ret == 0)
-		{
-			printf("Module hello.ko loaded successfully!\n");
-		}
-		else
-		{
-			printf("Failed to load module: %d\n", ret);
-		}
-	}
-	else if (strcmp(cmd, "net") == 0)
-	{
-		printf("Loading net.ko...\n");
-		int ret = module_load("/modules/net.ko");
-		if (ret == 0)
-		{
-			printf("Module net.ko loaded successfully!\n");
-		}
-		else
-		{
-			printf("Failed to load module: %d\n", ret);
-		}
-	}
-	else if (strcmp(cmd, "lsmod") == 0)
-	{
-		int fd = open("/proc/modules", 0);
-		if (fd >= 0)
-		{
-			char buf[256];
-			int n;
-			while ((n = read_file(fd, buf, sizeof(buf) - 1)) > 0)
-			{
-				buf[n] = '\0';
-				printf("%s", buf);
-			}
-		}
-		else
-		{
-			printf("No /proc/modules available\n");
-		}
-	}
-	else if (strncmp(cmd, "modprobe ", 9) == 0)
-	{
-		char *modname = cmd + 9;
-		/* Skip leading spaces */
-		while (*modname == ' ')
-			modname++;
-		if (*modname == '\0')
-		{
-			printf("usage: modprobe <module>\n");
-		}
-		else
-		{
-			char path[256] = "/modules/";
-			strcat(path, modname);
-			strcat(path, ".ko");
-			printf("Loading %s...\n", path);
-			int ret = module_load(path);
-			if (ret == 0)
-				printf("Loaded %s\n", path);
-			else
-				printf("Failed to load %s: %d\n", path, ret);
-		}
-	}
-	else if (strncmp(cmd, "rmmod ", 6) == 0)
-	{
-		char *modname = cmd + 6;
-		while (*modname == ' ')
-			modname++;
-		if (*modname == '\0')
-		{
-			printf("usage: rmmod <module>\n");
-		}
-		else
-		{
-			printf("Unloading %s...\n", modname);
-			int ret = module_unload(modname);
-			if (ret == 0)
-				printf("Unloaded %s\n", modname);
-			else
-				printf("Failed to unload %s: %d\n", modname, ret);
-		}
-	}
-	else
-	{
-		printf("Unknown command: %s\n", cmd);
-	}
+  if (strcmp(cmd, "help") == 0) {
+    printf("Available commands: help, echo, clear, hello, lsmod, modprobe, "
+           "rmmod, net\n");
+  } else if (strncmp(cmd, "echo ", 5) == 0) {
+    printf("%s\n", cmd + 5);
+  } else if (strcmp(cmd, "hello") == 0) {
+    printf("Loading hello.ko...\n");
+    int ret = module_load("/modules/hello.ko");
+    if (ret == 0) {
+      printf("Module hello.ko loaded successfully!\n");
+    } else {
+      printf("Failed to load module: %d\n", ret);
+    }
+  } else if (strcmp(cmd, "net") == 0) {
+    printf("Loading net.ko...\n");
+    int ret = module_load("/modules/net.ko");
+    if (ret == 0) {
+      printf("Module net.ko loaded successfully!\n");
+    } else {
+      printf("Failed to load module: %d\n", ret);
+    }
+  } else if (strcmp(cmd, "lsmod") == 0) {
+    int fd = open("/proc/modules", 0);
+    if (fd >= 0) {
+      char buf[256];
+      int n;
+      while ((n = read_file(fd, buf, sizeof(buf) - 1)) > 0) {
+        buf[n] = '\0';
+        printf("%s", buf);
+      }
+    } else {
+      printf("No /proc/modules available\n");
+    }
+  } else if (strncmp(cmd, "modprobe ", 9) == 0) {
+    char *modname = cmd + 9;
+    /* Skip leading spaces */
+    while (*modname == ' ')
+      modname++;
+    if (*modname == '\0') {
+      printf("usage: modprobe <module>\n");
+    } else {
+      char path[256] = "/modules/";
+      strcat(path, modname);
+      strcat(path, ".ko");
+      printf("Loading %s...\n", path);
+      int ret = module_load(path);
+      if (ret == 0)
+        printf("Loaded %s\n", path);
+      else
+        printf("Failed to load %s: %d\n", path, ret);
+    }
+  } else if (strncmp(cmd, "rmmod ", 6) == 0) {
+    char *modname = cmd + 6;
+    while (*modname == ' ')
+      modname++;
+    if (*modname == '\0') {
+      printf("usage: rmmod <module>\n");
+    } else {
+      printf("Unloading %s...\n", modname);
+      int ret = module_unload(modname);
+      if (ret == 0)
+        printf("Unloaded %s\n", modname);
+      else
+        printf("Failed to unload %s: %d\n", modname, ret);
+    }
+  } else {
+    printf("Unknown command: %s\n", cmd);
+  }
 }
 
-void load_essential_modules(void)
-{
-	const char *modules[] = {
-	    "/modules/input.ko",
-	    "/modules/tty.ko",
-	};
-	for (size_t i = 0; i < sizeof(modules) / sizeof(modules[0]); i++)
-	{
-		int ret = module_load(modules[i]);
-		if (ret == 0)
-			printf("Auto-loaded %s\n", modules[i]);
-		else
-			printf("Note: %s (%d)\n", modules[i], ret);
-	}
+void load_essential_modules(void) {
+  const char *modules[] = {
+      "/modules/input.ko",
+      "/modules/tty.ko",
+  };
+  for (size_t i = 0; i < sizeof(modules) / sizeof(modules[0]); i++) {
+    int ret = module_load(modules[i]);
+    if (ret == 0)
+      printf("Auto-loaded %s\n", modules[i]);
+    else
+      printf("Note: %s (%d)\n", modules[i], ret);
+  }
 }
 
-void _start(void)
-{
-	libc_init();
-	printf("Hello from user space 2!\n");
-	load_essential_modules();
-	// int pid = spawn(test, NULL, 0);
-	int pid2 = spawn(terminal, NULL, 0);
-	while (1)
-	{
-		;
-	}
+void _start(void) {
+  libc_init();
+  printf("Hello from user space 2!\n");
+  load_essential_modules();
+  // int pid = spawn(test, NULL, 0);
+  int pid2 = spawn(terminal, NULL, 0);
+  while (1) {
+    ;
+  }
 }
-void test(void)
-{
-	printf("Test task 2!\n");
-	char c;
-	char buf[128];
-	int pos = 0;
-	int kbd_file = open("/dev/kbd", 0);
-	int pipe_file = open("/pipe/term", 0);
-	while (1)
-	{
-		;
-		read_file(kbd_file, &c, 1);
-		buf[pos++] = c;
-		lseek(pipe_file, 0, 0);
-		write_file(pipe_file, buf, pos);
-		pos = 0;
-		// printf("%s", buf);
-		// printf("key 2: %c\n", c);
-	};
-	// printf("Test task!\n")
+void test(void) {
+  printf("Test task 2!\n");
+  char c;
+  char buf[128];
+  int pos = 0;
+  int kbd_file = open("/dev/kbd", 0);
+  int pipe_file = open("/pipe/term", 0);
+  while (1) {
+    ;
+    read_file(kbd_file, &c, 1);
+    buf[pos++] = c;
+    lseek(pipe_file, 0, 0);
+    write_file(pipe_file, buf, pos);
+    pos = 0;
+    // printf("%s", buf);
+    // printf("key 2: %c\n", c);
+  };
+  // printf("Test task!\n")
 }
 
 // #include <stddef.h>
@@ -270,18 +238,22 @@ void test(void)
 // #include <libgui/ui.h>
 // #include <dev/mouse/mouse.h>
 
-// /* ── syscalls ────────────────────────────────────────────────────────────── */
+// /* -- syscalls --------------------------------------------------------------
+// */
 
-// void *mmap_(uint64_t addr, size_t len, int prot, int flags, int fd, uint64_t off)
+// void *mmap_(uint64_t addr, size_t len, int prot, int flags, int fd, uint64_t
+// off)
 // {
 // 	return (void *)syscall6(3, addr, len, prot, flags, fd, off);
 // }
-// int read_file(int fd, void *buf, size_t size) { return syscall3(SYS_read, fd, (long)buf, size); }
-// int write_file(int fd, void *buf, size_t size) { return syscall3(1, fd, (long)buf, size); }
-// uint32_t open(const char *path, int flags) { return syscall2(SYS_open, (long)path, flags); }
-// int spawn(void *fn, void *arg, uint32_t pri) { return syscall3(6, (long)fn, (long)arg, pri); }
+// int read_file(int fd, void *buf, size_t size) { return syscall3(SYS_read, fd,
+// (long)buf, size); } int write_file(int fd, void *buf, size_t size) { return
+// syscall3(1, fd, (long)buf, size); } uint32_t open(const char *path, int
+// flags) { return syscall2(SYS_open, (long)path, flags); } int spawn(void *fn,
+// void *arg, uint32_t pri) { return syscall3(6, (long)fn, (long)arg, pri); }
 
-// /* ── Термінальний стан ───────────────────────────────────────────────────── */
+// /* -- Термінальний стан -----------------------------------------------------
+// */
 
 // #define TERM_COLS 60
 // #define TERM_ROWS 20
@@ -300,12 +272,14 @@ void test(void)
 
 // static terminal_view_t g_term;
 
-// /* ── Ініціалізація вікна терміналу ──────────────────────────────────────── */
+// /* -- Ініціалізація вікна терміналу ----------------------------------------
+// */
 
 // static void terminal_view_init(void)
 // {
-// 	int win_w = TERM_COLS * 8 + TERM_PAD_X * 2;		   /* ~8px на символ       */
-// 	int win_h = TERM_ROWS * TERM_LINE_H + TERM_PAD_Y * 2 + 20; /* +titlebar */
+// 	int win_w = TERM_COLS * 8 + TERM_PAD_X * 2;		   /* ~8px на
+// символ       */ 	int win_h = TERM_ROWS * TERM_LINE_H + TERM_PAD_Y * 2 +
+// 20; /* +titlebar */
 
 // 	g_term.win = window_create(50, 50, win_w, win_h);
 // 	g_term.cur_row = 0;
@@ -324,7 +298,8 @@ void test(void)
 // 	}
 // }
 
-// /* ── Прокрутка ───────────────────────────────────────────────────────────── */
+// /* -- Прокрутка -------------------------------------------------------------
+// */
 
 // static void terminal_scroll(void)
 // {
@@ -340,14 +315,16 @@ void test(void)
 // 	g_term.cur_col = 0;
 // }
 
-// /* ── Вивести один символ ─────────────────────────────────────────────────── */
+// /* -- Вивести один символ ---------------------------------------------------
+// */
 
 // static void terminal_putchar(char c)
 // {
 // 	if (c == '\n' || g_term.cur_col >= TERM_COLS)
 // 	{
 // 		/* оновлюємо label поточного рядка */
-// 		label_set_text(g_term.labels[g_term.cur_row], g_term.lines[g_term.cur_row]);
+// 		label_set_text(g_term.labels[g_term.cur_row],
+// g_term.lines[g_term.cur_row]);
 
 // 		g_term.cur_row++;
 // 		g_term.cur_col = 0;
@@ -364,7 +341,8 @@ void test(void)
 // 			g_term.cur_col--;
 // 			g_term.lines[g_term.cur_row][g_term.cur_col] = ' ';
 // 			g_term.lines[g_term.cur_row][g_term.cur_col + 1] = '\0';
-// 			label_set_text(g_term.labels[g_term.cur_row], g_term.lines[g_term.cur_row]);
+// 			label_set_text(g_term.labels[g_term.cur_row],
+// g_term.lines[g_term.cur_row]);
 // 		}
 // 		return;
 // 	}
@@ -374,11 +352,12 @@ void test(void)
 
 // 	g_term.lines[g_term.cur_row][g_term.cur_col] = c;
 // 	g_term.lines[g_term.cur_row][g_term.cur_col + 1] = '\0';
-// 	label_set_text(g_term.labels[g_term.cur_row], g_term.lines[g_term.cur_row]);
-// 	g_term.cur_col++;
+// 	label_set_text(g_term.labels[g_term.cur_row],
+// g_term.lines[g_term.cur_row]); 	g_term.cur_col++;
 // }
 
-// /* ── Читання з pipe і вивід у вікно ─────────────────────────────────────── */
+// /* -- Читання з pipe і вивід у вікно ---------------------------------------
+// */
 
 // static void terminal_reader(void)
 // {
@@ -395,7 +374,8 @@ void test(void)
 // 	}
 // }
 
-// /* ── Main ────────────────────────────────────────────────────────────────── */
+// /* -- Main ------------------------------------------------------------------
+// */
 
 // typedef struct
 // {
@@ -414,7 +394,8 @@ void test(void)
 // 	uint32_t *fb = (uint32_t *)mmap_(0, 800 * 5120, 3, 1, fb_file, 0);
 
 // 	int mouse_file = open("/dev/mouse", 0);
-// 	mouse_t *mouse = (mouse_t *)mmap_(0, sizeof(mouse_t), 3, 1, mouse_file, 0);
+// 	mouse_t *mouse = (mouse_t *)mmap_(0, sizeof(mouse_t), 3, 1, mouse_file,
+// 0);
 
 // 	framebuffer_info_t fb_info = {
 // 	    .base = fb,
@@ -428,7 +409,8 @@ void test(void)
 // 	compositor_init();
 // 	background_create(rgb(20, 20, 20));
 
-// 	cursor_t *cursor = cursor_create(16, 16, rgb(0, 0, 0), rgb(255, 255, 255));
+// 	cursor_t *cursor = cursor_create(16, 16, rgb(0, 0, 0), rgb(255, 255,
+// 255));
 
 // 	/* термінальне вікно */
 // 	terminal_view_init();
@@ -441,21 +423,21 @@ void test(void)
 // 	{
 // 		mouse_update(mouse->x, mouse->y, mouse->left);
 
-// 		if (cursor->surface->x != mouse->x || cursor->surface->y != mouse->y)
-// 			cursor_move(cursor, mouse->x, mouse->y);
+// 		if (cursor->surface->x != mouse->x || cursor->surface->y !=
+// mouse->y) 			cursor_move(cursor, mouse->x, mouse->y);
 
 // 		if (g_mouse.drag_obj)
 // 		{
 // 			int dx = g_mouse.x - g_mouse.drag_offset_x;
 // 			int dy = g_mouse.y - g_mouse.drag_offset_y;
 // 			if (g_mouse.drag_el)
-// 				object_move_element(g_mouse.drag_obj, g_mouse.drag_el,
-// 						    dx - g_mouse.drag_obj->x,
-// 						    dy - g_mouse.drag_obj->y);
-// 			else
+// 				object_move_element(g_mouse.drag_obj,
+// g_mouse.drag_el, 						    dx -
+// g_mouse.drag_obj->x, 						    dy -
+// g_mouse.drag_obj->y); 			else
 // 			{
-// 				compositor_move_object(g_mouse.drag_obj, dx, dy);
-// 				compositor_bring_to_front(g_mouse.drag_obj, LAYER_WINDOWS);
+// 				compositor_move_object(g_mouse.drag_obj, dx,
+// dy); compositor_bring_to_front(g_mouse.drag_obj, LAYER_WINDOWS);
 // 			}
 // 		}
 

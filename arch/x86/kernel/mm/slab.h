@@ -14,62 +14,62 @@
 
 #include <_cheader.h>
 
-/* ── Configuration ───────────────────────────────────────────────────────── */
+/* -- Configuration --------------------------------------------------------- */
 
 #define SLAB_MIN_SIZE 8
 #define SLAB_MAX_SIZE 1024
 
-/* ── Slab Structures ─────────────────────────────────────────────────────── */
+/* -- Slab Structures ------------------------------------------------------- */
 
 /**
  * @brief A single slab (one page of objects)
  */
 typedef struct slab {
-	struct slab *next;
-	struct slab *prev;
-	void *free_list;
-	uint32_t in_use;
-	uint32_t capacity;
-	void *start;
+  struct slab *next;
+  struct slab *prev;
+  void *free_list;
+  uint32_t in_use;
+  uint32_t capacity;
+  void *start;
 } slab_t;
 
 /**
  * @brief Slab cache for objects of a specific size
  */
 typedef struct slab_cache {
-	size_t object_size;
-	size_t align;
+  size_t object_size;
+  size_t align;
 
-	slab_t *slabs_full;
-	slab_t *slabs_partial;
-	slab_t *slabs_free;
+  slab_t *slabs_full;
+  slab_t *slabs_partial;
+  slab_t *slabs_free;
 
-	uint32_t objects_per_slab;
-	uint32_t total_slabs;
-	uint32_t total_objects;
-	uint32_t used_objects;
+  uint32_t objects_per_slab;
+  uint32_t total_slabs;
+  uint32_t total_objects;
+  uint32_t used_objects;
 
-	struct slab_cache *next;
+  struct slab_cache *next;
 } slab_cache_t;
 
 /**
  * @brief Slab allocator statistics
  */
 typedef struct {
-	uint64_t total_memory;
-	uint64_t used_memory;
-	uint64_t wasted_memory;
-	uint32_t cache_count;
-	uint32_t total_slabs;
-	uint32_t total_allocations;
-	uint32_t total_frees;
-	uint32_t cache_hits;
-	uint32_t cache_misses;
+  uint64_t total_memory;
+  uint64_t used_memory;
+  uint64_t wasted_memory;
+  uint32_t cache_count;
+  uint32_t total_slabs;
+  uint32_t total_allocations;
+  uint32_t total_frees;
+  uint32_t cache_hits;
+  uint32_t cache_misses;
 } slab_info_t;
 
 _Begin_C_Header;
 
-/* ── Core Functions ──────────────────────────────────────────────────────── */
+/* -- Core Functions -------------------------------------------------------- */
 
 /**
  * @brief Initialize the slab allocator
@@ -110,7 +110,7 @@ void *slab_calloc(size_t size);
  */
 void *slab_realloc(void *ptr, size_t new_size);
 
-/* ── Cache Management ────────────────────────────────────────────────────── */
+/* -- Cache Management ------------------------------------------------------ */
 
 /**
  * @brief Find the slab cache that owns a given pointer

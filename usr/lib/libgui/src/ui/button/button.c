@@ -4,25 +4,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-button_t *button_create(int x, int y, int w, int h, const char *text)
-{
-	element_t *el = element_create(x, y, w, h);
-	if (!el)
-		return NULL;
+button_t *button_create(int x, int y, int w, int h, const char *text) {
+  element_t *el = element_create(x, y, w, h);
+  if (!el)
+    return NULL;
 
-	el->type = UI_BUTTON;
+  el->type = UI_BUTTON;
 
-	if (text)
-	{
-		el->text = strdup(text);
-	}
+  if (text) {
+    el->text = strdup(text);
+  }
 
-	el->needs_redraw = true;
+  el->needs_redraw = true;
 
-	return el;
+  return el;
 }
 
-void button_destroy(button_t *btn)
-{
-	element_destroy(btn);
-}
+void button_destroy(button_t *btn) { element_destroy(btn); }

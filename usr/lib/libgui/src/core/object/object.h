@@ -3,26 +3,25 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <utils/color/color.h>
 #include <core/element/element.h>
+#include <utils/color/color.h>
 
-typedef struct object
-{
-	int x, y;
-	int width, height;
+typedef struct object {
+  int x, y;
+  int width, height;
 
-	int prev_x, prev_y;
-	int prev_w, prev_h;
-	bool maximized;
+  int prev_x, prev_y;
+  int prev_w, prev_h;
+  bool maximized;
 
-	uint32_t *buffer;
-	color_t bg_color;
+  uint32_t *buffer;
+  color_t bg_color;
 
-	element_t **elements;
-	int element_count;
-	int element_capacity;
+  element_t **elements;
+  int element_count;
+  int element_capacity;
 
-	int layer;
+  int layer;
 } object_t;
 
 void element_mark_dirty(element_t *el);

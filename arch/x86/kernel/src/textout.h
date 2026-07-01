@@ -9,7 +9,7 @@
 #include <hubble/color.h>
 #include <stdint.h>
 
-#define CHAR_WIDTH  8
+#define CHAR_WIDTH 8
 #define CHAR_HEIGHT 8
 
 _Begin_C_Header;

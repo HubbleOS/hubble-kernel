@@ -1,6 +1,7 @@
 /**
  * @file ctype.h
- * @brief Character type classification and conversion functions for the bootloader
+ * @brief Character type classification and conversion functions for the
+ * bootloader
  */
 
 #pragma once

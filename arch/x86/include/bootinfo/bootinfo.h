@@ -17,11 +17,10 @@
 /**
  * @brief Top-level boot information structure
  */
-typedef struct
-{
-	framebuffer_info_t framebuffer;
-	ram_info_t memory_map;
-	void *rsdp;
+typedef struct {
+  framebuffer_info_t framebuffer;
+  ram_info_t memory_map;
+  void *rsdp;
 } BootInfo;
 
 extern BootInfo *g_boot_info;

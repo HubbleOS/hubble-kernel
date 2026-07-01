@@ -9,24 +9,27 @@
  */
 
 #include <_cheader.h>
+#include <hubble/color.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <hubble/color.h>
 
-/* ── Log levels ───────────────────────────────────────────────────────────── */
+/* -- Log levels -------------------------------------------------------------
+ */
 
-#define KERN_EMERG   "<0>"   /**< System is unusable.            */
-#define KERN_ALERT   "<1>"   /**< Action must be taken immediately. */
-#define KERN_CRIT    "<2>"   /**< Critical conditions.           */
-#define KERN_ERR     "<3>"   /**< Error conditions.              */
-#define KERN_WARNING "<4>"   /**< Warning conditions.            */
-#define KERN_NOTICE  "<5>"   /**< Normal but significant condition. */
-#define KERN_INFO    "<6>"   /**< Informational.                 */
-#define KERN_DEBUG   "<7>"   /**< Debug-level messages.          */
-#define KERN_OK      "<8>"   /**< Successful status messages.    */
+#define KERN_EMERG "<0>"   /**< System is unusable.            */
+#define KERN_ALERT "<1>"   /**< Action must be taken immediately. */
+#define KERN_CRIT "<2>"    /**< Critical conditions.           */
+#define KERN_ERR "<3>"     /**< Error conditions.              */
+#define KERN_WARNING "<4>" /**< Warning conditions.            */
+#define KERN_NOTICE "<5>"  /**< Normal but significant condition. */
+#define KERN_INFO "<6>"    /**< Informational.                 */
+#define KERN_DEBUG "<7>"   /**< Debug-level messages.          */
+#define KERN_OK "<8>"      /**< Successful status messages.    */
 
-#define PRINTK_BUFFER_SIZE (16 * 1024) /**< Size of the internal ring buffer. */
+#define PRINTK_BUFFER_SIZE                                                     \
+  (16 * 1024) /**< Size of the internal ring buffer.                           \
+               */
 
 _Begin_C_Header;
 
@@ -50,7 +53,7 @@ void printk_set_color_output(void (*fn)(char c, color_t color));
  * @param user_data Opaque pointer passed to the callback.
  */
 void printk_register_console(void (*write_fn)(const char *, size_t, void *),
-			     void *user_data);
+                             void *user_data);
 
 /**
  * @brief Unregister the console backend.

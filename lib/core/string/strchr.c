@@ -11,16 +11,14 @@
  * @param c Character to find
  * @return Pointer to the first occurrence of c, or NULL if not found
  */
-char *strchr(const char *s, int c)
-{
-	unsigned char uc = (unsigned char)c;
+char *strchr(const char *s, int c) {
+  unsigned char uc = (unsigned char)c;
 
-	while (*s)
-	{
-		if (*s == uc)
-			return (char *)s;
-		s++;
-	}
+  while (*s) {
+    if (*s == uc)
+      return (char *)s;
+    s++;
+  }
 
-	return uc == '\0' ? (char *)s : NULL;
+  return uc == '\0' ? (char *)s : NULL;
 }

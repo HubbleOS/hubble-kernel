@@ -4,10 +4,10 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <interrupt/interrupt.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <interrupt/interrupt.h>
+#include <stdint.h>
 
 /**
  * @brief PS/2 keyboard IRQ handler

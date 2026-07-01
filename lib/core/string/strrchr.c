@@ -11,17 +11,15 @@
  * @param c Character to find
  * @return Pointer to the last occurrence of c, or NULL if not found
  */
-char *strrchr(const char *s, int c)
-{
-	const char *end = s + strlen(s);
-	unsigned char uc = (unsigned char)c;
+char *strrchr(const char *s, int c) {
+  const char *end = s + strlen(s);
+  unsigned char uc = (unsigned char)c;
 
-	while (end != s)
-	{
-		end--;
-		if (*end == uc)
-			return (char *)end;
-	}
+  while (end != s) {
+    end--;
+    if (*end == uc)
+      return (char *)end;
+  }
 
-	return uc == *s ? (char *)s : NULL;
+  return uc == *s ? (char *)s : NULL;
 }

@@ -5,42 +5,42 @@
 
 #pragma once
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include <interrupt/interrupt.h>
 #include <smp/spinlock.h>
 #include <smp/task.h>
 
-/* ── Constants ────────────────────────────────────────────────────────── */
+/* -- Constants ---------------------------------------------------------- */
 
 #define MAX_TASKS 256
 #define MAX_CPUS 16
 
-/* ── Per-CPU run queue ────────────────────────────────────────────────── */
+/* -- Per-CPU run queue -------------------------------------------------- */
 
 /**
  * @brief Per-CPU run queue structure
  */
 typedef struct {
-	task_t *queue[MAX_TASKS];
-	size_t count;
-	spinlock_t lock;
-	task_t *current;
-	uint64_t idle_time;
-	task_t *idle_task;
-	uint32_t next_index;
+  task_t *queue[MAX_TASKS];
+  size_t count;
+  spinlock_t lock;
+  task_t *current;
+  uint64_t idle_time;
+  task_t *idle_task;
+  uint32_t next_index;
 } cpu_runqueue_t;
 
 /**
  * @brief Per-CPU kill queue for zombie reaping
  */
 typedef struct {
-	task_t *queue[MAX_TASKS];
-	size_t count;
+  task_t *queue[MAX_TASKS];
+  size_t count;
 } cpu_killqueue_t;
 
-/* ── Scheduler core ───────────────────────────────────────────────────── */
+/* -- Scheduler core ----------------------------------------------------- */
 
 /**
  * @brief Handler for the LAPIC timer interrupt
@@ -77,7 +77,7 @@ bool is_scheduler_initialized(void);
  */
 void task_exit(int exit_code);
 
-/* ── Task scheduling helpers ──────────────────────────────────────────── */
+/* -- Task scheduling helpers -------------------------------------------- */
 
 /**
  * @brief Wake a blocked task
@@ -90,7 +90,7 @@ void task_wake(task_t *task);
  */
 void task_sleep(void);
 
-/* ── Task creation ────────────────────────────────────────────────────── */
+/* -- Task creation ------------------------------------------------------ */
 
 /**
  * @brief Create a new task with an argument
@@ -100,7 +100,8 @@ void task_sleep(void);
  * @param userspace true if this is a user-space task
  * @return Pointer to new task, or NULL on failure
  */
-task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint32_t priority, bool userspace);
+task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg,
+                              uint32_t priority, bool userspace);
 
 /**
  * @brief Create a new task without an argument
@@ -109,7 +110,8 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg, uint
  * @param userspace true if this is a user-space task
  * @return Pointer to new task, or NULL on failure
  */
-task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority, bool userspace);
+task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority,
+                            bool userspace);
 
 /**
  * @brief Map user stack pages into the task's page table
@@ -120,12 +122,11 @@ void task_map_user_stack(task_t *task, uint64_t *pml4_phys);
 
 #define _task_create_select(_1, _2, _3, _4, NAME) NAME
 
-#define task_create(...)                           \
-	_task_create_select(__VA_ARGS__,           \
-			    _task_create_with_arg, \
-			    _task_create_no_arg)(__VA_ARGS__)
+#define task_create(...)                                                       \
+  _task_create_select(__VA_ARGS__, _task_create_with_arg,                      \
+                      _task_create_no_arg)(__VA_ARGS__)
 
-/* ── Task termination ─────────────────────────────────────────────────── */
+/* -- Task termination --------------------------------------------------- */
 
 /**
  * @brief Kill a task by task pointer
@@ -139,5 +140,7 @@ void task_kill_by_task(task_t *task);
  */
 void task_kill_by_pid(uint32_t pid);
 
-#define task_kill(...) _task_kill_select(__VA_ARGS__, task_kill_by_pid, task_kill_by_task)(__VA_ARGS__)
+#define task_kill(...)                                                         \
+  _task_kill_select(__VA_ARGS__, task_kill_by_pid,                             \
+                    task_kill_by_task)(__VA_ARGS__)
 #define _task_kill_select(_1, _2, _3, NAME, ...) NAME

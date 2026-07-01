@@ -12,7 +12,7 @@
 #include "percpu.h"
 #include "spinlock.h"
 
-/* ── Public functions ─────────────────────────────────────────────────── */
+/* -- Public functions --------------------------------------------------- */
 
 /**
  * @brief Initialize SMP (start all Application Processors)

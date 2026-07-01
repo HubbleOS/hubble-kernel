@@ -13,18 +13,17 @@
 /**
  * @brief IPv4 header structure
  */
-struct ip_hdr
-{
-	uint8_t  ihl_ver;   /**< Version (4) and IHL (5) combined */
-	uint8_t  tos;       /**< Type of service */
-	uint16_t tot_len;   /**< Total length */
-	uint16_t id;        /**< Identification */
-	uint16_t frag_off;  /**< Fragment offset and flags */
-	uint8_t  ttl;       /**< Time to live */
-	uint8_t  proto;     /**< Protocol */
-	uint16_t checksum;  /**< Header checksum */
-	uint32_t src;       /**< Source IP address */
-	uint32_t dst;       /**< Destination IP address */
+struct ip_hdr {
+  uint8_t ihl_ver;   /**< Version (4) and IHL (5) combined */
+  uint8_t tos;       /**< Type of service */
+  uint16_t tot_len;  /**< Total length */
+  uint16_t id;       /**< Identification */
+  uint16_t frag_off; /**< Fragment offset and flags */
+  uint8_t ttl;       /**< Time to live */
+  uint8_t proto;     /**< Protocol */
+  uint16_t checksum; /**< Header checksum */
+  uint32_t src;      /**< Source IP address */
+  uint32_t dst;      /**< Destination IP address */
 } __attribute__((packed));
 
 /**

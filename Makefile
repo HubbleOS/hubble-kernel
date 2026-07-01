@@ -334,10 +334,24 @@ PHONY += build-tool
 build-tool:
 	@$(MAKE) -C $(DEV_TOOLS_DIR)/build build
 
-# PHONY += usr-build
-# usr-build: build-tool
-# 	@mkdir -p $(OUT_DIR)/logs
-# 	@$(MAKE) -C $(USR_DIR) -j$(JOBS) BUILD_TOOL_FLAGS="--log-file $(OUT_DIR)/logs/usr_build.log -v --jobs $(JOBS)"
+SRC_DIRS := .
+
+.PHONY: format
+format:
+	@echo "Formatting all files..."
+	@find $(SRC_DIRS) -type f \( -name "*.c" -o -name "*.h" \) \
+		-not -path "*/.*" \
+		-not -path "*/build/*" \
+		| xargs -r clang-format -style=file -i
+	@echo "Formatting complete!"
+
+.PHONY: format-check
+format-check:
+	@echo "Checking formatting..."
+	@find $(SRC_DIRS) -type f \( -name "*.c" -o -name "*.h" \) \
+		-not -path "*/.*" \
+		-not -path "*/build/*" \
+		| xargs -r clang-format -style=file --dry-run --Werror
 
 PHONY += build
 build: build-tool

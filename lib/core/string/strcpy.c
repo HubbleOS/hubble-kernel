@@ -11,10 +11,9 @@
  * @param src Source string
  * @return Pointer to dest
  */
-char *strcpy(char *dest, const char *src)
-{
-	char *orig = dest;
-	while ((*dest++ = *src++))
-		;
-	return orig;
+char *strcpy(char *dest, const char *src) {
+  char *orig = dest;
+  while ((*dest++ = *src++))
+    ;
+  return orig;
 }

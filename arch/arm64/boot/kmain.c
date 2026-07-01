@@ -52,7 +52,8 @@
 // 	GPPUDCLK0 = (GPIO_BASE + 0x98),
 
 // 	// The base address for UART.
-// 	UART0_BASE = (GPIO_BASE + 0x1000), // for raspi4 0xFE201000, raspi2 & 3 0x3F201000, and 0x20201000 for raspi1
+// 	UART0_BASE = (GPIO_BASE + 0x1000), // for raspi4 0xFE201000, raspi2 & 3
+// 0x3F201000, and 0x20201000 for raspi1
 
 // 	// The offsets for reach register for the UART.
 // 	UART0_DR = (UART0_BASE + 0x00),
@@ -122,9 +123,9 @@
 // 		while (mmio_read(MBOX_STATUS) & 0x80000000)
 // 		{
 // 		}
-// 		// send our message to property channel and wait for the response
-// 		mmio_write(MBOX_WRITE, r);
-// 		while ((mmio_read(MBOX_STATUS) & 0x40000000) || mmio_read(MBOX_READ) != r)
+// 		// send our message to property channel and wait for the
+// response 		mmio_write(MBOX_WRITE, r); 		while
+// ((mmio_read(MBOX_STATUS) & 0x40000000) || mmio_read(MBOX_READ) != r)
 // 			;
 // 	}
 
@@ -176,7 +177,8 @@
 
 // #ifdef AARCH64
 //     // arguments for AArch64
-//     void kernel_main(uint64_t dtb_ptr32, uint64_t x1, uint64_t x2, uint64_t x3)
+//     void kernel_main(uint64_t dtb_ptr32, uint64_t x1, uint64_t x2, uint64_t
+//     x3)
 // #else
 // // arguments for AArch32
 // void kernel_main(uint32_t r0, uint32_t r1, uint32_t atags)
@@ -195,212 +197,195 @@
 
 static uint32_t MMIO_BASE;
 
-static inline void mmio_init(int raspi)
-{
-	switch (raspi)
-	{
-	case 2:
-	case 3:
-		MMIO_BASE = 0x3F000000;
-		break;
-	case 4:
-		MMIO_BASE = 0xFE000000;
-		break;
-	default:
-		MMIO_BASE = 0x20000000;
-		break;
-	}
+static inline void mmio_init(int raspi) {
+  switch (raspi) {
+  case 2:
+  case 3:
+    MMIO_BASE = 0x3F000000;
+    break;
+  case 4:
+    MMIO_BASE = 0xFE000000;
+    break;
+  default:
+    MMIO_BASE = 0x20000000;
+    break;
+  }
 }
 
-static inline void mmio_write(uint32_t reg, uint32_t data)
-{
-	*(volatile uint32_t *)(MMIO_BASE + reg) = data;
+static inline void mmio_write(uint32_t reg, uint32_t data) {
+  *(volatile uint32_t *)(MMIO_BASE + reg) = data;
 }
 
-static inline uint32_t mmio_read(uint32_t reg)
-{
-	return *(volatile uint32_t *)(MMIO_BASE + reg);
+static inline uint32_t mmio_read(uint32_t reg) {
+  return *(volatile uint32_t *)(MMIO_BASE + reg);
 }
 
-static inline void delay(int32_t count)
-{
-	asm volatile("__delay_%=: subs %[count], %[count], #1; bne __delay_%=\n"
-		     : "=r"(count) : [count] "0"(count) : "cc");
+static inline void delay(int32_t count) {
+  asm volatile("__delay_%=: subs %[count], %[count], #1; bne __delay_%=\n"
+               : "=r"(count)
+               : [count] "0"(count)
+               : "cc");
 }
 
-enum
-{
-	GPIO_BASE = 0x200000,
-	GPPUD = (GPIO_BASE + 0x94),
-	GPPUDCLK0 = (GPIO_BASE + 0x98),
-	UART0_BASE = (GPIO_BASE + 0x1000),
-	UART0_DR = (UART0_BASE + 0x00),
-	UART0_FR = (UART0_BASE + 0x18),
-	UART0_IBRD = (UART0_BASE + 0x24),
-	UART0_FBRD = (UART0_BASE + 0x28),
-	UART0_LCRH = (UART0_BASE + 0x2C),
-	UART0_CR = (UART0_BASE + 0x30),
-	UART0_IMSC = (UART0_BASE + 0x38),
-	UART0_ICR = (UART0_BASE + 0x44),
+enum {
+  GPIO_BASE = 0x200000,
+  GPPUD = (GPIO_BASE + 0x94),
+  GPPUDCLK0 = (GPIO_BASE + 0x98),
+  UART0_BASE = (GPIO_BASE + 0x1000),
+  UART0_DR = (UART0_BASE + 0x00),
+  UART0_FR = (UART0_BASE + 0x18),
+  UART0_IBRD = (UART0_BASE + 0x24),
+  UART0_FBRD = (UART0_BASE + 0x28),
+  UART0_LCRH = (UART0_BASE + 0x2C),
+  UART0_CR = (UART0_BASE + 0x30),
+  UART0_IMSC = (UART0_BASE + 0x38),
+  UART0_ICR = (UART0_BASE + 0x44),
 
-	MBOX_BASE = 0xB880,
-	MBOX_READ = (MBOX_BASE + 0x00),
-	MBOX_STATUS = (MBOX_BASE + 0x18),
-	MBOX_WRITE = (MBOX_BASE + 0x20),
+  MBOX_BASE = 0xB880,
+  MBOX_READ = (MBOX_BASE + 0x00),
+  MBOX_STATUS = (MBOX_BASE + 0x18),
+  MBOX_WRITE = (MBOX_BASE + 0x20),
 };
 
-// ── Mailbox ──────────────────────────────────────────────────────────────────
+// -- Mailbox ------------------------------------------------------------------
 
-static void mbox_send(volatile unsigned int *msg)
-{
-	unsigned int r = (((unsigned int)(uintptr_t)msg & ~0xF) | 8);
-	while (mmio_read(MBOX_STATUS) & 0x80000000)
-	{
-	}
-	mmio_write(MBOX_WRITE, r);
-	while ((mmio_read(MBOX_STATUS) & 0x40000000) || mmio_read(MBOX_READ) != r)
-	{
-	}
+static void mbox_send(volatile unsigned int *msg) {
+  unsigned int r = (((unsigned int)(uintptr_t)msg & ~0xF) | 8);
+  while (mmio_read(MBOX_STATUS) & 0x80000000) {
+  }
+  mmio_write(MBOX_WRITE, r);
+  while ((mmio_read(MBOX_STATUS) & 0x40000000) || mmio_read(MBOX_READ) != r) {
+  }
 }
 
-// ── UART ─────────────────────────────────────────────────────────────────────
+// -- UART ---------------------------------------------------------------------
 
 volatile unsigned int __attribute__((aligned(16))) uart_mbox[9] = {
     9 * 4, 0, 0x38002, 12, 8, 2, 3000000, 0, 0};
 
-void uart_init(int raspi)
-{
-	mmio_init(raspi);
-	mmio_write(UART0_CR, 0);
-	mmio_write(GPPUD, 0);
-	delay(150);
-	mmio_write(GPPUDCLK0, (1 << 14) | (1 << 15));
-	delay(150);
-	mmio_write(GPPUDCLK0, 0);
-	mmio_write(UART0_ICR, 0x7FF);
+void uart_init(int raspi) {
+  mmio_init(raspi);
+  mmio_write(UART0_CR, 0);
+  mmio_write(GPPUD, 0);
+  delay(150);
+  mmio_write(GPPUDCLK0, (1 << 14) | (1 << 15));
+  delay(150);
+  mmio_write(GPPUDCLK0, 0);
+  mmio_write(UART0_ICR, 0x7FF);
 
-	if (raspi >= 3)
-		mbox_send(uart_mbox);
+  if (raspi >= 3)
+    mbox_send(uart_mbox);
 
-	mmio_write(UART0_IBRD, 1);
-	mmio_write(UART0_FBRD, 40);
-	mmio_write(UART0_LCRH, (1 << 4) | (1 << 5) | (1 << 6));
-	mmio_write(UART0_IMSC, (1 << 1) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10));
-	mmio_write(UART0_CR, (1 << 0) | (1 << 8) | (1 << 9));
+  mmio_write(UART0_IBRD, 1);
+  mmio_write(UART0_FBRD, 40);
+  mmio_write(UART0_LCRH, (1 << 4) | (1 << 5) | (1 << 6));
+  mmio_write(UART0_IMSC, (1 << 1) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7) |
+                             (1 << 8) | (1 << 9) | (1 << 10));
+  mmio_write(UART0_CR, (1 << 0) | (1 << 8) | (1 << 9));
 }
 
-void uart_putc(unsigned char c)
-{
-	while (mmio_read(UART0_FR) & (1 << 5))
-	{
-	}
-	mmio_write(UART0_DR, c);
+void uart_putc(unsigned char c) {
+  while (mmio_read(UART0_FR) & (1 << 5)) {
+  }
+  mmio_write(UART0_DR, c);
 }
 
-unsigned char uart_getc()
-{
-	while (mmio_read(UART0_FR) & (1 << 4))
-	{
-	}
-	return mmio_read(UART0_DR);
+unsigned char uart_getc() {
+  while (mmio_read(UART0_FR) & (1 << 4)) {
+  }
+  return mmio_read(UART0_DR);
 }
 
-void uart_puts(const char *str)
-{
-	for (size_t i = 0; str[i]; i++)
-		uart_putc((unsigned char)str[i]);
+void uart_puts(const char *str) {
+  for (size_t i = 0; str[i]; i++)
+    uart_putc((unsigned char)str[i]);
 }
 
-// ── Framebuffer ───────────────────────────────────────────────────────────────
+// -- Framebuffer
+// ---------------------------------------------------------------
 
 #define FB_WIDTH 1024
 #define FB_HEIGHT 768
 
 volatile unsigned int __attribute__((aligned(16))) fb_mbox[36] = {
-    36 * 4, 0,
-    0x48003, 8, 0, FB_WIDTH, FB_HEIGHT, // set physical (display) size
-    0x48004, 8, 0, FB_WIDTH, FB_HEIGHT, // set virtual (buffer)  size
-    0x48005, 4, 0, 32,			// set colour depth: 32 bpp
-    0x48006, 4, 0, 0,			// set pixel order: RGB
-    0x40001, 8, 0, 4096, 0,		// allocate framebuffer → [ptr, size]
-    0x40008, 4, 0, FB_WIDTH * 4,	// set pitch (bytes per row)
+    36 * 4,    0,        0x48003,   8,
+    0,         FB_WIDTH, FB_HEIGHT, // set physical (display) size
+    0x48004,   8,        0,         FB_WIDTH,
+    FB_HEIGHT,                          // set virtual (buffer)  size
+    0x48005,   4,        0,         32, // set colour depth: 32 bpp
+    0x48006,   4,        0,         0,  // set pixel order: RGB
+    0x40001,   8,        0,         4096,
+    0, // allocate framebuffer → [ptr, size]
+    0x40008,   4,        0,         FB_WIDTH * 4, // set pitch (bytes per row)
     0};
 
 static unsigned char *fb = 0;
 static unsigned int fb_pitch = 0;
 
 // виводить uint32 в hex через UART
-static void uart_hex(unsigned int n)
-{
-	uart_puts("0x");
-	for (int i = 28; i >= 0; i -= 4)
-	{
-		unsigned int d = (n >> i) & 0xF;
-		uart_putc(d < 10 ? '0' + d : 'A' + d - 10);
-	}
-	uart_puts("\r\n");
+static void uart_hex(unsigned int n) {
+  uart_puts("0x");
+  for (int i = 28; i >= 0; i -= 4) {
+    unsigned int d = (n >> i) & 0xF;
+    uart_putc(d < 10 ? '0' + d : 'A' + d - 10);
+  }
+  uart_puts("\r\n");
 }
 
 // повертає 1 якщо успішно
-int fb_init(void)
-{
-	mbox_send(fb_mbox);
+int fb_init(void) {
+  mbox_send(fb_mbox);
 
-	// дамп всіх 36 слів відповіді
-	uart_puts("mbox dump:\r\n");
-	for (int i = 0; i < 36; i++)
-	{
-		uart_puts("[");
-		uart_putc('0' + i / 10);
-		uart_putc('0' + i % 10);
-		uart_puts("] ");
-		uart_hex(fb_mbox[i]);
-	}
+  // дамп всіх 36 слів відповіді
+  uart_puts("mbox dump:\r\n");
+  for (int i = 0; i < 36; i++) {
+    uart_puts("[");
+    uart_putc('0' + i / 10);
+    uart_putc('0' + i % 10);
+    uart_puts("] ");
+    uart_hex(fb_mbox[i]);
+  }
 
-	if (fb_mbox[1] != 0x80000000)
-		return 0;
-	if (fb_mbox[23] == 0)
-		return 0;
+  if (fb_mbox[1] != 0x80000000)
+    return 0;
+  if (fb_mbox[23] == 0)
+    return 0;
 
-	fb = (unsigned char *)(uintptr_t)(fb_mbox[23] & 0x3FFFFFFF);
-	fb_pitch = fb_mbox[28];
-	return 1;
+  fb = (unsigned char *)(uintptr_t)(fb_mbox[23] & 0x3FFFFFFF);
+  fb_pitch = fb_mbox[28];
+  return 1;
 }
 
-static inline void fb_put_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b)
-{
-	unsigned int off = (unsigned int)y * fb_pitch + (unsigned int)x * 4;
-	fb[off + 0] = r;
-	fb[off + 1] = g;
-	fb[off + 2] = b;
-	fb[off + 3] = 0xFF;
+static inline void fb_put_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
+  unsigned int off = (unsigned int)y * fb_pitch + (unsigned int)x * 4;
+  fb[off + 0] = r;
+  fb[off + 1] = g;
+  fb[off + 2] = b;
+  fb[off + 3] = 0xFF;
 }
 
-void fb_fill_rect(int x, int y, int w, int h, uint8_t r, uint8_t g, uint8_t b)
-{
-	for (int j = y; j < y + h; j++)
-		for (int i = x; i < x + w; i++)
-			fb_put_pixel(i, j, r, g, b);
+void fb_fill_rect(int x, int y, int w, int h, uint8_t r, uint8_t g, uint8_t b) {
+  for (int j = y; j < y + h; j++)
+    for (int i = x; i < x + w; i++)
+      fb_put_pixel(i, j, r, g, b);
 }
 
-void fb_clear(uint8_t r, uint8_t g, uint8_t b)
-{
-	fb_fill_rect(0, 0, FB_WIDTH, FB_HEIGHT, r, g, b);
+void fb_clear(uint8_t r, uint8_t g, uint8_t b) {
+  fb_fill_rect(0, 0, FB_WIDTH, FB_HEIGHT, r, g, b);
 }
 
-// ── kernel_main ───────────────────────────────────────────────────────────────
+// -- kernel_main
+// ---------------------------------------------------------------
 
 volatile unsigned int __attribute__((aligned(16))) led_mbox[8] = {
-    8 * 4, 0,
-    0x00038041, 8, 0, // tag: set GPIO state
-    47,		      // pin (Act LED)
-    1,		      // 1 = on, 0 = off
+    8 * 4, 0, 0x00038041, 8, 0, // tag: set GPIO state
+    47,                         // pin (Act LED)
+    1,                          // 1 = on, 0 = off
     0};
 
-void led_set(int on)
-{
-	led_mbox[6] = on;
-	mbox_send(led_mbox);
+void led_set(int on) {
+  led_mbox[6] = on;
+  mbox_send(led_mbox);
 }
 
 #if defined(__cplusplus)
@@ -412,32 +397,28 @@ extern "C"
 void kernel_main(uint32_t r0, uint32_t r1, uint32_t atags)
 #endif
 {
-	uart_init(3);
-	uart_puts("Hello, kernel World!\r\n");
+  uart_init(3);
+  uart_puts("Hello, kernel World!\r\n");
 
-	if (fb_init())
-	{
-		uart_puts("Framebuffer OK\r\n");
+  if (fb_init()) {
+    uart_puts("Framebuffer OK\r\n");
 
-		fb_clear(0, 0, 0); // чорний фон
+    fb_clear(0, 0, 0); // чорний фон
 
-		fb_fill_rect(100, 100, 200, 200, 255, 0, 0); // червоний квадрат
-		fb_fill_rect(350, 100, 200, 200, 0, 255, 0); // зелений квадрат
-		fb_fill_rect(600, 100, 200, 200, 0, 0, 255); // синій квадрат
-	}
-	else
-	{
-		uart_puts("Framebuffer FAILED\r\n");
-	}
+    fb_fill_rect(100, 100, 200, 200, 255, 0, 0); // червоний квадрат
+    fb_fill_rect(350, 100, 200, 200, 0, 255, 0); // зелений квадрат
+    fb_fill_rect(600, 100, 200, 200, 0, 0, 255); // синій квадрат
+  } else {
+    uart_puts("Framebuffer FAILED\r\n");
+  }
 
-	while (1)
-	{
-		led_set(1);
-		delay(500000);
-		led_set(0);
-		delay(500000);
-	}
+  while (1) {
+    led_set(1);
+    delay(500000);
+    led_set(0);
+    delay(500000);
+  }
 
-	while (1)
-		uart_putc(uart_getc());
+  while (1)
+    uart_putc(uart_getc());
 }

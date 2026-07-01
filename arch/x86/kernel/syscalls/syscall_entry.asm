@@ -1,8 +1,8 @@
-; ── Syscall Entry ─────────────────────────────────────────────
+; -- Syscall Entry ---------------------------------------------
 ; Entry point for system calls via the syscall/sysret mechanism.
 ; Saves user registers, switches to kernel stack, calls the C
 ; syscall handler, restores registers, and returns to user mode.
-; ──────────────────────────────────────────────────────────────
+; --------------------------------------------------------------
 
 [BITS 64]
 global syscall_entry

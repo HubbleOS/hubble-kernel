@@ -10,10 +10,9 @@
  * @param s String to measure
  * @return Number of characters before the null terminator
  */
-size_t strlen(const char *s)
-{
-	const char *p = s;
-	while (*p)
-		++p;
-	return p - s;
+size_t strlen(const char *s) {
+  const char *p = s;
+  while (*p)
+    ++p;
+  return p - s;
 }

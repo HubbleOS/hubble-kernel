@@ -10,7 +10,7 @@
 /** @brief Ethernet type for ARP */
 #define ETH_TYPE_ARP 0x0806
 /** @brief Ethernet type for IPv4 */
-#define ETH_TYPE_IP  0x0800
+#define ETH_TYPE_IP 0x0800
 
 /**
  * @brief Send an Ethernet frame

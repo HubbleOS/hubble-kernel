@@ -4,18 +4,17 @@
 
 #include <core/element/element.h>
 #include <core/object/object.h>
-#include <ui/window/window.h>
 #include <ui/canvas/canvas.h>
+#include <ui/window/window.h>
 
 #include <dev/mouse/mouse.h>
 
-typedef struct
-{
-	window_t *win;	/* вікно що редагується         */
-	bool active;	/* editor overlay on/off         */
-	bool prev_left; /* стан кнопки на попередньому тику */
+typedef struct {
+  window_t *win;  /* вікно що редагується         */
+  bool active;    /* editor overlay on/off         */
+  bool prev_left; /* стан кнопки на попередньому тику */
 
-	element_t *selected; /* поточно вибраний елемент      */
+  element_t *selected; /* поточно вибраний елемент      */
 } ui_editor_t;
 
 /*  API  */

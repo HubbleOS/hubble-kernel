@@ -8,50 +8,46 @@
 
 #include "waitqueue.h"
 
-/* ── Initialization ───────────────────────────────────────────────────── */
+/* -- Initialization ----------------------------------------------------- */
 
 /**
  * @brief Initialize a wait queue
  * @param wq Pointer to wait queue
  */
-void waitqueue_init(wait_queue_t *wq)
-{
-	wq->count = 0;
-	wq->lock = SPINLOCK_INIT("waitqueue");
+void waitqueue_init(wait_queue_t *wq) {
+  wq->count = 0;
+  wq->lock = SPINLOCK_INIT("waitqueue");
 }
 
-/* ── Sleep / Wake ─────────────────────────────────────────────────────── */
+/* -- Sleep / Wake ------------------------------------------------------- */
 
 /**
  * @brief Sleep on a wait queue (blocks current task)
  * @param wq Pointer to wait queue
  */
-void waitqueue_sleep(wait_queue_t *wq)
-{
-	task_t *current = get_current_task();
+void waitqueue_sleep(wait_queue_t *wq) {
+  task_t *current = get_current_task();
 
-	spinlock_acquire(&wq->lock);
+  spinlock_acquire(&wq->lock);
 
-	wq->tasks[wq->count++] = current;
+  wq->tasks[wq->count++] = current;
 
-	spinlock_release(&wq->lock);
+  spinlock_release(&wq->lock);
 
-	task_sleep();
+  task_sleep();
 }
 
 /**
  * @brief Wake all tasks sleeping on a wait queue
  * @param wq Pointer to wait queue
  */
-void waitqueue_wake_all(wait_queue_t *wq)
-{
-	spinlock_acquire(&wq->lock);
+void waitqueue_wake_all(wait_queue_t *wq) {
+  spinlock_acquire(&wq->lock);
 
-	for (size_t i = 0; i < wq->count; i++)
-	{
-		wq->tasks[i]->state = TASK_READY;
-	}
+  for (size_t i = 0; i < wq->count; i++) {
+    wq->tasks[i]->state = TASK_READY;
+  }
 
-	wq->count = 0;
-	spinlock_release(&wq->lock);
+  wq->count = 0;
+  spinlock_release(&wq->lock);
 }

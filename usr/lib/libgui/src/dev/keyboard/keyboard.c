@@ -1,7 +1,8 @@
 // #ifndef GUI_DEMO
 
 // #include "keyboard.h"
-// #include <dev/keyboard.h> // ← key_event_t, keyboard_poll_event, keymap_lookup_char
+// #include <dev/keyboard.h> // ← key_event_t, keyboard_poll_event,
+// keymap_lookup_char
 
 // #include <core/object/object.h>
 // #include <core/element/element.h>

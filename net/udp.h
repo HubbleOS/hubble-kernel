@@ -10,12 +10,11 @@
 /**
  * @brief UDP header structure
  */
-struct udp_hdr
-{
-	uint16_t src_port;  /**< Source port */
-	uint16_t dst_port;  /**< Destination port */
-	uint16_t length;    /**< Length (header + data) */
-	uint16_t checksum;  /**< Checksum (optional for UDP) */
+struct udp_hdr {
+  uint16_t src_port; /**< Source port */
+  uint16_t dst_port; /**< Destination port */
+  uint16_t length;   /**< Length (header + data) */
+  uint16_t checksum; /**< Checksum (optional for UDP) */
 } __attribute__((packed));
 
 /**
@@ -27,7 +26,7 @@ struct udp_hdr
  * @param len Payload length
  */
 void udp_send(uint32_t dst_ip, uint16_t src_port, uint16_t dst_port,
-	      const void *data, uint16_t len);
+              const void *data, uint16_t len);
 
 /**
  * @brief Receive a UDP datagram on a given port

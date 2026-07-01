@@ -2,50 +2,43 @@
 #include "fb.h"
 #include "mouse.h"
 
-#include <stdlib.h>
 #include <core/screen/screen.h>
 #include <dev/mouse/mouse.h>
-#include <utils/color/color.h>
+#include <stdlib.h>
 #include <tasks/task.h>
+#include <utils/color/color.h>
 
-demo_ctx_t demo_init(uint32_t w, uint32_t h, uint8_t bpp)
-{
-	demo_ctx_t ctx = {0};
+demo_ctx_t demo_init(uint32_t w, uint32_t h, uint8_t bpp) {
+  demo_ctx_t ctx = {0};
 
-	SDL_Init(SDL_INIT_VIDEO);
+  SDL_Init(SDL_INIT_VIDEO);
 
-	ctx.window = SDL_CreateWindow(
-		"Kernel FB Simulator",
-		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-		w, h, 0);
+  ctx.window = SDL_CreateWindow("Kernel FB Simulator", SDL_WINDOWPOS_CENTERED,
+                                SDL_WINDOWPOS_CENTERED, w, h, 0);
 
-	ctx.renderer = SDL_CreateRenderer(ctx.window, -1,
-									  SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+  ctx.renderer = SDL_CreateRenderer(
+      ctx.window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
-	ctx.texture = SDL_CreateTexture(
-		ctx.renderer,
-		SDL_PIXELFORMAT_ARGB8888,
-		SDL_TEXTUREACCESS_STREAMING,
-		w, h);
+  ctx.texture = SDL_CreateTexture(ctx.renderer, SDL_PIXELFORMAT_ARGB8888,
+                                  SDL_TEXTUREACCESS_STREAMING, w, h);
 
-	ctx.fb = fb_create(w, h, bpp);
-	screen_init(ctx.fb);
+  ctx.fb = fb_create(w, h, bpp);
+  screen_init(ctx.fb);
 
-	mouse = malloc(sizeof(mouse_t));
-	mouse->x = w / 2;
-	mouse->y = h / 2;
+  mouse = malloc(sizeof(mouse_t));
+  mouse->x = w / 2;
+  mouse->y = h / 2;
 
-	tasks_init();
-	kmain_thread();
+  tasks_init();
+  kmain_thread();
 
-	return ctx;
+  return ctx;
 }
 
-void demo_shutdown(demo_ctx_t *ctx)
-{
-	fb_destroy(ctx->fb);
-	SDL_DestroyTexture(ctx->texture);
-	SDL_DestroyRenderer(ctx->renderer);
-	SDL_DestroyWindow(ctx->window);
-	SDL_Quit();
+void demo_shutdown(demo_ctx_t *ctx) {
+  fb_destroy(ctx->fb);
+  SDL_DestroyTexture(ctx->texture);
+  SDL_DestroyRenderer(ctx->renderer);
+  SDL_DestroyWindow(ctx->window);
+  SDL_Quit();
 }

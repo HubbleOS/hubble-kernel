@@ -8,18 +8,18 @@
 #include <smp/scheduler.h>
 #include <smp/spinlock.h>
 
-/* ── Wait queue structure ─────────────────────────────────────────────── */
+/* -- Wait queue structure ----------------------------------------------- */
 
 /**
  * @brief Wait queue for synchronizing task sleep/wakeup
  */
 typedef struct wait_queue {
-	task_t *tasks[MAX_TASKS];
-	size_t count;
-	spinlock_t lock;
+  task_t *tasks[MAX_TASKS];
+  size_t count;
+  spinlock_t lock;
 } wait_queue_t;
 
-/* ── Public functions ─────────────────────────────────────────────────── */
+/* -- Public functions --------------------------------------------------- */
 
 /**
  * @brief Initialize a wait queue

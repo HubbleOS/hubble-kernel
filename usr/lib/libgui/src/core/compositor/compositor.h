@@ -13,17 +13,15 @@
 
 #define MAX_LAYERS 4
 
-typedef struct
-{
-	object_t *objects[MAX_OBJECTS];
-	int count;
+typedef struct {
+  object_t *objects[MAX_OBJECTS];
+  int count;
 } layer_t;
 
-typedef struct
-{
-	layer_t layers[MAX_LAYERS];
-	rect_t dirty[MAX_DIRTY];
-	int dirty_count;
+typedef struct {
+  layer_t layers[MAX_LAYERS];
+  rect_t dirty[MAX_DIRTY];
+  int dirty_count;
 } compositor_t;
 
 extern compositor_t compositor;

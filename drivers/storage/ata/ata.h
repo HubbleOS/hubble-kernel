@@ -9,12 +9,11 @@
 /**
  * @brief ATA device descriptor
  */
-typedef struct
-{
-	uint8_t bus;        /* 0 = primary, 1 = secondary */
-	uint8_t device;     /* 0 = master, 1 = slave */
-	uint16_t io_base;   /* base port 0x1F0 or 0x170 */
-	uint16_t ctrl_base; /* control port 0x3F6 or 0x376 */
+typedef struct {
+  uint8_t bus;        /* 0 = primary, 1 = secondary */
+  uint8_t device;     /* 0 = master, 1 = slave */
+  uint16_t io_base;   /* base port 0x1F0 or 0x170 */
+  uint16_t ctrl_base; /* control port 0x3F6 or 0x376 */
 } ATA_Device;
 
 /**

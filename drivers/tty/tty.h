@@ -4,44 +4,42 @@
  */
 #pragma once
 
-#include <stdint.h>
-#include <stdbool.h>
 #include <smp/waitqueue.h>
+#include <stdbool.h>
+#include <stdint.h>
 
-/* ── Console output abstraction ────────────────────────── */
+/* -- Console output abstraction -------------------------- */
 
 /*
  * The TTY does not know about VGA or framebuffer details — it
  * calls into console_ops provided by the platform driver.
  */
-typedef struct
-{
-	void (*putchar)(char c);
-	void (*clear)(void);
+typedef struct {
+  void (*putchar)(char c);
+  void (*clear)(void);
 } tty_console_ops_t;
 
-/* ── Buffer sizes ───────────────────────────────────────── */
+/* -- Buffer sizes ----------------------------------------- */
 
 #define TTY_LINE_BUF_SIZE 256
 #define TTY_READ_BUF_SIZE 4096
 
-/* ── TTY instance ───────────────────────────────────────── */
+/* -- TTY instance ----------------------------------------- */
 
-typedef struct
-{
-	char line_buf[TTY_LINE_BUF_SIZE];
-	size_t line_len;
+typedef struct {
+  char line_buf[TTY_LINE_BUF_SIZE];
+  size_t line_len;
 
-	char read_buf[TTY_READ_BUF_SIZE];
-	volatile size_t read_head;
-	volatile size_t read_tail;
+  char read_buf[TTY_READ_BUF_SIZE];
+  volatile size_t read_head;
+  volatile size_t read_tail;
 
-	const tty_console_ops_t *console;
+  const tty_console_ops_t *console;
 
-	wait_queue_t read_wq;
+  wait_queue_t read_wq;
 } tty_t;
 
-/* ── API ────────────────────────────────────────────────── */
+/* -- API -------------------------------------------------- */
 
 /**
  * @brief Initialise a TTY instance

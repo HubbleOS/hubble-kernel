@@ -13,25 +13,26 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* ── Page Table Constants ────────────────────────────────────────────────── */
+/* -- Page Table Constants -------------------------------------------------- */
 
 #define VMM_PAGE_SIZE 4096
 #define VMM_HUGE_PAGE_SIZE (2 * 1024 * 1024)
 
-/* ── Page Table Access via Recursive Mapping ─────────────────────────────── */
+/* -- Page Table Access via Recursive Mapping ------------------------------- */
 
 #define PML4_INDEX(va) (((uint64_t)(va) >> 39) & 0x1FF)
 #define PDPT_INDEX(va) (((uint64_t)(va) >> 30) & 0x1FF)
-#define PD_INDEX(va)   (((uint64_t)(va) >> 21) & 0x1FF)
-#define PT_INDEX(va)   (((uint64_t)(va) >> 12) & 0x1FF)
+#define PD_INDEX(va) (((uint64_t)(va) >> 21) & 0x1FF)
+#define PT_INDEX(va) (((uint64_t)(va) >> 12) & 0x1FF)
 
 #define RECURSIVE_INDEX 510ULL
 #define HIGHER_HALF_BASE 0xFFFFFFFF80000000ULL
 
 #define RECURSIVE_PML4_INDEX 510
-#define RECURSIVE_MAPPING (0xFFFFULL << 48 | (uint64_t)RECURSIVE_PML4_INDEX << 39)
+#define RECURSIVE_MAPPING                                                      \
+  (0xFFFFULL << 48 | (uint64_t)RECURSIVE_PML4_INDEX << 39)
 
-/* ── Recursive Page Table Helpers ────────────────────────────────────────── */
+/* -- Recursive Page Table Helpers ------------------------------------------ */
 
 /**
  * @brief Get the virtual address of the PML4 table
@@ -39,10 +40,10 @@
  * @return Pointer to the PML4 table
  */
 static inline uint64_t *pml4_table(void) {
-	return (uint64_t *)(RECURSIVE_MAPPING |
-			    ((uint64_t)RECURSIVE_PML4_INDEX << 30) |
-			    ((uint64_t)RECURSIVE_PML4_INDEX << 21) |
-			    ((uint64_t)RECURSIVE_PML4_INDEX << 12));
+  return (uint64_t *)(RECURSIVE_MAPPING |
+                      ((uint64_t)RECURSIVE_PML4_INDEX << 30) |
+                      ((uint64_t)RECURSIVE_PML4_INDEX << 21) |
+                      ((uint64_t)RECURSIVE_PML4_INDEX << 12));
 }
 
 /**
@@ -52,10 +53,10 @@ static inline uint64_t *pml4_table(void) {
  * @return Pointer to the PDPT
  */
 static inline uint64_t *pdpt_table(uint64_t va) {
-	return (uint64_t *)(RECURSIVE_MAPPING |
-			    ((uint64_t)RECURSIVE_PML4_INDEX << 30) |
-			    ((uint64_t)RECURSIVE_PML4_INDEX << 21) |
-			    (PML4_INDEX(va) << 12));
+  return (uint64_t *)(RECURSIVE_MAPPING |
+                      ((uint64_t)RECURSIVE_PML4_INDEX << 30) |
+                      ((uint64_t)RECURSIVE_PML4_INDEX << 21) |
+                      (PML4_INDEX(va) << 12));
 }
 
 /**
@@ -65,10 +66,9 @@ static inline uint64_t *pdpt_table(uint64_t va) {
  * @return Pointer to the PD
  */
 static inline uint64_t *pd_table(uint64_t va) {
-	return (uint64_t *)(RECURSIVE_MAPPING |
-			    ((uint64_t)RECURSIVE_PML4_INDEX << 30) |
-			    (PML4_INDEX(va) << 21) |
-			    (PDPT_INDEX(va) << 12));
+  return (uint64_t *)(RECURSIVE_MAPPING |
+                      ((uint64_t)RECURSIVE_PML4_INDEX << 30) |
+                      (PML4_INDEX(va) << 21) | (PDPT_INDEX(va) << 12));
 }
 
 /**
@@ -78,53 +78,51 @@ static inline uint64_t *pd_table(uint64_t va) {
  * @return Pointer to the PT
  */
 static inline uint64_t *pt_table(uint64_t va) {
-	return (uint64_t *)(RECURSIVE_MAPPING |
-			    (PML4_INDEX(va) << 30) |
-			    (PDPT_INDEX(va) << 21) |
-			    (PD_INDEX(va) << 12));
+  return (uint64_t *)(RECURSIVE_MAPPING | (PML4_INDEX(va) << 30) |
+                      (PDPT_INDEX(va) << 21) | (PD_INDEX(va) << 12));
 }
 
-/* ── Page Table Entry Flags ──────────────────────────────────────────────── */
+/* -- Page Table Entry Flags ------------------------------------------------ */
 
-#define PTE_PRESENT  (1ULL << 0)
-#define PTE_WRITE    (1ULL << 1)
-#define PTE_USER     (1ULL << 2)
-#define PTE_PWT      (1ULL << 3)
-#define PTE_PCD      (1ULL << 4)
+#define PTE_PRESENT (1ULL << 0)
+#define PTE_WRITE (1ULL << 1)
+#define PTE_USER (1ULL << 2)
+#define PTE_PWT (1ULL << 3)
+#define PTE_PCD (1ULL << 4)
 #define PTE_ACCESSED (1ULL << 5)
-#define PTE_DIRTY    (1ULL << 6)
-#define PTE_HUGE     (1ULL << 7)
-#define PTE_GLOBAL   (1ULL << 8)
-#define PTE_NX       (1ULL << 63)
+#define PTE_DIRTY (1ULL << 6)
+#define PTE_HUGE (1ULL << 7)
+#define PTE_GLOBAL (1ULL << 8)
+#define PTE_NX (1ULL << 63)
 
 #define PTE_NOCACHE (PTE_PWT | PTE_PCD)
 
-#define VMM_FLAGS_KERNEL   (PTE_PRESENT | PTE_WRITE)
-#define VMM_FLAGS_USER     (PTE_PRESENT | PTE_WRITE | PTE_USER)
-#define VMM_FLAGS_USER_RO  (PTE_PRESENT | PTE_USER)
-#define VMM_FLAGS_STACK    (PTE_PRESENT | PTE_WRITE | PTE_NX)
-#define VMM_FLAGS_HEAP     (PTE_PRESENT | PTE_WRITE | PTE_NX)
+#define VMM_FLAGS_KERNEL (PTE_PRESENT | PTE_WRITE)
+#define VMM_FLAGS_USER (PTE_PRESENT | PTE_WRITE | PTE_USER)
+#define VMM_FLAGS_USER_RO (PTE_PRESENT | PTE_USER)
+#define VMM_FLAGS_STACK (PTE_PRESENT | PTE_WRITE | PTE_NX)
+#define VMM_FLAGS_HEAP (PTE_PRESENT | PTE_WRITE | PTE_NX)
 #define VMM_FLAGS_NO_CACHE (PTE_PRESENT | PTE_WRITE | PTE_NOCACHE)
-#define VMM_FLAGS_GLOBAL   (PTE_PRESENT | PTE_WRITE | PTE_GLOBAL)
+#define VMM_FLAGS_GLOBAL (PTE_PRESENT | PTE_WRITE | PTE_GLOBAL)
 
 #define VMM_MAP_NO_CACHE (1ULL << 0)
-#define VMM_MAP_GLOBAL   (1ULL << 1)
-#define VMM_MAP_USER     (1ULL << 2)
+#define VMM_MAP_GLOBAL (1ULL << 1)
+#define VMM_MAP_USER (1ULL << 2)
 
-/* ── VMM State ───────────────────────────────────────────────────────────── */
+/* -- VMM State ------------------------------------------------------------- */
 
 /**
  * @brief Virtual Memory Manager state
  */
 typedef struct {
-	uint64_t *pml4_virt;
-	uint64_t pml4_phys;
-	uint64_t total_mapped_pages;
+  uint64_t *pml4_virt;
+  uint64_t pml4_phys;
+  uint64_t total_mapped_pages;
 } vmm_info_t;
 
 extern vmm_info_t g_vmm;
 
-/* ── Core API ────────────────────────────────────────────────────────────── */
+/* -- Core API -------------------------------------------------------------- */
 
 /**
  * @brief Initialize the Virtual Memory Manager
@@ -221,7 +219,8 @@ uint64_t *vmm_create_user_pagemap(void);
  * @param flags Page table entry flags
  * @return 0 on success, -1 on failure
  */
-int vmm_map_page_into(uint64_t *pml4_phys, uint64_t va, uint64_t pa, uint64_t flags);
+int vmm_map_page_into(uint64_t *pml4_phys, uint64_t va, uint64_t pa,
+                      uint64_t flags);
 
 /**
  * @brief Get physical address from a specific page table

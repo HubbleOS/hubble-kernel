@@ -21,14 +21,13 @@
  *
  * @return The resulting file offset on success, or -1 on error.
  */
-long sys_lseek(int fd, uint64_t offset, int whence)
-{
-	task_t *task = get_current_task();
+long sys_lseek(int fd, uint64_t offset, int whence) {
+  task_t *task = get_current_task();
 
-	fd_entry_t *fd_entry = task_get_fd(task, fd);
-	VFS_File *file = fd_entry->data;
-	if (!file)
-		return -1;
+  fd_entry_t *fd_entry = task_get_fd(task, fd);
+  VFS_File *file = fd_entry->data;
+  if (!file)
+    return -1;
 
-	return (long)vfs_lseek(file, offset, whence);
+  return (long)vfs_lseek(file, offset, whence);
 }

@@ -18,14 +18,13 @@
  * the interrupt number / error code, and the CPU-pushed frame
  * (RIP, CS, RFLAGS, RSP, SS).
  */
-typedef struct registers
-{
-	uint64_t r15, r14, r13, r12, r11, r10, r9, r8;
-	uint64_t rbp, rdi, rsi, rdx, rcx, rbx, rax;
+typedef struct registers {
+  uint64_t r15, r14, r13, r12, r11, r10, r9, r8;
+  uint64_t rbp, rdi, rsi, rdx, rcx, rbx, rax;
 
-	uint64_t int_no, err_code;
+  uint64_t int_no, err_code;
 
-	uint64_t rip, cs, rflags, rsp, ss;
+  uint64_t rip, cs, rflags, rsp, ss;
 } __attribute__((packed)) registers_t;
 
 /**
@@ -35,26 +34,26 @@ typedef struct registers
  */
 typedef void (*irq_handler_t)(registers_t *regs);
 
-/* ── Initialisation ──────────────────────────────────────────── */
+/* -- Initialisation -------------------------------------------- */
 
 void interrupts_init(void);
 
-/* ── Legacy PIC ──────────────────────────────────────────────── */
+/* -- Legacy PIC ------------------------------------------------ */
 
 void pic_remap(void);
 void pic_send_eoi(uint8_t irq);
 
-/* ── IRQ Masking ─────────────────────────────────────────────── */
+/* -- IRQ Masking ----------------------------------------------- */
 
 void irq_set_mask(uint8_t irq);
 void irq_clear_mask(uint8_t irq);
 
-/* ── Handler Registry ────────────────────────────────────────── */
+/* -- Handler Registry ------------------------------------------ */
 
 void irq_install_handler(uint8_t irq, irq_handler_t handler);
 void irq_uninstall_handler(uint8_t irq);
 
-/* ── Common Handlers ─────────────────────────────────────────── */
+/* -- Common Handlers ------------------------------------------- */
 
 void isr_handler(registers_t *regs);
 void irq_handler(registers_t *regs);
