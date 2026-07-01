@@ -112,8 +112,8 @@ void start_kernel(void) {
   boot_cpu_init();
   acpi_init(g_boot_info->rsdp);
   boot_memory_init();
-  apic_init_bsp();
   hpet_init();
+  apic_init_bsp();
 
   smp_init();
 
@@ -153,6 +153,8 @@ void kmain_thread(void) {
   task_t *task1 = exec("/usr/bin/user1.elf");
   if (task1 != NULL)
     scheduler_add_task(task1);
+
+  printk(KERN_INFO "kmain thread done, entering idle loop\n");
 
   while (1)
     hlt();
