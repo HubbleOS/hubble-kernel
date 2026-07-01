@@ -571,13 +571,13 @@ void scheduler_init(void) {
     printk(KERN_INFO "Initializing runqueue for CPU %d\n", i);
     runqueues[i].count = 0;
     runqueues[i].next_index = 0;
-    task_t *idle = task_create(idle_task, 0, 0);
+    task_t *idle = task_create(idle_task, 255, 0);
     runqueues[i].idle_task = idle;
     current_task[i] = NULL;
   }
 
   extern void kmain_thread(void);
-  task_t *kmain = task_create(kmain_thread, 5, 0);
+  task_t *kmain = task_create(kmain_thread, 255, 0);
   scheduler_add_task(kmain);
 
   initialized = true;

@@ -336,7 +336,7 @@ build-tool:
 
 SRC_DIRS := .
 
-.PHONY: format
+PHONY: format
 format:
 	@echo "Formatting all files..."
 	@find $(SRC_DIRS) -type f \( -name "*.c" -o -name "*.h" \) \
@@ -345,7 +345,7 @@ format:
 		| xargs -r clang-format -style=file -i
 	@echo "Formatting complete!"
 
-.PHONY: format-check
+PHONY: format-check
 format-check:
 	@echo "Checking formatting..."
 	@find $(SRC_DIRS) -type f \( -name "*.c" -o -name "*.h" \) \
