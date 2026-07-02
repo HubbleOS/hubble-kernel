@@ -1,0 +1,28 @@
+---
+title: Framebuffer
+---
+
+`drivers/video/fb.c` registers a `/dev/fb0` device with `dev_vfs_register()`.
+
+## Mapping
+
+The framebuffer mmap callback returns `g_platform.fb_base`, which is filled from bootloader-provided framebuffer information during `start_kernel()`.
+
+```c
+static uint64_t fb_mmap(uint64_t offset, size_t size)
+{
+    return g_platform.fb_base;
+}
+```
+
+## Metadata
+
+The framebuffer metadata type in `include/hubble/fb.h` includes:
+
+- `base`
+- `width`
+- `height`
+- `pitch`
+- `bpp`
+
+Current framebuffer device support is mmap-oriented. No read/write callbacks are registered for `fb0`.

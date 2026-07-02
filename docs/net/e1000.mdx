@@ -1,0 +1,31 @@
+---
+title: Network Devices and E1000
+---
+
+`net/netdev.h` defines the network device interface expected by the stack:
+
+```c
+struct netdev_ops {
+    int (*send)(const void *data, uint16_t len);
+    int (*recv)(void *buf, uint16_t *len);
+};
+
+struct netdev_data {
+    uint8_t mac[6];
+};
+```
+
+The Ethernet layer finds a device by calling `device_find_by_type(DEV_NET)`. The returned `struct device` must provide `ops` as `struct netdev_ops` and `priv` as `struct netdev_data`.
+
+## E1000 Driver
+
+The E1000 driver registers itself as a PCI driver through `pci_register_driver()`. When a matching PCI device is found, `e1000_probe()`:
+
+1. Enables PCI memory space and bus mastering.
+2. Maps the BAR0 MMIO range into the kernel virtual address space.
+3. Resets and initializes the controller.
+4. Reads the MAC address.
+5. Initializes TX and RX descriptor rings.
+6. Registers a kernel device named `eth0` with type `DEV_NET`.
+
+The registered callbacks are `e1000_send()` and `e1000_recv()`.

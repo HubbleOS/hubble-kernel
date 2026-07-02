@@ -1,0 +1,15 @@
+---
+title: Networking Overview
+---
+
+The networking stack in `net/` implements a small layered path for Ethernet, ARP, IPv4, and UDP. The active hardware-facing example is the E1000 driver in `drivers/net/e1000/`.
+
+## Pages
+
+- [Network Devices and E1000](e1000.mdx)
+- [Ethernet](ethernet.mdx)
+- [ARP, IPv4, and UDP](protocols.mdx)
+
+## Current Scope
+
+The stack does not currently include sockets, routing tables, TCP, IP fragmentation/reassembly, or automatic ARP retry logic. It is a direct packet path from simple protocol helpers down to the active `DEV_NET` device.

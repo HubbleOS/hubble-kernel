@@ -1,0 +1,12 @@
+---
+title: Process Creation Syscalls
+---
+
+Two process-related syscalls are declared in `include/hubble/syscalls.h`:
+
+- `sys_spawn(entry_point, arg, priority)` creates a task from a direct entry point.
+- `sys_spawn_file(path, arg, priority)` creates a task from an executable file path.
+
+The x86 user loading path is implemented under `arch/x86/kernel/user/`, including ELF parsing and user-space entry.
+
+Keep `include/hubble/syscall.h` and `usr/include/sys/syscall.h` synchronized when exposing process syscalls to user programs.

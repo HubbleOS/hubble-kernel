@@ -1,0 +1,20 @@
+---
+title: Kernel Modules
+---
+
+Kernel modules are loaded from relocatable ELF files with a `.ko` suffix.
+
+## Loader Behavior
+
+- The loader currently accepts x86-64 `ET_REL` ELF objects.
+- Allocated sections are mapped into a dedicated kernel module area.
+- Relocations are resolved against the kernel export table in `kernel/module.c`.
+- `initcall` and `device_initcall` entries in `.initcalls.*` sections are executed after relocation.
+
+## Boot-Time Loading
+
+`kmain_thread()` scans `/modules` and loads every `.ko` file it finds. If no module directory exists, boot continues normally.
+
+## Building Modules
+
+Compile modules as relocatable objects against the kernel headers and link them into `.ko` files. The exact build recipe can stay simple as long as the output is a valid x86-64 relocatable ELF file.

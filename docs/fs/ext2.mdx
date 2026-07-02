@@ -1,0 +1,27 @@
+---
+title: ext2
+---
+
+The ext2 implementation is less complete than FAT32. `fs/ext2/ext2.h` exposes primitives for superblock initialization, path parsing, directory entry lookup, file creation, directory listing, and inode reads.
+
+## VFS Adapter
+
+`fs/vfs/ext2_vfs.c` currently:
+
+- Allocates and initializes an `EXT2_FS` from a `VFS_Device` and partition start LBA.
+- Calls `ext2_init()` and stores the result in `fs->fs`.
+- Implements `readdir` by resolving the path from root inode `2`, reading the inode, and calling `ext2_list_dir()`.
+
+## Current Limitations
+
+Several VFS operations are still stubs:
+
+- `open`
+- `read`
+- `write`
+- `close`
+- `lseek`
+- `unlink`
+- `mkdir`
+
+Treat ext2 as partially implemented read-oriented directory support until those callbacks are completed.

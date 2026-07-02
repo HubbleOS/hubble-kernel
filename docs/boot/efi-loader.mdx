@@ -1,0 +1,20 @@
+---
+title: EFI Loader
+---
+
+The EFI bootloader code is in `arch/x86/boot/`. Its job is to collect firmware-provided information, load the kernel ELF, prepare page tables, and transfer control to the kernel.
+
+## Responsibilities
+
+The boot sources show support for:
+
+- EFI type and protocol definitions in `arch/x86/boot/efi.h`.
+- ACPI RSDP discovery from the EFI configuration table.
+- Framebuffer initialization through GOP.
+- File access through EFI Simple File System.
+- Kernel ELF loading into physical memory.
+- Boot-time mapping and stack setup.
+- `BootInfo` construction.
+- Final transfer through `jump_to_kernel(boot_info, entry, stack)`.
+
+`arch/x86/boot/kernel_entry.asm` performs the final control transfer into the kernel entry point with the boot info pointer.

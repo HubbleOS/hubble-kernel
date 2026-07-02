@@ -1,0 +1,31 @@
+---
+title: PCI
+---
+
+The PCI API is declared in `drivers/pci/pci.h` and implemented in `drivers/pci/pci.c`.
+
+Configuration space access uses the legacy I/O ports:
+
+- `0xCF8` for the configuration address.
+- `0xCFC` for the configuration data.
+
+## API
+
+- `pci_read_config(bus, slot, func, offset)`
+- `pci_write_config(bus, slot, func, offset, val)`
+- `pci_set_command(dev, flags)`
+- `pci_register_driver(drv)`
+
+Drivers provide a `struct pci_driver`:
+
+```c
+struct pci_driver {
+    const char *name;
+    const struct pci_device_id *id_table;
+    int (*probe)(struct pci_device *dev);
+};
+```
+
+`pci_register_driver()` scans all buses (`0..255`), slots (`0..31`), and functions (`0..7`). For every present device, it compares vendor/device IDs against the driver's ID table. On match, it allocates a `struct pci_device`, fills bus/slot/function, class code, and BAR0, then calls the driver's `probe()` function.
+
+The E1000 network driver is the main active example.

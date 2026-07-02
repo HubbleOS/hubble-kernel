@@ -1,0 +1,55 @@
+[
+	{
+		"name": "Build kernel",
+		"cmd": "make build",
+		"desc": "Build kernel"
+	},
+	{
+		"name": "Qemu",
+		"cmd": "python tools/dev/qemu/main.py {ARCH} {MEM} {ISO_PATH}",
+		"args": {
+			"ARCH": "--arch {ARCH}",
+			"MEM": "--mem {MEM}",
+			"ISO_PATH": "--iso {ISO_PATH}"
+		},
+		"desc": "Runs the system in the QEMU emulator"
+	},
+	{
+		"name": "Run kernel (QEMU)",
+		"cmd": "make run",
+		"desc": "Runs the system in the QEMU emulator",
+		"interactive": true
+	},
+	{
+		"name": "Run Demo",
+		"cmd": "make demo",
+		"desc": "Runs GUI preview on SDL",
+		"interactive": true
+	},
+	{
+		"name": "Create disk image",
+		"cmd": "make disk",
+		"desc": "Create disk image for QEMU",
+		"interactive": true
+	},
+	{
+		"name": "Clean",
+		"cmd": "make clean",
+		"desc": "Removes all build files"
+	},
+	{
+		"name": "Rebuild",
+		"cmd": "make clean && make build",
+		"desc": "Complete project rebuild"
+	},
+	{
+		"name": "Exit",
+		"cmd": null,
+		"desc": "Exit menu"
+	},
+	{
+		"name": "test",
+		"cmd": "echo {TEXT} > test.txt",
+		"desc": "Exit menu"
+	}
+]

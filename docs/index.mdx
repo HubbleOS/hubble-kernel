@@ -1,0 +1,46 @@
+---
+title: HubbleOS Kernel Documentation
+---
+
+This documentation describes the kernel subsystems that are already present in the HubbleOS tree. It is organized by subsystem and split into small MDX pages so each driver or layer can grow independently.
+
+## Filesystem and Storage
+
+- [Overview](fs/overview.mdx)
+- [VFS](fs/vfs.mdx)
+- [FAT32](fs/fat32.mdx)
+- [ext2](fs/ext2.mdx)
+- [GPT and Storage Devices](fs/storage.mdx)
+- [Device Filesystem](fs/devfs.mdx)
+
+## Networking
+
+- [Overview](net/overview.mdx)
+- [Network Devices and E1000](net/e1000.mdx)
+- [Ethernet](net/ethernet.mdx)
+- [ARP, IPv4, and UDP](net/protocols.mdx)
+
+## Devices and Drivers
+
+- [Overview](dev/overview.mdx)
+- [Device Manager](dev/device-manager.mdx)
+- [PCI](dev/pci.mdx)
+- [Input Core](dev/input-core.mdx)
+- [Keyboard](dev/keyboard.mdx)
+- [Mouse](dev/mouse.mdx)
+- [Framebuffer](dev/framebuffer.mdx)
+
+## System Calls
+
+- [Overview](syscalls/overview.mdx)
+- [x86-64 ABI](syscalls/abi.mdx)
+- [File Descriptors](syscalls/file-descriptors.mdx)
+- [Process Creation](syscalls/process.mdx)
+
+## Boot and Initialization
+
+- [Overview](boot/overview.mdx)
+- [EFI Loader](boot/efi-loader.mdx)
+- [Kernel Initialization](boot/kernel-init.mdx)
+- [Initcalls](boot/initcalls.mdx)
+- [Kernel Modules](boot/modules.mdx)
