@@ -26,7 +26,7 @@ task_t *exec(const char *path) {
   uint64_t entry;
   elf_load(path, &entry, (uint64_t *)pml4);
 
-  task_t *task1 = task_create((void *)entry, 255, 1);
+  task_t *task1 = task_create((void *)entry, 0, 1);
 
   task_map_user_stack(task1, (uint64_t *)pml4);
 
