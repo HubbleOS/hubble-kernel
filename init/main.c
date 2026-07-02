@@ -22,6 +22,7 @@
 #include <smp/spinlock.h>
 
 #include <asm.h>
+
 #include <higher_half.h>
 #include <io.h>
 
@@ -89,6 +90,9 @@ void do_initcalls(void) {
   do_initcalls_range(__start___initcalls_late, __stop___initcalls_late);
 }
 
+extern void rust_init(void);
+extern int rust_sum(int a, int b);
+
 /**
  * @brief Architecture-independent kernel entry point.
  *
@@ -110,6 +114,11 @@ void start_kernel(void) {
 
   g_boot_info->framebuffer.base = (void *)phys_to_virt(fb_phys);
   printk_init(&g_boot_info->framebuffer);
+
+  rust_init();
+
+  int sum = rust_sum(3, 4);
+  printk(KERN_INFO "Rust sum result: %d\n", sum);
 
   boot_cpu_init();
   acpi_init(g_boot_info->rsdp);
@@ -152,7 +161,7 @@ void kmain_thread(void) {
       hlt();
   }
 
-  task_t *task1 = exec("/usr/bin/user1.elf");
+  task_t *task1 = exec("/usr/bin/user.elf");
   if (task1 != NULL)
     scheduler_add_task(task1);
 
