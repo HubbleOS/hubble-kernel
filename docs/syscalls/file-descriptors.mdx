@@ -1,0 +1,16 @@
+---
+title: File Descriptor Syscalls
+---
+
+The file-related syscalls bridge into the VFS layer.
+
+## API
+
+- `sys_open(path, flags)` opens a VFS path and assigns it to a per-task file descriptor.
+- `sys_close(fd)` closes the descriptor and releases the VFS file.
+- `sys_read(fd, buffer, len)` reads from the descriptor.
+- `sys_write(fd, buffer, len)` writes to the descriptor.
+- `sys_lseek(fd, offset, whence)` updates the VFS file offset.
+- `sys_mmap(addr, length, prot, flags, fd, offset)` maps memory. For device-backed mappings, it can route through VFS/device mmap support.
+
+The syscall code assumes the current task has a file descriptor table, so behavior depends on scheduler/task initialization.

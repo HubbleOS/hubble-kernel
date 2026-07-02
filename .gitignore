@@ -1,11 +1,17 @@
 # MacOS system files
 *.DS_Store
 
+# Configuration files
+*.config
+*.toml
+
 # Compiled binaries and images
 *.elf
 *.bin
 *.iso
 *.o
+*.so
+*.a
 *.EFI
 *.img
 
@@ -23,6 +29,7 @@ test/
 # IDE/editor config
 .vscode/
 .idea/
+.fleet/
 *.swp
 *~
 .env
@@ -35,14 +42,20 @@ test/
 *.dmp
 *.map
 
-# Coverage reports (if you use any)
+# Coverage reports
 coverage/
 *.gcda
 *.gcno
 *.gcov
 
-# Docker-related files
-docker-compose.override.yml
-
 # Other temp files
 *.bak
+
+# Except
+!tools/dev/build
+
+
+# 
+.venv/
+__pycache__/
+*.pyc

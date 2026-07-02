@@ -1,0 +1,15 @@
+---
+title: Filesystem and Storage Overview
+---
+
+HubbleOS has a Virtual File System layer in `fs/vfs/` with adapters for FAT32, ext2, device nodes, and pipes. The active storage initialization path currently uses ATA-backed `VFS_Device` callbacks and GPT partition discovery.
+
+An NVMe implementation is present in `fs/nvme/`, but the visible code is currently commented out and is not wired into the active filesystem initialization path.
+
+## Pages
+
+- [VFS](vfs.mdx)
+- [FAT32](fat32.mdx)
+- [ext2](ext2.mdx)
+- [GPT and Storage Devices](storage.mdx)
+- [Device Filesystem](devfs.mdx)

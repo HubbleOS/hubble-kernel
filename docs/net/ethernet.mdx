@@ -1,0 +1,29 @@
+---
+title: Ethernet
+---
+
+`net/eth.c` builds and parses Ethernet II frames.
+
+## Sending
+
+`eth_send(dst, type, payload, len)`:
+
+1. Finds the active `DEV_NET` device.
+2. Reads the source MAC from `struct netdev_data`.
+3. Prepends destination MAC, source MAC, and EtherType.
+4. Pads the frame to the Ethernet minimum size if needed.
+5. Sends it through `netdev_ops.send`.
+
+## Receiving
+
+`eth_recv(payload_out, len_out, type_out)`:
+
+1. Receives a raw frame through `netdev_ops.recv`.
+2. Parses the Ethernet header.
+3. Handles ARP packets internally through `arp_handle()`.
+4. Returns IPv4 payloads to the caller.
+
+Supported EtherTypes are declared in `net/eth.h`:
+
+- `ETH_TYPE_ARP` (`0x0806`)
+- `ETH_TYPE_IP` (`0x0800`)

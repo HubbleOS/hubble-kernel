@@ -1,0 +1,22 @@
+---
+title: Keyboard
+---
+
+`drivers/input/serio/keyboard.c` implements a PS/2 keyboard driver.
+
+## Responsibilities
+
+The driver:
+
+- Initializes the PS/2 controller path.
+- Configures scancode set handling.
+- Tracks modifier state for Shift, Ctrl, Alt, and Caps Lock.
+- Registers an input device named `ps2-keyboard`.
+- Installs IRQ1.
+- Sends `EV_KEY` events through `input_report()`.
+
+The keyboard driver uses scancodes as event codes. Extended scancodes are encoded by setting bit `0x100`.
+
+## TTY Consumer
+
+`drivers/tty/keyboard.c` registers a TTY keyboard input handler through `device_initcall`. It consumes input events from the input core and converts keyboard state into TTY-facing behavior.

@@ -1,0 +1,30 @@
+---
+title: Mouse
+---
+
+Mouse support is split between the PS/2 mouse implementation and the `/dev` registration layer.
+
+## PS/2 Mouse Driver
+
+`drivers/input/serio/mouse.c` contains a PS/2 IRQ12 mouse implementation. It:
+
+- Enables the second PS/2 port.
+- Configures the controller for mouse IRQs.
+- Resets the mouse and enables data reporting.
+- Parses 3-byte PS/2 packets.
+- Maintains `mouse_t` state with position and button flags.
+- Provides `mouse_mmap()` and `mouse_read_file()` helpers.
+
+Current wiring note: `device_initcall(mouse_initcall)` in `drivers/input/serio/mouse.c` is commented out, so this hardware initialization path is not currently registered through initcalls.
+
+## `/dev/mouse`
+
+`drivers/input/mouse/mouse.c` registers a device file named `mouse`:
+
+```c
+dev_vfs_register("mouse", mouse_mmap, mouse_read_file, NULL);
+```
+
+This exposes mouse state through the device filesystem when the underlying `mouse_g` state has been initialized.
+
+Because the serio mouse initcall is currently disabled, `/dev/mouse` registration and hardware state initialization should be checked together when enabling mouse support end to end.
