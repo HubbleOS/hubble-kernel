@@ -38,6 +38,8 @@ static cpu_runqueue_t runqueues[MAX_CPUS];
 static bool initialized = false;
 static __thread bool dirty_queue = false;
 
+volatile bool need_resched = false;
+
 static slab_cache_t *fpu_cache = NULL;
 
 static uint64_t next_user_stack = 0x6ff00000ULL;

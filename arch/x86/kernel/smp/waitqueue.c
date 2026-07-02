@@ -51,4 +51,6 @@ void waitqueue_wake_all(wait_queue_t *wq) {
 
   wq->count = 0;
   spinlock_release(&wq->lock);
+
+  need_resched = true;
 }
