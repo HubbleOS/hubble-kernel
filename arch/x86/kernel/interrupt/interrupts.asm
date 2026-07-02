@@ -18,6 +18,8 @@ global isr128
 extern isr_handler
 extern irq_handler
 extern syscall_handler_wrapper
+extern need_resched
+extern schedule
 
 ; -- ISR Macros -------------------------------------------------
 
@@ -96,7 +98,8 @@ isr128:
 ; %1 = stub label suffix
 ; %2 = handler function name
 ; %3 = load fs segment (1 = yes, 0 = no)
-%macro COMMON_STUB 3
+; %4 = check need_resched after handler (1 = yes, 0 = no)
+%macro COMMON_STUB 3-4 0
 %1_stub:
     ; Save all registers
     push    rax
@@ -132,6 +135,16 @@ isr128:
     mov     rdi, rbp
     call    %2
 
+    ; If a task was woken during IRQ handling, reschedule now
+    %if %4
+    cmp     byte [need_resched], 0
+    je      %%restore
+    mov     byte [need_resched], 0
+    mov     rdi, rbp
+    call    schedule
+%%restore:
+    %endif
+
     ; Restore original stack
     mov     rsp, rbp
 
@@ -160,6 +173,6 @@ isr128:
 %endmacro
 
 ; Generate common stubs
-COMMON_STUB isr_common, isr_handler, 1
-COMMON_STUB irq_common, irq_handler, 1
-COMMON_STUB syscall_common, syscall_handler_wrapper, 0
+COMMON_STUB isr_common, isr_handler, 1, 0
+COMMON_STUB irq_common, irq_handler, 1, 1
+COMMON_STUB syscall_common, syscall_handler_wrapper, 0, 0

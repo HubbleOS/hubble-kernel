@@ -66,6 +66,11 @@ task_t *get_current_task(void);
 void scheduler_add_task(task_t *task);
 
 /**
+ * @brief Flag set when a task needs rescheduling after IRQ
+ */
+extern volatile bool need_resched;
+
+/**
  * @brief Check if the scheduler has been initialized
  * @return true if initialized
  */
