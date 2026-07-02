@@ -477,6 +477,12 @@ void schedule(registers_t *regs) {
 
   extern cpu_local_t cpu_locals[];
 
+  if (old_task && old_task->in_syscall && !old_task->in_syscall_rsp) {
+    uint64_t user_rsp;
+    asm volatile("mov %%gs:8, %0" : "=r"(user_rsp));
+    old_task->in_syscall_rsp = user_rsp;
+  }
+
   if (new_task->in_syscall) {
     cpu_locals[cpu_id].cpu_id = new_task->in_syscall_rsp;
   }
