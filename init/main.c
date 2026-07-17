@@ -151,8 +151,11 @@ void kmain_thread(void) {
     while (1)
       hlt();
   }
-
-  task_t *task1 = exec("/usr/bin/user1.elf");
+  Directory check = vfs_readdir("/ext2/busy/");
+  for (int i = 0; i < check.count; i++) {
+    printk("%s\n", check.entries[i].name);
+  }
+  task_t *task1 = exec("/ext2/busy");
   if (task1 != NULL)
     scheduler_add_task(task1);
 
