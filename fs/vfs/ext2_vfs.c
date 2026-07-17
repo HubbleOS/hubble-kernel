@@ -46,7 +46,11 @@ bool ext2_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba) {
 }
 
 /** @brief Open wrapper (stub — not yet implemented). */
-static VFS_Node *ext2_vfs_open(VFS_FS *fs, const char *path) { return NULL; }
+static VFS_Node *ext2_vfs_open(VFS_FS *fs, const char *path) { 
+  
+  return NULL; 
+
+}
 
 /** @brief Read wrapper (stub — not yet implemented). */
 int ext2_vfs_read(VFS_File *node, void *buffer, uint32_t size) { return 0; }
