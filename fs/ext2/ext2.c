@@ -20,15 +20,15 @@
 
 /* -- Forward declarations ------------------------------------------- */
 
-static void ext2_read_block(EXT2_FS *fs, uint32_t block_number, void *buf);
-static void ext2_write_block(EXT2_FS *fs, uint32_t block_number, void *buf);
+void ext2_read_block(EXT2_FS *fs, uint32_t block_number, void *buf);
+void ext2_write_block(EXT2_FS *fs, uint32_t block_number, void *buf);
 static int IS_DIR(uint16_t mode);
 static PathParts_ext format_folder_path_ext(const char *in);
 static int ext2_read_group_desc(EXT2_FS *fs);
 static int ext2_read_superblock(EXT2_FS *fs);
 static uint32_t ext2_allocate_inode(EXT2_FS *fs, uint32_t parent_inode);
-static uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t group);
-static int ext2_write_inode(EXT2_FS *fs, uint32_t inode_num, Ext2Inode *inode);
+uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t group);
+int ext2_write_inode(EXT2_FS *fs, uint32_t inode_num, Ext2Inode *inode);
 static int ext2_add_dir_entry(EXT2_FS *fs, uint32_t dir_inode_num,
                               const char *name, uint32_t inode_num,
                               uint8_t file_type);
@@ -36,7 +36,7 @@ static int ext2_free_block(EXT2_FS *fs, uint32_t block_num);
 static int ext2_free_inode(EXT2_FS *fs, uint32_t inode_num);
 /* -- Block I/O ------------------------------------------------------ */
 
-static void ext2_read_block(EXT2_FS *fs, uint32_t block_number, void *buf) {
+void ext2_read_block(EXT2_FS *fs, uint32_t block_number, void *buf) {
   uint32_t sectors_per_block = fs->block_size / 512;
   uint32_t lba = fs->first_lba + block_number * sectors_per_block;
 
@@ -44,7 +44,7 @@ static void ext2_read_block(EXT2_FS *fs, uint32_t block_number, void *buf) {
     fs->read_sector(fs->device, lba + i, ((uint8_t *)buf) + i * 512);
 }
 
-static void ext2_write_block(EXT2_FS *fs, uint32_t block_number, void *buf) {
+void ext2_write_block(EXT2_FS *fs, uint32_t block_number, void *buf) {
   uint32_t sectors_per_block = fs->block_size / 512;
   uint32_t lba = fs->first_lba + block_number * sectors_per_block;
 
@@ -150,7 +150,7 @@ static int ext2_read_group_desc(EXT2_FS *fs) {
   return 0;
 }
 
-static int ext2_write_group_desc(EXT2_FS *fs) {
+int ext2_write_group_desc(EXT2_FS *fs) {
   uint32_t desc_block = (fs->block_size == 1024) ? 2 : 0;
 
   uint32_t groups_count =
@@ -208,7 +208,6 @@ static int ext2_read_superblock(EXT2_FS *fs) {
   printk(KERN_INFO "EXT2: block size = %u bytes\n", fs->block_size);
   printk(KERN_INFO "EXT2: inodes = %u, blocks = %u\n", fs->sb.s_inodes_count,
          fs->sb.s_blocks_count);
-
   return 0;
 }
 
@@ -364,7 +363,7 @@ static uint32_t ext2_allocate_inode(EXT2_FS *fs, uint32_t parent_inode) {
   return 0; // full
 }
 
-static uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t parent_inode) {
+uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t parent_inode) {
   uint32_t groups_count =
       (fs->sb.s_blocks_count + fs->sb.s_blocks_per_group - 1) /
       fs->sb.s_blocks_per_group;
@@ -406,7 +405,7 @@ static uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t parent_inode) {
 
 /* -- Inode write / directory entry management ------------------------ */
 
-static int ext2_write_inode(EXT2_FS *fs, uint32_t inode_num, Ext2Inode *inode) {
+int ext2_write_inode(EXT2_FS *fs, uint32_t inode_num, Ext2Inode *inode) {
   uint32_t group = (inode_num - 1) / fs->sb.s_inodes_per_group;
   uint32_t index = (inode_num - 1) % fs->sb.s_inodes_per_group;
   uint32_t table_block = fs->groups[group].inode_table;
@@ -481,7 +480,7 @@ uint32_t ext2_create_file(EXT2_FS *fs, uint32_t parent_inode,
   Ext2Inode inode = {0};
   inode.mode = 0x8000 | 0644;
   inode.size = 0;
-  inode.blocks = 1;
+  inode.blocks = 2;
   inode.block[0] = new_block;
   inode.links_count = 1;
 

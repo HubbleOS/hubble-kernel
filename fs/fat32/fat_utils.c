@@ -470,6 +470,7 @@ bool fat_flush(FAT32_FS *fs) {
         return false;
     }
   }
+
   fs->fat_dirty = false;
   return true;
 }

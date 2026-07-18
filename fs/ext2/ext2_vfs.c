@@ -59,7 +59,7 @@ static VFS_Node *ext2_vfs_open(VFS_FS *fs, const char *path) {
     return NULL;
   }
 
-  Ext2Inode inode_buf; /* stack, not heap */
+  Ext2Inode inode_buf;
   if (ext2_read_inode(e_fs, inode, &inode_buf) < 0) {
     printk(KERN_INFO "failed to read inode %u\n", inode);
     return NULL;
@@ -70,6 +70,7 @@ static VFS_Node *ext2_vfs_open(VFS_FS *fs, const char *path) {
     return NULL;
   file->inode_number = inode;
   file->fs = e_fs;
+  memcpy(&file->inode, &inode_buf, sizeof(Ext2Inode));
 
   VFS_Node *node = kmalloc(sizeof(VFS_Node), GFP_KERNEL);
   if (!node) {
@@ -79,17 +80,154 @@ static VFS_Node *ext2_vfs_open(VFS_FS *fs, const char *path) {
   node->fs = fs;
   node->is_dir = inode_buf.mode & EXT2_ATTR_DIRECTORY;
   node->fs_node = file;
+  node->size = inode_buf.size;
+  node->pos = 0;
 
   printk(KERN_INFO "opened inode: %u\n", inode);
   return node;
 }
 
 /** @brief Read wrapper (stub — not yet implemented). */
-int ext2_vfs_read(VFS_File *node, void *buffer, uint32_t size) { return 0; }
+int ext2_vfs_read(VFS_File *file, void *buffer, uint32_t size) {
+  if (!file)
+    return -1;
+  memset(buffer, 0, size);
+
+  EXT2_FS *fs = (EXT2_FS *)file->node->fs->fs;
+  EXT2_FILE *ext2_file = (EXT2_FILE *)file->node->fs_node;
+  Ext2Inode *inode = &ext2_file->inode;
+
+  if (inode->mode & EXT2_ATTR_DIRECTORY) {
+    printk(KERN_ERR "cannot read directory\n");
+    return -1;
+  }
+
+  size_t file_size = inode->size;
+  if (file->pos >= file_size) {
+    printk(KERN_INFO "EOF\n");
+    return 0;
+  }
+
+  size_t to_read =
+      (file->pos + size > file_size) ? (file_size - file->pos) : size;
+  printk(KERN_INFO "Reading %u bytes block_size=%u\n", to_read, fs->block_size);
+  uint8_t *block_buf = kmalloc(fs->block_size, GFP_KERNEL);
+  if (!block_buf) {
+    printk(KERN_ERR "failed to allocate block buffer\n");
+    return -1;
+  }
+
+  size_t read = 0;
+  while (read < to_read) {
+    uint32_t abs_pos = file->pos + read;
+    uint32_t block_index = abs_pos / fs->block_size;
+    uint32_t offset_in_block = abs_pos % fs->block_size;
+
+    if (block_index >= 12) {
+      printk(KERN_ERR "indirect blocks not supported\n");
+      break;
+    }
+
+    uint32_t block_num = inode->block[block_index];
+    if (block_num == 0)
+      break;
+
+    ext2_read_block(fs, block_num, block_buf);
+
+    size_t space_in_block = fs->block_size - offset_in_block;
+    size_t remaining = to_read - read;
+    size_t chunk = (remaining < space_in_block) ? remaining : space_in_block;
+
+    memcpy((uint8_t *)buffer + read, block_buf + offset_in_block, chunk);
+
+    read += chunk;
+  }
+
+  kfree(block_buf);
+  file->pos += read;
+  return (int)read;
+}
 
 /** @brief Write wrapper (stub — not yet implemented). */
-int ext2_vfs_write(VFS_File *node, const void *buffer, uint32_t size) {
-  return 0;
+int ext2_vfs_write(VFS_File *file, const void *buffer, uint32_t size) {
+  if (!file)
+    return -1;
+
+  EXT2_FS *fs = (EXT2_FS *)file->node->fs->fs;
+  EXT2_FILE *ext2_file = (EXT2_FILE *)file->node->fs_node;
+  Ext2Inode *inode = &ext2_file->inode;
+
+  if (inode->mode & EXT2_ATTR_DIRECTORY) {
+    printk(KERN_ERR "cannot write directory\n");
+    return -1;
+  }
+
+  uint8_t *block_buf = kmalloc(fs->block_size, GFP_KERNEL);
+  if (!block_buf) {
+    printk(KERN_ERR "failed to allocate block buffer\n");
+    return -1;
+  }
+
+  size_t to_write = size;
+  size_t written = 0;
+  int inode_dirty = 0;
+
+  while (written < to_write) {
+    uint32_t abs_pos = file->pos + written;
+    uint32_t block_index = abs_pos / fs->block_size;
+    uint32_t offset_in_block = abs_pos % fs->block_size;
+
+    if (block_index >= 12) {
+      printk(KERN_ERR "indirect blocks not supported\n");
+      break;
+    }
+
+    size_t space_in_block = fs->block_size - offset_in_block;
+    size_t remaining = to_write - written;
+    size_t chunk = (remaining < space_in_block) ? remaining : space_in_block;
+
+    uint32_t block_num = inode->block[block_index];
+    int is_new_block = (block_num == 0);
+
+    if (is_new_block) {
+      block_num = ext2_allocate_block(fs, ext2_file->inode_number);
+      if (block_num == 0) {
+        printk(KERN_ERR "No space left on device\n");
+        break;
+      }
+      inode->block[block_index] = block_num;
+      inode->blocks +=
+          fs->block_size / 512; /* blocks field is in 512B sectors */
+      inode_dirty = 1;
+    }
+
+    /* Only need to read the existing block if we're not overwriting all of
+       it - a brand new block has nothing to preserve, so just zero it. */
+    if (is_new_block) {
+      memset(block_buf, 0, fs->block_size);
+    } else if (offset_in_block != 0 || chunk < fs->block_size) {
+      ext2_read_block(fs, block_num, block_buf);
+    }
+
+    memcpy(block_buf + offset_in_block, (const uint8_t *)buffer + written,
+           chunk);
+    ext2_write_block(fs, block_num, block_buf);
+
+    written += chunk;
+  }
+
+  uint32_t new_end = file->pos + written;
+  if (new_end > inode->size) {
+    inode->size = new_end;
+    inode_dirty = 1;
+  }
+
+  if (inode_dirty)
+    ext2_write_inode(fs, ext2_file->inode_number, inode);
+
+  kfree(block_buf);
+  file->pos += written;
+  return (int)written;
 }
 
 /** @brief Close wrapper (stub — not yet implemented). */
