@@ -27,3 +27,8 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode);
 
 /** @brief Read an inode from disk into memory. */
 int ext2_read_inode(EXT2_FS *fs, uint32_t inode_number, Ext2Inode *out_inode);
+
+typedef struct {
+  EXT2_FS *fs;
+  uint32_t inode_number;
+} EXT2_FILE;

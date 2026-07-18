@@ -4,8 +4,8 @@
  * function calls.
  * ------------------------------------------------------------------ */
 
-#include "vfs.h"
-#include "vfs_standart_struct.h"
+#include <fs/vfs/vfs.h>
+#include <fs/vfs/vfs_standart_struct.h>
 #include <hubble/printk.h>
 
 #include <fs/ext2/ext2.h>
@@ -40,16 +40,48 @@ bool ext2_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba) {
   printk(KERN_INFO "Initializing EXT2 on partition starting at LBA %u\n",
          start_lba);
   ext2_init(ext2_fs);
-  printk(KERN_OK "EXT2 Superblock OK (magic 0x%x)\n", ext2_fs->magic);
+  printk(KERN_OK "EXT2 Superblock OK (magic 0x%x)\n", ext2_fs->sb.s_magic);
   fs->fs = ext2_fs;
   return 1;
 }
 
 /** @brief Open wrapper (stub — not yet implemented). */
-static VFS_Node *ext2_vfs_open(VFS_FS *fs, const char *path) { 
-  
-  return NULL; 
+static VFS_Node *ext2_vfs_open(VFS_FS *fs, const char *path) {
+  if (!fs->fs) {
+    printk(KERN_INFO "fs not mounted\n");
+    return NULL;
+  }
+  EXT2_FS *e_fs = (EXT2_FS *)fs->fs;
 
+  uint32_t inode = ext2_parse_path(e_fs, 2, path);
+  if (inode == 0) {
+    printk(KERN_INFO "inode not found\n");
+    return NULL;
+  }
+
+  Ext2Inode inode_buf; /* stack, not heap */
+  if (ext2_read_inode(e_fs, inode, &inode_buf) < 0) {
+    printk(KERN_INFO "failed to read inode %u\n", inode);
+    return NULL;
+  }
+
+  EXT2_FILE *file = kmalloc(sizeof(EXT2_FILE), GFP_KERNEL);
+  if (!file)
+    return NULL;
+  file->inode_number = inode;
+  file->fs = e_fs;
+
+  VFS_Node *node = kmalloc(sizeof(VFS_Node), GFP_KERNEL);
+  if (!node) {
+    kfree(file);
+    return NULL;
+  }
+  node->fs = fs;
+  node->is_dir = inode_buf.mode & EXT2_ATTR_DIRECTORY;
+  node->fs_node = file;
+
+  printk(KERN_INFO "opened inode: %u\n", inode);
+  return node;
 }
 
 /** @brief Read wrapper (stub — not yet implemented). */

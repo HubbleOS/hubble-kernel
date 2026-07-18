@@ -82,7 +82,8 @@ def build_qemu_command(opts: QemuOptions):
     cmd = [
         f"qemu-system-{opts.arch}",
         "-M", "pc",
-        "-cpu", "Haswell",
+        "-cpu", "host",
+        "-enable-kvm",
         "-m", str(opts.mem),
         "-smp", str(opts.smp),
 

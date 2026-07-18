@@ -192,23 +192,24 @@ int fat32_read(VFS_File *file, uint8_t *buffer, uint32_t size) {
     cluster = get_fat_entry(fs, cluster);
 
   while (read < to_read && cluster < 0x0FFFFFF8) {
-    printk(KERN_INFO "Reading cluster: %d ", cluster);
+    //     printk(KERN_INFO "Reading cluster: %d ", cluster);
     uint8_t *cluster_buf = kmalloc(fs->cluster_size, GFP_KERNEL);
     if (!cluster_buf)
       return -1;
 
     fat32_read_cluster(fs, cluster, cluster_buf);
-    printk(KERN_INFO "Cluster readed: %d ", cluster);
-    uint16_t *buf = (uint16_t *)cluster_buf;
-    for (int j = 0; j < 16; j++)
-      printk(KERN_INFO "%02X ", buf[j]);
-    printk(KERN_INFO "\n");
+    //     printk(KERN_INFO "Cluster readed: %d ", cluster);
+    //     uint16_t *buf = (uint16_t *)cluster_buf;
+    //     for (int j = 0; j < 16; j++)
+    //       printk(KERN_INFO "%02X ", buf[j]);
+    //     printk(KERN_INFO "\n");
 
     size_t available = fs->cluster_size - in_cluster_offset;
     size_t chunk = (to_read - read < available) ? (to_read - read) : available;
 
     memcpy(buffer + read, cluster_buf + in_cluster_offset, chunk);
-    printk(KERN_INFO "Read chunk: %d bytes, readed: %d\n", chunk, read + chunk);
+    //     printk(KERN_INFO "Read chunk: %d bytes, readed: %d\n", chunk, read +
+    //     chunk);
     read += chunk;
     kfree(cluster_buf);
     cluster = get_fat_entry(fs, cluster);
@@ -435,7 +436,7 @@ int fat32_update_fat_entry(FAT32_FS *fs, FAT32_File *file) {
 void fat32_read_cluster(FAT32_FS *fs, uint32_t cluster, uint8_t *buffer) {
   uint32_t lba = cluster_to_lba(fs, cluster);
   for (uint32_t i = 0; i < fs->sectors_per_cluster; i++) {
-    printk(KERN_INFO "lba: %d\n", lba + i);
+    //     printk(KERN_INFO "lba: %d\n", lba + i);
     fs->read_sector(fs->device, lba + i, buffer + i * fs->bytes_per_sector);
   }
 }
