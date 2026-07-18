@@ -15,6 +15,7 @@ config = DiskConfig(
             files=[
                 ("out/usr", "/usr/bin"),
                 ("out/modules", "/modules"),
+                ("busy/","/busy")
             ]
         ),
         Partition(

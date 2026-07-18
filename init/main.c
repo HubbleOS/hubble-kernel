@@ -155,9 +155,16 @@ void kmain_thread(void) {
   for (int i = 0; i < check.count; i++) {
     printk("%s\n", check.entries[i].name);
   }
-  task_t *task1 = exec("/ext2/busy");
-  if (task1 != NULL)
-    scheduler_add_task(task1);
+  VFS_File *ext2_file = vfs_open("/ext2/busy/busybox", VFS_O_RDWR);
+  if (IS_ERR(ext2_file) || ext2_file == NULL) {
+    printk(KERN_ERR "failed to open file /ext2/busy/busybox: %d\n",
+           IS_ERR(ext2_file) ? PTR_ERR(ext2_file) : -1);
+    while (1)
+      hlt();
+  }
+  //   task_t *task1 = exec("/ext2/busy/busybox");
+  //   if (task1 != NULL)
+  //     scheduler_add_task(task1);
 
   printk(KERN_INFO "kmain thread done, entering idle loop\n");
 

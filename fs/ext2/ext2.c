@@ -26,13 +26,14 @@ static int IS_DIR(uint16_t mode);
 static PathParts_ext format_folder_path_ext(const char *in);
 static int ext2_read_group_desc(EXT2_FS *fs);
 static int ext2_read_superblock(EXT2_FS *fs);
-static uint32_t ext2_allocate_inode(EXT2_FS *fs, uint32_t group);
+static uint32_t ext2_allocate_inode(EXT2_FS *fs, uint32_t parent_inode);
 static uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t group);
 static int ext2_write_inode(EXT2_FS *fs, uint32_t inode_num, Ext2Inode *inode);
 static int ext2_add_dir_entry(EXT2_FS *fs, uint32_t dir_inode_num,
                               const char *name, uint32_t inode_num,
                               uint8_t file_type);
-
+static int ext2_free_block(EXT2_FS *fs, uint32_t block_num);
+static int ext2_free_inode(EXT2_FS *fs, uint32_t inode_num);
 /* -- Block I/O ------------------------------------------------------ */
 
 static void ext2_read_block(EXT2_FS *fs, uint32_t block_number, void *buf) {
@@ -55,34 +56,61 @@ static void ext2_write_block(EXT2_FS *fs, uint32_t block_number, void *buf) {
 
 static int IS_DIR(uint16_t mode) { return (mode & 0xF000) == 0x4000; }
 
+#define EXT2_NAME_LEN 255 /* match your on-disk limit */
+
 static PathParts_ext format_folder_path_ext(const char *in) {
   PathParts_ext result = {0};
 
   while (*in == '/')
     in++;
 
-  while (*in && result.count < MAX_PARTS && *in != '\0') {
+  while (*in && result.count < MAX_PARTS) {
     const char *end = in;
-    while (*end && *end != '/' && *end != '\0')
+    while (*end && *end != '/')
       end++;
 
-    int len = end - in;
+    size_t len = end - in;
     if (len > 0) {
-      char name[256] = {0};
-      strncpy(name, in, len);
+      if (len > EXT2_NAME_LEN) {
+        /* reject rather than silently truncate a real path */
+        goto fail;
+      }
 
-      result.parts[result.count].name = kmalloc(len + 1, GFP_KERNEL);
-      memcpy(result.parts[result.count].name, name, len);
-      result.parts[result.count].name[len] = '\0';
+      char *name = kmalloc(len + 1, GFP_KERNEL);
+      if (!name)
+        goto fail;
 
+      memcpy(name, in, len);
+      name[len] = '\0';
+
+      result.parts[result.count].name = name;
       result.count++;
     }
 
     in = end;
-    while (*in == '/' && *in != '\0')
+    while (*in == '/')
       in++;
   }
   return result;
+
+fail:
+  for (int i = 0; i < result.count; i++)
+    kfree(result.parts[i].name);
+  result.count = 0;
+  return result;
+}
+
+static void free_path_parts_ext(PathParts_ext *parts) {
+  for (int i = 0; i < parts->count; i++)
+    kfree(parts->parts[i].name);
+}
+
+static int ext2_get_group(EXT2_FS *fs, uint32_t inode_num) {
+  return (inode_num - 1) / fs->sb.s_inodes_per_group;
+}
+
+static int ext2_get_index(EXT2_FS *fs, uint32_t inode_num) {
+  return (inode_num - 1) % fs->sb.s_inodes_per_group;
 }
 
 /* -- Superblock / Group descriptor reading -------------------------- */
@@ -91,7 +119,8 @@ static int ext2_read_group_desc(EXT2_FS *fs) {
   uint32_t desc_block = (fs->block_size == 1024) ? 2 : 0;
 
   uint32_t groups_count =
-      (fs->blocks_count + fs->blocks_per_group - 1) / fs->blocks_per_group;
+      (fs->sb.s_blocks_count + fs->sb.s_blocks_per_group - 1) /
+      fs->sb.s_blocks_per_group;
   uint32_t desc_size = sizeof(Ext2GroupDesc) * groups_count;
 
   uint32_t blocks_needed = (desc_size + fs->block_size - 1) / fs->block_size;
@@ -101,6 +130,7 @@ static int ext2_read_group_desc(EXT2_FS *fs) {
     printk(KERN_ERR "EXT2: failed to alloc group desc buffer\n");
     return -1;
   }
+  memcpy(0, buf, blocks_needed * fs->block_size);
 
   for (uint32_t i = 0; i < blocks_needed; i++)
     ext2_read_block(fs, desc_block + i, buf + i * fs->block_size);
@@ -117,6 +147,31 @@ static int ext2_read_group_desc(EXT2_FS *fs) {
 
   printk(KERN_INFO "EXT2: read %u group descriptors\n", groups_count);
   printk(KERN_INFO "inode_table: %u\n", fs->groups[0].inode_table);
+  return 0;
+}
+
+static int ext2_write_group_desc(EXT2_FS *fs) {
+  uint32_t desc_block = (fs->block_size == 1024) ? 2 : 0;
+
+  uint32_t groups_count =
+      (fs->sb.s_blocks_count + fs->sb.s_blocks_per_group - 1) /
+      fs->sb.s_blocks_per_group;
+  uint32_t desc_size = sizeof(Ext2GroupDesc) * groups_count;
+
+  uint32_t blocks_needed = (desc_size + fs->block_size - 1) / fs->block_size;
+
+  uint8_t *buf = kmalloc(blocks_needed * fs->block_size, GFP_KERNEL);
+  if (!buf) {
+    printk(KERN_ERR "EXT2: failed to alloc group desc buffer\n");
+    return -1;
+  }
+  memset(buf, 0, blocks_needed * fs->block_size);
+  memcpy(buf, fs->groups, desc_size);
+
+  for (uint32_t i = 0; i < blocks_needed; i++)
+    ext2_write_block(fs, desc_block + i, buf + i * fs->block_size);
+
+  kfree(buf);
   return 0;
 }
 
@@ -143,23 +198,26 @@ static int ext2_read_superblock(EXT2_FS *fs) {
     return -1;
   }
   printk(KERN_OK "EXT2: magic ok 0x%x\n", sb->s_magic);
-  fs->inodes_count = sb->s_inodes_count;
-  fs->blocks_count = sb->s_blocks_count;
-  fs->first_data_block = sb->s_first_data_block;
-  fs->log_block_size = sb->s_log_block_size;
-  fs->blocks_per_group = sb->s_blocks_per_group;
-  fs->inodes_per_group = sb->s_inodes_per_group;
-  fs->block_size = 1024 << sb->s_log_block_size;
-  fs->magic = sb->s_magic;
 
+  memcpy(&fs->sb, sb, sizeof(Ext2Superblock));
+  fs->block_size = 1024 << sb->s_log_block_size;
   fs->inode_size =
       (sb->s_inode_size && sb->s_inode_size >= 128) ? sb->s_inode_size : 128;
 
   printk(KERN_OK "EXT2: magic ok 0x%x\n", sb->s_magic);
   printk(KERN_INFO "EXT2: block size = %u bytes\n", fs->block_size);
-  printk(KERN_INFO "EXT2: inodes = %u, blocks = %u\n", fs->inodes_count,
-         fs->blocks_count);
+  printk(KERN_INFO "EXT2: inodes = %u, blocks = %u\n", fs->sb.s_inodes_count,
+         fs->sb.s_blocks_count);
 
+  return 0;
+}
+
+static int ext2_write_superblock(EXT2_FS *fs) {
+  uint8_t buf[1024];
+  memcpy(buf, &fs->sb, sizeof(Ext2Superblock));
+  uint32_t superblock_lba = fs->first_lba + 2;
+  for (int i = 0; i < 2; i++)
+    fs->write_sector(fs->device, superblock_lba + i, buf + i * 512);
   return 0;
 }
 
@@ -189,8 +247,8 @@ int ext2_init(EXT2_FS *fs) {
 /** @brief Read an inode from disk. */
 int ext2_read_inode(EXT2_FS *fs, uint32_t inode_number, Ext2Inode *out_inode) {
   printk(KERN_INFO "Reading inode in func %u\n", inode_number);
-  uint32_t group = (inode_number - 1) / fs->inodes_per_group;
-  uint32_t index = (inode_number - 1) % fs->inodes_per_group;
+  uint32_t group = (inode_number - 1) / fs->sb.s_inodes_per_group;
+  uint32_t index = (inode_number - 1) % fs->sb.s_inodes_per_group;
   printk(KERN_INFO "group=%u index=%u\n", group, index);
 
   printk(KERN_INFO "inode_table=%u\n", fs->groups[0].inode_table);
@@ -251,9 +309,7 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode) {
       if (!dir.entries[dir.count].name)
         printk(KERN_ERR "failed");
 
-      printk(KERN_INFO "teto 2");
       memcpy(dir.entries[dir.count].name, entry->name, entry->name_len);
-      printk(KERN_INFO "teto3 count - %d\n", dir.count);
       dir.entries[dir.count].name[entry->name_len] = '\0';
       dir.entries[dir.count].is_dir = entry->file_type == 0x10;
       dir.entries[dir.count].cluster = entry->inode;
@@ -264,56 +320,95 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode) {
         break;
     }
   }
-  printk(KERN_INFO "teto ultima");
   kfree(block_buf);
   return dir;
 }
 
 /* -- Inode / block allocation ---------------------------------------- */
 
-static uint32_t ext2_allocate_inode(EXT2_FS *fs, uint32_t group) {
-  uint8_t *bitmap = kmalloc(fs->block_size, GFP_KERNEL);
-  ext2_read_block(fs, fs->groups[group].inode_bitmap, bitmap);
+static uint32_t ext2_allocate_inode(EXT2_FS *fs, uint32_t parent_inode) {
+  uint32_t groups_count =
+      (fs->sb.s_blocks_count + fs->sb.s_blocks_per_group - 1) /
+      fs->sb.s_blocks_per_group;
 
-  for (uint32_t i = 0; i < fs->inodes_per_group; i++) {
-    uint32_t byte = i / 8;
-    uint8_t bit = 1 << (i % 8);
-    if (!(bitmap[byte] & bit)) {
-      bitmap[byte] |= bit;
-      ext2_write_block(fs, fs->groups[group].inode_bitmap, bitmap);
-      kfree(bitmap);
-      return i + 1 + group * fs->inodes_per_group;
+  uint32_t preferred_group = (parent_inode - 1) / fs->sb.s_inodes_per_group;
+
+  uint8_t *bitmap = kmalloc(fs->block_size, GFP_KERNEL);
+  if (!bitmap)
+    return 0;
+
+  for (uint32_t attempt = 0; attempt < groups_count; attempt++) {
+    uint32_t group = (preferred_group + attempt) % groups_count;
+
+    ext2_read_block(fs, fs->groups[group].inode_bitmap, bitmap);
+
+    for (uint32_t i = 0; i < fs->sb.s_inodes_per_group; i++) {
+      uint32_t byte = i / 8;
+      uint8_t bit = 1 << (i % 8);
+      if (!(bitmap[byte] & bit)) {
+        bitmap[byte] |= bit;
+        ext2_write_block(fs, fs->groups[group].inode_bitmap, bitmap);
+
+        fs->groups[group].free_inodes_count--;
+        fs->sb.s_free_inodes_count--;
+        ext2_write_group_desc(fs);
+        ext2_write_superblock(fs);
+
+        kfree(bitmap);
+        return i + 1 + group * fs->sb.s_inodes_per_group;
+      }
     }
   }
 
   kfree(bitmap);
-  return 0;
+  return 0; // full
 }
 
-static uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t group) {
-  uint8_t *bitmap = kmalloc(fs->block_size, GFP_KERNEL);
-  ext2_read_block(fs, fs->groups[group].block_bitmap, bitmap);
+static uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t parent_inode) {
+  uint32_t groups_count =
+      (fs->sb.s_blocks_count + fs->sb.s_blocks_per_group - 1) /
+      fs->sb.s_blocks_per_group;
 
-  for (uint32_t i = 0; i < fs->blocks_per_group; i++) {
-    uint32_t byte = i / 8;
-    uint8_t bit = 1 << (i % 8);
-    if (!(bitmap[byte] & bit)) {
-      bitmap[byte] |= bit;
-      ext2_write_block(fs, fs->groups[group].block_bitmap, bitmap);
-      kfree(bitmap);
-      return fs->first_data_block + i + group * fs->blocks_per_group;
+  uint32_t preferred_group = (parent_inode - 1) / fs->sb.s_inodes_per_group;
+
+  uint8_t *bitmap = kmalloc(fs->block_size, GFP_KERNEL);
+  if (!bitmap)
+    return 0;
+
+  for (uint32_t attempt = 0; attempt < groups_count; attempt++) {
+    uint32_t group = (preferred_group + attempt) % groups_count;
+
+    ext2_read_block(fs, fs->groups[group].block_bitmap, bitmap);
+
+    for (uint32_t i = 0; i < fs->sb.s_blocks_per_group; i++) {
+      uint32_t byte = i / 8;
+      uint8_t bit = 1 << (i % 8);
+      if (!(bitmap[byte] & bit)) {
+        bitmap[byte] |= bit;
+        ext2_write_block(fs, fs->groups[group].block_bitmap, bitmap);
+
+        fs->groups[group].free_blocks_count--;
+        fs->sb.s_free_blocks_count--;
+
+        ext2_write_group_desc(fs);
+        ext2_write_superblock(fs);
+
+        kfree(bitmap);
+        return fs->sb.s_first_data_block + i +
+               group * fs->sb.s_blocks_per_group;
+      }
     }
   }
 
   kfree(bitmap);
-  return 0;
+  return 0; // full
 }
 
 /* -- Inode write / directory entry management ------------------------ */
 
 static int ext2_write_inode(EXT2_FS *fs, uint32_t inode_num, Ext2Inode *inode) {
-  uint32_t group = (inode_num - 1) / fs->inodes_per_group;
-  uint32_t index = (inode_num - 1) % fs->inodes_per_group;
+  uint32_t group = (inode_num - 1) / fs->sb.s_inodes_per_group;
+  uint32_t index = (inode_num - 1) % fs->sb.s_inodes_per_group;
   uint32_t table_block = fs->groups[group].inode_table;
 
   uint32_t inode_size = sizeof(Ext2Inode);
@@ -369,14 +464,26 @@ static int ext2_add_dir_entry(EXT2_FS *fs, uint32_t dir_inode_num,
 /** @brief Create a new file under a parent inode. */
 uint32_t ext2_create_file(EXT2_FS *fs, uint32_t parent_inode,
                           const char *name) {
-  uint32_t new_inode = ext2_allocate_inode(fs, 0);
-  uint32_t new_block = ext2_allocate_block(fs, 0);
 
+  //   uint32_t group = ext2_get_group(fs, parent_inode);
+
+  uint32_t new_inode = ext2_allocate_inode(fs, parent_inode);
+  if (!new_inode) {
+    printk("Failed to allocate inode\n");
+    return 0;
+  }
+  uint32_t new_block = ext2_allocate_block(fs, new_inode);
+  if (!new_block) {
+    printk("Failed to allocate block\n");
+    ext2_free_inode(fs, new_inode);
+    return 0;
+  }
   Ext2Inode inode = {0};
   inode.mode = 0x8000 | 0644;
   inode.size = 0;
-  inode.blocks = 2;
+  inode.blocks = 1;
   inode.block[0] = new_block;
+  inode.links_count = 1;
 
   ext2_write_inode(fs, new_inode, &inode);
   ext2_add_dir_entry(fs, parent_inode, name, new_inode, 1);
@@ -388,6 +495,7 @@ uint32_t ext2_create_file(EXT2_FS *fs, uint32_t parent_inode,
 
 /** @brief Find a directory entry by name within a given inode. */
 uint32_t ext2_find_dir_entry(EXT2_FS *fs, uint32_t inode, const char *name) {
+  //   printk("ext2_find_dir_entry: %s \n", name);
   Ext2Inode dir_inode;
   ext2_read_inode(fs, inode, &dir_inode);
 
@@ -399,10 +507,13 @@ uint32_t ext2_find_dir_entry(EXT2_FS *fs, uint32_t inode, const char *name) {
     Ext2DirEntry *entry = (Ext2DirEntry *)(block_buf + offset);
     if (entry->inode == 0)
       break;
-    if (entry->file_type == 1 && strcmp(entry->name, name) == 0) {
+    if (strncmp(entry->name, name, entry->name_len) == 0) {
       kfree(block_buf);
+      //       printk("entry found: %s\n", entry->name);
       return entry->inode;
     }
+    //     printk("entry name: %s, name_len: %d, file_type: %d\n", entry->name,
+    //            entry->name_len, entry->file_type);
     offset += entry->rec_len;
   }
   kfree(block_buf);
@@ -412,10 +523,85 @@ uint32_t ext2_find_dir_entry(EXT2_FS *fs, uint32_t inode, const char *name) {
 /** @brief Resolve a path to an inode number. */
 uint32_t ext2_parse_path(EXT2_FS *fs, uint32_t inode, const char *path) {
   PathParts_ext parts = format_folder_path_ext(path);
+  uint32_t cur = inode;
+
   for (int i = 0; i < parts.count; i++) {
-    inode = ext2_find_dir_entry(fs, inode, parts.parts[i].name);
-    if (inode == 0)
-      return 0;
+    cur = ext2_find_dir_entry(fs, cur, parts.parts[i].name);
+
+    if (cur == 0)
+      break;
   }
-  return inode;
+
+  free_path_parts_ext(&parts);
+  return cur;
+}
+
+static int ext2_free_inode(EXT2_FS *fs, uint32_t inode_num) {
+  if (inode_num == 0)
+    return -1; /* nothing to free */
+
+  uint32_t group = (inode_num - 1) / fs->sb.s_inodes_per_group;
+  uint32_t index = (inode_num - 1) % fs->sb.s_inodes_per_group;
+
+  uint8_t *bitmap = kmalloc(fs->block_size, GFP_KERNEL);
+  if (!bitmap)
+    return -1;
+
+  ext2_read_block(fs, fs->groups[group].inode_bitmap, bitmap);
+
+  uint32_t byte = index / 8;
+  uint8_t bit = 1 << (index % 8);
+
+  if (!(bitmap[byte] & bit)) {
+    /* already free */
+    kfree(bitmap);
+    return -1;
+  }
+
+  bitmap[byte] &= ~bit;
+  ext2_write_block(fs, fs->groups[group].inode_bitmap, bitmap);
+  kfree(bitmap);
+
+  fs->groups[group].free_inodes_count++;
+  fs->sb.s_free_inodes_count++;
+
+  ext2_write_group_desc(fs);
+  ext2_write_superblock(fs);
+
+  return 0;
+}
+
+static int ext2_free_block(EXT2_FS *fs, uint32_t block_num) {
+  if (block_num < fs->sb.s_first_data_block)
+    return -1; /* invalid / reserved block */
+
+  uint32_t rel = block_num - fs->sb.s_first_data_block;
+  uint32_t group = rel / fs->sb.s_blocks_per_group;
+  uint32_t index = rel % fs->sb.s_blocks_per_group;
+
+  uint8_t *bitmap = kmalloc(fs->block_size, GFP_KERNEL);
+  if (!bitmap)
+    return -1;
+
+  ext2_read_block(fs, fs->groups[group].block_bitmap, bitmap);
+
+  uint32_t byte = index / 8;
+  uint8_t bit = 1 << (index % 8);
+
+  if (!(bitmap[byte] & bit)) {
+    kfree(bitmap);
+    return -1; /* double free guard */
+  }
+
+  bitmap[byte] &= ~bit;
+  ext2_write_block(fs, fs->groups[group].block_bitmap, bitmap);
+  kfree(bitmap);
+
+  fs->groups[group].free_blocks_count++;
+  fs->sb.s_free_blocks_count++;
+
+  ext2_write_group_desc(fs);
+  ext2_write_superblock(fs);
+
+  return 0;
 }
