@@ -13,6 +13,8 @@
 
 #include <apic/apic.h>
 #include <asm.h>
+#include <msr.h>
+
 #include <gdt/gdt.h>
 #include <hubble/printk.h>
 #include <hubble/string.h>
@@ -494,6 +496,13 @@ void schedule(registers_t *regs) {
   if (new_task->page_table != (old_task ? old_task->page_table : NULL)) {
     asm volatile("mov %0, %%cr3" ::"r"(new_task->page_table) : "memory");
   }
+
+  if (new_task->fs_base) {
+    printk("load fs_base new_task->fs_base: %lx\n", new_task->fs_base);
+    wrmsr(0xC0000100, new_task->fs_base);
+    printk("load fs_base loaded\n");
+  }
+
   task_state_load(new_task, regs);
 }
 

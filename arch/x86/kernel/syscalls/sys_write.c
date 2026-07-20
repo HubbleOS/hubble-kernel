@@ -31,6 +31,10 @@ long sys_write(int fd, const char *buffer, size_t len) {
     printk("%.*s", (int)len, buffer);
     return len;
   }
+  if (fd == 2) {
+    printk(KERN_ERR "%.*s", (int)len, buffer);
+    return len;
+  }
   task_t *task = get_current_task();
 
   fd_entry_t *fd_entry = task_get_fd(task, fd);

@@ -30,5 +30,5 @@ static inline uint64_t rdmsr(uint32_t msr) {
  */
 static inline void wrmsr(uint32_t msr, uint64_t v) {
   uint32_t lo = v, hi = v >> 32;
-  __asm__ volatile("wrmsr" ::"c"(msr), "a"(lo), "d"(hi));
+  __asm__ volatile("wrmsr" ::"c"(msr), "a"(lo), "d"(hi) : "memory");
 }

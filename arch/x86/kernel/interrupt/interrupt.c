@@ -180,7 +180,11 @@ void isr_handler(registers_t *regs) {
   printk(KERN_INFO "SS:  0x%04lx\n", regs->ss);
   printk(KERN_INFO "RFLAGS: 0x%016lx\n", regs->rflags);
 
-  if (regs->int_no == 8 || regs->int_no == 13 || regs->int_no == 14) {
+  uint64_t cr2;
+  asm volatile("mov %%cr2, %0" : "=r"(cr2));
+  printk("CR2 = %p\n", cr2);
+
+    if (regs->int_no == 8 || regs->int_no == 13 || regs->int_no == 14) {
     printk(KERN_ERR "\nFATAL ERROR - System Halted\n");
 
     if (regs->int_no == 14) {

@@ -118,6 +118,11 @@ isr128:
     push    r14
     push    r15
 
+;     test    qword [rsp + 144], 0x3
+;     jz      %%skip_swapgs
+;     swapgs
+; %%skip_swapgs: 43c78b
+
     ; Set kernel data segments
     mov     ax, 0x10
     ; mov     ds, ax
@@ -165,6 +170,10 @@ isr128:
     pop     rbx
     pop     rax
 
+;     test    qword [rsp + 24], 0x3
+;     jz      %%skip_swapgs2
+;     swapgs
+; %%skip_swapgs2:
     ; Clear stack of int_no and err_code
     add     rsp, 16
 
