@@ -196,13 +196,10 @@ int ext2_vfs_write(VFS_File *file, const void *buffer, uint32_t size) {
         break;
       }
       inode->block[block_index] = block_num;
-      inode->blocks +=
-          fs->block_size / 512; /* blocks field is in 512B sectors */
+      inode->blocks += fs->block_size / 512;
       inode_dirty = 1;
     }
 
-    /* Only need to read the existing block if we're not overwriting all of
-       it - a brand new block has nothing to preserve, so just zero it. */
     if (is_new_block) {
       memset(block_buf, 0, fs->block_size);
     } else if (offset_in_block != 0 || chunk < fs->block_size) {
@@ -261,4 +258,5 @@ void ext2_init_vfs(VFS_FS *fs) {
   fs->unlink = ext2_vfs_unlink;
   fs->mkdir = ext2_vfs_mkdir;
   fs->readdir = ext2_vfs_readdir;
+  //   fs->create_file
 }

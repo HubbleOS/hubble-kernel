@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 /**
@@ -41,5 +42,20 @@ typedef struct {
   uint64_t p_align;
 } __attribute__((packed)) Elf64_Phdr;
 
-int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm);
+typedef struct {
+  uint64_t entry;
+
+  uint64_t tls_vaddr;
+  uint64_t tls_filesz;
+  uint64_t tls_memsz;
+  uint64_t tls_align;
+  uint64_t tls_offset;
+  bool has_tls;
+
+  void *tls_init;
+
+  uint64_t initial_brk;
+} elf_image_t;
+
+int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm);
 int elf_load_sep(const char *path, uint64_t *entry_out, uint64_t *pm);

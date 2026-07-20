@@ -27,6 +27,7 @@
 #define PAGE_SIZE 4096
 
 #define PT_LOAD 0x1
+#define PT_TLS 0x7
 #define PF_X 0x1
 #define PF_W 0x2
 #define PF_R 0x4
@@ -181,7 +182,7 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm) {
  * @param pm        Target user page table to map into
  * @return 0 on success, -1 on failure
  */
-int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm) {
+int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm) {
   VFS_File *f = vfs_open(path, VFS_O_RDONLY);
   printk(KERN_INFO "[ELF] Trying to open %s\n", path);
   if (!f) {
@@ -227,7 +228,7 @@ int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm) {
     vfs_close(f);
     return -1;
   }
-
+  uint64_t max_vaddr_end = 0;
   for (uint16_t i = 0; i < ehdr.e_phnum; ++i) {
     Elf64_Phdr *p = &phdrs[i];
     if (p->p_type == PT_LOAD) {
@@ -242,15 +243,52 @@ int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm) {
         vfs_close(f);
         return -1;
       }
+      uint64_t seg_end = p->p_vaddr + p->p_memsz;
+      if (seg_end > max_vaddr_end)
+        max_vaddr_end = seg_end;
+    }
+    if (p->p_type == PT_TLS) {
+      printk(KERN_INFO "[ELF] HERE loading TLS PHDR[%u]: vaddr=0x%llx "
+                       "filesz=0x%llx memsz=0x%llx flags=0x%x\n",
+             i, (unsigned long long)p->p_vaddr, (unsigned long long)p->p_filesz,
+             (unsigned long long)p->p_memsz, p->p_flags);
+      entry_out->tls_vaddr = p->p_vaddr;
+      entry_out->tls_memsz = p->p_memsz;
+      entry_out->tls_filesz = p->p_filesz;
+      entry_out->tls_offset = p->p_offset;
+      entry_out->tls_align = p->p_align;
+      entry_out->has_tls = true;
+
+      entry_out->tls_init = kmalloc(p->p_filesz, GFP_KERNEL);
+      if (!entry_out->tls_init) {
+        kfree(phdrs);
+        vfs_close(f);
+        return -1;
+      }
+
+      if (vfs_lseek(f, p->p_offset, SEEK_SET) < 0) {
+        kfree(entry_out->tls_init);
+        kfree(phdrs);
+        vfs_close(f);
+        return -1;
+      }
+
+      if (vfs_read(f, entry_out->tls_init, p->p_filesz) != p->p_filesz) {
+        kfree(entry_out->tls_init);
+        kfree(phdrs);
+        vfs_close(f);
+        return -1;
+      }
     }
   }
 
   kfree(phdrs);
   vfs_close(f);
 
-  *entry_out = ehdr.e_entry;
+  entry_out->entry = ehdr.e_entry;
+  entry_out->initial_brk = PAGE_ALIGN_UP(max_vaddr_end);
   printk(KERN_OK "[ELF] Load complete, entry=0x%llx\n",
-         (unsigned long long)*entry_out);
+         (unsigned long long)entry_out->entry);
   return 0;
 }
 

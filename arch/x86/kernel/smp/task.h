@@ -116,6 +116,11 @@ typedef struct task {
   uint64_t user_stack;
   size_t stack_size;
 
+  uint64_t fs_base;
+
+  uint64_t heap_start;
+  uint64_t heap_end;
+
   vm_map_t *vm_map;
 
   struct task *next;
