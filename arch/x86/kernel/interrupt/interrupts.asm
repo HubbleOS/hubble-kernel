@@ -121,14 +121,20 @@ isr128:
 ;     test    qword [rsp + 144], 0x3
 ;     jz      %%skip_swapgs
 ;     swapgs
-; %%skip_swapgs: 43c78b
+; %%skip_swapgs:
 
     ; Set kernel data segments
+    ; %if %3
+    ; ; Зберегти поточний FS.base ПЕРЕД тим, як його зіпсує mov fs,ax
+    ; mov     ecx, 0xC0000100      ; MSR_FS_BASE
+    ; rdmsr
+    ; push    rdx
+    ; push    rax                  ; збережений FS.base (low:high на стеку)
+    ; %endif
+
     mov     ax, 0x10
-    ; mov     ds, ax
-    ; mov     es, ax
     %if %3
-    mov     fs, ax
+    ; mov     fs, ax 
     %endif
 
     ; Align stack to 16 bytes for ABI
@@ -153,6 +159,14 @@ isr128:
     ; Restore original stack
     mov     rsp, rbp
 
+    ; %if %3
+    ; ; Відновити FS.base ПЕРЕД поверненням
+    ; pop     rax
+    ; pop     rdx
+    ; mov     ecx, 0xC0000100
+    ; wrmsr
+    ; %endif
+
     ; Restore all registers
     pop     r15
     pop     r14
@@ -176,7 +190,6 @@ isr128:
 ; %%skip_swapgs2:
     ; Clear stack of int_no and err_code
     add     rsp, 16
-
     ; Return from interrupt
     iretq
 %endmacro

@@ -12,7 +12,6 @@ extern syscall_rsp0
 section .text
 
 syscall_entry:
-    cli
     swapgs
 
     ; Save user RSP

@@ -20,8 +20,8 @@ long arch_stub(long a1, long a2, long a3, long a4, long a5, long a6) {
   switch (a1) {
   case 0x1002:
     // printk("FS_BASE: %lx\n", a2);
-    // task_t *current_task = get_current_task();
-    // current_task->fs_base = a2;
+    task_t *current_task = get_current_task();
+    current_task->fs_base = a2;
     wrmsr(0xC0000100, (uint64_t)a2);
     // wrfsbase(a2);
     // uint64_t val = rdmsr(0xC0000100);
