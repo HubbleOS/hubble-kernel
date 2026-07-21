@@ -114,6 +114,7 @@ typedef struct task {
   uint64_t *page_table;
   uint64_t kernel_stack;
   uint64_t user_stack;
+  bool userspace;
   size_t stack_size;
 
   uint64_t fs_base;
