@@ -520,7 +520,6 @@ void lapic_timer_handler(registers_t *regs) {
     return;
   }
   task_t *current = get_current_task();
-
   if (current) {
     save_context(current, regs);
 
