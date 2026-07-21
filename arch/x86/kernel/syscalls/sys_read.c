@@ -25,6 +25,15 @@ long sys_read(int fd, char *buffer, size_t len) {
   if (fd < 0 || fd >= MAX_FDS || !buffer || len == 0) {
     return -1;
   }
+
+  if (fd == 0) {
+    VFS_File *stdin = vfs_open("/dev/tty0", 0);
+
+    size_t read_count = vfs_read(stdin, buffer, len);
+    vfs_close(stdin);
+    return (long)read_count;
+  }
+
   task_t *current = get_current_task();
   fd_entry_t *fd_entry = task_get_fd(current, fd);
 

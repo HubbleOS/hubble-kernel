@@ -25,8 +25,10 @@
  * @return Number of bytes written on success, or -1 on error.
  */
 long sys_write(int fd, const char *buffer, size_t len) {
-  if (!buffer)
+  if (!buffer) {
+    printk("buffer is null\n");
     return -1;
+  }
   if (fd == 1) {
     printk("%.*s", (int)len, buffer);
     return len;
@@ -41,8 +43,10 @@ long sys_write(int fd, const char *buffer, size_t len) {
   fd_entry_t *fd_entry = task_get_fd(task, fd);
 
   VFS_File *file = fd_entry->data;
-  if (!file)
+  if (!file) {
+    printk("file is null\n");
     return -1;
+  }
 
   size_t written = vfs_write(file, buffer, len);
   return (long)written;

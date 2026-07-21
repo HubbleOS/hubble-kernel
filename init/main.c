@@ -182,8 +182,10 @@ void kmain_thread(void) {
   //   }
 
   //   vfs_close(ext2_file);
-
-  task_t *task1 = exec("/busy/busybox");
+  module_load("/modules/input.ko");
+  module_load("/modules/tty.ko");
+  char *argv[] = {"/busy/busybox", "sh", NULL};
+  task_t *task1 = execv("/busy/busybox", argv, NULL);
   if (task1 != NULL)
     scheduler_add_task(task1);
 
