@@ -25,7 +25,7 @@
  * @return Number of bytes written on success, or -1 on error.
  */
 long sys_write(int fd, const char *buffer, size_t len) {
-  if (!buffer || len == 0)
+  if (!buffer)
     return -1;
   if (fd == 1) {
     printk("%.*s", (int)len, buffer);
@@ -33,6 +33,7 @@ long sys_write(int fd, const char *buffer, size_t len) {
   }
   if (fd == 2) {
     printk(KERN_ERR "%.*s", (int)len, buffer);
+    // printk(KERN_ERR "\n");
     return len;
   }
   task_t *task = get_current_task();

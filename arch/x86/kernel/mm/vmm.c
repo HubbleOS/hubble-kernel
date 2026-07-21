@@ -461,6 +461,10 @@ int vmm_map_page_into(uint64_t *pml4_phys, uint64_t va, uint64_t pa,
   return 0;
 }
 
+int vmm_unmap_page_from(uint64_t *pml4_phys, uint64_t va){
+  return 0;
+}
+
 /**
  * @brief Get physical address from a specific page table
  *

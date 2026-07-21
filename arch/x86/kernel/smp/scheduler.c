@@ -108,7 +108,7 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg,
   task->time_slice = task->time_slice_max;
   task->context_saved = false;
   task->in_syscall = false;
-
+  task->userspace = userspace;
   uint64_t cr3;
   asm volatile("mov %%cr3, %0" : "=r"(cr3));
   task->page_table = (uint64_t *)cr3;
@@ -298,12 +298,25 @@ void save_context(task_t *current, registers_t *regs) {
  */
 void free_context(task_t *task) {
   if (task->kernel_stack) {
-    kfree((void *)task->kernel_stack);
+    if (task->userspace) {
+      // Розмапити і звільнити фізичні сторінки user-стека
+      for (uint64_t i = 0; i < task->stack_size; i += PAGE_SIZE) {
+        uint64_t va = task->kernel_stack + i;
+        uint64_t phys = vmm_get_phys_from(task->page_table, va);
+        if (phys) {
+          vmm_unmap_page_from(task->page_table, va);
+          pmm_free_page(phys);
+        }
+      }
+    } else {
+      kfree((void *)task->kernel_stack);
+    }
   }
 
   if (task->context.fpu_state)
     slab_cache_free(fpu_cache, task->context.fpu_state);
 }
+
 
 /* -- Task lifecycle ----------------------------------------------------- */
 
@@ -316,7 +329,7 @@ void task_exit(int exit_code) {
   task_t *task = get_current_task();
 
   outb(0x3f8, 'E');
-
+  printk("exited with code: %d", exit_code);
   if (!task)
     return;
 

@@ -16,6 +16,9 @@
 #include <smp/task.h>
 #include <user/elf.h>
 
+#define AT_NULL   0
+#define AT_RANDOM 25
+
 /**
  * @brief Load an ELF binary and create a task for it
  *
@@ -59,19 +62,38 @@ task_t *exec(const char *path) {
   uint64_t old_cr3 = get_cr3();
   set_cr3((uint64_t)pml4);
   printk("task->context.rsp: %lx\n", task->context.rsp);
-  char *str = (char *)(task->context.rsp - 5);
-  memcpy(str, "echo", 4);
+  char *str1 = (char *)(task->context.rsp - 3);
+  memcpy(str1, "sh", 3); // 5, щоб включити '\0'
 
-  uint64_t *sp = (uint64_t *)((uintptr_t)str & ~0xFULL);
+  // char *str2 = str1 - 20;
+  // memcpy(str2, " ", ); // 19, щоб включити '\0'
 
-  *--sp = 0;             // AT_NULL value
-  *--sp = 0;             // AT_NULL type
-  *--sp = 0;             // envp[0]
-  *--sp = 0;             // argv[1]
-  *--sp = (uint64_t)str; // argv[0]
-  *--sp = 1;             // argc
+  uint64_t *sp = (uint64_t *)((uintptr_t)str1 & ~0xFULL);
+
+  sp = (uint64_t *)((uint8_t *)sp - 16);
+  uint8_t *random_bytes = (uint8_t *)sp;
+  for (int i = 0; i < 16; i++)
+    random_bytes[i] = (uint8_t)(i * 0x9E + 0x37);
+
+  sp = (uint64_t *)((uintptr_t)sp & ~0xFULL);
+
+  // Будуємо стек У ЗВОРОТНОМУ порядку (auxv -> envp -> argv -> argc)
+  *--sp = 0;                          // AT_NULL value
+  *--sp = AT_NULL;                    // AT_NULL type
+  *--sp = (uint64_t)random_bytes;     // AT_RANDOM value
+  *--sp = AT_RANDOM;                  // AT_RANDOM type
+
+  *--sp = 0;                          // envp[0] (кінець envp, порожнє середовище)
+
+  *--sp = 0;                          // argv[2] = NULL (кінець argv)
+  *--sp = 0;             // argv[1] = "hello"
+  *--sp = (uint64_t)str1;             // argv[0] = "echo"
+
+  *--sp = 2;                          // argc = 2 (!!)
 
   task->context.rsp = (uint64_t)sp;
+
+
 
   set_cr3(old_cr3);
 

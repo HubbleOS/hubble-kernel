@@ -231,6 +231,7 @@ int vmm_map_page_into(uint64_t *pml4_phys, uint64_t va, uint64_t pa,
  */
 uint64_t vmm_get_phys_from(uint64_t *pml4_phys, uint64_t va);
 
+int vmm_unmap_page_from(uint64_t *pml4_phys, uint64_t va);
 /**
  * @brief Debug: dump full page table walk for a virtual address
  *
