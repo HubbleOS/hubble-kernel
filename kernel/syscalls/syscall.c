@@ -3,6 +3,7 @@
  */
 
 #include <hpet/hpet.h>
+#include <hubble/errno.h>
 #include <hubble/printk.h>
 #include <hubble/string.h>
 #include <hubble/syscall.h>
@@ -35,6 +36,20 @@ long sys_rt_sigprocmask(int how, const void *set, void *oldset,
   return 0;
 }
 
+long sys_getcwd(char *buf, size_t size) {
+  if (size < 2)
+    return -ERANGE;
+
+  buf[0] = '/';
+  buf[1] = '\0';
+
+  return 2;
+}
+
+long sys_getuid(void) { return 0; }
+
+long sys_geteuid(void) { return 0; }
+
 long sys_exit_group(int status) { return exit_stub(status); }
 static syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_write] = (syscall_fn_t)sys_write,
@@ -56,6 +71,8 @@ static syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [20] = (syscall_fn_t)sys_writev,
     [13] = (syscall_fn_t)sys_rt_sigaction,
     [14] = (syscall_fn_t)sys_rt_sigprocmask,
+    [79] = (syscall_fn_t)sys_getcwd,
+    [107] = (syscall_fn_t)sys_getuid,
 };
 
 uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
