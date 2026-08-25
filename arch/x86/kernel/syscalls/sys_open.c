@@ -29,7 +29,7 @@ long sys_open(const char *path, int flags) {
 
   VFS_File *file = vfs_open(path, flags);
   if (IS_ERR(file) || !file)
-    return -1;
+    return -ENOENT;
 
   for (int i = 2; i < MAX_FDS; i++) {
     if (!current->fds[i].data) {
@@ -40,7 +40,7 @@ long sys_open(const char *path, int flags) {
     }
   }
   vfs_close(file);
-  return -1;
+  return -EBADF;
 }
 
 /**
@@ -56,7 +56,7 @@ long sys_open(const char *path, int flags) {
 long sys_close(int fd) {
   task_t *current = get_current_task();
   if (fd < 0 || fd >= MAX_FDS || !current->fds[fd].data)
-    return -1;
+    return -EBADF;
   vfs_close(current->fds[fd].data);
   current->fds[fd].data = NULL;
   return 0;

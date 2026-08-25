@@ -6,6 +6,7 @@
  * helper functions for file descriptor lookup used by other syscalls.
  */
 
+#include <hubble/errno.h>
 #include <hubble/string.h>
 #include <hubble/syscalls.h>
 #include <stddef.h>
@@ -95,7 +96,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
   if (!current->vm_map)
     current->vm_map = vm_map_create();
   if (!current->vm_map) {
-    return -1;
+    return -EFAULT;
   }
 
   size_t size = PAGE_ALIGN_UP(length);
@@ -124,7 +125,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
     for (uint64_t off = 0; off < size; off += PAGE_SIZE) {
       uint64_t phys = pmm_alloc_page();
       if (!phys)
-        return -1;
+        return -EFAULT;
 
       memset((void *)phys_to_virt(phys), 0, PAGE_SIZE);
 
