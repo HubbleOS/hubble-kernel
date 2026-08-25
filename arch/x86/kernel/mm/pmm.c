@@ -23,6 +23,27 @@ static uint64_t g_heap_phys_start = 0;
 static uint64_t g_heap_phys_end = 0;
 static uint64_t g_last_search_index = 0;
 
+static inline uint32_t *get_page_meta(uint64_t phys_addr) {
+  uint64_t pfn =
+      phys_addr / PAGE_SIZE; // PFN = phys_addr >> 12 для 4KB сторінок
+  return &g_pmm_info.page_refcounts[pfn];
+}
+
+static inline void pmm_inc_refcount(uint64_t phys_addr) {
+  uint32_t *refcount = get_page_meta(phys_addr);
+  __atomic_fetch_add(refcount, 1, __ATOMIC_SEQ_CST);
+}
+
+static inline uint32_t pmm_dec_refcount(uint64_t phys_addr) {
+  uint32_t *refcount = get_page_meta(phys_addr);
+  return __atomic_sub_fetch(refcount, 1, __ATOMIC_SEQ_CST);
+}
+
+static inline uint32_t pmm_get_refcount(uint64_t phys_addr) {
+  uint32_t *refcount = get_page_meta(phys_addr);
+  return __atomic_load_n(refcount, __ATOMIC_SEQ_CST);
+}
+
 /* -- Internal Helpers ------------------------------------------------------ */
 
 /**
@@ -123,6 +144,14 @@ uint64_t pmm_alloc_pages(size_t count) {
     mark_pages(start_index, count, false);
     return 0;
   }
+
+  for (int i = 0; i < count; i++) {
+    pmm_inc_refcount(phys_addr);
+    phys_addr += PAGE_SIZE;
+  }
+
+  phys_addr = page_index_to_phys(start_index);
+
   return phys_addr;
 }
 
@@ -156,7 +185,15 @@ void pmm_free_pages(uint64_t phys_addr, size_t count) {
   if (start_index + count > g_pmm_info.total_pages)
     count = g_pmm_info.total_pages - start_index;
 
-  mark_pages(start_index, count, false);
+  uint64_t addr = phys_addr;
+  for (size_t i = 0; i < count; i++) {
+    uint32_t remaining = pmm_dec_refcount(addr);
+
+    if (remaining == 0) {
+      mark_pages(start_index + i, 1, false); // not used
+    }
+    addr += PAGE_SIZE;
+  }
 }
 
 /**
@@ -174,6 +211,7 @@ void pmm_free_page(uint64_t phys_addr) { pmm_free_pages(phys_addr, 1); }
  * Sets up the bitmap from boot info and calculates the heap boundaries.
  */
 void pmm_init(void) {
+
   uint64_t heap_virt_start = g_boot_info->memory_map.heap_start;
   uint64_t heap_phys_start = virt_to_phys(heap_virt_start);
   uint64_t heap_size = g_boot_info->memory_map.heap_size;
@@ -191,6 +229,15 @@ void pmm_init(void) {
 
   uint64_t heap_after_bitmap = heap_phys_start + bitmap_size;
   g_heap_phys_start = PAGE_ALIGN_UP(heap_after_bitmap);
+
+  uint64_t refcount_array_size = total_pages * sizeof(uint32_t);
+  g_pmm_info.page_refcounts =
+      (uint32_t *)(g_pmm_info.bitmap + g_pmm_info.bitmap_size);
+  memset(g_pmm_info.page_refcounts, 0, refcount_array_size);
+
+  uint64_t heap_after_refcounts = heap_after_bitmap + refcount_array_size;
+
+  g_heap_phys_start = PAGE_ALIGN_UP(heap_after_refcounts);
 
   uint64_t usable_size = (heap_phys_start + heap_size) - g_heap_phys_start;
   g_pmm_info.total_pages = usable_size / PAGE_SIZE;

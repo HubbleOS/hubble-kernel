@@ -6,10 +6,10 @@
  * to the kernel console via printk.
  */
 
+#include "syscall_entry.h"
+#include <hubble/errno.h>
 #include <hubble/printk.h>
 #include <hubble/syscalls.h>
-
-#include "syscall_entry.h"
 
 /**
  * @brief Write to a file descriptor.
@@ -26,8 +26,7 @@
  */
 long sys_write(int fd, const char *buffer, size_t len) {
   if (!buffer) {
-    printk("buffer is null\n");
-    return -1;
+    return -EINVAL;
   }
   if (fd == 1) {
     printk("%.*s", (int)len, buffer);
@@ -35,7 +34,6 @@ long sys_write(int fd, const char *buffer, size_t len) {
   }
   if (fd == 2) {
     printk(KERN_ERR "%.*s", (int)len, buffer);
-    // printk(KERN_ERR "\n");
     return len;
   }
   task_t *task = get_current_task();
@@ -44,8 +42,7 @@ long sys_write(int fd, const char *buffer, size_t len) {
 
   VFS_File *file = fd_entry->data;
   if (!file) {
-    printk("file is null\n");
-    return -1;
+    return -ENOENT;
   }
 
   size_t written = vfs_write(file, buffer, len);

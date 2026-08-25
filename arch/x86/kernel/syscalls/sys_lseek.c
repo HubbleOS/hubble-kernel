@@ -27,7 +27,7 @@ long sys_lseek(int fd, uint64_t offset, int whence) {
   fd_entry_t *fd_entry = task_get_fd(task, fd);
   VFS_File *file = fd_entry->data;
   if (!file)
-    return -1;
+    return -EBADF;
 
   return (long)vfs_lseek(file, offset, whence);
 }

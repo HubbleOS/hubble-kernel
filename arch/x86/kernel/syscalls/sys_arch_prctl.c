@@ -1,3 +1,4 @@
+#include <hubble/errno.h>
 #include <hubble/syscalls.h>
 #include <msr.h>
 #include <smp/scheduler.h>
@@ -14,6 +15,7 @@ long arch_prctl(long a1, long a2, long a3, long a4, long a5, long a6) {
     return rdmsr(0xC0000100);
     break;
   default:
+    return -ENOSYS;
     break;
   }
 

@@ -1,4 +1,5 @@
 #include <fs/vfs/vfs.h>
+#include <hubble/errno.h>
 #include <hubble/string.h>
 #include <hubble/syscall.h>
 #include <stddef.h>
@@ -19,7 +20,7 @@ struct stat {
 long sys_stat(const char *path, struct stat *st) {
   VFS_File *f = vfs_open(path, VFS_O_RDONLY);
   if (IS_ERR(f) || !f)
-    return -2;
+    return -ENOENT;
 
   memset(st, 0, sizeof(*st));
   st->st_size = 1;

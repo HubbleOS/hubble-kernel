@@ -43,8 +43,7 @@ uint64_t sys_brk(uint64_t new_addr) {
     }
   } else if (new_top < old_top) {
     for (uint64_t va = new_top; va < old_top; va += PAGE_SIZE) {
-      uint64_t phys = vmm_get_phys_from(
-          p->page_table, va); // дістати фіз. адресу перед розмапом
+      uint64_t phys = vmm_get_phys_from(p->page_table, va);
       //   unmap_page(p->page_table, va);
       //   free_frame((void *)phys);
     }

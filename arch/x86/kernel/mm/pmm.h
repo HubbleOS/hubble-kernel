@@ -28,6 +28,7 @@ typedef struct {
   uint64_t used_pages;
   uint8_t *bitmap;
   uint64_t bitmap_size;
+  uint32_t *page_refcounts;
 } pmm_info_t;
 
 /* -- Public API ------------------------------------------------------------ */
