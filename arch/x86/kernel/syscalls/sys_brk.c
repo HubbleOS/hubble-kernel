@@ -13,15 +13,15 @@ uint64_t sys_brk(uint64_t new_addr) {
   task_t *p = get_current_task();
 
   if (new_addr == 0)
-    return p->heap_end;
+    return p->mm.heap_end;
 
-  if (new_addr < p->heap_start)
-    return p->heap_end;
+  if (new_addr < p->mm.heap_start)
+    return p->mm.heap_end;
 
   //   if (p->heap_max && new_addr > p->heap_max)
   //     return p->heap_end;
 
-  uint64_t old_end = p->heap_end;
+  uint64_t old_end = p->mm.heap_end;
   uint64_t old_top = PAGE_ALIGN_UP(old_end);
   uint64_t new_top = PAGE_ALIGN_UP(new_addr);
 
@@ -35,7 +35,7 @@ uint64_t sys_brk(uint64_t new_addr) {
           pmm_free_page((uint64_t)phys);
         return old_end;
       }
-      if (vmm_map_page_into(p->page_table, va, (uint64_t)phys,
+      if (vmm_map_page_into(p->mm.page_table, va, (uint64_t)phys,
                             PTE_PRESENT | PTE_WRITE | PTE_USER) < 0) {
         // free_frame(phys);
         return old_end;
@@ -43,12 +43,12 @@ uint64_t sys_brk(uint64_t new_addr) {
     }
   } else if (new_top < old_top) {
     for (uint64_t va = new_top; va < old_top; va += PAGE_SIZE) {
-      uint64_t phys = vmm_get_phys_from(p->page_table, va);
+      uint64_t phys = vmm_get_phys_from(p->mm.page_table, va);
       //   unmap_page(p->page_table, va);
       //   free_frame((void *)phys);
     }
   }
 
-  p->heap_end = new_addr;
-  return p->heap_end;
+  p->mm.heap_end = new_addr;
+  return p->mm.heap_end;
 }

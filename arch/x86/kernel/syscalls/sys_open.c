@@ -32,10 +32,10 @@ long sys_open(const char *path, int flags) {
     return -ENOENT;
 
   for (int i = 2; i < MAX_FDS; i++) {
-    if (!current->fds[i].data) {
-      current->fds[i].data = file;
-      current->fds[i].flags = flags;
-      current->fds[i].type = FD_FILE;
+    if (!current->fdtable.fds[i].data) {
+      current->fdtable.fds[i].data = file;
+      current->fdtable.fds[i].flags = flags;
+      current->fdtable.fds[i].type = FD_FILE;
       return i;
     }
   }
@@ -55,9 +55,9 @@ long sys_open(const char *path, int flags) {
  */
 long sys_close(int fd) {
   task_t *current = get_current_task();
-  if (fd < 0 || fd >= MAX_FDS || !current->fds[fd].data)
+  if (fd < 0 || fd >= MAX_FDS || !current->fdtable.fds[fd].data)
     return -EBADF;
-  vfs_close(current->fds[fd].data);
-  current->fds[fd].data = NULL;
+  vfs_close(current->fdtable.fds[fd].data);
+  current->fdtable.fds[fd].data = NULL;
   return 0;
 }

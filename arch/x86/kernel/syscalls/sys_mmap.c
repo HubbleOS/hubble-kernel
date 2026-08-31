@@ -49,7 +49,7 @@
 fd_entry_t *task_get_fd(task_t *task, int fd) {
   if (fd < 0 || fd >= MAX_FDS)
     return NULL;
-  return &task->fds[fd];
+  return &task->fdtable.fds[fd];
 }
 
 /**
@@ -64,8 +64,8 @@ fd_entry_t *task_get_fd(task_t *task, int fd) {
  */
 fd_entry_t *task_get_free_fd(task_t *task) {
   for (int i = 2; i < MAX_FDS; i++) {
-    if (!task->fds[i].data)
-      return &task->fds[i];
+    if (!task->fdtable.fds[i].data)
+      return &task->fdtable.fds[i];
   }
   return NULL;
 }
@@ -93,9 +93,9 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
   }
 
   task_t *current = get_current_task();
-  if (!current->vm_map)
-    current->vm_map = vm_map_create();
-  if (!current->vm_map) {
+  if (!current->mm.vm_map)
+    current->mm.vm_map = vm_map_create();
+  if (!current->mm.vm_map) {
     return -EFAULT;
   }
 
@@ -105,7 +105,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
   if ((flags & MAP_FIXED) && addr)
     vaddr = addr;
   else
-    vaddr = vm_find_free_range(current->vm_map, size);
+    vaddr = vm_find_free_range(current->mm.vm_map, size);
 
   uint32_t vm_flags = 0;
   if (prot & PROT_READ)
@@ -143,7 +143,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
     vma->size = size;
     vma->flags = vm_flags;
     vma->type = VMA_ANONYMOUS;
-    vm_insert_area(current->vm_map, vma);
+    vm_insert_area(current->mm.vm_map, vma);
     return (long)vaddr;
   }
 
@@ -178,7 +178,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
     vma->flags = vm_flags;
     vma->type = VMA_DEVICE;
     vma->phys_base = phys_base;
-    vm_insert_area(current->vm_map, vma);
+    vm_insert_area(current->mm.vm_map, vma);
     return (long)vaddr;
   }
 }

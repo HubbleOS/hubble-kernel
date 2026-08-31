@@ -368,18 +368,24 @@ int make_pd_entry_user(uint64_t va) {
  */
 uint64_t *vmm_create_user_pagemap(void) {
   uint64_t phys = pmm_alloc_page();
-  uint64_t *pml4 = (uint64_t *)phys_to_virt(phys);
-  memset(pml4, 0, PAGE_SIZE);
+  uint64_t *new_pml4 = (uint64_t *)phys_to_virt(phys);
+  memset(new_pml4, 0, PAGE_SIZE);
 
-  uint64_t *current_pml4 =
-      (uint64_t *)phys_to_virt(g_vmm.pml4_phys & ~0xFFFULL);
+  uint64_t *old_pml4 = (uint64_t *)phys_to_virt(g_vmm.pml4_phys & ~0xFFFULL);
 
   for (int i = 256; i < 512; i++) {
     if (i == RECURSIVE_PML4_INDEX)
       continue;
-    if (current_pml4[i] & PTE_PRESENT)
-      pml4[i] = current_pml4[i];
+    if (old_pml4[i] & PTE_PRESENT)
+      new_pml4[i] = old_pml4[i];
   }
+
+  //   for (int i = 256; i < 512; i++) {
+  //     if (i == RECURSIVE_PML4_INDEX)
+  //       continue;
+  //     if (current_pml4[i] & PTE_PRESENT)
+  //       pml4[i] = (current_pml4[i] & ~PTE_WRITE) | PTE_COW;
+  //   }
 
   /* User entries (indices 0-255) are intentionally left empty.
    * The kernel PML4 may contain bootloader identity mappings for low
@@ -393,11 +399,41 @@ uint64_t *vmm_create_user_pagemap(void) {
   return (uint64_t *)new_phys;
 }
 
+uint64_t *vmm_copy_user_pagemap(uint64_t *old_phys) {
+
+  uint64_t phys = pmm_alloc_page();
+  uint64_t *pml4 = (uint64_t *)phys_to_virt(phys);
+  memset(pml4, 0, PAGE_SIZE);
+
+  uint64_t *current_pml4 =
+      (uint64_t *)phys_to_virt((uint64_t)old_phys & ~0xFFFULL);
+
+  for (int i = 0; i < 512; i++) {
+    if (i == RECURSIVE_PML4_INDEX)
+      continue;
+    if (current_pml4[i] & PTE_PRESENT)
+      pml4[i] = current_pml4[i] & PTE_COW;
+  }
+
+  uint64_t new_phys = virt_to_phys((uint64_t)pml4);
+  pml4[RECURSIVE_PML4_INDEX] = pte_make(new_phys, PTE_PRESENT | PTE_WRITE);
+
+  return (uint64_t *)new_phys;
+}
+
+int vmm_copy_pt(uint64_t *src, uint64_t *trg, int lvl) {
+
+  for (int i = 0; i <= 512; i++) {
+    uint64_t entry = src[i];
+  }
+}
+
 /**
  * @brief Map a page into a specific (non-current) page table
  *
  * Walks the page table hierarchy of the given PML4 and installs a mapping.
- * Handles huge page splitting when an existing 2 MB page needs a 4 KB mapping.
+ * Handles huge page splitting when an existing 2 MB page needs a 4 KB
+ * mapping.
  *
  * @param pml4_phys Physical address of the target PML4
  * @param va Virtual address
@@ -461,9 +497,7 @@ int vmm_map_page_into(uint64_t *pml4_phys, uint64_t va, uint64_t pa,
   return 0;
 }
 
-int vmm_unmap_page_from(uint64_t *pml4_phys, uint64_t va){
-  return 0;
-}
+int vmm_unmap_page_from(uint64_t *pml4_phys, uint64_t va) { return 0; }
 
 /**
  * @brief Get physical address from a specific page table

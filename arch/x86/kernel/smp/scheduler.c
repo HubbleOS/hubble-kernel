@@ -99,91 +99,94 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg,
 
   printk(KERN_INFO "Assigning PID\n");
   static uint32_t next_pid = 1;
-  task->pid = __atomic_fetch_add(&next_pid, 1, __ATOMIC_SEQ_CST);
+  task->id.pid = __atomic_fetch_add(&next_pid, 1, __ATOMIC_SEQ_CST);
 
   printk(KERN_INFO "Setting state\n");
-  task->state = TASK_READY;
-  task->priority = priority;
-  task->time_slice_max = BASE_SLICE + priority;
-  task->time_slice = task->time_slice_max;
-  task->context_saved = false;
-  task->in_syscall = false;
-  task->userspace = userspace;
+  task->linkage.state = TASK_READY;
+  task->sched.priority = priority;
+  task->sched.time_slice_max = BASE_SLICE + priority;
+  task->sched.time_slice = task->sched.time_slice_max;
+  task->exec.context_saved = false;
+  task->exec.in_syscall = false;
+  task->stacks.userspace = userspace;
   uint64_t cr3;
   asm volatile("mov %%cr3, %0" : "=r"(cr3));
-  task->page_table = (uint64_t *)cr3;
+  task->mm.page_table = (uint64_t *)cr3;
 
-  task->rsp0_size = 64 * 1024;
-  task->rsp0 = (uint64_t)kmalloc(task->rsp0_size, GFP_KERNEL);
-  if (!task->rsp0) {
+  task->exec.rsp0_size = 64 * 1024;
+  task->exec.rsp0 = (uint64_t)kmalloc(task->exec.rsp0_size, GFP_KERNEL);
+  if (!task->exec.rsp0) {
     kfree(task);
     return NULL;
   }
-  *(uint64_t *)(task->rsp0 + task->rsp0_size - 8) = CANARY;
-  *(uint64_t *)(task->rsp0) = CANARY;
+  *(uint64_t *)(task->exec.rsp0 + task->exec.rsp0_size - 8) = CANARY;
+  *(uint64_t *)(task->exec.rsp0) = CANARY;
 
   if (!userspace) {
     printk(KERN_INFO "Allocating kernel task stack\n");
-    task->stack_size = 16384;
-    task->kernel_stack = (uint64_t)kmalloc(task->stack_size, GFP_KERNEL);
-    if (!task->kernel_stack) {
-      kfree((void *)task->rsp0);
+    task->stacks.stack_size = 16384;
+    task->stacks.kernel_stack =
+        (uint64_t)kmalloc(task->stacks.stack_size, GFP_KERNEL);
+    if (!task->stacks.kernel_stack) {
+      kfree((void *)task->exec.rsp0);
       kfree(task);
       return NULL;
     }
   } else {
-    task->kernel_stack = alloc_user_stack();
-    task->stack_size = USER_STACK_SIZE;
+    task->stacks.kernel_stack = alloc_user_stack();
+    task->stacks.stack_size = USER_STACK_SIZE;
   }
 
   printk(KERN_INFO "Setting up initial stack\n");
   uint64_t *stack_top =
-      (uint64_t *)(((task->kernel_stack + task->stack_size) & ~0xFULL) - 8);
+      (uint64_t *)(((task->stacks.kernel_stack + task->stacks.stack_size) &
+                    ~0xFULL) -
+                   8);
 
   printk(KERN_INFO "Initializing context\n");
   if (!userspace) {
-    task->context.rip = (uint64_t)task_wrapper;
+    task->exec.context.rip = (uint64_t)task_wrapper;
   } else {
-    task->context.rip = (uint64_t)entry_point;
+    task->exec.context.rip = (uint64_t)entry_point;
   }
-  task->context.rsp = (uint64_t)stack_top;
+  task->exec.context.rsp = (uint64_t)stack_top;
   if (!userspace) {
-    task->context.cs = 0x08;
-    task->context.ss = 0x10;
-    task->context.ds = 0x10;
-    task->context.es = 0x10;
-    task->context.fs = 0x10;
-    task->context.gs = 0x10;
-    task->context.rdi = (uint64_t)task;
+    task->exec.context.cs = 0x08;
+    task->exec.context.ss = 0x10;
+    task->exec.context.ds = 0x10;
+    task->exec.context.es = 0x10;
+    task->exec.context.fs = 0x10;
+    task->exec.context.gs = 0x10;
+    task->exec.context.rdi = (uint64_t)task;
   } else {
-    task->context.cs = 0x23;
-    task->context.ss = 0x1B;
-    task->context.ds = 0x1B;
-    task->context.es = 0x1B;
-    task->context.fs = 0x1B;
-    task->context.gs = 0x1B;
+    task->exec.context.cs = 0x23;
+    task->exec.context.ss = 0x1B;
+    task->exec.context.ds = 0x1B;
+    task->exec.context.es = 0x1B;
+    task->exec.context.fs = 0x1B;
+    task->exec.context.gs = 0x1B;
   }
 
-  task->context.rflags = 0x202;
-  task->entry_point = entry_point;
-  task->entry_arg = entry_arg;
+  task->exec.context.rflags = 0x202;
+  task->entry.entry_point = entry_point;
+  task->entry.entry_arg = entry_arg;
 
-  printk(KERN_INFO "RSP: %p\n", task->context.rsp);
-  printk(KERN_INFO "RIP: %p\n", task->context.rip);
-  printk(KERN_INFO "CS: %p\n", task->context.cs);
-  printk(KERN_INFO "SS: %p\n", task->context.ss);
+  printk(KERN_INFO "RSP: %p\n", task->exec.context.rsp);
+  printk(KERN_INFO "RIP: %p\n", task->exec.context.rip);
+  printk(KERN_INFO "CS: %p\n", task->exec.context.cs);
+  printk(KERN_INFO "SS: %p\n", task->exec.context.ss);
 
   printk(KERN_INFO "Allocating FPU state\n");
   if (!fpu_cache)
     fpu_cache = slab_cache_create(512, 16);
-  task->context.fpu_state = slab_cache_alloc(fpu_cache);
+  task->exec.context.fpu_state = slab_cache_alloc(fpu_cache);
 
-  if (task->context.fpu_state) {
+  if (task->exec.context.fpu_state) {
     printk(KERN_INFO "Initializing FPU state\n");
-    asm volatile("fxsave %0" : "=m"(*(char *)task->context.fpu_state));
+    asm volatile("fxsave %0" : "=m"(*(char *)task->exec.context.fpu_state));
   }
 
-  task->signal = 0;
+  task->signals.signal = 0;
   printk(KERN_INFO "Task created\n");
   return task;
 }
@@ -194,8 +197,8 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg,
  * @param pml4_phys Physical address of target PML4
  */
 void task_map_user_stack(task_t *task, uint64_t *pml4_phys) {
-  uint64_t stack_base = task->kernel_stack;
-  uint32_t size = task->stack_size;
+  uint64_t stack_base = task->stacks.kernel_stack;
+  uint32_t size = task->stacks.stack_size;
 
   for (uint64_t i = 0; i < size; i += PAGE_SIZE) {
     uint64_t phys = pmm_alloc_page();
@@ -230,26 +233,26 @@ task_t *_task_create_no_arg(void (*entry_point)(void), uint32_t priority,
 static void task_state_load(task_t *task, registers_t *regs) {
   if (!task)
     return;
-  regs->rax = task->context.rax;
-  regs->rbx = task->context.rbx;
-  regs->rcx = task->context.rcx;
-  regs->rdx = task->context.rdx;
-  regs->rsi = task->context.rsi;
-  regs->rdi = task->context.rdi;
-  regs->rbp = task->context.rbp;
-  regs->rsp = task->context.rsp;
-  regs->r8 = task->context.r8;
-  regs->r9 = task->context.r9;
-  regs->r10 = task->context.r10;
-  regs->r11 = task->context.r11;
-  regs->r12 = task->context.r12;
-  regs->r13 = task->context.r13;
-  regs->r14 = task->context.r14;
-  regs->r15 = task->context.r15;
-  regs->rip = task->context.rip;
-  regs->rflags = task->context.rflags;
-  regs->cs = (uint16_t)task->context.cs;
-  regs->ss = (uint16_t)task->context.ss;
+  regs->rax = task->exec.context.rax;
+  regs->rbx = task->exec.context.rbx;
+  regs->rcx = task->exec.context.rcx;
+  regs->rdx = task->exec.context.rdx;
+  regs->rsi = task->exec.context.rsi;
+  regs->rdi = task->exec.context.rdi;
+  regs->rbp = task->exec.context.rbp;
+  regs->rsp = task->exec.context.rsp;
+  regs->r8 = task->exec.context.r8;
+  regs->r9 = task->exec.context.r9;
+  regs->r10 = task->exec.context.r10;
+  regs->r11 = task->exec.context.r11;
+  regs->r12 = task->exec.context.r12;
+  regs->r13 = task->exec.context.r13;
+  regs->r14 = task->exec.context.r14;
+  regs->r15 = task->exec.context.r15;
+  regs->rip = task->exec.context.rip;
+  regs->rflags = task->exec.context.rflags;
+  regs->cs = (uint16_t)task->exec.context.cs;
+  regs->ss = (uint16_t)task->exec.context.ss;
 }
 
 /**
@@ -261,34 +264,35 @@ void save_context(task_t *current, registers_t *regs) {
   if (!current) {
     return;
   }
-  if (current->context_saved) {
+  if (current->exec.context_saved) {
     return;
   }
 
-  current->context.r15 = regs->r15;
-  current->context.r14 = regs->r14;
-  current->context.r13 = regs->r13;
-  current->context.r12 = regs->r12;
-  current->context.r11 = regs->r11;
-  current->context.r10 = regs->r10;
-  current->context.r9 = regs->r9;
-  current->context.r8 = regs->r8;
-  current->context.rbp = regs->rbp;
-  current->context.rdi = regs->rdi;
-  current->context.rsi = regs->rsi;
-  current->context.rdx = regs->rdx;
-  current->context.rcx = regs->rcx;
-  current->context.rbx = regs->rbx;
-  current->context.rax = regs->rax;
+  current->exec.context.r15 = regs->r15;
+  current->exec.context.r14 = regs->r14;
+  current->exec.context.r13 = regs->r13;
+  current->exec.context.r12 = regs->r12;
+  current->exec.context.r11 = regs->r11;
+  current->exec.context.r10 = regs->r10;
+  current->exec.context.r9 = regs->r9;
+  current->exec.context.r8 = regs->r8;
+  current->exec.context.rbp = regs->rbp;
+  current->exec.context.rdi = regs->rdi;
+  current->exec.context.rsi = regs->rsi;
+  current->exec.context.rdx = regs->rdx;
+  current->exec.context.rcx = regs->rcx;
+  current->exec.context.rbx = regs->rbx;
+  current->exec.context.rax = regs->rax;
 
-  current->context.rip = regs->rip;
-  current->context.rsp = regs->rsp;
-  current->context.rflags = regs->rflags;
-  current->context.cs = regs->cs;
-  current->context.ss = regs->ss;
+  current->exec.context.rip = regs->rip;
+  current->exec.context.rsp = regs->rsp;
+  current->exec.context.rflags = regs->rflags;
+  current->exec.context.cs = regs->cs;
+  current->exec.context.ss = regs->ss;
 
-  if (current->context.fpu_state) {
-    asm volatile("fxsave (%0)" ::"r"(current->context.fpu_state) : "memory");
+  if (current->exec.context.fpu_state) {
+    asm volatile("fxsave (%0)" ::"r"(current->exec.context.fpu_state)
+                 : "memory");
   }
 }
 
@@ -297,26 +301,25 @@ void save_context(task_t *current, registers_t *regs) {
  * @param task Task whose resources to free
  */
 void free_context(task_t *task) {
-  if (task->kernel_stack) {
-    if (task->userspace) {
+  if (task->stacks.kernel_stack) {
+    if (task->stacks.userspace) {
       // Розмапити і звільнити фізичні сторінки user-стека
-      for (uint64_t i = 0; i < task->stack_size; i += PAGE_SIZE) {
-        uint64_t va = task->kernel_stack + i;
-        uint64_t phys = vmm_get_phys_from(task->page_table, va);
+      for (uint64_t i = 0; i < task->stacks.stack_size; i += PAGE_SIZE) {
+        uint64_t va = task->stacks.kernel_stack + i;
+        uint64_t phys = vmm_get_phys_from(task->mm.page_table, va);
         if (phys) {
-          vmm_unmap_page_from(task->page_table, va);
+          vmm_unmap_page_from(task->mm.page_table, va);
           pmm_free_page(phys);
         }
       }
     } else {
-      kfree((void *)task->kernel_stack);
+      kfree((void *)task->stacks.kernel_stack);
     }
   }
 
-  if (task->context.fpu_state)
-    slab_cache_free(fpu_cache, task->context.fpu_state);
+  if (task->exec.context.fpu_state)
+    slab_cache_free(fpu_cache, task->exec.context.fpu_state);
 }
-
 
 /* -- Task lifecycle ----------------------------------------------------- */
 
@@ -333,8 +336,8 @@ void task_exit(int exit_code) {
   if (!task)
     return;
 
-  task->exit_code = exit_code;
-  task->state = TASK_DEAD;
+  task->linkage.exit_code = exit_code;
+  task->linkage.state = TASK_DEAD;
 
   spinlock_acquire(&runqueues[cpu_id].lock);
 
@@ -374,15 +377,15 @@ void task_sleep(void) {
   asm volatile("mov %%rcx,  %0" : "=r"(user_rip));
   asm volatile("mov %%r11,  %0" : "=r"(user_rflags));
 
-  current->state = TASK_BLOCKED;
-  current->time_slice = 0;
+  current->linkage.state = TASK_BLOCKED;
+  current->sched.time_slice = 0;
 
-  if (current->in_syscall) {
-    current->in_syscall_rsp = user_rsp;
+  if (current->exec.in_syscall) {
+    current->exec.in_syscall_rsp = user_rsp;
     asm volatile("swapgs");
   }
   asm volatile("int $32");
-  if (current->in_syscall)
+  if (current->exec.in_syscall)
     asm volatile("swapgs");
 }
 
@@ -391,11 +394,11 @@ void task_sleep(void) {
  * @param task Task to wake
  */
 void task_wake(task_t *task) {
-  if (!task || task->state != TASK_BLOCKED)
+  if (!task || task->linkage.state != TASK_BLOCKED)
     return;
 
-  task->time_slice = task->time_slice_max;
-  task->state = TASK_READY;
+  task->sched.time_slice = task->sched.time_slice_max;
+  task->linkage.state = TASK_READY;
 }
 
 /* -- Task wrapper ------------------------------------------------------- */
@@ -406,7 +409,7 @@ void task_wake(task_t *task) {
 __attribute__((noreturn)) void task_wrapper(void) {
   register task_t *current asm("rdi");
 
-  current->entry_point(current->entry_arg);
+  current->entry.entry_point(current->entry.entry_arg);
 
   task_exit(0);
   __builtin_unreachable();
@@ -418,7 +421,7 @@ __attribute__((noreturn)) void task_wrapper(void) {
  * @brief Kill a task by task pointer
  * @param task Task to kill
  */
-void task_kill_by_task(task_t *task) { task->state = TASK_ZOMBIE; }
+void task_kill_by_task(task_t *task) { task->linkage.state = TASK_ZOMBIE; }
 
 /**
  * @brief Kill a task by PID
@@ -445,8 +448,8 @@ task_t *get_next_task(uint8_t cpu_id) {
 
   for (size_t i = 0; i < rq->count; i++) {
     size_t index = (rq->next_index + i) % rq->count;
-    if (rq->queue[index]->state == TASK_READY ||
-        rq->queue[index]->state == TASK_ZOMBIE) {
+    if (rq->queue[index]->linkage.state == TASK_READY ||
+        rq->queue[index]->linkage.state == TASK_ZOMBIE) {
       rq->next_index = (index + 1) % rq->count;
       task_t *next = rq->queue[index];
       spinlock_release(&rq->lock);
@@ -480,39 +483,39 @@ void schedule(registers_t *regs) {
     return;
 
   if (new_task && new_task == runqueues[cpu_id].idle_task) {
-    if (old_task && old_task->state == TASK_RUNNING) {
+    if (old_task && old_task->linkage.state == TASK_RUNNING) {
       return;
     }
   }
 
-  if (old_task && old_task->state == TASK_RUNNING)
-    old_task->state = TASK_READY;
+  if (old_task && old_task->linkage.state == TASK_RUNNING)
+    old_task->linkage.state = TASK_READY;
 
-  new_task->state = TASK_RUNNING;
-  new_task->cpu = cpu_id;
+  new_task->linkage.state = TASK_RUNNING;
+  new_task->sched.cpu = cpu_id;
   current_task[cpu_id] = new_task;
 
   extern cpu_local_t cpu_locals[];
 
-  if (old_task && old_task->in_syscall && !old_task->in_syscall_rsp) {
+  if (old_task && old_task->exec.in_syscall && !old_task->exec.in_syscall_rsp) {
     uint64_t user_rsp;
     asm volatile("mov %%gs:8, %0" : "=r"(user_rsp));
-    old_task->in_syscall_rsp = user_rsp;
+    old_task->exec.in_syscall_rsp = user_rsp;
   }
 
-  if (new_task->in_syscall) {
-    cpu_locals[cpu_id].cpu_id = new_task->in_syscall_rsp;
+  if (new_task->exec.in_syscall) {
+    cpu_locals[cpu_id].cpu_id = new_task->exec.in_syscall_rsp;
   }
-  cpu_locals[cpu_id].rsp0 = new_task->rsp0 + new_task->rsp0_size;
-  tss_set_rsp0(new_task->rsp0 + new_task->rsp0_size);
+  cpu_locals[cpu_id].rsp0 = new_task->exec.rsp0 + new_task->exec.rsp0_size;
+  tss_set_rsp0(new_task->exec.rsp0 + new_task->exec.rsp0_size);
 
-  if (new_task->page_table != (old_task ? old_task->page_table : NULL)) {
-    asm volatile("mov %0, %%cr3" ::"r"(new_task->page_table) : "memory");
+  if (new_task->mm.page_table != (old_task ? old_task->mm.page_table : NULL)) {
+    asm volatile("mov %0, %%cr3" ::"r"(new_task->mm.page_table) : "memory");
   }
 
-  if (new_task->fs_base) {
-    printk("load fs_base new_task->fs_base: %lx\n", new_task->fs_base);
-    wrmsr(0xC0000100, new_task->fs_base);
+  if (new_task->mm.fs_base) {
+    printk("load fs_base new_task->fs_base: %lx\n", new_task->mm.fs_base);
+    wrmsr(0xC0000100, new_task->mm.fs_base);
     printk("load fs_base loaded\n");
   }
 
@@ -536,22 +539,22 @@ void lapic_timer_handler(registers_t *regs) {
   if (current) {
     save_context(current, regs);
 
-    if (current->time_slice > 0)
-      current->time_slice--;
+    if (current->sched.time_slice > 0)
+      current->sched.time_slice--;
   }
 
-  if (current && current->rsp0) {
-    uint64_t *canary = (uint64_t *)(current->rsp0);
+  if (current && current->exec.rsp0) {
+    uint64_t *canary = (uint64_t *)(current->exec.rsp0);
     if (*canary != CANARY) {
       printk(KERN_ERR "STACK UNDERFLOW on task pid=%d, data=0x%llx\n",
-             current->pid, *(uint64_t *)(current->rsp0));
-      *(uint64_t *)(current->rsp0) = CANARY;
+             current->id.pid, *(uint64_t *)(current->exec.rsp0));
+      *(uint64_t *)(current->exec.rsp0) = CANARY;
     }
   }
 
-  if (!current || current->time_slice <= 0) {
+  if (!current || current->sched.time_slice <= 0) {
     if (current) {
-      current->time_slice = current->time_slice_max;
+      current->sched.time_slice = current->sched.time_slice_max;
     }
 
     schedule(regs);
@@ -567,8 +570,8 @@ void lapic_timer_handler(registers_t *regs) {
     return;
   }
 
-  if (current->state == TASK_ZOMBIE) {
-    if (current->spinlocks > 0) {
+  if (current->linkage.state == TASK_ZOMBIE) {
+    if (current->linkage.spinlocks > 0) {
       return;
     }
     task_exit(-1);
@@ -632,6 +635,6 @@ void scheduler_add_task(task_t *task) {
 
   spinlock_acquire(&runqueues[target_cpu].lock);
   runqueues[target_cpu].queue[runqueues[target_cpu].count++] = task;
-  task->cpu = target_cpu;
+  task->sched.cpu = target_cpu;
   spinlock_release(&runqueues[target_cpu].lock);
 }

@@ -93,6 +93,7 @@ static inline uint64_t *pt_table(uint64_t va) {
 #define PTE_DIRTY (1ULL << 6)
 #define PTE_HUGE (1ULL << 7)
 #define PTE_GLOBAL (1ULL << 8)
+#define PTE_COW (1ULL << 9)
 #define PTE_NX (1ULL << 63)
 
 #define PTE_NOCACHE (PTE_PWT | PTE_PCD)

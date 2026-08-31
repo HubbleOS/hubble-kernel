@@ -391,10 +391,10 @@ int elf_run(uint64_t entry) {
 
   task_t *current_task = get_current_task();
 
-  current_task->context.ds = 0x23;
-  current_task->context.es = 0x23;
-  current_task->context.fs = 0x23;
-  current_task->context.gs = 0x23;
+  current_task->exec.context.ds = 0x23;
+  current_task->exec.context.es = 0x23;
+  current_task->exec.context.fs = 0x23;
+  current_task->exec.context.gs = 0x23;
 
   user_enter(entry, USER_STACK_TOP);
 

@@ -184,7 +184,7 @@ void isr_handler(registers_t *regs) {
   asm volatile("mov %%cr2, %0" : "=r"(cr2));
   printk("CR2 = %p\n", cr2);
 
-    if (regs->int_no == 8 || regs->int_no == 13 || regs->int_no == 14) {
+  if (regs->int_no == 8 || regs->int_no == 13 || regs->int_no == 14) {
     printk(KERN_ERR "\nFATAL ERROR - System Halted\n");
 
     if (regs->int_no == 14) {
@@ -198,7 +198,8 @@ void isr_handler(registers_t *regs) {
       task_t *t = get_current_task();
       printk(KERN_INFO
              "Fault: active CR3=0x%llx task->page_table=0x%llx match=%d\n",
-             cr3, (uint64_t)t->page_table, cr3 == (uint64_t)t->page_table);
+             cr3, (uint64_t)t->mm.page_table,
+             cr3 == (uint64_t)t->mm.page_table);
     }
     while (1) {
       asm volatile("cli; hlt");
