@@ -45,7 +45,7 @@ bool ext2_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba) {
   return 1;
 }
 
-/** @brief Open wrapper (stub — not yet implemented). */
+/** @brief Open wrapper. */
 static VFS_Node *ext2_vfs_open(VFS_FS *fs, const char *path) {
   if (!fs->fs) {
     printk(KERN_INFO "fs not mounted\n");
@@ -87,7 +87,7 @@ static VFS_Node *ext2_vfs_open(VFS_FS *fs, const char *path) {
   return node;
 }
 
-/** @brief Read wrapper (stub — not yet implemented). */
+/** @brief Read wrapper. */
 int ext2_vfs_read(VFS_File *file, void *buffer, uint32_t size) {
   if (!file)
     return -1;
@@ -148,7 +148,7 @@ int ext2_vfs_read(VFS_File *file, void *buffer, uint32_t size) {
   return (int)read;
 }
 
-/** @brief Write wrapper (stub — not yet implemented). */
+/** @brief Write wrapper. */
 int ext2_vfs_write(VFS_File *file, const void *buffer, uint32_t size) {
   if (!file)
     return -1;
@@ -227,8 +227,18 @@ int ext2_vfs_write(VFS_File *file, const void *buffer, uint32_t size) {
   return (int)written;
 }
 
-/** @brief Close wrapper (stub — not yet implemented). */
-int ext2_vfs_close(VFS_File *file) { return 0; }
+/** @brief Close wrapper . */
+int ext2_vfs_close(VFS_File *file) {
+
+  EXT2_FS *fs = (EXT2_FS *)file->node->fs->fs;
+  EXT2_FILE *ext2_file = (EXT2_FILE *)file->node->fs_node;
+  Ext2Inode *inode = &ext2_file->inode;
+
+  kfree(ext2_file);
+  kfree(file->node);
+
+  return 0;
+}
 
 /** @brief Lseek wrapper (stub — not yet implemented). */
 int ext2_vfs_lseek(VFS_File *node, int offset, int whence) { return 0; }

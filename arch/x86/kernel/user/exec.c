@@ -103,10 +103,10 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
   elf_load(path, image, pml4);
 
   task_t *task = task_create((void *)image->entry, 200, 1);
-  printk("task->fs_base: %lx\n", task->fs_base);
+  printk("task->fs_base: %lx\n", task->mm.fs_base);
 
-  task->heap_end = image->initial_brk;
-  task->heap_start = image->initial_brk;
+  task->mm.heap_end = image->initial_brk;
+  task->mm.heap_start = image->initial_brk;
 
   if (image->has_tls) {
     void *tls = kmalloc(image->tls_memsz, GFP_KERNEL);
@@ -114,8 +114,8 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
     memset(tls, 0, image->tls_memsz);
     memcpy(tls, image->tls_init, image->tls_filesz);
 
-    task->fs_base = (uint64_t)tls;
-    printk("task->fs_base: %lx\n", task->fs_base);
+    task->mm.fs_base = (uint64_t)tls;
+    printk("task->fs_base: %lx\n", task->mm.fs_base);
 
     kfree(image->tls_init);
   } else {
@@ -129,7 +129,7 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
   }
 
   task_map_user_stack(task, pml4);
-  printk("task->context.rsp: %lx\n", task->context.rsp);
+  printk("task->exec.context.rsp: %lx\n", task->exec.context.rsp);
 
   uint64_t old_cr3 = get_cr3();
   set_cr3((uint64_t)pml4);
@@ -138,10 +138,10 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
   char *default_envp[] = {"PATH=/usr/bin:/busy/", NULL};
 
   uint64_t new_sp =
-      build_user_stack(task->context.rsp, argv ? argv : default_argv,
+      build_user_stack(task->exec.context.rsp, argv ? argv : default_argv,
                        envp ? envp : default_envp);
 
-  task->context.rsp = new_sp;
+  task->exec.context.rsp = new_sp;
 
   set_cr3(old_cr3);
 
@@ -152,7 +152,7 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
   uint64_t fsbase = ((uint64_t)hi << 32) | lo;
   printk("FS.base = %p\n", fsbase);
 
-  task->page_table = pml4;
+  task->mm.page_table = pml4;
   kfree(image);
   return task;
 }
