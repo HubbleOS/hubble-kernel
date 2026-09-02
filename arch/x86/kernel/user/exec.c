@@ -100,7 +100,10 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
   uint64_t *pml4 = vmm_create_user_pagemap();
 
   elf_image_t *image = kmalloc(sizeof(elf_image_t), GFP_KERNEL);
-  elf_load(path, image, pml4);
+  if (elf_load(path, image, pml4) == -1) {
+    printk("exited");
+    return NULL;
+  }
 
   task_t *task = task_create((void *)image->entry, 200, 1);
   printk("task->fs_base: %lx\n", task->mm.fs_base);
