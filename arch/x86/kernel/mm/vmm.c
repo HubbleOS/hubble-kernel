@@ -393,8 +393,8 @@ uint64_t *vmm_create_user_pagemap(void) {
    * User mappings are created on demand by elf_load_segment() and
    * sys_mmap() via vmm_map_page_into() / vmm_map_page(). */
 
-  uint64_t new_phys = virt_to_phys((uint64_t)pml4);
-  pml4[RECURSIVE_PML4_INDEX] = pte_make(new_phys, PTE_PRESENT | PTE_WRITE);
+  uint64_t new_phys = virt_to_phys((uint64_t)new_pml4);
+  new_pml4[RECURSIVE_PML4_INDEX] = pte_make(new_phys, PTE_PRESENT | PTE_WRITE);
 
   return (uint64_t *)new_phys;
 }

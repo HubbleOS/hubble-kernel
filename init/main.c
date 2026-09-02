@@ -184,8 +184,8 @@ void kmain_thread(void) {
   //   vfs_close(ext2_file);
   module_load("/modules/input.ko");
   module_load("/modules/tty.ko");
-  char *argv[] = {"/busy/busybox", "sh", NULL};
-  task_t *task1 = execv("/busy/busybox", argv, NULL);
+  char *argv[] = {"/busy/ruby", "-e", "puts 'Hello'", NULL};
+  task_t *task1 = execv("/busy/ruby", argv, NULL);
   if (task1 != NULL)
     scheduler_add_task(task1);
 

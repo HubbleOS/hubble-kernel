@@ -6,12 +6,12 @@ arch = os.environ.get("ARCH", "x86")
 
 config = DiskConfig(
     path="out/disks/disk.img",
-    size_mb=210,
+    size_mb=2100,
     partitions=[
         Partition(
             label="BOOT",
             fs="fat32",
-            size="100",
+            size="1000",
             files=[
                 ("out/usr", "/usr/bin"),
                 ("out/modules", "/modules"),
@@ -21,7 +21,7 @@ config = DiskConfig(
         Partition(
             label="ROOT",
             fs="ext2",
-            size="100",
+            size="1000",
             files=[
                 ("out/usr", "/usr/bin"),
                 ("out/modules", "/modules"),

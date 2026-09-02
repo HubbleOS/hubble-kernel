@@ -84,7 +84,7 @@ def build_qemu_command(opts: QemuOptions):
         "-M", "pc",
         "-cpu", "Haswell",
         # "-enable-kvm",
-        "-m", str(opts.mem),
+        "-m", str(1024),
         "-smp", str(opts.smp),
 
         # Main disk

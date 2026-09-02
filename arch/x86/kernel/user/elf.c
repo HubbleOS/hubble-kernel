@@ -263,13 +263,15 @@ int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm) {
       if (!entry_out->tls_init) {
         kfree(phdrs);
         vfs_close(f);
-        return -1;
+        printk("error 0");
+        // return -1;
       }
 
       if (vfs_lseek(f, p->p_offset, SEEK_SET) < 0) {
         kfree(entry_out->tls_init);
         kfree(phdrs);
         vfs_close(f);
+        printk("error 1");
         return -1;
       }
 
@@ -277,6 +279,7 @@ int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm) {
         kfree(entry_out->tls_init);
         kfree(phdrs);
         vfs_close(f);
+        printk("error 2");
         return -1;
       }
     }
