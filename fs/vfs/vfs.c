@@ -68,18 +68,24 @@ bool vfs_mount(const char *mountpoint, gpt_partition_t *partition,
                               uint32_t start_lba);
     pipe_vfs_init(fs, partition->device, partition->first_lba);
     break;
+  case FS_INITRAMFS:
+    printk(KERN_INFO "VFS: init initramfs vfs\n");
+    extern void initramfs_init_vfs(VFS_FS * fs);
+    initramfs_init_vfs(fs);
+    break;
   default:
     printk(KERN_INFO "VFS: unsupported FS type %d\n", type);
     kfree(fs);
     return false;
   }
   printk(KERN_INFO "VFS: mount %d at %s\n", type, mountpoint);
-  if (!partition->device->read && (type != FS_DEV || type != FS_PIPE))
-    printk(KERN_INFO "partition has no device\n");
 
-  printk(KERN_INFO "VFS: mount %d at %s\n", type, mountpoint);
-
-  if ((type != FS_DEV && type != FS_PIPE)) {
+  if (type != FS_DEV && type != FS_PIPE && type != FS_INITRAMFS) {
+    if (!partition || !partition->device) {
+      printk(KERN_ERR "VFS: no partition for %d at %s\n", type, mountpoint);
+      kfree(fs);
+      return false;
+    }
     if (!fs->mount(fs, partition->device, partition->first_lba)) {
       printk(KERN_ERR "VFS: failed to mount %d at %s\n", type, mountpoint);
       return false;

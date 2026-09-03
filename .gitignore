@@ -1,3 +1,6 @@
+/limine-protocol
+.deps-obtained
+
 # MacOS system files
 *.DS_Store
 

@@ -37,7 +37,14 @@ typedef enum {
 } OpenFlags;
 
 /** @brief Filesystem type identifiers. */
-typedef enum { FS_NONE, FS_FAT32, FS_EXT2, FS_DEV, FS_PIPE } FileSystemType;
+typedef enum {
+  FS_NONE,
+  FS_FAT32,
+  FS_EXT2,
+  FS_DEV,
+  FS_PIPE,
+  FS_INITRAMFS
+} FileSystemType;
 
 /** @brief Abstract block device descriptor. */
 typedef struct {

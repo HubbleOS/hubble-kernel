@@ -36,14 +36,6 @@
 *.out   binary
 *.app   binary
 
-# Auto detect text files and perform normalization
-*          text=auto
-
-*.rs       text diff=rust
-*.toml     text diff=toml
-Cargo.lock text
-
-
 # Basic .gitattributes for a python repo.
 
 # Source files
@@ -73,3 +65,11 @@ Cargo.lock text
 # with the python modules ``pickle``, ``dbm.*``,
 # ``shelve``, ``marshal``, ``anydbm``, & ``bsddb``
 # (among others).
+
+# Auto detect text files and perform normalization
+*          text=auto
+
+*.rs       text diff=rust
+*.toml     text diff=toml
+Cargo.lock text
+
