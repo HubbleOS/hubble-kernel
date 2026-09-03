@@ -41,13 +41,25 @@ void init_filesystems(void) {
 
   /* Discover persistent storage (ATA/GPT/FAT32) */
   printk(KERN_DEBUG "GPT init...\n");
-  int gpt_result = gpt_init(partitions, 20);
-  if (gpt_result < 0) {
-    printk(KERN_WARNING "GPT initialization failed: %d (no persistent disk)\n",
-           gpt_result);
+
+  /* Probe for ATA devices before attempting GPT */
+  int detected = 0;
+  for (int i = 0; i < 2; i++) {
+    if (ata_probe(&ata_devices[i]) == 0) {
+      detected++;
+    }
+  }
+
+  if (detected == 0) {
+    printk(KERN_WARNING "No ATA devices found, skipping GPT\n");
   } else {
-    printk(KERN_OK "GPT initialized with %d partitions\n", gpt_result);
-    printk(KERN_INFO "Persistent storage available at disk partitions\n");
+    int gpt_result = gpt_init(partitions, 20);
+    if (gpt_result < 0) {
+      printk(KERN_WARNING "GPT initialization failed: %d\n", gpt_result);
+    } else {
+      printk(KERN_OK "GPT initialized with %d partitions\n", gpt_result);
+      printk(KERN_INFO "Persistent storage available at disk partitions\n");
+    }
   }
 
   printk(KERN_INFO "Filesystem initialized\n");

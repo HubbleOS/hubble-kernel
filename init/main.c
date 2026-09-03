@@ -261,8 +261,8 @@ void kmain_thread(void) {
       hlt();
   }
 
-  //   task_t *task1 = exec("/init");
-  task_t *task1 = exec("/usr/user1.elf");
+  task_t *task1 = exec("/init");
+  //   task_t *task1 = exec("/usr/user.elf");
   if (task1 != NULL)
     scheduler_add_task(task1);
 
