@@ -29,6 +29,8 @@
 #include <higher_half.h>
 #include <io.h>
 
+#include <mm/vmm.h>
+
 #include <limine.h>
 #include <limine_requests.h>
 
@@ -102,6 +104,20 @@ void start_kernel(void) {
   /* -- Limine: HHDM -------------------------------------------------- */
   uint64_t hhdm = limine_hhdm_req.response->offset;
   printk(KERN_INFO "[boot] HHDM offset: 0x%llx\n", hhdm);
+
+  /* -- Set up recursive page table mapping ---------------------------- */
+  /* Limine does not set up recursive page tables. The kernel VMM and
+   * APIC MMIO code require PML4[510] to point back to the PML4 itself,
+   * enabling access to page table entries via a fixed virtual address. */
+  {
+    uint64_t cr3 = get_cr3();
+    uint64_t pml4_phys = cr3 & ~0xFFFULL;
+    uint64_t *pml4 = (uint64_t *)phys_to_virt(pml4_phys);
+    pml4[RECURSIVE_PML4_INDEX] = pml4_phys | PTE_PRESENT | PTE_WRITE;
+    asm volatile("invlpg (%0)" : : "r"(pml4_table()) : "memory");
+    printk(KERN_INFO "[boot] Recursive PML4[510] = 0x%llx\n",
+           pml4[RECURSIVE_PML4_INDEX]);
+  }
 
   /* -- Limine: kernel addresses --------------------------------------- */
   if (limine_exec_addr_req.response) {
@@ -245,7 +261,8 @@ void kmain_thread(void) {
       hlt();
   }
 
-  task_t *task1 = exec("/init");
+  //   task_t *task1 = exec("/init");
+  task_t *task1 = exec("/usr/user1.elf");
   if (task1 != NULL)
     scheduler_add_task(task1);
 

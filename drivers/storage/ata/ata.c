@@ -8,6 +8,7 @@
 #include <hubble/string.h>
 #include <io.h>
 #include <stdint.h>
+#include <hpet/hpet.h>
 
 /* -- ATA register and command defines --------------------- */
 
@@ -31,17 +32,41 @@
 
 /* -- Wait helpers ----------------------------------------- */
 
-static void ata_wait(ATA_Device *dev) {
-  while (inb(dev->io_base + 7) & ATA_STATUS_BSY)
-    ;
+#define ATA_TIMEOUT_MS 500
+
+static int ata_wait(ATA_Device *dev) {
+  uint64_t freq = hpet_get_frequency();
+  uint64_t deadline = hpet_get_counter() + (freq * ATA_TIMEOUT_MS / 1000);
+  while (inb(dev->io_base + 7) & ATA_STATUS_BSY) {
+    if (hpet_get_counter() >= deadline) {
+      printk(KERN_ERR "ATA: BSY timeout on %s %s\n",
+             dev->bus == 0 ? "primary" : "secondary",
+             dev->device == 0 ? "master" : "slave");
+      return -1;
+    }
+  }
+  return 0;
 }
 
 static int ata_wait_drq(ATA_Device *dev) {
+  uint64_t freq = hpet_get_frequency();
+  uint64_t deadline = hpet_get_counter() + (freq * ATA_TIMEOUT_MS / 1000);
   uint8_t status;
   do {
     status = inb(dev->io_base + 7);
-    if (status & ATA_STATUS_ERROR)
+    if (status & ATA_STATUS_ERROR) {
+      printk(KERN_ERR "ATA: DRQ error on %s %s\n",
+             dev->bus == 0 ? "primary" : "secondary",
+             dev->device == 0 ? "master" : "slave");
       return -1;
+    }
+    if (hpet_get_counter() >= deadline) {
+      printk(KERN_ERR "ATA: DRQ timeout on %s %s (status=0x%02x)\n",
+             dev->bus == 0 ? "primary" : "secondary",
+             dev->device == 0 ? "master" : "slave",
+             status);
+      return -1;
+    }
   } while (!(status & ATA_STATUS_DRQ));
   return 0;
 }
@@ -51,7 +76,8 @@ static int ata_wait_drq(ATA_Device *dev) {
 int ata_read_sector(void *device, uint32_t lba, void *buffer) {
   ATA_Device *dev = (ATA_Device *)device;
 
-  ata_wait(dev);
+  if (ata_wait(dev) != 0)
+    return -1;
   outb(dev->ctrl_base, 0x00);
 
   outb(dev->io_base + 2, 1);
@@ -61,11 +87,10 @@ int ata_read_sector(void *device, uint32_t lba, void *buffer) {
   outb(dev->io_base + 6, 0xE0 | ((lba >> 24) & 0x0F));
   outb(dev->io_base + 7, ATA_CMD_READ_SECT);
 
-  ata_wait(dev);
-  if (ata_wait_drq(dev) != 0) {
-    printk(KERN_ERR "ata_wait_drq failed\n");
+  if (ata_wait(dev) != 0)
     return -1;
-  }
+  if (ata_wait_drq(dev) != 0)
+    return -1;
 
   for (int i = 0; i < SECTOR_SIZE / 2; i++)
     ((uint16_t *)buffer)[i] = inw(dev->io_base);
@@ -90,7 +115,8 @@ int ata_write_sector(void *device, uint32_t lba, const void *buffer) {
   if (((FAT32_DirectoryEntry *)(buf))->name[0] == 0x00)
     printk(KERN_INFO "ata_write_sector: buffer is empty\n");
 
-  ata_wait(dev);
+  if (ata_wait(dev) != 0)
+    return -1;
 
   outb(dev->io_base + 6, 0xE0 | ((lba >> 24) & 0x0F));
   outb(dev->io_base + 2, 1);
@@ -99,15 +125,14 @@ int ata_write_sector(void *device, uint32_t lba, const void *buffer) {
   outb(dev->io_base + 5, (lba >> 16) & 0xFF);
   outb(dev->io_base + 7, ATA_WRITE_SECTORS);
 
-  if (ata_wait_drq(dev) < 0) {
-    printk(KERN_ERR "ata_wait_drq failed\n");
+  if (ata_wait_drq(dev) < 0)
     return -1;
-  }
 
   for (int i = 0; i < SECTOR_SIZE / 2; i++)
     outw(dev->io_base, buf[i]);
 
-  ata_wait(dev);
+  if (ata_wait(dev) != 0)
+    return -1;
 
   if (inb(dev->io_base + 7) & ATA_STATUS_ERROR) {
     printk(KERN_ERR "ata_write_sector failed\n");

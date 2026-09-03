@@ -41,7 +41,7 @@ void init_filesystems(void) {
 
   /* Discover persistent storage (ATA/GPT/FAT32) */
   printk(KERN_DEBUG "GPT init...\n");
-  int gpt_result = gpt_init(partitions);
+  int gpt_result = gpt_init(partitions, 20);
   if (gpt_result < 0) {
     printk(KERN_WARNING "GPT initialization failed: %d (no persistent disk)\n",
            gpt_result);

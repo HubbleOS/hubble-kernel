@@ -60,13 +60,15 @@ bool vfs_mount(const char *mountpoint, gpt_partition_t *partition,
     printk(KERN_INFO "VFS: init dev vfs\n");
     extern void dev_vfs_init(VFS_FS * fs, VFS_Device * device,
                              uint32_t start_lba);
-    dev_vfs_init(fs, partition->device, partition->first_lba);
+    dev_vfs_init(fs, partition ? partition->device : NULL,
+                 partition ? partition->first_lba : 0);
     break;
   case FS_PIPE:
     printk(KERN_INFO "VFS: init pipe vfs\n");
     extern void pipe_vfs_init(VFS_FS * fs, VFS_Device * device,
                               uint32_t start_lba);
-    pipe_vfs_init(fs, partition->device, partition->first_lba);
+    pipe_vfs_init(fs, partition ? partition->device : NULL,
+                  partition ? partition->first_lba : 0);
     break;
   case FS_INITRAMFS:
     printk(KERN_INFO "VFS: init initramfs vfs\n");
@@ -91,10 +93,6 @@ bool vfs_mount(const char *mountpoint, gpt_partition_t *partition,
       return false;
     }
   }
-  printk(KERN_INFO "VFS: mounted %d at %s\n", type, mountpoint);
-  if (!fs->fs)
-    printk(KERN_ERR "VFS: failed to mount %d at %s\n", type, mountpoint);
-
   VFS_Mount *mnt = kmalloc(sizeof(VFS_Mount), GFP_KERNEL);
   strcpy(mnt->mountpoint, mountpoint);
   mnt->fs = fs;
