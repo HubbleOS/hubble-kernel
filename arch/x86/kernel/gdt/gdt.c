@@ -148,12 +148,27 @@ void tss_set_rsp0(uint64_t rsp0) {
 }
 
 /**
+ * @brief Get the APIC ID via CPUID (works before APIC is initialized)
+ *
+ * Uses CPUID leaf 1, EBX bits 24-31 to read the initial APIC ID.
+ * This is safe to call during early boot when the LAPIC MMIO is
+ * not yet mapped.
+ */
+static uint8_t early_get_apic_id(void) {
+  uint32_t eax, ebx, ecx, edx;
+  asm volatile("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(1));
+  return (ebx >> 24) & 0xFF;
+}
+
+/**
  * @brief Initialise the TSS for the current CPU
  *
  * Allocates a kernel stack and loads the TSS via LTR.
+ * Uses CPUID for the APIC ID since the LAPIC MMIO is not
+ * yet available during early boot.
  */
 void tss_init(void) {
-  uint8_t cpu_id = lapic_get_id();
+  uint8_t cpu_id = early_get_apic_id();
 
   memset(&tss[cpu_id], 0, sizeof(tss_t));
   tss[cpu_id].rsp0 =

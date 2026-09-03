@@ -8,13 +8,11 @@
 #include "gpt_struct.h"
 #include <stdint.h>
 
-extern uint32_t first_usable_lba;
-extern uint32_t last_usable_lba;
-
 /** @brief Initialize GPT partition table parsing.
  *
  * @param partitions  Array of gpt_partition_t to fill with discovered
- * partitions.
+ *                    partitions.
+ * @param capacity    Maximum number of partitions the array can hold.
  * @return Number of partitions found, or -1 on error.
  */
-int gpt_init(gpt_partition_t *partitions);
+int gpt_init(gpt_partition_t *partitions, uint32_t capacity);

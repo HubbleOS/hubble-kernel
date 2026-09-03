@@ -184,17 +184,53 @@ void isr_handler(registers_t *regs) {
     printk(KERN_ERR "\nFATAL ERROR - System Halted\n");
 
     if (regs->int_no == 14) {
-      uint64_t addr;
-      asm volatile("mov %%cr2, %0" : "=r"(addr));
-
-      debug_dump_mapping((uint64_t *)get_cr3(), addr);
-
+      uint64_t cr2;
       uint64_t cr3;
+      asm volatile("mov %%cr2, %0" : "=r"(cr2));
       asm volatile("mov %%cr3, %0" : "=r"(cr3));
-      task_t *t = get_current_task();
-      printk(KERN_INFO
-             "Fault: active CR3=0x%llx task->page_table=0x%llx match=%d\n",
-             cr3, (uint64_t)t->page_table, cr3 == (uint64_t)t->page_table);
+
+      printk(KERN_ERR "\nPAGE FAULT\n");
+      printk(KERN_ERR "CR2: 0x%016llx  (fault address)\n", cr2);
+      printk(KERN_ERR "RIP: 0x%016llx\n", regs->rip);
+      printk(KERN_ERR "RSP: 0x%016llx\n", regs->rsp);
+      printk(KERN_ERR "CR3: 0x%016llx\n", cr3);
+      printk(KERN_ERR "ERROR: 0x%llx  [", regs->err_code);
+      if (regs->err_code & 1)
+        printk(KERN_ERR "PRESENT ");
+      else
+        printk(KERN_ERR "NON-PRESENT ");
+      if (regs->err_code & 2)
+        printk(KERN_ERR "WRITE ");
+      else
+        printk(KERN_ERR "READ ");
+      if (regs->err_code & 4)
+        printk(KERN_ERR "USER ");
+      else
+        printk(KERN_ERR "SUPERVISOR ");
+      if (regs->err_code & 8)
+        printk(KERN_ERR "RSVD_BIT_SET ");
+      if (regs->err_code & 0x10)
+        printk(KERN_ERR "INSTR_FETCH ");
+      printk(KERN_ERR "]\n");
+
+      printk(KERN_ERR "\nPage table walk for CR2=0x%llx:\n", cr2);
+      debug_dump_mapping((uint64_t *)(cr3 & ~0xFFFULL), cr2);
+
+      if (is_scheduler_initialized()) {
+        task_t *t = get_current_task();
+        if (t) {
+          printk(KERN_ERR "Fault: active CR3=0x%llx task->page_table=0x%llx "
+                          "match=%d\n",
+                 cr3, (uint64_t)t->page_table,
+                 cr3 == (uint64_t)t->page_table);
+        } else {
+          printk(KERN_ERR "Fault: active CR3=0x%llx (no current task)\n",
+                 cr3);
+        }
+      } else {
+        printk(KERN_ERR "Fault: active CR3=0x%llx (scheduler not init)\n",
+               cr3);
+      }
     }
     while (1) {
       asm volatile("cli; hlt");
