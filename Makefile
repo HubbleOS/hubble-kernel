@@ -334,6 +334,22 @@ PHONY += build-tool
 build-tool:
 	@$(MAKE) -C $(DEV_TOOLS_DIR)/build build
 
+# ---------------------------------------------------------------------------
+# Rust crate
+# ---------------------------------------------------------------------------
+
+RUST_TARGET := x86_64-unknown-none
+RUST_DIR    := $(ROOT_DIR)/rust
+RUST_LIB    := $(RUST_DIR)/target/$(RUST_TARGET)/release/libhubble_rust.a
+
+PHONY += rust
+rust:
+	@echo "Building Rust crate..."
+	RUSTFLAGS="-C code-model=kernel" cargo build \
+		--manifest-path $(RUST_DIR)/Cargo.toml \
+		--target $(RUST_TARGET) \
+		--release
+
 SRC_DIRS := .
 
 PHONY: format
@@ -354,7 +370,7 @@ format-check:
 		| xargs -r clang-format -style=file --dry-run --Werror
 
 PHONY += build
-build: build-tool
+build: build-tool rust
 	@mkdir -p $(LOG_DIR)
 	$(foreach mod,$(MODULES),$(call load-module,$(mod)))
 	$(Q)set -e; for dir in $(filter-out arch/$(ARCH)/kernel,$(subdirs)); do \
