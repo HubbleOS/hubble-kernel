@@ -398,11 +398,15 @@ build: build-tool rust
 PHONY += initramfs
 initramfs: $(INITRAMFS_IMG)
 
-$(INITRAMFS_IMG): $(OUT_DIR)/init/init.elf
+$(INITRAMFS_IMG): $(OUT_DIR)/init/init.elf $(OUT_DIR)/usr/user1.elf
 	@echo "Generating initramfs..."
-	@mkdir -p $(BUILD_DIR)/initramfs-root
+	@test -f $(OUT_DIR)/usr/user1.elf || \
+		(echo "ERROR: user1.elf not found at $(OUT_DIR)/usr/user1.elf" && exit 1)
+	@mkdir -p $(BUILD_DIR)/initramfs-root/usr
 	@cp $(OUT_DIR)/init/init.elf $(BUILD_DIR)/initramfs-root/init
 	@chmod +x $(BUILD_DIR)/initramfs-root/init
+	@cp $(OUT_DIR)/usr/user1.elf $(BUILD_DIR)/initramfs-root/usr/user1.elf
+	@chmod +x $(BUILD_DIR)/initramfs-root/usr/user1.elf
 	python3 $(ROOT_DIR)/tools/dev/initramfs/main.py \
 		--root $(BUILD_DIR)/initramfs-root \
 		--output $(INITRAMFS_IMG)
