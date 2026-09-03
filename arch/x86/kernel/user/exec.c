@@ -24,7 +24,10 @@ task_t *exec(const char *path) {
   uint64_t *pml4 = vmm_create_user_pagemap();
 
   uint64_t entry;
-  elf_load(path, &entry, (uint64_t *)pml4);
+  if (elf_load(path, &entry, (uint64_t *)pml4) < 0) {
+    printk(KERN_ERR "exec: failed to load %s\n", path);
+    return NULL;
+  }
 
   task_t *task1 = task_create((void *)entry, 0, 1);
 

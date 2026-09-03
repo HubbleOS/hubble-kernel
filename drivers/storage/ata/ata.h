@@ -34,4 +34,11 @@ int ata_read_sector(void *device, uint32_t lba, void *buffer);
  */
 int ata_write_sector(void *device, uint32_t lba, const void *buffer);
 
+/**
+ * @brief Detect whether an ATA device is present on the channel
+ * @param dev  Pointer to an ATA_Device descriptor
+ * @return 0 if device present, -1 if no device
+ */
+int ata_probe(ATA_Device *dev);
+
 void ata_manual_test(void);
