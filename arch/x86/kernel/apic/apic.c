@@ -188,13 +188,22 @@ void lapic_eoi(void) {
 /**
  * @brief Get the APIC ID of the current CPU
  *
+ * Uses x2APIC MSR if available, then LAPIC MMIO if initialized,
+ * and falls back to CPUID during early boot before APIC init.
+ *
  * @return APIC ID
  */
 uint32_t lapic_get_id(void) {
   if (apic_mode == APIC_INIT_X2APIC) {
     return (uint32_t)rdmsr(0x802);
-  } else {
+  } else if (apic_state.lapic_base) {
     return (lapic_read(LAPIC_ID) >> 24) & 0xFF;
+  } else {
+    uint32_t eax, ebx, ecx, edx;
+    asm volatile("cpuid"
+                 : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
+                 : "a"(1));
+    return (ebx >> 24) & 0xFF;
   }
 }
 

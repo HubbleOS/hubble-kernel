@@ -14,6 +14,17 @@
 /* -- Page Table Control ---------------------------------------- */
 
 /**
+ * @brief Get the current CR2 value (faulting address on page fault)
+ *
+ * @return Value of CR2 register
+ */
+static inline uint64_t get_cr2(void) {
+  uint64_t cr2;
+  asm volatile("mov %%cr2, %0" : "=r"(cr2));
+  return cr2;
+}
+
+/**
  * @brief Get the current CR3 value (physical address of PML4)
  *
  * @return Physical address of the current top-level page table
