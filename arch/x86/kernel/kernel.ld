@@ -1,9 +1,7 @@
 KERNEL_VIRT_BASE = 0xffffffff80000000;
-KERNEL_PHYS_BASE = 0x100000;
 
 MEMORY
 {
-    PHYS (rwx) : ORIGIN = KERNEL_PHYS_BASE, LENGTH = 16M
     VIRT (rwx) : ORIGIN = KERNEL_VIRT_BASE, LENGTH = 16M
 }
 
@@ -21,19 +19,27 @@ SECTIONS
     . = KERNEL_VIRT_BASE;
 
     _kernel_start = .;
-    _kernel_phys_start = ORIGIN(PHYS);
 
     .text : ALIGN(4096)
     {
         *(.text.boot)
         *(.text*)
         *(.text.ap_trampoline)
-    } > VIRT AT > PHYS :text
+    } > VIRT :text
 
     .rodata : ALIGN(4096)
     {
         *(.rodata*)
-    } > VIRT AT > PHYS :rodata
+    } > VIRT :rodata
+
+    .limine_requests ALIGN(8) :
+    {
+        __limine_requests_start = .;
+        KEEP(*(.limine_requests_start))
+        KEEP(*(.limine_requests))
+        KEEP(*(.limine_requests_end))
+        __limine_requests_end = .;
+    } > VIRT :rodata
 
     .initcalls ALIGN(8) :
     {
@@ -56,12 +62,12 @@ SECTIONS
         __start___initcalls_late = .;
         KEEP(*(.initcalls.late))
         __stop___initcalls_late = .;
-    } > VIRT AT > PHYS :rodata
+    } > VIRT :rodata
 
     .data : ALIGN(4096)
     {
         *(.data*)
-    } > VIRT AT > PHYS :data
+    } > VIRT :data
 
     .bss (NOLOAD) : ALIGN(4096)
     {
@@ -69,18 +75,12 @@ SECTIONS
         *(.bss*)
         *(COMMON)
         _bss_end = .;
-    } > VIRT AT > PHYS :data
+    } > VIRT :data
 
     . = ALIGN(4096);
 
     _kernel_end = .;
     _kernel_size = _kernel_end - _kernel_start;
-
-    _kernel_phys_end = LOADADDR(.text)
-        + SIZEOF(.text)
-        + SIZEOF(.rodata)
-        + SIZEOF(.initcalls)
-        + SIZEOF(.data);
 
     /DISCARD/ :
     {

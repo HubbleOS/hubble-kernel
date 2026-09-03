@@ -17,7 +17,7 @@ BUILD_TOOL := $(OUT_DIR)/tools/dev/build/build_main
 BUILD_TOOL_FLAGS := --log-file $(OUT_DIR)/logs/usr_build.log -v
 export BUILD_TOOL BUILD_TOOL_FLAGS
 
-subdirs := lib apps apptest
+subdirs := lib apps apptest init
 
 .PHONY: all build clean rebuild
 
