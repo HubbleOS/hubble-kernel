@@ -11,6 +11,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <mm/map/vm_map.h>
+
 /**
  * @brief ELF64 file header
  */
@@ -57,5 +59,6 @@ typedef struct {
   uint64_t initial_brk;
 } elf_image_t;
 
-int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm);
+int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm,
+            vm_map_t *vm_map);
 int elf_load_sep(const char *path, uint64_t *entry_out, uint64_t *pm);

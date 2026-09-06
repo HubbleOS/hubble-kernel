@@ -67,3 +67,21 @@ void pmm_free_page(uint64_t phys_addr);
  * @param count Number of pages to free
  */
 void pmm_free_pages(uint64_t phys_addr, size_t count);
+
+/**
+ * @brief Increment a physical page's reference count
+ *
+ * Used when a second mapping starts pointing at an already-allocated page
+ * (e.g. a COW fork sharing a page between parent and child).
+ *
+ * @param phys_addr Physical address of the page
+ */
+void pmm_inc_refcount(uint64_t phys_addr);
+
+/**
+ * @brief Read a physical page's current reference count
+ *
+ * @param phys_addr Physical address of the page
+ * @return Current reference count
+ */
+uint32_t pmm_get_refcount(uint64_t phys_addr);
