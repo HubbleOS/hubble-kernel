@@ -33,8 +33,6 @@
 #define MAX_PRIO 255
 #define BASE_SLICE 5
 #define USER_STACK_SIZE 0x10000
-/* Matches syscall_init.c's MSR_GS_BASE - see task_sleep() below. */
-#define MSR_GS_BASE 0xC0000101
 
 /* -- Static data -------------------------------------------------------- */
 
@@ -362,6 +360,10 @@ void task_exit(int exit_code) {
   if (!task)
     return;
 
+  /* Captured now, used after free_context() below - see the comment
+   * further down at the matching swapgs. */
+  bool was_in_syscall = task->exec.in_syscall;
+
   task->linkage.exit_code = exit_code;
   task->linkage.state = TASK_DEAD;
 
@@ -387,6 +389,21 @@ void task_exit(int exit_code) {
   free_context(task);
   current_task[cpu_id] = NULL;
 
+  /* GS_BASE is a single per-CPU MSR, not saved/restored per task. If we
+   * got here mid-syscall (exit_group, the common case), syscall_entry's
+   * own entry swapgs already swapped it to this cpu's real per-cpu
+   * pointer and never swapped it back (we're not returning to
+   * userspace, we're dying) - left as is, whichever task schedule()
+   * picks next inherits that wrong value the moment IT tries its own
+   * syscall_entry swapgs, exchanging against our leftover instead of
+   * the real baseline. Swap back to the baseline ourselves before
+   * yielding the CPU, exactly like task_sleep() does. Not needed if we
+   * got here via task_wrapper() instead (a kernel task's entry point
+   * just returning) - that path never swapped anything in the first
+   * place. We never come back, so there's no matching swap-in. */
+  if (was_in_syscall)
+    asm volatile("swapgs");
+
   asm volatile("int $32");
 
   while (1)
@@ -409,27 +426,24 @@ void task_sleep(void) {
   current->linkage.state = TASK_BLOCKED;
   current->sched.time_slice = 0;
 
-  if (current->exec.in_syscall)
+  /* GS_BASE is a single per-CPU MSR, not saved/restored per task: while
+   * we're blocked, some OTHER task's syscall can run on this CPU, and
+   * ITS entry swapgs needs GS_BASE sitting at the "nobody's mid-syscall"
+   * baseline (this cpu's real per-cpu pointer, stashed in KERNEL_GS_BASE)
+   * to exchange against - not left at what WE had it as. So swap back to
+   * that baseline before yielding the CPU, same as if we were actually
+   * returning to userspace (conceptually, we're handing it to someone
+   * else); swap back in once we actually resume. task_exit() mirrors the
+   * swap-out half of this on its own way out, for the same reason. */
+  if (current->exec.in_syscall) {
     current->exec.in_syscall_rsp = user_rsp;
+    asm volatile("swapgs");
+  }
 
   asm volatile("int $32");
 
-  /* GS_BASE is a single per-CPU MSR, not saved/restored per task - by the
-   * time we resume here (possibly much later, on whatever CPU picks this
-   * task back up), it holds whatever the last syscall_entry.asm exit on
-   * THIS cpu left it as (always 0/"user", since every syscall entry/exit
-   * pair is self-contained and swaps back before returning to userspace),
-   * regardless of what it was when we called int $32 above. We're about
-   * to unwind back up through the original syscall path (wait4 and
-   * friends) that needs GS_BASE = this cpu's real per-cpu pointer to work
-   * (its own gs:8 access in syscall_entry.asm's epilogue), so set it back
-   * explicitly - an absolute wrmsr, not a swapgs, since we can't assume
-   * anything about the current value to toggle against. */
-  if (current->exec.in_syscall) {
-    extern cpu_local_t cpu_locals[];
-    uint8_t cpu_id = lapic_get_id();
-    wrmsr(MSR_GS_BASE, (uint64_t)&cpu_locals[cpu_id]);
-  }
+  if (current->exec.in_syscall)
+    asm volatile("swapgs");
 }
 
 /**
