@@ -28,6 +28,11 @@ long sys_read(int fd, char *buffer, size_t len) {
 
   if (fd == 0) {
     VFS_File *stdin = vfs_open("/dev/tty0", 0);
+    /* vfs_open() reports failure as ERR_PTR(-errno), not NULL - has to
+     * be checked before handing it to vfs_read(), which dereferences it
+     * unconditionally. */
+    if (IS_ERR(stdin) || !stdin)
+      return -EIO;
 
     size_t read_count = vfs_read(stdin, buffer, len);
     vfs_close(stdin);
