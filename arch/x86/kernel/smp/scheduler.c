@@ -25,6 +25,7 @@
 #include "io.h"
 #include "scheduler.h"
 #include "task.h"
+#include "waitqueue.h"
 
 /* -- Constants ---------------------------------------------------------- */
 
@@ -32,6 +33,8 @@
 #define MAX_PRIO 255
 #define BASE_SLICE 5
 #define USER_STACK_SIZE 0x10000
+/* Matches syscall_init.c's MSR_GS_BASE - see task_sleep() below. */
+#define MSR_GS_BASE 0xC0000101
 
 /* -- Static data -------------------------------------------------------- */
 
@@ -96,6 +99,13 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg,
     return NULL;
 
   memset(task, 0, sizeof(task_t));
+
+  task->child_wait = kmalloc(sizeof(wait_queue_t), GFP_KERNEL);
+  if (!task->child_wait) {
+    kfree(task);
+    return NULL;
+  }
+  waitqueue_init(task->child_wait);
 
   printk(KERN_INFO "Assigning PID\n");
   static uint32_t next_pid = 1;
@@ -207,6 +217,22 @@ void task_map_user_stack(task_t *task, uint64_t *pml4_phys) {
 
     vmm_map_page_into(pml4_phys, stack_base + i, phys,
                       PTE_PRESENT | PTE_USER | PTE_WRITE);
+  }
+
+  /* Register the stack as a VMA too, or it's invisible to anything that
+   * walks the address space by VMA (mmap's free-range search, fork()'s COW
+   * clone) even though it's really mapped. */
+  if (!task->mm.vm_map)
+    task->mm.vm_map = vm_map_create();
+  if (task->mm.vm_map) {
+    vm_area_t *vma = kmalloc(sizeof(vm_area_t), GFP_ZERO);
+    if (vma) {
+      vma->base = stack_base;
+      vma->size = size;
+      vma->type = VMA_ANONYMOUS;
+      vma->flags = VM_READ | VM_WRITE;
+      vm_insert_area(task->mm.vm_map, vma);
+    }
   }
 }
 
@@ -339,6 +365,9 @@ void task_exit(int exit_code) {
   task->linkage.exit_code = exit_code;
   task->linkage.state = TASK_DEAD;
 
+  if (task->linkage.parent)
+    waitqueue_wake_all(task->linkage.parent->child_wait);
+
   spinlock_acquire(&runqueues[cpu_id].lock);
 
   size_t task_index = 0;
@@ -380,13 +409,27 @@ void task_sleep(void) {
   current->linkage.state = TASK_BLOCKED;
   current->sched.time_slice = 0;
 
-  if (current->exec.in_syscall) {
-    current->exec.in_syscall_rsp = user_rsp;
-    asm volatile("swapgs");
-  }
-  asm volatile("int $32");
   if (current->exec.in_syscall)
-    asm volatile("swapgs");
+    current->exec.in_syscall_rsp = user_rsp;
+
+  asm volatile("int $32");
+
+  /* GS_BASE is a single per-CPU MSR, not saved/restored per task - by the
+   * time we resume here (possibly much later, on whatever CPU picks this
+   * task back up), it holds whatever the last syscall_entry.asm exit on
+   * THIS cpu left it as (always 0/"user", since every syscall entry/exit
+   * pair is self-contained and swaps back before returning to userspace),
+   * regardless of what it was when we called int $32 above. We're about
+   * to unwind back up through the original syscall path (wait4 and
+   * friends) that needs GS_BASE = this cpu's real per-cpu pointer to work
+   * (its own gs:8 access in syscall_entry.asm's epilogue), so set it back
+   * explicitly - an absolute wrmsr, not a swapgs, since we can't assume
+   * anything about the current value to toggle against. */
+  if (current->exec.in_syscall) {
+    extern cpu_local_t cpu_locals[];
+    uint8_t cpu_id = lapic_get_id();
+    wrmsr(MSR_GS_BASE, (uint64_t)&cpu_locals[cpu_id]);
+  }
 }
 
 /**

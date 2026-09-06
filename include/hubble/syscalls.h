@@ -26,3 +26,9 @@ long sys_stat(const char *path, struct stat *st);
 long sys_writev(int fd, struct iovec *iov, int iovcnt);
 long sys_mprotect(void *addr, size_t len, int prot);
 long arch_prctl(long a1, long a2, long a3, long a4, long a5, long a6);
+long sys_munmap(uint64_t addr, size_t length);
+
+typedef struct registers registers_t;
+long sys_fork(registers_t *regs);
+long sys_execve(registers_t *regs);
+long sys_wait4(int pid, int *status, int options, void *rusage);
