@@ -40,10 +40,12 @@ uint64_t build_user_stack(uint64_t stack_top, char *const argv[],
   uint64_t *envp_ptrs = kmalloc(sizeof(uint64_t) * (envc + 1), GFP_KERNEL);
 
   for (int i = 0; i < argc; i++) {
-    size_t len = strlen(argv[i]) + 1; // +1 для '\0'
-    sp -= len;
-    memcpy(sp, argv[i], len);
-    argv_ptrs[i] = (uint64_t)sp;
+    if (argv[i]) {
+      size_t len = strlen(argv[i]) + 1; // +1 для '\0'
+      sp -= len;
+      memcpy(sp, argv[i], len);
+      argv_ptrs[i] = (uint64_t)sp;
+    }
   }
   argv_ptrs[argc] = 0;
 
@@ -98,14 +100,16 @@ uint64_t build_user_stack(uint64_t stack_top, char *const argv[],
  */
 task_t *execv(const char *path, char *const argv[], char *const envp[]) {
   uint64_t *pml4 = vmm_create_user_pagemap();
+  vm_map_t *vm_map = vm_map_create();
 
   elf_image_t *image = kmalloc(sizeof(elf_image_t), GFP_KERNEL);
-  if (elf_load(path, image, pml4) == -1) {
+  if (elf_load(path, image, pml4, vm_map) == -1) {
     printk("exited");
     return NULL;
   }
 
   task_t *task = task_create((void *)image->entry, 200, 1);
+  task->mm.vm_map = vm_map;
   printk("task->fs_base: %lx\n", task->mm.fs_base);
 
   task->mm.heap_end = image->initial_brk;
@@ -118,6 +122,7 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
     memcpy(tls, image->tls_init, image->tls_filesz);
 
     task->mm.fs_base = (uint64_t)tls;
+    task->mm.tls_size = image->tls_memsz;
     printk("task->fs_base: %lx\n", task->mm.fs_base);
 
     kfree(image->tls_init);
@@ -134,10 +139,20 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
   task_map_user_stack(task, pml4);
   printk("task->exec.context.rsp: %lx\n", task->exec.context.rsp);
 
+  /* `path` may be a caller-supplied pointer that's only valid under the
+   * CURRENT (pre-exec) address space - elf_load() above already relied on
+   * that. build_user_stack() below runs after we've switched CR3 to the
+   * freshly loaded image, where `path` is no longer guaranteed mapped, so
+   * copy it into kernel memory (safe under any CR3, since the kernel heap
+   * lives in the shared kernel half) while it's still dereferenceable. */
+  size_t path_len = strlen(path) + 1;
+  char *path_copy = kmalloc(path_len, GFP_KERNEL);
+  memcpy(path_copy, path, path_len);
+
   uint64_t old_cr3 = get_cr3();
   set_cr3((uint64_t)pml4);
 
-  char *default_argv[] = {(char *)path, NULL};
+  char *default_argv[] = {path_copy, NULL};
   char *default_envp[] = {"PATH=/usr/bin:/busy/", NULL};
 
   uint64_t new_sp =
@@ -147,6 +162,7 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
   task->exec.context.rsp = new_sp;
 
   set_cr3(old_cr3);
+  kfree(path_copy);
 
   uint32_t lo, hi;
 

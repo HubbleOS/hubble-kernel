@@ -55,6 +55,7 @@ static syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_write] = (syscall_fn_t)sys_write,
     [SYS_read] = (syscall_fn_t)sys_read,
     [SYS_mmap] = (syscall_fn_t)sys_mmap,
+    [SYS_munmap] = (syscall_fn_t)sys_munmap,
     [SYS_open] = (syscall_fn_t)sys_open,
     [SYS_stat] = (syscall_fn_t)sys_stat,
     [SYS_close] = (syscall_fn_t)sys_close,
@@ -73,6 +74,7 @@ static syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [14] = (syscall_fn_t)sys_rt_sigprocmask,
     [79] = (syscall_fn_t)sys_getcwd,
     [107] = (syscall_fn_t)sys_getuid,
+    [SYS_wait4] = (syscall_fn_t)sys_wait4,
 };
 
 uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,

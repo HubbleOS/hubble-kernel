@@ -11,6 +11,10 @@
 #include <fs/vfs/vfs.h>
 #include <mm/map/vm_map.h>
 
+/* Forward-declared, not included: waitqueue.h includes scheduler.h, which
+ * includes this header - a plain pointer only needs the incomplete type. */
+struct wait_queue;
+
 /* -- Constants ---------------------------------------------------------- */
 
 #define MAX_FDS 64
@@ -118,6 +122,10 @@ typedef struct {
   uint64_t heap_start;
   uint64_t heap_end;
   uint64_t fs_base;
+  size_t tls_size; /* size of the kmalloc'd block fs_base points to, 0 if
+                     * fs_base isn't an owned TLS allocation (no TLS, or a
+                     * raw value set via arch_prctl) - lets fork() know
+                     * whether/how much to duplicate rather than alias it */
 } task_mm_t;
 
 // ---- Stacks state ----
@@ -151,8 +159,8 @@ typedef struct {
   uint16_t lock;
   uint8_t spinlocks;
 
-  struct task_t *next, *prev;
-  struct task_t *parent, *children, *sibling;
+  struct task *next, *prev;
+  struct task *parent, *children, *sibling;
 } task_linkage_t;
 
 typedef struct task {
@@ -165,4 +173,5 @@ typedef struct task {
   task_fdtable_t fdtable;
   task_signals_t signals;
   task_linkage_t linkage;
+  struct wait_queue *child_wait; /* woken by task_exit() for wait4() */
 } task_t;
