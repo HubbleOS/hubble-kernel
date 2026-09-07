@@ -159,18 +159,11 @@ static const char *exception_messages[] = {
  * @param regs Register snapshot from the ISR stub
  */
 void isr_handler(registers_t *regs) {
-  /* Page fault, present + write + from user mode: may be a COW page
-   * waiting to be duplicated rather than a real error - resolve it
-   * silently before spending any diagnostic output on what is normal COW
-   * behavior. The user-mode check matters: COW only ever applies to user
-   * mappings, and without it a kernel-mode fault landing on a page whose
-   * PTE happens to carry stray bits that look like PRESENT|COW gets
-   * misrouted into vmm_resolve_cow(), which then does real alloc/copy/free
-   * work against a bogus physical address. */
-  if (regs->int_no == 14 && (regs->err_code & 0x7) == 0x7) {
+  /**	COW resolve */
+  if (regs->int_no == 14 && (regs->err_code & 0x3) == 0x3) {
     uint64_t fault_addr;
     asm volatile("mov %%cr2, %0" : "=r"(fault_addr));
-    if (vmm_resolve_cow(fault_addr))
+    if (fault_addr < 0x0000800000000000ULL && vmm_resolve_cow(fault_addr))
       return;
   }
 

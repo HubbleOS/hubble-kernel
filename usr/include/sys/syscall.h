@@ -12,6 +12,7 @@
 #define SYS_lseek 8
 #define SYS_mmap 9
 #define SYS_module_load 10
+#define SYS_arch_prctl 158
 
 #define SYSCALL_COUNT 256
 

@@ -31,7 +31,7 @@ long sys_open(const char *path, int flags) {
   if (IS_ERR(file) || !file)
     return -ENOENT;
 
-  for (int i = 2; i < MAX_FDS; i++) {
+  for (int i = 3; i < MAX_FDS; i++) {
     if (!current->fdtable.fds[i].data) {
       current->fdtable.fds[i].data = file;
       current->fdtable.fds[i].flags = flags;
