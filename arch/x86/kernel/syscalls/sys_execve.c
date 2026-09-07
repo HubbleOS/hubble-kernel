@@ -6,9 +6,6 @@
  *
  *  - the old address space (page table, vm_map) is leaked instead of torn
  *    down - fine for a one-shot test process, not for repeated execve().
- *  - argv/envp are passed straight through to execv() as kernel pointers;
- *    there's no copy-in from user space, so callers must currently pass
- *    something the kernel can dereference directly.
  *  - fd table / signal state aren't reset (POSIX wants close-on-exec
  *    handled here; not done).
  *
@@ -16,7 +13,9 @@
  */
 
 #include <hubble/errno.h>
+#include <hubble/string.h>
 #include <hubble/syscalls.h>
+#include <mm/kmalloc.h>
 #include <msr.h>
 
 #include <smp/scheduler.h>
@@ -25,6 +24,58 @@
 
 #include "syscall_entry.h"
 #include <asm.h>
+
+/**
+ * @brief Copy a NULL-terminated argv/envp array (and the strings it
+ * points to) from the CALLING process's address space into kernel
+ * memory.
+ *
+ * Must be called before execv() switches CR3 to the freshly loaded
+ * image's page table - user_vec and everything it points to belongs to
+ * the OLD address space, same reasoning as why execv() itself copies
+ * `path` early. The kernel-owned copy this returns lives in the shared
+ * kernel half, so it stays dereferenceable after the switch.
+ *
+ * @param user_vec NULL-terminated array of user pointers, or NULL.
+ * @return Kernel-owned NULL-terminated array of kernel-owned strings, or
+ *         NULL if user_vec was NULL or the copy failed.
+ */
+static char **copy_strvec_from_user(char *const *user_vec) {
+  if (!user_vec)
+    return NULL;
+
+  int count = 0;
+  while (user_vec[count])
+    count++;
+
+  char **copy = kmalloc(sizeof(char *) * (count + 1), GFP_KERNEL);
+  if (!copy)
+    return NULL;
+
+  int i;
+  for (i = 0; i < count; i++) {
+    size_t len = strlen(user_vec[i]) + 1;
+    copy[i] = kmalloc(len, GFP_KERNEL);
+    if (!copy[i])
+      break;
+    memcpy(copy[i], user_vec[i], len);
+  }
+  copy[i] = NULL; /* terminate wherever the loop actually got to, so a
+                   * mid-way kmalloc failure still yields a valid
+                   * (just truncated) NULL-terminated array. */
+  return copy;
+}
+
+/**
+ * @brief Free an array returned by copy_strvec_from_user().
+ */
+static void free_strvec(char **vec) {
+  if (!vec)
+    return;
+  for (int i = 0; vec[i]; i++)
+    kfree(vec[i]);
+  kfree(vec);
+}
 
 /**
  * @brief execve() - replace the current task's program image.
@@ -48,28 +99,24 @@
 long sys_execve(registers_t *regs) {
   const char *path = (const char *)regs->rdi;
 
-  /* No copy-in from user space yet (see file header): argv/envp are
-   * pointers into the CALLING process's OLD address space, and execv()
-   * only dereferences them after switching CR3 to the freshly loaded
-   * image's page table, where they're not valid. Ignoring whatever the
-   * caller passed and forcing NULL here just falls back to execv()'s own
-   * default_argv/default_envp (which only touches `path`, already proven
-   * dereferenceable since elf_load() got this far with it) - good enough
-   * for a quick smoke test, wrong for a real execve(argv, envp). */
-  char *const *argv = NULL;
-  char *const *envp = NULL;
-
   if (!path)
     return -EINVAL;
 
+  char **argv = copy_strvec_from_user((char *const *)regs->rsi);
+  char **envp = copy_strvec_from_user((char *const *)regs->rdx);
+
   task_t *image = execv(path, argv, envp);
-  if (!image)
+  if (!image) {
+    free_strvec(argv);
+    free_strvec(envp);
     return -ENOEXEC;
+  }
+
+  free_strvec(argv);
+  free_strvec(envp);
 
   task_t *current = get_current_task();
 
-  /* TODO: tear down current->mm.page_table / vm_map instead of leaking
-   * them once execve needs to survive more than a quick test. */
   current->mm.page_table = image->mm.page_table;
   current->mm.vm_map = image->mm.vm_map;
   current->mm.heap_start = image->mm.heap_start;
@@ -84,16 +131,8 @@ long sys_execve(registers_t *regs) {
   uint64_t new_rip = image->exec.context.rip;
   uint64_t new_rsp = image->exec.context.rsp;
 
-  /* Only image->mm/exec.context were harvested above; the throwaway
-   * task_t (and its own kernel stack) is discarded - leaked, not freed,
-   * for now. */
   kfree(image);
 
-  /* Redirect the pending sysret instead of returning normally: RCX holds
-   * the return RIP (syscall_entry.asm restores it with "pop rcx" right
-   * before sysret), while the saved user RSP lives at %gs:8 (restored by
-   * "mov rsp, [gs:8]" just before sysret too) rather than in the register
-   * frame at all - so that's the one we have to poke directly. */
   regs->rcx = new_rip;
   asm volatile("mov %0, %%gs:8" ::"r"(new_rsp) : "memory");
 

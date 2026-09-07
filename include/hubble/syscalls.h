@@ -24,6 +24,7 @@ long sys_module_unload(const char *name);
 uint64_t sys_brk(uint64_t new_addr);
 long sys_stat(const char *path, struct stat *st);
 long sys_writev(int fd, struct iovec *iov, int iovcnt);
+long sys_readv(int fd, struct iovec *iov, int iovcnt);
 long sys_mprotect(void *addr, size_t len, int prot);
 long arch_prctl(long a1, long a2, long a3, long a4, long a5, long a6);
 long sys_munmap(uint64_t addr, size_t length);
