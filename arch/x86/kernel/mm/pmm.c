@@ -11,8 +11,8 @@
 
 #include <stdbool.h>
 
-#include <limine.h>
-#include <limine_requests.h>
+#include <boot/limine.h>
+#include <requests.h>
 #include <hubble/string.h>
 
 #include "higher_half.h"

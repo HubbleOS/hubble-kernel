@@ -31,8 +31,8 @@
 
 #include <mm/vmm.h>
 
-#include <limine.h>
-#include <limine_requests.h>
+#include <boot/limine.h>
+#include <requests.h>
 
 #include <src/console.h>
 #include <user/exec.h>

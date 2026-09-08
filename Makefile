@@ -94,7 +94,7 @@ INCLUDES += -I$(abspath .)
 INCLUDES += -I$(abspath include)
 INCLUDES += -I$(ARCH_DIR)/include
 INCLUDES += -I$(ARCH_DIR)/kernel
-INCLUDES += -I$(abspath limine-protocol/include)
+INCLUDES += -I$(ARCH_DIR)/boot/limine
 export INCLUDES
 
 # ---------------------------------------------------------------------------
@@ -107,14 +107,6 @@ export LIB_DIR
 LOG_DIR  := $(OUT_DIR)/logs/$(shell date +%Y-%m-%d)
 LOG_FILE := $(LOG_DIR)/$(shell date +%H-%M-%S).log
 export LOG_DIR LOG_FILE
-
-ISO_DIR  := $(BUILD_DIR)/iso
-ISO_TREE := $(BUILD_DIR)/iso-tree
-ISO_OUT  := $(OUT_DIR)/hubble.iso
-INITRAMFS_IMG := $(BUILD_DIR)/initramfs.img
-export ISO_DIR
-
-LIMINE_DATADIR := $(shell limine --print-datadir 2>/dev/null)
 
 ifeq ($(ARCH),arm64)
 	EFI_NAME := BOOTAA64.EFI
@@ -313,26 +305,13 @@ endef
 
 subdirs :=
 $(eval $(call kbuild-subdir,arch/$(ARCH)))
-$(eval $(call kbuild-subdir,tools/dev))
 
 # ---------------------------------------------------------------------------
-# Userland build
-# ---------------------------------------------------------------------------
-
-USR_DIR := $(abspath usr)
-export USR_DIR
-
-USR_BUILD :=
-ifneq ($(ARCH),arm64)
-  USR_BUILD := $(MAKE) -C $(USR_DIR) -j$(JOBS) BUILD_TOOL_FLAGS="--log-file $(OUT_DIR)/logs/usr_build.log -v --jobs $(JOBS)"
-endif
-
-# ---------------------------------------------------------------------------
-# Default target: produce a bootable ISO
+# Default target: build the kernel
 # ---------------------------------------------------------------------------
 
 PHONY += all
-all: iso
+all: build
 
 # ---------------------------------------------------------------------------
 # Targets
@@ -388,100 +367,7 @@ build: build-tool rust
 	$(Q)set -e; for dir in $(filter-out arch/$(ARCH)/kernel,$(subdirs)); do \
 		$(MAKE) -C $$dir; \
 	done
-	$(USR_BUILD)
 	@echo "Build complete"
-
-# ---------------------------------------------------------------------------
-# Initramfs
-# ---------------------------------------------------------------------------
-
-PHONY += initramfs
-initramfs: $(INITRAMFS_IMG)
-
-$(INITRAMFS_IMG): $(OUT_DIR)/init/init.elf $(OUT_DIR)/usr/user1.elf
-	@echo "Generating initramfs..."
-	@test -f $(OUT_DIR)/usr/user1.elf || \
-		(echo "ERROR: user1.elf not found at $(OUT_DIR)/usr/user1.elf" && exit 1)
-	@mkdir -p $(BUILD_DIR)/initramfs-root/usr
-	@cp $(OUT_DIR)/init/init.elf $(BUILD_DIR)/initramfs-root/init
-	@chmod +x $(BUILD_DIR)/initramfs-root/init
-	@cp $(OUT_DIR)/usr/user1.elf $(BUILD_DIR)/initramfs-root/usr/user1.elf
-	@chmod +x $(BUILD_DIR)/initramfs-root/usr/user1.elf
-	python3 $(ROOT_DIR)/tools/dev/initramfs/main.py \
-		--root $(BUILD_DIR)/initramfs-root \
-		--output $(INITRAMFS_IMG)
-
-# ---------------------------------------------------------------------------
-# ISO generation
-# ---------------------------------------------------------------------------
-
-PHONY += iso-tree
-iso-tree: build initramfs
-	@echo "Assembling ISO tree..."
-	@rm -rf $(ISO_TREE)
-	@mkdir -p $(ISO_TREE)/boot/limine
-	@mkdir -p $(ISO_TREE)/EFI/BOOT
-	@cp $(ISO_DIR)/kernel.elf                $(ISO_TREE)/boot/kernel.elf
-	@cp $(INITRAMFS_IMG)                      $(ISO_TREE)/boot/initramfs.img
-	@cp $(ROOT_DIR)/limine.conf               $(ISO_TREE)/boot/limine/limine.conf
-	@cp $(LIMINE_DATADIR)/BOOTX64.EFI         $(ISO_TREE)/EFI/BOOT/BOOTX64.EFI
-	@cp $(LIMINE_DATADIR)/BOOTIA32.EFI        $(ISO_TREE)/EFI/BOOT/BOOTIA32.EFI 2>/dev/null || true
-	@cp $(LIMINE_DATADIR)/limine-bios.sys     $(ISO_TREE)/boot/limine/limine-bios.sys 2>/dev/null || true
-	@cp $(LIMINE_DATADIR)/limine-bios-cd.bin  $(ISO_TREE)/boot/limine/limine-bios-cd.bin 2>/dev/null || true
-	@cp $(LIMINE_DATADIR)/limine-uefi-cd.bin  $(ISO_TREE)/boot/limine/limine-uefi-cd.bin 2>/dev/null || true
-	@cp $(ROOT_DIR)/cat.jpg $(ISO_TREE)/boot/cat.jpg 2>/dev/null || true
-	@echo "ISO tree assembled at $(ISO_TREE)"
-
-PHONY += iso
-iso: iso-tree
-	@echo "Creating hubble.iso..."
-	@mkdir -p $(OUT_DIR)
-	xorriso -as mkisofs -R -r -J \
-		-b boot/limine/limine-bios-cd.bin \
-		-no-emul-boot \
-		-boot-load-size 4 \
-		-boot-info-table \
-		--efi-boot boot/limine/limine-uefi-cd.bin \
-		-efi-boot-part \
-		--efi-boot-image \
-		--protective-msdos-label \
-		$(ISO_TREE) \
-		-o $(ISO_OUT)
-	limine bios-install $(ISO_OUT) 2>/dev/null || true
-	@echo ""
-	@echo "============================================="
-	@echo "  ISO created: $(ISO_OUT)"
-	@echo "  Size: $$(du -h $(ISO_OUT) | cut -f1)"
-	@echo "============================================="
-	@echo ""
-	@echo "  Contents of ISO:"
-	@xorriso -indev $(ISO_OUT) -report_el_torito as_mkisofs 2>/dev/null | head -30 || true
-	@echo ""
-
-# ---------------------------------------------------------------------------
-# Run (boot the ISO in QEMU)
-# ---------------------------------------------------------------------------
-
-PHONY += run
-run: iso
-	@python3 $(ROOT_DIR)/tools/dev/qemu/main.py --iso $(ISO_OUT)
-
-# ---------------------------------------------------------------------------
-# Disk image
-# ---------------------------------------------------------------------------
-
-PHONY += disk
-disk:
-	@mkdir -p out/disks
-	@python3 tools/dev/disk/main.py
-
-PHONY += flash
-flash:
-	@python3 tools/dev/flash/main.py
-
-PHONY += demo
-demo:
-	@$(MAKE) -C tools/dev/demo run
 
 PHONY += clean
 clean:

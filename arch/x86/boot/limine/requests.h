@@ -1,9 +1,9 @@
 /**
- * @file limine_requests.h
+ * @file requests.h
  * @brief Centralized Limine request declarations for the Hubble kernel
  *
  * ALL Limine requests used by the kernel are declared here as extern globals.
- * The corresponding definitions live in limine_requests.c.
+ * The corresponding definitions live in requests.c.
  *
  * Each kernel subsystem includes this header to access the Limine responses
  * it needs. There is NO intermediate boot-info structure — subsystems
@@ -12,7 +12,8 @@
 
 #pragma once
 
-#include <limine.h>
+#include <boot/limine.h>
+
 
 /* Memory map */
 extern volatile struct limine_memmap_request limine_memmap_req;

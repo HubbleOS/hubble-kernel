@@ -1,14 +1,14 @@
 /**
- * @file limine_requests.c
+ * @file requests.c
  * @brief Limine request definitions — the single source of truth
  *
  * All Limine protocol requests are defined here. The corresponding
- * declarations live in limine_requests.h. Each kernel subsystem
+ * declarations live in requests.h. Each kernel subsystem
  * includes that header to access the responses it needs.
  */
 
-#include <limine.h>
-#include <limine_requests.h>
+#include <boot/limine.h>
+#include <requests.h>
 
 /* -- Limine base revision (0) ----------------------------------------- */
 
