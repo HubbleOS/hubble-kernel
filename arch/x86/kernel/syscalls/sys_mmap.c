@@ -1,10 +1,4 @@
-/*
- * Syscall: map files or devices into memory.
- *
- * Implements the mmap system call for creating memory mappings, either
- * anonymous (zero-filled) or backed by device memory.  Also provides
- * helper functions for file descriptor lookup used by other syscalls.
- */
+
 
 #include <hubble/errno.h>
 #include <hubble/printk.h>

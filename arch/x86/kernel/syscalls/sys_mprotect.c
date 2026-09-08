@@ -5,10 +5,10 @@
 #include <smp/scheduler.h>
 #include <smp/task.h>
 
-#define PROT_READ 0x1  // можна читати
-#define PROT_WRITE 0x2 // можна писати
-#define PROT_EXEC 0x4  // можна виконувати як інструкції процесора
-#define PROT_NONE 0x0  // взагалі ніякого доступу
+#define PROT_READ 0x1
+#define PROT_WRITE 0x2
+#define PROT_EXEC 0x4
+#define PROT_NONE 0x0
 
 long sys_mprotect(void *addr, size_t len, int prot) {
   task_t *p = get_current_task();
@@ -19,11 +19,11 @@ long sys_mprotect(void *addr, size_t len, int prot) {
   if (prot & PROT_WRITE)
     flags |= PTE_WRITE;
   if (!(prot & PROT_EXEC))
-    flags |= PTE_NX; // якщо є NX-біт підтримка
+    flags |= PTE_NX;
 
   for (uint64_t va = start; va < end; va += PAGE_SIZE) {
     // if (vmm_update_page_flags(p->page_table, va, flags) < 0)
-    //     return -1; // -EINVAL/-ENOMEM залежно від причини
+    //     return -1; // -EINVAL/-ENOMEM
   }
   return 0;
 }

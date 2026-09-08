@@ -16,11 +16,6 @@
 
 typedef long (*syscall_fn_t)(long, long, long, long, long, long);
 
-long exit_stub(long a1) {
-  task_exit(a1);
-  __builtin_unreachable();
-}
-
 long sys_set_tid_address(int *tidptr) {
   // task_t *current_task = get_current_task();
   //   current_task->clear_child_tid = tidptr; // optional
@@ -35,20 +30,6 @@ long sys_rt_sigprocmask(int how, const void *set, void *oldset,
                         size_t sigsetsize) {
   return 0;
 }
-
-long sys_getcwd(char *buf, size_t size) {
-  if (size < 2)
-    return -ERANGE;
-
-  buf[0] = '/';
-  buf[1] = '\0';
-
-  return 2;
-}
-
-long sys_getuid(void) { return 0; }
-
-long sys_geteuid(void) { return 0; }
 
 long sys_exit_group(int status) { return exit_stub(status); }
 static syscall_fn_t syscall_table[SYSCALL_COUNT] = {

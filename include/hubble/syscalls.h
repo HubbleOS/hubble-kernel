@@ -33,3 +33,7 @@ typedef struct registers registers_t;
 long sys_fork(registers_t *regs);
 long sys_execve(registers_t *regs);
 long sys_wait4(int pid, int *status, int options, void *rusage);
+long sys_getuid(void);
+long sys_geteuid(void);
+long sys_getcwd(char *buf, size_t size);
+long exit_stub(long a1);
