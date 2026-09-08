@@ -1,0 +1,15 @@
+[kernel]
+arch = "x86_64"
+mem = 1024
+smp = 2
+
+[debug]
+port = 1000
+
+[qemu]
+ARCH = "x86_64"
+MEM = 1024
+ISO_PATH = "out/build/x86/iso/"
+
+[test]
+TEXT = "test!"

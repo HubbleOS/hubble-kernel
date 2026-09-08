@@ -11,8 +11,8 @@
 
 #include <stdint.h>
 
-#include <limine.h>
-#include <limine_requests.h>
+#include <boot/limine.h>
+#include <requests.h>
 
 /* -- Virtual Memory Layout ----------------------------------------------- */
 
