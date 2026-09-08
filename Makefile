@@ -15,6 +15,9 @@ OUT_DIR ?= $(abspath out)
 BUILD_DIR := $(OUT_DIR)/build/$(ARCH)
 ARCH_DIR := $(abspath arch/$(ARCH))
 
+# Debug kernel ELF path (when DEBUG=1, copy kernel.elf here after build)
+DEBUG_KERNEL_ELF := $(OUT_DIR)/debug/kernel.elf
+
 TOOLS_DIR := tools
 DEV_TOOLS_DIR := tools/dev
 BUILD_TOOL := $(OUT_DIR)/tools/dev/build/build_main
@@ -26,10 +29,13 @@ ifneq ($(ARCH),$(filter $(ARCH),$(SUPPORTED_ARCHES)))
 endif
 
 # ---------------------------------------------------------------------------
-# Build mode: RELEASE=1 removes debug symbols, uses -O3
+# Build mode
+#   RELEASE=1  removes debug symbols, uses -O3
+#   DEBUG=1    builds with debug symbols and -Og optimization
 # ---------------------------------------------------------------------------
 
 RELEASE ?= 0
+DEBUG ?= 0
 
 # ---------------------------------------------------------------------------
 # Parallel jobs: defaults to number of CPUs
@@ -72,6 +78,8 @@ export ARCH OUT_DIR BUILD_DIR ARCH_DIR TOOLS_DIR BUILD_TOOL
 
 ifeq ($(RELEASE),1)
 	CFLAGS = -ffreestanding -O3 -Wall -Wextra
+else ifeq ($(DEBUG),1)
+	CFLAGS = -ffreestanding -Og -Wall -Wextra -g -gdwarf-4
 else
 	CFLAGS = -ffreestanding -O2 -Wall -Wextra -g
 endif
@@ -368,6 +376,55 @@ build: build-tool rust
 		$(MAKE) -C $$dir; \
 	done
 	@echo "Build complete"
+
+PHONY += debug-build
+debug-build:
+	@$(MAKE) DEBUG=1 build
+	@mkdir -p $(OUT_DIR)/debug
+	@cp $(OUT_DIR)/kernel.elf $(DEBUG_KERNEL_ELF)
+	@echo "Debug kernel: $(DEBUG_KERNEL_ELF)"
+
+PHONY += release
+release-build:
+	@$(MAKE) RELEASE=1 build
+	@mkdir -p $(OUT_DIR)/release
+	@cp $(OUT_DIR)/kernel.elf $(OUT_DIR)/release/kernel.elf
+	@echo "Release kernel: $(OUT_DIR)/release/kernel.elf"
+
+# ---------------------------------------------------------------------------
+# Run kernel in QEMU (requires Limine)
+# ---------------------------------------------------------------------------
+
+PHONY += run
+run: build
+	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(OUT_DIR)/kernel.elf $(OUT_DIR)/kernel-dev.iso
+	@bash $(ROOT_DIR)/scripts/qemu/run-qemu.sh --iso $(OUT_DIR)/kernel-dev.iso
+
+# ---------------------------------------------------------------------------
+# Debug: build debug kernel, create minimal ISO, launch QEMU paused
+# ---------------------------------------------------------------------------
+
+PHONY += debug
+debug: debug-build
+	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(DEBUG_KERNEL_ELF) $(OUT_DIR)/kernel-debug.iso
+	@bash $(ROOT_DIR)/scripts/qemu/run-qemu.sh --debug --iso $(OUT_DIR)/kernel-debug.iso
+
+# ---------------------------------------------------------------------------
+# GDB: connect to running QEMU debug session
+# ---------------------------------------------------------------------------
+
+PHONY += gdb
+gdb:
+	@gdb -q -ex "file $(DEBUG_KERNEL_ELF)" -ex "target remote :1234"
+
+# ---------------------------------------------------------------------------
+# Release: build release kernel, create minimal ISO, launch QEMU
+# ---------------------------------------------------------------------------
+
+PHONY += release
+release: release-build
+	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(OUT_DIR)/release/kernel.elf $(OUT_DIR)/kernel.iso
+	@bash $(ROOT_DIR)/scripts/qemu/run-qemu.sh --iso $(OUT_DIR)/kernel.iso
 
 PHONY += clean
 clean:
