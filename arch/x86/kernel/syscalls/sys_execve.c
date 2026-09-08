@@ -1,16 +1,3 @@
-/*
- * Syscall: execve.
- *
- * QUICK TEST-QUALITY IMPLEMENTATION - just enough to smoke-test a
- * fork()+execve() flow, not a correct POSIX execve() yet. Known shortcuts:
- *
- *  - the old address space (page table, vm_map) is leaked instead of torn
- *    down - fine for a one-shot test process, not for repeated execve().
- *  - fd table / signal state aren't reset (POSIX wants close-on-exec
- *    handled here; not done).
- *
- * Remove this comment once execve is fleshed out into the real thing.
- */
 
 #include <hubble/errno.h>
 #include <hubble/string.h>
@@ -60,9 +47,7 @@ static char **copy_strvec_from_user(char *const *user_vec) {
       break;
     memcpy(copy[i], user_vec[i], len);
   }
-  copy[i] = NULL; /* terminate wherever the loop actually got to, so a
-                   * mid-way kmalloc failure still yields a valid
-                   * (just truncated) NULL-terminated array. */
+  copy[i] = NULL;
   return copy;
 }
 

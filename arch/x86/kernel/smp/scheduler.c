@@ -599,7 +599,7 @@ void lapic_timer_handler(registers_t *regs) {
     if (current->sched.time_slice > 0)
       current->sched.time_slice--;
   }
-
+  // cannary for stack overflow, not very usefull, mostly debuging thing
   if (current && current->exec.rsp0) {
     uint64_t *canary = (uint64_t *)(current->exec.rsp0);
     if (*canary != CANARY) {

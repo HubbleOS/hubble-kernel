@@ -1,10 +1,3 @@
-/*
- * Syscall: write to a file descriptor.
- *
- * Writes data from a user buffer to the kernel file associated with
- * the given file descriptor.  Writes to fd 1 (stdout) are redirected
- * to the kernel console via printk.
- */
 
 #include "syscall_entry.h"
 #include <hubble/errno.h>
