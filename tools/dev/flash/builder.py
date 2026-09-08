@@ -1,6 +1,6 @@
 import platform
 
-from backends import MacBackend
+from backends import LinuxBackend, MacBackend
 
 
 class Builder:
@@ -8,11 +8,11 @@ class Builder:
         os_name = platform.system()
 
         if os_name == "Linux":
-            print("Linux backend not implemented")
+            self.backend = LinuxBackend()
         elif os_name == "Darwin":
             self.backend = MacBackend()
         else:
-            raise Exception("Unsupported OS")
+            raise Exception("make flash is only supported on Linux and macOS")
 
     def build(self):
         disks = self.backend.disk_list()
@@ -22,10 +22,16 @@ class Builder:
 
         print("\nAvailable disks:")
         for i, disk in enumerate(disks):
-            print(f"{i + 1}. {disk}")
+            if isinstance(disk, dict):
+                print(f"  {i + 1}. {disk['path']}  ({disk.get('size_gb', 0):.1f} GB)  {disk.get('name', '')}")
+            else:
+                print(f"  {i + 1}. {disk}")
 
         choice = int(input("\nSelect disk: ")) - 1
-        disk = disks[choice]
+        if isinstance(disks[0], dict):
+            disk = disks[choice]["path"]
+        else:
+            disk = disks[choice]
 
         print(f"\nSelected: {disk}")
 
