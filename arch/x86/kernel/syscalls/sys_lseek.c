@@ -1,9 +1,4 @@
-/*
- * Syscall: reposition file offset.
- *
- * Implements the lseek system call for changing the current read/write
- * position within an open file.
- */
+
 
 #include <hubble/syscalls.h>
 

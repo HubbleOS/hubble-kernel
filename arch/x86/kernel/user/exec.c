@@ -21,7 +21,6 @@
 
 uint64_t build_user_stack(uint64_t stack_top, char *const argv[],
                           char *const envp[]) {
-  // 1. Порахувати кількість argv/envp елементів
   int argc = 0;
   if (argv)
     while (argv[argc])
@@ -34,8 +33,6 @@ uint64_t build_user_stack(uint64_t stack_top, char *const argv[],
 
   uint8_t *sp = (uint8_t *)stack_top;
 
-  // 2. Скопіювати самі рядки (argv, потім envp), знизу вгору,
-  //    і одразу запам'ятати адреси, куди їх поклали
   uint64_t *argv_ptrs = kmalloc(sizeof(uint64_t) * (argc + 1), GFP_KERNEL);
   uint64_t *envp_ptrs = kmalloc(sizeof(uint64_t) * (envc + 1), GFP_KERNEL);
 
@@ -57,33 +54,27 @@ uint64_t build_user_stack(uint64_t stack_top, char *const argv[],
   }
   envp_ptrs[envc] = 0;
 
-  // 3. Вирівняти перед AT_RANDOM
   sp = (uint8_t *)((uintptr_t)sp & ~0xFULL);
   sp -= 16;
   uint8_t *random_bytes = sp;
   for (int i = 0; i < 16; i++)
     random_bytes[i] = (uint8_t)(i * 0x9E + 0x37);
 
-  // 4. Вирівняти основний sp
   uint64_t *usp = (uint64_t *)((uintptr_t)sp & ~0xFULL);
 
-  // 5. auxv (у зворотному порядку -- останній push стає першим у пам'яті)
   *--usp = 0;                      // AT_NULL value
   *--usp = AT_NULL;                // AT_NULL type
   *--usp = (uint64_t)random_bytes; // AT_RANDOM value
   *--usp = AT_RANDOM;              // AT_RANDOM type
 
-  // 6. envp[] масив вказівників (у зворотному порядку)
-  *--usp = 0; // NULL термінатор envp
+  *--usp = 0;
   for (int i = envc - 1; i >= 0; i--)
     *--usp = envp_ptrs[i];
 
-  // 7. argv[] масив вказівників
-  *--usp = 0; // NULL термінатор argv
+  *--usp = 0;
   for (int i = argc - 1; i >= 0; i--)
     *--usp = argv_ptrs[i];
 
-  // 8. argc
   *--usp = argc;
 
   kfree(argv_ptrs);
@@ -139,12 +130,6 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
   task_map_user_stack(task, pml4);
   printk("task->exec.context.rsp: %lx\n", task->exec.context.rsp);
 
-  /* `path` may be a caller-supplied pointer that's only valid under the
-   * CURRENT (pre-exec) address space - elf_load() above already relied on
-   * that. build_user_stack() below runs after we've switched CR3 to the
-   * freshly loaded image, where `path` is no longer guaranteed mapped, so
-   * copy it into kernel memory (safe under any CR3, since the kernel heap
-   * lives in the shared kernel half) while it's still dereferenceable. */
   size_t path_len = strlen(path) + 1;
   char *path_copy = kmalloc(path_len, GFP_KERNEL);
   memcpy(path_copy, path, path_len);
