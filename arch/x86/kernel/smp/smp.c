@@ -103,20 +103,13 @@ void ap_entry(void) {
 
   percpu_init_ap(apic_id);
 
-  hpet_init();
-
   idt_load();
   tss_init();
   syscall_init();
   enable_nxe();
   ap_ready = true;
 
-  uint64_t rflags;
-  asm volatile("pushfq; pop %0" : "=r"(rflags));
-  printk(KERN_INFO "AP %u: RFLAGS=0x%lx, IF=%d\n", lapic_get_id(), rflags,
-         (rflags >> 9) & 1);
   sti();
-  printk(KERN_INFO "\nAP %u online!\nHello from AP %u \n\n", apic_id, apic_id);
   lapic_timer_init(100);
   while (1) {
     hlt();
@@ -174,37 +167,21 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id,
   printk(KERN_INFO "Starting AP %u...\n", apic_id);
   apic_start_ap(apic_id, AP_TRAMPOLINE_ADDR);
 
-  for (volatile int i = 0; i < 10000000; i++)
-    ;
-
-  volatile uint32_t *marker =
-      (volatile uint32_t *)(AP_TRAMPOLINE_ADDR +
-                            offsetof(struct ap_startup_data, ap_ready));
-
-  printk(KERN_INFO "AP marker: 0x%x\n", *marker);
+  hpet_delay_ms(10);
 
   printk(KERN_INFO "Waiting for AP %u to signal ready...\n", apic_id);
-  uint64_t timeout = 1000000000;
+  uint64_t timeout = 1000;
 
   while (data->ap_ready == 0 && timeout > 0) {
     timeout--;
-
-    if (timeout % 100000000 == 0) {
-      printk(KERN_INFO "  Still waiting... (ap_ready=%u)\n", data->ap_ready);
-    }
-
-    asm volatile("pause" ::: "memory");
+    hpet_delay_us(100);
   }
 
   if (data->ap_ready) {
     printk(KERN_OK "AP %u started successfully!\n", apic_id);
   } else {
     printk(KERN_ERR "AP %u failed to start (timeout)\n", apic_id);
-    printk(KERN_INFO "  Final ap_ready value: %u\n", data->ap_ready);
   }
-
-  for (volatile int i = 0; i < 10000000; i++)
-    ;
 }
 
 /* -- SMP initialization ------------------------------------------------- */
