@@ -5,7 +5,7 @@
 # Usage:
 #   ./scripts/qemu/build-minimal-iso.sh [KERNEL_ELF] [OUTPUT_ISO]
 #
-# This creates a minimal ISO with just the kernel and Limine bootloader,
+# This creates a minimal ISO with the kernel, initramfs, and Limine bootloader,
 # suitable for direct QEMU execution without the full hubble-os environment.
 #
 
@@ -16,14 +16,16 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 KERNEL_ELF="${1:-$ROOT_DIR/out/kernel.elf}"
 OUTPUT_ISO="${2:-$ROOT_DIR/out/kernel-dev.iso}"
+INITRAMFS_IMG="${3:-$ROOT_DIR/out/initramfs.img}"
 
 SCRIPTS_DIR="$SCRIPT_DIR"
 CONFIG_DIR="$SCRIPT_DIR"
 LIMINE_DATADIR="${LIMINE_DATADIR:-$(limine --print-datadir 2>/dev/null || true)}"
 
 echo "=== Hubble Kernel Minimal ISO Builder ==="
-echo "Kernel ELF: $KERNEL_ELF"
-echo "Output:     $OUTPUT_ISO"
+echo "Kernel ELF:  $KERNEL_ELF"
+echo "Initramfs:   $INITRAMFS_IMG"
+echo "Output:      $OUTPUT_ISO"
 echo ""
 
 # Check kernel exists
@@ -48,6 +50,15 @@ mkdir -p "$ISO_TREE/EFI/BOOT"
 
 # Copy kernel
 cp "$KERNEL_ELF" "$ISO_TREE/boot/kernel.elf"
+
+# Copy initramfs if present
+if [ -f "$INITRAMFS_IMG" ]; then
+    cp "$INITRAMFS_IMG" "$ISO_TREE/boot/initramfs.img"
+    echo "Included initramfs: $INITRAMFS_IMG"
+else
+    echo "WARNING: initramfs not found at $INITRAMFS_IMG"
+    echo "  Run 'make initramfs' to generate it."
+fi
 
 # Copy Limine config
 cp "$CONFIG_DIR/limine.conf" "$ISO_TREE/boot/limine/limine.conf"
