@@ -171,6 +171,19 @@ static inline void lapic_write(uint32_t reg, uint32_t val) {
   }
 }
 
+/**
+ * @brief Wait until the LAPIC ICR is idle (no pending delivery)
+ *
+ * Polls the Delivery Status bit (bit 12) of ICR_LOW until it
+ * clears, indicating the previous IPI has been accepted by the
+ * local APIC.  Includes a bounded timeout to avoid hangs.
+ */
+static void lapic_wait_icr_idle(void) {
+  int timeout = 100000;
+  while ((lapic_read(LAPIC_ICR_LOW) & (1 << 12)) && --timeout)
+    cpu_pause();
+}
+
 /* -- Local APIC Public API ------------------------------------- */
 
 /**
@@ -327,36 +340,24 @@ void lapic_send_ipi(uint32_t dest, uint8_t vector) {
  */
 void lapic_send_init_ipi(uint8_t dest_apic_id) {
   if (!apic_state.lapic_base && apic_mode != APIC_INIT_X2APIC) {
-    printk(KERN_ERR "ERROR: LAPIC not initialized\n");
+    printk(KERN_ERR "LAPIC not initialized\n");
     return;
   }
-
-  printk(KERN_INFO "Sending INIT IPI to APIC ID %u\n", dest_apic_id);
 
   if (apic_mode == APIC_INIT_X2APIC) {
     uint64_t icr =
         ((uint64_t)dest_apic_id << 32) | (5 << 8) | (1 << 14) | (1 << 15);
-
-    wrmsr(IA32_X2APIC_ICR, icr);
-
-    hpet_delay_ms(10);
-
-    icr = ((uint64_t)dest_apic_id << 32) | (5 << 8) | (1 << 15);
-
     wrmsr(IA32_X2APIC_ICR, icr);
   } else {
     lapic_write(LAPIC_ICR_HIGH, ((uint32_t)dest_apic_id) << 24);
 
+    lapic_wait_icr_idle();
     lapic_write(LAPIC_ICR_LOW, 0x4500);
-    while (lapic_read(LAPIC_ICR_LOW) & (1 << 12))
-      ;
+    lapic_wait_icr_idle();
 
     lapic_write(LAPIC_ICR_LOW, 0x4500 | (1 << 15));
-    while (lapic_read(LAPIC_ICR_LOW) & (1 << 12))
-      ;
+    lapic_wait_icr_idle();
   }
-
-  printk(KERN_INFO "INIT IPI sent\n");
 }
 
 /**
@@ -367,135 +368,22 @@ void lapic_send_init_ipi(uint8_t dest_apic_id) {
  */
 void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector) {
   if (!apic_state.lapic_base && apic_mode != APIC_INIT_X2APIC) {
-    printk(KERN_ERR "ERROR: LAPIC base not initialized\n");
+    printk(KERN_ERR "LAPIC base not initialized\n");
     return;
   }
-
-  printk(KERN_INFO "Sending STARTUP IPI");
-  printk(KERN_INFO "Destination APIC ID: %u\n", dest_apic_id);
-  printk(KERN_INFO "Vector: 0x%02x\n", vector);
-  printk(KERN_INFO "Target physical address: 0x%05x\n", (uint32_t)vector << 12);
-  printk(KERN_INFO "APIC Mode: %s\n",
-         apic_mode == APIC_INIT_X2APIC ? "x2APIC" : "xAPIC");
-
-  uint32_t svr = lapic_read(LAPIC_SVR);
-  printk(KERN_INFO "LAPIC SVR: 0x%08x %s\n", svr,
-         (svr & 0x100) ? "[ENABLED]" : "[DISABLED!]");
-
-  if (!(svr & 0x100)) {
-    printk(KERN_ERR "ERROR: LAPIC not enabled!\n");
-    return;
-  }
-
-  uint32_t esr_before = lapic_read(LAPIC_ESR);
-  printk(KERN_INFO "ESR before: 0x%08x\n", esr_before);
 
   if (apic_mode == APIC_INIT_X2APIC) {
-    uint64_t icr = ((uint64_t)dest_apic_id << 32) | (vector & 0xFF) | (6 << 8) |
-                   (0 << 11) | (1 << 14) | (0 << 15);
-
-    printk(KERN_INFO "Writing x2APIC ICR (single 64-bit MSR):\n");
-    printk(KERN_INFO "  Destination (bits 63:32): 0x%08x\n", dest_apic_id);
-    printk(KERN_INFO "  Vector (bits 0-7):        0x%02x\n", vector & 0xFF);
-    printk(KERN_INFO "  Delivery mode (bits 8-10): %u (STARTUP)\n", 6);
-    printk(KERN_INFO "  Full ICR value:           0x%016llx\n", icr);
-
-    wrmsr(0x830, icr);
-
-    printk(KERN_OK "x2APIC ICR write completed (self-synchronizing)\n");
+    uint64_t icr = ((uint64_t)dest_apic_id << 32) | (vector & 0xFF) |
+                   (6 << 8) | (0 << 11) | (1 << 14) | (0 << 15);
+    wrmsr(IA32_X2APIC_ICR, icr);
   } else {
-    uint32_t icr_high = ((uint32_t)dest_apic_id) << 24;
-    printk(KERN_INFO "Writing xAPIC ICR_HIGH: 0x%08x\n", icr_high);
-    lapic_write(LAPIC_ICR_HIGH, icr_high);
-
-    uint32_t icr_high_read = lapic_read(LAPIC_ICR_HIGH);
-    printk(KERN_INFO "ICR_HIGH readback: 0x%08x %s\n", icr_high_read,
-           (icr_high_read == icr_high) ? "[OK]" : "[MISMATCH!]");
-
+    lapic_write(LAPIC_ICR_HIGH, ((uint32_t)dest_apic_id) << 24);
     asm volatile("mfence" ::: "memory");
 
-    uint32_t icr_low = (vector & 0xFF) | (6 << 8);
-
-    printk(KERN_INFO "Writing xAPIC ICR_LOW: 0x%08x\n", icr_low);
-    printk(KERN_INFO "  Vector field (bits 0-7):    0x%02x\n", icr_low & 0xFF);
-    printk(KERN_INFO "  Delivery mode (bits 8-10):  %u (STARTUP)\n",
-           (icr_low >> 8) & 0x7);
-    printk(KERN_INFO "  Level (bit 14):             %u\n", (icr_low >> 14) & 1);
-    printk(KERN_INFO "  Trigger (bit 15):           %u\n", (icr_low >> 15) & 1);
-
-    lapic_write(LAPIC_ICR_LOW, icr_low);
-
-    uint32_t icr_low_read = lapic_read(LAPIC_ICR_LOW);
-    printk(KERN_INFO "ICR_LOW readback: 0x%08x\n", icr_low_read);
-    printk(KERN_INFO "  Delivery Status (bit 12): %s\n",
-           (icr_low_read & (1 << 12)) ? "Send Pending" : "Idle");
-
-    int timeout = 100000;
-    while ((lapic_read(LAPIC_ICR_LOW) & (1 << 12)) && timeout > 0) {
-      cpu_pause();
-      timeout--;
-    }
-
-    if (timeout == 0) {
-      printk(KERN_WARNING "WARNING: SIPI delivery timeout!\n");
-    } else {
-      printk(KERN_OK "SIPI delivery completed (iterations left: %d)\n",
-             timeout);
-    }
+    lapic_wait_icr_idle();
+    lapic_write(LAPIC_ICR_LOW, (vector & 0xFF) | (6 << 8));
+    lapic_wait_icr_idle();
   }
-
-  uint32_t esr_after = lapic_read(LAPIC_ESR);
-  printk(KERN_INFO "ESR after: 0x%08x\n", esr_after);
-
-  if (esr_after != 0) {
-    printk(KERN_ERR "ERROR: LAPIC errors detected!\n");
-    if (esr_after & 0x01)
-      printk(KERN_ERR "  - Send Checksum Error\n");
-    if (esr_after & 0x02)
-      printk(KERN_ERR "  - Receive Checksum Error\n");
-    if (esr_after & 0x04)
-      printk(KERN_ERR "  - Send Accept Error\n");
-    if (esr_after & 0x08)
-      printk(KERN_ERR "  - Receive Accept Error\n");
-    if (esr_after & 0x20)
-      printk(KERN_INFO "  - Send Illegal Vector\n");
-    if (esr_after & 0x40)
-      printk(KERN_INFO "  - Receive Illegal Vector\n");
-    if (esr_after & 0x80)
-      printk(KERN_INFO "  - Illegal Register Address\n");
-  }
-
-  printk(KERN_OK "STARTUP IPI Complete\n");
-
-  printk(KERN_INFO "POST-SIPI VERIFICATION");
-
-  for (volatile int i = 0; i < 100000; i++)
-    cpu_pause();
-
-  if (apic_mode == APIC_INIT_X2APIC) {
-    uint64_t icr = rdmsr(0x830);
-    printk(KERN_INFO "ICR after delay: 0x%016llx\n", icr);
-    printk(KERN_INFO "  Delivery Status (bit 12): %s\n",
-           (icr & (1ULL << 12)) ? "STILL PENDING (!)" : "Complete");
-
-    if (icr & (1ULL << 12)) {
-      printk(KERN_ERR
-             "ERROR: SIPI delivery still pending - may not have been sent!\n");
-    }
-  }
-
-  uint32_t esr = lapic_read(LAPIC_ESR);
-  if (esr != 0) {
-    printk(KERN_ERR "ERROR: LAPIC ESR shows errors: 0x%08x\n", esr);
-    if (esr & 0x04) {
-      printk(KERN_ERR
-             "  Send Accept Error - Destination AP didn't accept IPI!\n");
-      printk(KERN_INFO
-             "  This means the AP either doesn't exist or isn't ready.\n");
-    }
-  }
-
-  printk(KERN_INFO "END POST-SIPI VERIFICATION\n");
 }
 
 /* -- Debug ----------------------------------------------------- */
@@ -861,31 +749,15 @@ void apic_start_ap(uint8_t apic_id, uint32_t trampoline_addr) {
   if (!apic_state.initialized)
     return;
 
-  printk(KERN_INFO "Starting AP with APIC ID %u", apic_id);
-  printk(KERN_INFO "Trampoline at physical 0x%x\n", trampoline_addr);
-
   uint8_t vector = (trampoline_addr >> 12) & 0xFF;
-  printk(KERN_INFO "SIPI vector: 0x%02x (starts at 0x%05x)\n", vector,
-         vector << 12);
 
-  printk(KERN_INFO "\nStep 1: Sending INIT IPI...\n");
   lapic_send_init_ipi(apic_id);
+  hpet_delay_ms(10);
 
-  printk(KERN_INFO "Step 2: Waiting 10ms...\n");
-  for (volatile int i = 0; i < 10000000; i++)
-    cpu_pause();
-
-  printk(KERN_INFO "Step 3: Sending first SIPI...\n");
   lapic_send_startup_ipi(apic_id, vector);
+  hpet_delay_us(200);
 
-  printk(KERN_INFO "Step 4: Waiting 200us...\n");
-  for (volatile int i = 0; i < 200000; i++)
-    cpu_pause();
-
-  printk(KERN_INFO "Step 5: Sending second SIPI...\n");
   lapic_send_startup_ipi(apic_id, vector);
-
-  printk(KERN_OK "AP startup sequence complete\n");
 }
 
 /**
