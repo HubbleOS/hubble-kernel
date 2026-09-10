@@ -4,11 +4,11 @@
  */
 #include "ata.h"
 #include <fs/fat32/fat_structs.h>
+#include <hpet/hpet.h>
 #include <hubble/printk.h>
 #include <hubble/string.h>
 #include <io.h>
 #include <stdint.h>
-#include <hpet/hpet.h>
 
 /* -- ATA register and command defines --------------------- */
 
@@ -67,8 +67,7 @@ static int ata_wait_drq(ATA_Device *dev) {
     if (hpet_get_counter() >= deadline) {
       printk(KERN_ERR "ATA: DRQ timeout on %s %s (status=0x%02x)\n",
              dev->bus == 0 ? "primary" : "secondary",
-             dev->device == 0 ? "master" : "slave",
-             status);
+             dev->device == 0 ? "master" : "slave", status);
       return -1;
     }
   } while (!(status & ATA_STATUS_DRQ));

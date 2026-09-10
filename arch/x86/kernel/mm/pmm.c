@@ -12,8 +12,8 @@
 #include <stdbool.h>
 
 #include <boot/limine.h>
-#include <requests.h>
 #include <hubble/string.h>
+#include <requests.h>
 
 #include "higher_half.h"
 #include "lib/bitmap.h"

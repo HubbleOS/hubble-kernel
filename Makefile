@@ -12,11 +12,7 @@ export ROOT_DIR
 
 ARCH ?= x86
 OUT_DIR ?= $(abspath out)
-BUILD_DIR := $(OUT_DIR)/build/$(ARCH)
 ARCH_DIR := $(abspath arch/$(ARCH))
-
-# Debug kernel ELF path (when DEBUG=1, copy kernel.elf here after build)
-DEBUG_KERNEL_ELF := $(OUT_DIR)/debug/kernel.elf
 
 TOOLS_DIR := tools
 DEV_TOOLS_DIR := tools/dev
@@ -34,8 +30,26 @@ endif
 #   DEBUG=1    builds with debug symbols and -Og optimization
 # ---------------------------------------------------------------------------
 
+DEBUG ?= 1
 RELEASE ?= 0
-DEBUG ?= 0
+
+ifeq ($(RELEASE),1)
+  DEBUG := 0
+  BUILD_TYPE := release
+  CFLAGS += -ffreestanding -O3 -Wall -Wextra
+else
+  DEBUG := 1
+  BUILD_TYPE := build
+  CFLAGS += -ffreestanding -Og -Wall -Wextra -g -gdwarf-4
+endif
+
+# ---------------------------------------------------------------------------
+# Build directory
+# ---------------------------------------------------------------------------
+
+BUILD_DIR := $(OUT_DIR)/$(BUILD_TYPE)/$(ARCH)
+KERNEL_ELF := $(BUILD_DIR)/kernel.elf
+export KERNEL_ELF
 
 # ---------------------------------------------------------------------------
 # Parallel jobs: defaults to number of CPUs
@@ -322,6 +336,14 @@ PHONY += all
 all: build
 
 # ---------------------------------------------------------------------------
+# Userland: minimal test payload for standalone kernel development
+# ---------------------------------------------------------------------------
+
+PHONY += usr
+usr:
+	@$(MAKE) -C usr KERNEL_PATH=$(ROOT_DIR) OUT_DIR=$(OUT_DIR)
+
+# ---------------------------------------------------------------------------
 # Targets
 # ---------------------------------------------------------------------------
 
@@ -377,27 +399,17 @@ build: build-tool rust
 	done
 	@echo "Build complete"
 
-PHONY += debug-build
-debug-build:
-	@$(MAKE) DEBUG=1 build
-	@mkdir -p $(OUT_DIR)/debug
-	@cp $(OUT_DIR)/kernel.elf $(DEBUG_KERNEL_ELF)
-	@echo "Debug kernel: $(DEBUG_KERNEL_ELF)"
-
 PHONY += release
 release-build:
 	@$(MAKE) RELEASE=1 build
-	@mkdir -p $(OUT_DIR)/release
-	@cp $(OUT_DIR)/kernel.elf $(OUT_DIR)/release/kernel.elf
-	@echo "Release kernel: $(OUT_DIR)/release/kernel.elf"
 
 # ---------------------------------------------------------------------------
 # Run kernel in QEMU (requires Limine)
 # ---------------------------------------------------------------------------
 
 PHONY += run
-run: build
-	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(OUT_DIR)/kernel.elf $(OUT_DIR)/kernel-dev.iso
+run: build usr
+	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(KERNEL_ELF) $(OUT_DIR)/kernel-dev.iso
 	@bash $(ROOT_DIR)/scripts/qemu/run-qemu.sh --iso $(OUT_DIR)/kernel-dev.iso
 
 # ---------------------------------------------------------------------------
@@ -405,8 +417,8 @@ run: build
 # ---------------------------------------------------------------------------
 
 PHONY += debug
-debug: debug-build
-	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(DEBUG_KERNEL_ELF) $(OUT_DIR)/kernel-debug.iso
+debug: debug-build usr
+	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(KERNEL_ELF) $(OUT_DIR)/kernel-debug.iso
 	@bash $(ROOT_DIR)/scripts/qemu/run-qemu.sh --debug --iso $(OUT_DIR)/kernel-debug.iso
 
 # ---------------------------------------------------------------------------
@@ -415,15 +427,15 @@ debug: debug-build
 
 PHONY += gdb
 gdb:
-	@gdb -q -ex "file $(DEBUG_KERNEL_ELF)" -ex "target remote :1234"
+	@gdb -q -ex "file $(KERNEL_ELF)" -ex "target remote :1234"
 
 # ---------------------------------------------------------------------------
 # Release: build release kernel, create minimal ISO, launch QEMU
 # ---------------------------------------------------------------------------
 
 PHONY += release
-release: release-build
-	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(OUT_DIR)/release/kernel.elf $(OUT_DIR)/kernel.iso
+release: release-build usr
+	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(KERNEL_ELF) $(OUT_DIR)/kernel.iso
 	@bash $(ROOT_DIR)/scripts/qemu/run-qemu.sh --iso $(OUT_DIR)/kernel.iso
 
 PHONY += clean
@@ -445,7 +457,17 @@ mkvars:
 PHONY += help
 help:
 	@echo "Usage: make [TARGET] [ARCH=<arch>]"
-	@echo "Targets: ${PHONY}"
-	@echo "Arches:  ${SUPPORTED_ARCHES}"
+	@echo ""
+	@echo "Targets:"
+	@echo "  build        Build kernel ELF"
+	@echo "  usr          Build minimal test userland"
+	@echo "  run          Build kernel + userland and run in QEMU"
+	@echo "  debug        Build debug kernel + userland and run in QEMU"
+	@echo "  release      Build release kernel + userland and run in QEMU"
+	@echo "  gdb          Connect GDB to running QEMU debug session"
+	@echo "  clean        Remove build artifacts"
+	@echo "  rebuild      Clean and rebuild"
+	@echo ""
+	@echo "Architectures: ${SUPPORTED_ARCHES}"
 
 .PHONY: $(PHONY)
