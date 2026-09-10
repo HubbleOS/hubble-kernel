@@ -2,8 +2,15 @@
  * @file hpet.h
  * @brief HPET (High Precision Event Timer) driver interface
  *
- * Provides initialisation, counter access, time conversion,
- * busy-wait delays, and one-shot / periodic timer setup.
+ * Provides initialisation from ACPI, MMIO register access,
+ * counter read, overflow-safe time conversion, busy-wait delays,
+ * and one-shot / periodic timer configuration.
+ *
+ * Register widths:
+ *   All HPET MMIO registers are 128 bits wide, but only the
+ *   lower 64 bits are used by the specification.  The driver
+ *   accesses them as 64-bit reads/writes at the correct byte
+ *   offsets.
  */
 
 #ifndef HPET_H
@@ -39,9 +46,5 @@ void hpet_delay_ms(uint64_t ms);
 int hpet_timer_oneshot(uint8_t timer_num, uint64_t ns, uint8_t vector);
 int hpet_timer_periodic(uint8_t timer_num, uint64_t period_ns, uint8_t vector);
 void hpet_timer_stop(uint8_t timer_num);
-
-/* -- Calibration ----------------------------------------------- */
-
-uint64_t hpet_calibrate_timer(volatile uint64_t *counter_fn, uint32_t ms);
 
 #endif /* HPET_H */
