@@ -14,7 +14,6 @@
 
 #include <boot/limine.h>
 
-
 /* Memory map */
 extern volatile struct limine_memmap_request limine_memmap_req;
 
@@ -34,4 +33,5 @@ extern volatile struct limine_module_request limine_module_req;
 extern volatile struct limine_executable_address_request limine_exec_addr_req;
 
 /* Bootloader info */
-extern volatile struct limine_bootloader_info_request limine_bootloader_info_req;
+extern volatile struct limine_bootloader_info_request
+    limine_bootloader_info_req;

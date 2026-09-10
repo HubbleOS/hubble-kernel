@@ -23,10 +23,8 @@
 #define GPT_MIN_HEADER_SIZE 92
 #define GPT_MAX_PARTITION_ENTRIES 128
 #define GPT_NAME_MAX_CHARS 36
-#define GPT_PARTITION_TYPE_EMPTY                                                     \
-  {                                                                                \
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0                            \
-  }
+#define GPT_PARTITION_TYPE_EMPTY                                               \
+  {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
 /* -- CRC32 Implementation (ISO 3309 / ITU-T V.42) --------------- */
 
@@ -106,8 +104,7 @@ static int gpt_validate_header(const GPT_Header *hdr, int read_rc) {
     return -1;
   }
 
-  if (hdr->revision != GPT_REVISION_1_0 &&
-      hdr->revision != GPT_REVISION_2_0) {
+  if (hdr->revision != GPT_REVISION_1_0 && hdr->revision != GPT_REVISION_2_0) {
     printk(KERN_ERR "GPT: unsupported revision 0x%08x\n", hdr->revision);
     return -1;
   }
@@ -119,8 +116,7 @@ static int gpt_validate_header(const GPT_Header *hdr, int read_rc) {
     return -1;
   }
 
-  if (hdr->sizeof_partition_entry == 0 ||
-      hdr->sizeof_partition_entry > 256) {
+  if (hdr->sizeof_partition_entry == 0 || hdr->sizeof_partition_entry > 256) {
     printk(KERN_ERR "GPT: invalid sizeof_partition_entry %u\n",
            hdr->sizeof_partition_entry);
     return -1;
@@ -179,14 +175,16 @@ static int gpt_validate_partition(const GPT_Partition_Entry *entry,
   }
 
   if (entry->first_lba < hdr->first_usable_lba) {
-    printk(KERN_WARNING "GPT: partition first_lba (%llu) < header.first_usable_lba (%llu)\n",
+    printk(KERN_WARNING
+           "GPT: partition first_lba (%llu) < header.first_usable_lba (%llu)\n",
            (unsigned long long)entry->first_lba,
            (unsigned long long)hdr->first_usable_lba);
     return 0;
   }
 
   if (entry->last_lba > hdr->last_usable_lba) {
-    printk(KERN_WARNING "GPT: partition last_lba (%llu) > header.last_usable_lba (%llu)\n",
+    printk(KERN_WARNING
+           "GPT: partition last_lba (%llu) > header.last_usable_lba (%llu)\n",
            (unsigned long long)entry->last_lba,
            (unsigned long long)hdr->last_usable_lba);
     return 0;
@@ -272,8 +270,7 @@ int gpt_init(gpt_partition_t *partitions, uint32_t capacity) {
     return -1;
   }
 
-  uint8_t *entry_buf_phys =
-      (uint8_t *)pmm_alloc_pages((uint32_t)alloc_pages);
+  uint8_t *entry_buf_phys = (uint8_t *)pmm_alloc_pages((uint32_t)alloc_pages);
   if (!entry_buf_phys) {
     printk(KERN_ERR "GPT: failed to allocate %llu pages for entries\n",
            (unsigned long long)alloc_pages);
@@ -290,7 +287,8 @@ int gpt_init(gpt_partition_t *partitions, uint32_t capacity) {
   memset(entry_buf, 0, total_size);
 
   /* -- Read partition entries --------------------------------- */
-  uint64_t sectors_to_read = (total_size + GPT_SECTOR_SIZE - 1) / GPT_SECTOR_SIZE;
+  uint64_t sectors_to_read =
+      (total_size + GPT_SECTOR_SIZE - 1) / GPT_SECTOR_SIZE;
   uint64_t base_lba = hdr->partition_entries_lba;
 
   for (uint64_t i = 0; i < sectors_to_read; i++) {
@@ -322,8 +320,7 @@ int gpt_init(gpt_partition_t *partitions, uint32_t capacity) {
              computed_crc, saved_crc);
       /* Continue anyway — some disks write invalid CRCs. */
     } else {
-      printk(KERN_INFO "GPT: partition entries CRC32 OK (0x%08x)\n",
-             saved_crc);
+      printk(KERN_INFO "GPT: partition entries CRC32 OK (0x%08x)\n", saved_crc);
     }
   }
 
