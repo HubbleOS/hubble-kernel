@@ -221,15 +221,12 @@ void isr_handler(registers_t *regs) {
         if (t) {
           printk(KERN_ERR "Fault: active CR3=0x%llx task->page_table=0x%llx "
                           "match=%d\n",
-                 cr3, (uint64_t)t->page_table,
-                 cr3 == (uint64_t)t->page_table);
+                 cr3, (uint64_t)t->page_table, cr3 == (uint64_t)t->page_table);
         } else {
-          printk(KERN_ERR "Fault: active CR3=0x%llx (no current task)\n",
-                 cr3);
+          printk(KERN_ERR "Fault: active CR3=0x%llx (no current task)\n", cr3);
         }
       } else {
-        printk(KERN_ERR "Fault: active CR3=0x%llx (scheduler not init)\n",
-               cr3);
+        printk(KERN_ERR "Fault: active CR3=0x%llx (scheduler not init)\n", cr3);
       }
     }
     while (1) {

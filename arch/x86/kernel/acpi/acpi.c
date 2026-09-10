@@ -13,6 +13,7 @@
 #include <hubble/printk.h>
 #include <hubble/string.h>
 #include <io.h>
+#include <stddef.h>
 
 #include "higher_half.h"
 
@@ -117,8 +118,12 @@ static void process_fadt(ACPI_SDTHeader *tbl, void *ctx) {
   acpi_state.fadt = (FADT *)tbl;
   printk(KERN_INFO "FADT found at %p\n", acpi_state.fadt);
 
-  uint64_t dsdt_phys =
-      acpi_state.fadt->X_Dsdt ? acpi_state.fadt->X_Dsdt : acpi_state.fadt->Dsdt;
+  uint64_t dsdt_phys = acpi_state.fadt->Dsdt;
+  if (tbl->Revision >= 2 &&
+      tbl->Length >= offsetof(FADT, X_Dsdt) + sizeof(acpi_state.fadt->X_Dsdt) &&
+      acpi_state.fadt->X_Dsdt) {
+    dsdt_phys = acpi_state.fadt->X_Dsdt;
+  }
   if (!dsdt_phys) {
     printk(KERN_ERR "DSDT pointer missing\n");
     return;

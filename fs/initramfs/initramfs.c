@@ -73,9 +73,7 @@ static uint32_t cpio_hex_field(const char *header, int offset, int width) {
 /**
  * @brief Align a value up to 4-byte boundary
  */
-static uint64_t cpio_align4(uint64_t val) {
-  return (val + 3) & ~3ULL;
-}
+static uint64_t cpio_align4(uint64_t val) { return (val + 3) & ~3ULL; }
 
 /* -- Tree manipulation ------------------------------------------------- */
 
@@ -200,7 +198,8 @@ static int parse_cpio(void *data, uint64_t size) {
     if (offset + CPIO_HEADER_SIZE + cpio_align4(namesize) +
             cpio_align4(filesize) >
         size) {
-      printk(KERN_ERR "[initramfs] entry exceeds archive bounds at offset %llu\n",
+      printk(KERN_ERR
+             "[initramfs] entry exceeds archive bounds at offset %llu\n",
              offset);
       return -1;
     }
@@ -409,13 +408,12 @@ static Directory initramfs_readdir(VFS_FS *fs, const char *path) {
 
   dir.count = node->child_count;
   for (int i = 0; i < node->child_count; i++) {
-    dir.entries[i].name = kmalloc(strlen(node->children[i]->name) + 1,
-                                  GFP_KERNEL);
+    dir.entries[i].name =
+        kmalloc(strlen(node->children[i]->name) + 1, GFP_KERNEL);
     if (dir.entries[i].name) {
       strcpy(dir.entries[i].name, node->children[i]->name);
     }
-    dir.entries[i].is_dir =
-        ((node->children[i]->mode & 0170000) == 0040000);
+    dir.entries[i].is_dir = ((node->children[i]->mode & 0170000) == 0040000);
     dir.entries[i].cluster = 0;
   }
 

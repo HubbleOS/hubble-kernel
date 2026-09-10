@@ -200,9 +200,7 @@ uint32_t lapic_get_id(void) {
     return (lapic_read(LAPIC_ID) >> 24) & 0xFF;
   } else {
     uint32_t eax, ebx, ecx, edx;
-    asm volatile("cpuid"
-                 : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
-                 : "a"(1));
+    asm volatile("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(1));
     return (ebx >> 24) & 0xFF;
   }
 }
