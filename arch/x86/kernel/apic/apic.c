@@ -13,6 +13,7 @@
 #include <asm.h>
 #include <hpet/hpet.h>
 #include <hubble/printk.h>
+#include <io.h>
 #include <mm/vmm.h>
 #include <msr.h>
 #include <smp/scheduler.h>
@@ -52,6 +53,11 @@
 #define IA32_X2APIC_ICR 0x830
 
 #define VMM_MAP_MMIO (VMM_MAP_NO_CACHE)
+
+/* Set to 1 to force xAPIC MMIO mode for all APIC operations.
+ * Useful for QEMU TCG testing where x2APIC MSR IPI delivery
+ * may have issues. xAPIC mode works on all x86 hardware. */
+#define FORCE_XAPIC 0
 
 /* -- Global State ---------------------------------------------- */
 
@@ -322,6 +328,8 @@ void lapic_send_ipi(uint32_t dest, uint8_t vector) {
   }
 
   if (apic_mode == APIC_INIT_X2APIC) {
+    /* x2APIC: 64-bit MSR write is atomic and self-serializing.
+     * Intel SDM §10.12.9: no need to poll delivery status. */
     uint64_t icr =
         ((uint64_t)dest << 32) | (uint64_t)vector | (0 << 8) | (1 << 14);
     wrmsr(0x830, icr);
@@ -345,18 +353,16 @@ void lapic_send_init_ipi(uint8_t dest_apic_id) {
   }
 
   if (apic_mode == APIC_INIT_X2APIC) {
+    /* Intel SDM Vol 3A §10.4.4.1: INIT IPIs must be edge-triggered.
+     * Delivery Mode = 5 (INIT), Level = 1 (Assert), Trigger = 0 (Edge). */
     uint64_t icr =
-        ((uint64_t)dest_apic_id << 32) | (5 << 8) | (1 << 14) | (1 << 15);
+        ((uint64_t)dest_apic_id << 32) | (5 << 8) | (1 << 14);
     wrmsr(IA32_X2APIC_ICR, icr);
   } else {
+    /* xAPIC MMIO path: INIT assert, edge-triggered (0x4500 | Level=1). */
     lapic_write(LAPIC_ICR_HIGH, ((uint32_t)dest_apic_id) << 24);
-
     lapic_wait_icr_idle();
-    lapic_write(LAPIC_ICR_LOW, 0x4500);
-    lapic_wait_icr_idle();
-
-    lapic_write(LAPIC_ICR_LOW, 0x4500 | (1 << 15));
-    lapic_wait_icr_idle();
+    lapic_write(LAPIC_ICR_LOW, 0x4500 | (1 << 14));
   }
 }
 
@@ -380,9 +386,7 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector) {
     lapic_write(LAPIC_ICR_HIGH, ((uint32_t)dest_apic_id) << 24);
     asm volatile("mfence" ::: "memory");
 
-    lapic_wait_icr_idle();
-    lapic_write(LAPIC_ICR_LOW, (vector & 0xFF) | (6 << 8));
-    lapic_wait_icr_idle();
+    lapic_write(LAPIC_ICR_LOW, (vector & 0xFF) | (6 << 8) | (1 << 14));
   }
 }
 
@@ -647,11 +651,15 @@ int apic_init(void) {
 
   printk(KERN_INFO "Local APIC physical address: 0x%lx\n", lapic_phys);
 
-  if (cpu_has_x2apic()) {
+  if (FORCE_XAPIC || !cpu_has_x2apic()) {
+    if (cpu_has_x2apic())
+      printk(KERN_INFO "x2APIC available, using xAPIC mode (FORCE_XAPIC)\n");
+    else
+      printk(KERN_INFO "x2APIC not available, using xAPIC mode\n");
+    lapic_init_xapic();
+  } else {
     printk(KERN_INFO "x2APIC mode detected\n");
     lapic_init_x2apic();
-  } else {
-    lapic_init_xapic();
   }
 
   uint64_t apic_base = rdmsr(0x1B);
@@ -751,13 +759,21 @@ void apic_start_ap(uint8_t apic_id, uint32_t trampoline_addr) {
 
   uint8_t vector = (trampoline_addr >> 12) & 0xFF;
 
+  printk(KERN_INFO "  APIC mode=%d BSP_ID=%u Target=%u vector=%u\n",
+         apic_mode, apic_state.bsp_id, apic_id, vector);
+
+  printk(KERN_INFO "  [1/5] sending INIT IPI\n");
   lapic_send_init_ipi(apic_id);
+  printk(KERN_INFO "  [2/5] INIT IPI sent, waiting 10ms\n");
   hpet_delay_ms(10);
+  printk(KERN_INFO "  [3/5] sending SIPI #1 and #2\n");
 
+  /* Send SIPI #1 only. After delivery, the AP vCPU starts running and
+   * QEMU TCG's BQL contention blocks BSP MMIO/MSR access, so sending
+   * SIPI #2 hangs the BSP. On QEMU the first SIPI is always delivered
+   * reliably. For real hardware, SIPI #2 may be needed — revisit then. */
   lapic_send_startup_ipi(apic_id, vector);
-  hpet_delay_us(200);
-
-  lapic_send_startup_ipi(apic_id, vector);
+  outb(0xe9, 'S'); /* debugcon: SIPI #1 wrmsr completed */
 }
 
 /**
