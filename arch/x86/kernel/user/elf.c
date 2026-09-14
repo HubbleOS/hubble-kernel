@@ -27,6 +27,7 @@
 #define PAGE_SIZE 4096
 
 #define PT_LOAD 0x1
+#define PT_TLS 0x7
 #define PF_X 0x1
 #define PF_W 0x2
 #define PF_R 0x4
@@ -47,9 +48,14 @@
  * @param f      Opened ELF file handle
  * @param phdr   Program header describing the segment
  * @param target_pm  Target user page table (PML4 physical)
+ * @param vm_map VMA bookkeeping list to register this segment in - without
+ *               this, the segment's pages exist in the page table but are
+ *               invisible to anything that walks the address space by VMA
+ *               (mmap's free-range search, fork()'s COW clone)
  * @return 0 on success, -1 on failure
  */
-int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm) {
+int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm,
+                     vm_map_t *vm_map) {
   if (phdr->p_type != PT_LOAD)
     return 0;
 
@@ -165,6 +171,20 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm) {
   debug_dump_mapping(target_pm, 0x409000);
   debug_dump_mapping(target_pm, 0x408000);
   printk(KERN_OK "[ELF] Segment loaded successfully\n");
+
+  vm_area_t *vma = kmalloc(sizeof(vm_area_t), GFP_ZERO);
+  if (vma) {
+    vma->base = map_start;
+    vma->size = map_end - map_start;
+    vma->type = VMA_ANONYMOUS;
+    vma->flags = VM_READ;
+    if (phdr->p_flags & PF_W)
+      vma->flags |= VM_WRITE;
+    if (phdr->p_flags & PF_X)
+      vma->flags |= VM_EXEC;
+    vm_insert_area(vm_map, vma);
+  }
+
   return 0;
 }
 
@@ -179,12 +199,18 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm) {
  * @param path      VFS path to the ELF binary
  * @param entry_out Receives the entry-point virtual address
  * @param pm        Target user page table to map into
+ * @param vm_map    VMA bookkeeping list to register loaded segments in
  * @return 0 on success, -1 on failure
  */
-int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm) {
+int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm,
+            vm_map_t *vm_map) {
   VFS_File *f = vfs_open(path, VFS_O_RDONLY);
   printk(KERN_INFO "[ELF] Trying to open %s\n", path);
-  if (!f) {
+  /* vfs_open() reports failure as ERR_PTR(-errno), not NULL - a bare `!f`
+   * lets that encoded-error pseudo-pointer (e.g. -ENOENT) through as if
+   * it were a valid VFS_File*, which then faults the moment vfs_read()
+   * dereferences it. */
+  if (IS_ERR(f) || !f) {
     printk(KERN_ERR "[ELF] ERROR: Failed to open %s\n", path);
     return -1;
   }
@@ -227,7 +253,7 @@ int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm) {
     vfs_close(f);
     return -1;
   }
-
+  uint64_t max_vaddr_end = 0;
   for (uint16_t i = 0; i < ehdr.e_phnum; ++i) {
     Elf64_Phdr *p = &phdrs[i];
     if (p->p_type == PT_LOAD) {
@@ -236,11 +262,54 @@ int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm) {
              i, (unsigned long long)p->p_vaddr, (unsigned long long)p->p_filesz,
              (unsigned long long)p->p_memsz, p->p_flags);
 
-      if (elf_load_segment(f, p, pm) < 0) {
+      if (elf_load_segment(f, p, pm, vm_map) < 0) {
         printk(KERN_ERR "[ELF] ERROR: Failed to load segment %u\n", i);
         kfree(phdrs);
         vfs_close(f);
         return -1;
+      }
+      uint64_t seg_end = p->p_vaddr + p->p_memsz;
+      if (seg_end > max_vaddr_end)
+        max_vaddr_end = seg_end;
+    }
+    if (p->p_type == PT_TLS) {
+      printk(KERN_INFO "[ELF] HERE loading TLS PHDR[%u]: vaddr=0x%llx "
+                       "filesz=0x%llx memsz=0x%llx flags=0x%x\n",
+             i, (unsigned long long)p->p_vaddr, (unsigned long long)p->p_filesz,
+             (unsigned long long)p->p_memsz, p->p_flags);
+      entry_out->tls_vaddr = p->p_vaddr;
+      entry_out->tls_memsz = p->p_memsz;
+      entry_out->tls_filesz = p->p_filesz;
+      entry_out->tls_offset = p->p_offset;
+      entry_out->tls_align = p->p_align;
+      entry_out->has_tls = true;
+
+      if (p->p_filesz > 0) {
+        entry_out->tls_init = kmalloc(p->p_filesz, GFP_KERNEL);
+        if (!entry_out->tls_init) {
+          kfree(phdrs);
+          vfs_close(f);
+          printk("error 0");
+          return -1;
+        }
+
+        if (vfs_lseek(f, p->p_offset, SEEK_SET) < 0) {
+          kfree(entry_out->tls_init);
+          kfree(phdrs);
+          vfs_close(f);
+          printk("error 1");
+          return -1;
+        }
+
+        if (vfs_read(f, entry_out->tls_init, p->p_filesz) != p->p_filesz) {
+          kfree(entry_out->tls_init);
+          kfree(phdrs);
+          vfs_close(f);
+          printk("error 2");
+          return -1;
+        }
+      } else {
+        entry_out->tls_init = NULL;
       }
     }
   }
@@ -248,9 +317,10 @@ int elf_load(const char *path, uint64_t *entry_out, uint64_t *pm) {
   kfree(phdrs);
   vfs_close(f);
 
-  *entry_out = ehdr.e_entry;
+  entry_out->entry = ehdr.e_entry;
+  entry_out->initial_brk = PAGE_ALIGN_UP(max_vaddr_end);
   printk(KERN_OK "[ELF] Load complete, entry=0x%llx\n",
-         (unsigned long long)*entry_out);
+         (unsigned long long)entry_out->entry);
   return 0;
 }
 
@@ -353,10 +423,10 @@ int elf_run(uint64_t entry) {
 
   task_t *current_task = get_current_task();
 
-  current_task->context.ds = 0x23;
-  current_task->context.es = 0x23;
-  current_task->context.fs = 0x23;
-  current_task->context.gs = 0x23;
+  current_task->exec.context.ds = 0x23;
+  current_task->exec.context.es = 0x23;
+  current_task->exec.context.fs = 0x23;
+  current_task->exec.context.gs = 0x23;
 
   user_enter(entry, USER_STACK_TOP);
 

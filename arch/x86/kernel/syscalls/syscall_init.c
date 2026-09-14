@@ -8,10 +8,10 @@
 
 #include <stdint.h>
 
+#include "syscall_entry.h"
 #include <apic/apic.h>
 #include <hubble/printk.h>
-
-#include "syscall_entry.h"
+#include <msr.h>
 
 #define MSR_EFER 0xC0000080
 #define MSR_STAR 0xC0000081
@@ -27,30 +27,6 @@ cpu_local_t cpu_locals[MAX_CPUS];
 
 #define MAX_CPUS 8
 static uint8_t syscall_stacks[MAX_CPUS][64 * 1024] __attribute__((aligned(16)));
-
-/**
- * @brief Write to an x86 model-specific register.
- *
- * @param msr   MSR address.
- * @param value 64-bit value to write.
- */
-static inline void wrmsr(uint32_t msr, uint64_t value) {
-  uint32_t low = value & 0xFFFFFFFF;
-  uint32_t high = value >> 32;
-  __asm__ volatile("wrmsr" : : "c"(msr), "a"(low), "d"(high));
-}
-
-/**
- * @brief Read from an x86 model-specific register.
- *
- * @param  msr MSR address.
- * @return 64-bit value read from the MSR.
- */
-static inline uint64_t rdmsr(uint32_t msr) {
-  uint32_t low, high;
-  __asm__ volatile("rdmsr" : "=a"(low), "=d"(high) : "c"(msr));
-  return ((uint64_t)high << 32) | low;
-}
 
 /**
  * @brief Initialise the SYSCALL/SYSRET fast system call mechanism.

@@ -13,6 +13,7 @@
 #include <io.h>
 
 #include <apic/apic.h>
+#include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <smp/scheduler.h>
 
@@ -158,6 +159,14 @@ static const char *exception_messages[] = {
  * @param regs Register snapshot from the ISR stub
  */
 void isr_handler(registers_t *regs) {
+  /**	COW resolve */
+  if (regs->int_no == 14 && (regs->err_code & 0x3) == 0x3) {
+    uint64_t fault_addr;
+    asm volatile("mov %%cr2, %0" : "=r"(fault_addr));
+    if (fault_addr < 0x0000800000000000ULL && vmm_resolve_cow(fault_addr))
+      return;
+  }
+
   printk(KERN_INFO "\n\tEXCEPTION OCCURRED\n");
 
   printk(KERN_INFO "Exception: %s (%lu)\n",
@@ -180,6 +189,10 @@ void isr_handler(registers_t *regs) {
   printk(KERN_INFO "SS:  0x%04lx\n", regs->ss);
   printk(KERN_INFO "RFLAGS: 0x%016lx\n", regs->rflags);
 
+  uint64_t cr2;
+  asm volatile("mov %%cr2, %0" : "=r"(cr2));
+  printk("CR2 = %p\n", cr2);
+
   if (regs->int_no == 8 || regs->int_no == 13 || regs->int_no == 14) {
     printk(KERN_ERR "\nFATAL ERROR - System Halted\n");
 
@@ -194,7 +207,8 @@ void isr_handler(registers_t *regs) {
       task_t *t = get_current_task();
       printk(KERN_INFO
              "Fault: active CR3=0x%llx task->page_table=0x%llx match=%d\n",
-             cr3, (uint64_t)t->page_table, cr3 == (uint64_t)t->page_table);
+             cr3, (uint64_t)t->mm.page_table,
+             cr3 == (uint64_t)t->mm.page_table);
     }
     while (1) {
       asm volatile("cli; hlt");
