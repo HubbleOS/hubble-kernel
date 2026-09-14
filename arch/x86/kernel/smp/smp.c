@@ -24,6 +24,7 @@
 /* -- Constants ---------------------------------------------------------- */
 
 #define AP_TRAMPOLINE_ADDR 0x8000
+#define AP_TRAMPOLINE_STACK_ADDR 0x7000
 #define AP_STACK_SIZE (64 * 1024)
 #define AP_STACK_PAGES ((AP_STACK_SIZE + 0xFFF) / 0x1000)
 
@@ -39,7 +40,6 @@ static volatile uint64_t *g_trampoline_cr3 = NULL;
 static volatile uint64_t *g_trampoline_stack = NULL;
 static volatile uint64_t *g_trampoline_entry = NULL;
 
-static volatile bool ap_ready = false;
 static spinlock_t smp_lock = SPINLOCK_INIT("smp");
 
 /* -- AP startup data structure ------------------------------------------ */
@@ -51,12 +51,93 @@ struct ap_startup_data {
   uint64_t stack_top;
   uint64_t entry_point;
   volatile uint32_t ap_ready;
+  volatile uint32_t boot_stage; /* AP writes milestone numbers here */
 } __attribute__((packed));
 
 /* -- Forward declarations ---------------------------------------------- */
 
 static void start_ap_callback(uint8_t apic_id, uint8_t processor_id, void *ctx);
 static void *allocate_ap_stack(void);
+
+static inline void ap_set_boot_stage(volatile struct ap_startup_data *data,
+                                     uint32_t stage) {
+  asm volatile("" ::: "memory");
+  data->boot_stage = stage;
+  asm volatile("mfence" ::: "memory");
+}
+
+/* -- Identity mapping helpers ------------------------------------------- */
+
+/**
+ * @brief Check if a virtual address is identity-mapped (va == phys)
+ *
+ * Walks both the PT level (4KB pages) and PD level (2MB huge pages)
+ * to determine if the address correctly maps to itself.
+ *
+ * @param va Virtual address to check
+ * @return true if identity mapping exists
+ */
+static bool is_identity_mapped(uint64_t va) {
+  /* Check 4KB page via PT level */
+  uint64_t phys = vmm_get_phys(va);
+  if (phys == va)
+    return true;
+
+  /* Check 2MB huge page via PD level */
+  uint64_t *pd = pd_table(va);
+  uint64_t pde = pd[PD_INDEX(va)];
+  if ((pde & PTE_PRESENT) && (pde & PTE_HUGE)) {
+    uint64_t huge_base = pde & 0x000FFFFFFFFFF000ULL;
+    return huge_base == (va & ~0x1FFFFFULL);
+  }
+
+  return false;
+}
+
+/**
+ * @brief Ensure a virtual address has an identity mapping (va == phys)
+ *
+ * If the mapping already exists (4KB or 2MB huge page), this is a no-op.
+ * Otherwise, creates a 4KB page mapping via vmm_map_page(). If that fails
+ * due to an existing 2MB huge page, verifies the huge page covers the
+ * address correctly.
+ *
+ * @param va Virtual/physical address to identity-map
+ * @return 0 on success, -1 on failure
+ */
+static int ensure_identity_mapping(uint64_t va) {
+  if (is_identity_mapped(va))
+    return 0;
+
+  /* No mapping exists — create a 4KB identity mapping.
+   * vmm_map_page() operates on the current page tables (BSP's PML4)
+   * via recursive mapping. It always sets PTE_PRESENT | PTE_WRITE,
+   * which is sufficient: the trampoline needs RW for the startup data
+   * and is executable because EFER.NXE is not yet set during the
+   * trampoline phase. */
+  if (vmm_map_page(va, va, PTE_WRITE) == 0)
+    return 0;
+
+  /* vmm_map_page() failed. The most likely cause is an existing 2MB
+   * huge page at the PD level. Verify it provides correct identity
+   * mapping. */
+  uint64_t *pd = pd_table(va);
+  uint64_t pde = pd[PD_INDEX(va)];
+  if ((pde & PTE_PRESENT) && (pde & PTE_HUGE)) {
+    uint64_t huge_base = pde & 0x000FFFFFFFFFF000ULL;
+    if (huge_base == (va & ~0x1FFFFFULL)) {
+      printk(KERN_INFO "  Identity mapping via 2MB huge page: "
+             "0x%lx -> 0x%lx\n",
+             va & ~0x1FFFFFULL, huge_base);
+      return 0;
+    }
+    printk(KERN_ERR "  ERROR: 2MB huge page at 0x%lx maps to 0x%lx, "
+           "expected 0x%lx\n",
+           va & ~0x1FFFFFULL, huge_base, va & ~0x1FFFFFULL);
+  }
+
+  return -1;
+}
 
 /* -- AP stack allocation ------------------------------------------------ */
 
@@ -97,17 +178,79 @@ void enable_nxe(void) {
  * @brief AP kernel entry point called by trampoline in long mode
  */
 void ap_entry(void) {
+  volatile struct ap_startup_data *data =
+      (volatile struct ap_startup_data *)(AP_TRAMPOLINE_ADDR + 512);
+
+  /* Enable NXE (No-Execute Enable) in EFER MSR BEFORE touching any kernel
+   * pages.  The BSP's page tables have NX bits set on some PTEs; without
+   * NXE the CPU treats bit 63 as a reserved bit → page fault with
+   * error code 0x0008. */
+  enable_nxe();
+
+  ap_set_boot_stage(data, 4);
+
+  /* Load the kernel GDT. The trampoline used a temporary GDT to reach
+   * long mode; the real kernel GDT (with TSS, per-CPU segments, etc.)
+   * must be installed before any kernel code runs. */
+  struct {
+    uint16_t limit;
+    uint64_t base;
+  } __attribute__((packed)) gdtr = {
+      .limit = data->gdt_limit,
+      .base = data->gdt_base,
+  };
+  asm volatile("lgdt %0" ::"m"(gdtr) : "memory");
+
+  /* Reload all data segment registers with the kernel GDT's selector */
+  asm volatile(
+      "mov $0x10, %%ax\n"
+      "mov %%ax, %%ds\n"
+      "mov %%ax, %%es\n"
+      "mov %%ax, %%ss\n"
+      "mov %%ax, %%fs\n"
+      "mov %%ax, %%gs\n" ::: "ax", "memory");
+
   apic_init_ap();
+
+  ap_set_boot_stage(data, 5);
 
   uint8_t apic_id = lapic_get_id();
 
   percpu_init_ap(apic_id);
 
-  idt_load();
+  ap_set_boot_stage(data, 6);
+
+  /* TSS must be initialized BEFORE idt_load().  The IDT gate for
+   * vector 8 (Double Fault) references IST1 from the TSS.  If the
+   * IDT is loaded before a valid TSS with IST1 is in place, any
+   * Double Fault would load an IST1 of 0 -> null stack -> Triple
+   * Fault -> CPU reset.
+   *
+   * INVARIANT: Before CPU can receive #DF:
+   *   GDT valid
+   *   TSS valid
+   *   TR loaded (ltr)
+   *   IST stack mapped
+   *   IST pointer valid
+   *   IDT vector 8 configured with IST1
+   */
   tss_init();
+
+  ap_set_boot_stage(data, 7);
+
+  idt_load();
+
+  ap_set_boot_stage(data, 8);
+
   syscall_init();
-  enable_nxe();
-  ap_ready = true;
+
+  ap_set_boot_stage(data, 9);
+
+  ap_set_boot_stage(data, 10);
+
+  /* Signal ready. Write to the shared struct at trampoline+512. */
+  data->ap_ready = 1;
+  asm volatile("mfence" ::: "memory");
 
   sti();
   lapic_timer_init(100);
@@ -148,12 +291,17 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id,
   data->pml4_phys = cr3;
 
   data->gdt_limit = get_gdt_limit();
+  /* NOTE: gdt_base is a higher-half virtual address. This works because the AP
+   * loads the BSP's CR3 (same page tables) before accessing the GDT. The kernel
+   * higher-half mapping is present in the shared PML4. Do NOT use virt_to_phys()
+   * here — there is no identity mapping for the GDT's physical page. */
   data->gdt_base = (uint64_t)get_gdt_base();
 
   data->stack_top = (uint64_t)stack_top;
   data->entry_point = (uint64_t)ap_entry;
 
   data->ap_ready = 0;
+  data->boot_stage = 0;
 
   asm volatile("mfence" ::: "memory");
 
@@ -167,20 +315,26 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id,
   printk(KERN_INFO "Starting AP %u...\n", apic_id);
   apic_start_ap(apic_id, AP_TRAMPOLINE_ADDR);
 
-  hpet_delay_ms(10);
-
-  printk(KERN_INFO "Waiting for AP %u to signal ready...\n", apic_id);
-  uint64_t timeout = 1000;
-
-  while (data->ap_ready == 0 && timeout > 0) {
+  /* Poll boot_stage with a bounded, I/O-free wait. */
+  uint32_t stage = 0;
+  uint64_t timeout = 10000000ULL;
+  while (timeout > 0) {
+    asm volatile("" ::: "memory");
+    stage = data->boot_stage;
+    if (stage >= 10)
+      break;
     timeout--;
-    hpet_delay_us(100);
   }
 
-  if (data->ap_ready) {
+  asm volatile("mfence" ::: "memory");
+  uint32_t ready = data->ap_ready;
+
+  printk(KERN_INFO "AP boot stage = %u\n", stage);
+  printk(KERN_INFO "AP boot wait completed (remaining=%lu)\n", timeout);
+  if (ready == 1) {
     printk(KERN_OK "AP %u started successfully!\n", apic_id);
   } else {
-    printk(KERN_ERR "AP %u failed to start (timeout)\n", apic_id);
+    printk(KERN_INFO "ap_ready = %u\n", ready);
   }
 }
 
@@ -199,10 +353,39 @@ int smp_init(void) {
 
   void *trampoline_dest = (void *)AP_TRAMPOLINE_ADDR;
 
-  printk(KERN_INFO "  Using identity mapping: virt 0x%lx = phys 0x%x\n",
-         (uint64_t)trampoline_dest, AP_TRAMPOLINE_ADDR);
+  /* The AP trampoline runs from physical 0x8000. After the AP enables
+   * paging (CR0.PG) using the BSP's PML4, it continues executing at
+   * virtual 0x8000 via an identity mapping (virt == phys). The AP's
+   * stack is at 0x7C00 (page 0x7000), also identity-mapped.
+   *
+   * Both pages must be mapped BEFORE the AP is started:
+   *   0x7000 -> 0x7000  (trampoline stack used during mode transitions)
+   *   0x8000 -> 0x8000  (trampoline code and startup data at +512)
+   *
+   * The trampoline accesses the stack (push/retfq) at ESP=0x7C00 while
+   * still in the identity-mapped range, before switching to the kernel
+   * stack allocated for the AP. */
 
-  printk(KERN_INFO "  Creating identity mapping for trampoline...\n");
+  printk(KERN_INFO "  Creating identity mappings for trampoline...\n");
+
+  if (ensure_identity_mapping(AP_TRAMPOLINE_ADDR) < 0) {
+    printk(KERN_ERR "ERROR: Failed to create identity mapping for "
+           "trampoline page 0x%x\n",
+           AP_TRAMPOLINE_ADDR);
+    return -1;
+  }
+
+  if (ensure_identity_mapping(AP_TRAMPOLINE_STACK_ADDR) < 0) {
+    printk(KERN_ERR "ERROR: Failed to create identity mapping for "
+           "trampoline stack page 0x%x\n",
+           AP_TRAMPOLINE_STACK_ADDR);
+    return -1;
+  }
+
+  printk(KERN_INFO "  Identity mappings established: "
+         "0x%x->0x%x, 0x%x->0x%x\n",
+         AP_TRAMPOLINE_ADDR, AP_TRAMPOLINE_ADDR,
+         AP_TRAMPOLINE_STACK_ADDR, AP_TRAMPOLINE_STACK_ADDR);
 
   g_trampoline_size = ap_trampoline_end - ap_trampoline_start;
 
