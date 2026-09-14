@@ -267,9 +267,9 @@ void hpet_delay_ns(uint64_t ns) {
 /**
  * @brief Busy-wait for a given number of microseconds
  *
- * Computes ticks directly from microseconds to avoid the
- * overflow that would occur from converting to nanoseconds
- * first (us * 1000 overflows for us > ~18.4 × 10^12).
+ * Computes ticks directly from microseconds, converting to
+ * femtoseconds (1 us = 10^9 fs) and dividing by the period
+ * in femtoseconds per tick.
  *
  * @param us Delay duration in microseconds
  */
@@ -279,7 +279,7 @@ void hpet_delay_us(uint64_t us) {
 
   uint64_t start = hpet_get_counter();
   uint64_t ticks =
-      (((__uint128_t)us * 1000000ULL) + hpet_state.period_fs - 1) /
+      (((__uint128_t)us * 1000000000ULL) + hpet_state.period_fs - 1) /
       hpet_state.period_fs;
 
   while ((hpet_get_counter() - start) < ticks)
@@ -289,9 +289,9 @@ void hpet_delay_us(uint64_t us) {
 /**
  * @brief Busy-wait for a given number of milliseconds
  *
- * Computes ticks directly from milliseconds to avoid the
- * overflow that would occur from converting to nanoseconds
- * first (ms * 1000000 overflows for ms > ~18.4 × 10^9).
+ * Computes ticks directly from milliseconds, converting to
+ * femtoseconds (1 ms = 10^12 fs) and dividing by the period
+ * in femtoseconds per tick.
  *
  * @param ms Delay duration in milliseconds
  */
@@ -301,7 +301,7 @@ void hpet_delay_ms(uint64_t ms) {
 
   uint64_t start = hpet_get_counter();
   uint64_t ticks =
-      (((__uint128_t)ms * 1000000000ULL) + hpet_state.period_fs - 1) /
+      (((__uint128_t)ms * 1000000000000ULL) + hpet_state.period_fs - 1) /
       hpet_state.period_fs;
 
   while ((hpet_get_counter() - start) < ticks)
