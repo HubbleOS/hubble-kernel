@@ -148,6 +148,7 @@ VFS_File *vfs_open(const char *path, int flags) {
 
 /** @brief Read from an open VFS file. */
 int vfs_read(VFS_File *file, void *buf, uint32_t size) {
+
   if (!file || !file->node->fs || !file->node->fs->read) {
     printk(KERN_ERR "VFS: read error\n");
     return -EIO;
