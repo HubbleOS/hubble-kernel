@@ -56,9 +56,11 @@ QEMU_CMD=(
     -M pc
     -cpu Haswell
     -m 256M
-    -smp 1
+    -smp 10
+    # -accel tcg,thread=on
     -cdrom "$ISO_PATH"
     -serial stdio
+    -debugcon file:/tmp/debugcon.log
     -no-reboot
     -no-shutdown
 )

@@ -23,12 +23,16 @@ ap_trampoline_start:
     mov     ss, ax
     mov     sp, 0x7C00          ; Temporary stack in real mode
 
+    ; Stage 1: Trampoline entry (zero I/O, memory-only diagnostic)
+    mov     dword [0x8226], 1
+
     ; Load our temporary GDT (not the kernel's yet - that comes later)
     lgdt    [0x8000 + temp_gdt_ptr - ap_trampoline_start]
 
-    ; Enable Protected Mode (set PE bit in CR0)
+    ; Enable Protected Mode (set PE bit in CR0, clear NW/CD)
     mov     eax, cr0
     or      al, 1
+    and     eax, ~((1 << 29) | (1 << 30))  ; Clear NW and CD
     mov     cr0, eax
 
     ; Far jump to 32-bit code to flush prefetch queue
@@ -36,6 +40,9 @@ ap_trampoline_start:
 
 [BITS 32]
 protected_mode_32:
+    ; Stage 2: Protected-mode entry
+    mov     dword [0x8226], 2
+
     ; Segments
     mov     ax, 0x10
     mov     ds, ax
@@ -45,9 +52,11 @@ protected_mode_32:
     mov     ss, ax
     mov     esp, 0x7C00
 
-    ; 1. PAE
+    ; 1. PAE + PGE (must match BSP CR4 — PGE required because kernel
+    ;    page tables use global pages; without PGE the G bit is reserved
+    ;    and causes a reserved-bit page fault on higher-half accesses).
     mov     eax, cr4
-    or      eax, (1 << 5)
+    or      eax, (1 << 5) | (1 << 7)
     mov     cr4, eax
 
     ; 2. CR3
@@ -63,16 +72,27 @@ protected_mode_32:
     ; 4. PG
     mov     eax, cr0
     or      eax, (1 << 31)
+    and     eax, ~((1 << 29) | (1 << 30))  ; Clear NW and CD
     mov     cr0, eax
 
     ; Now we're in compatibility mode, jump to 64-bit code
     jmp     0x08:0x8000 + long_mode_64 - ap_trampoline_start
 
 [BITS 64]
+default abs
 long_mode_64:
+    ; Enable NXE before accessing higher-half kernel mappings with NX PTEs.
+    mov     ecx, 0xC0000080
+    rdmsr
+    or      eax, (1 << 11)
+    wrmsr
+
     xor     eax, eax
     mov     ds, ax
     mov     es, ax
+
+    ; Stage 3: Long-mode entry
+    mov     dword [0x8000 + (ap_data_boot_stage - ap_trampoline_start)], 3
 
     ; Step 1: Load TEMPORARY GDT from identity-mapped trampoline area.
     ; CPU is still in 32-bit compatibility mode (CS.L=0, CS.D=1), so
@@ -81,32 +101,15 @@ long_mode_64:
 
     ; Far return to true 64-bit long mode via temp GDT's 64-bit code segment
     push    0x08
-    push    qword (0x8000 + (.load_kernel_gdt - ap_trampoline_start))
+    push    qword (0x8000 + (.enter_long_mode - ap_trampoline_start))
     retfq
 
-.load_kernel_gdt:
+.enter_long_mode:
+    ; Now in true 64-bit mode (CS.L=1). Use temp GDT's flat segments.
     mov     rbx, 0x8000
 
-    ; Step 2: Load REAL kernel GDT. Now in true 64-bit mode (CS.L=1),
-    ; lgdt reads the full 10-byte descriptor (2-byte limit + 8-byte base).
-    lgdt    [rbx + (ap_data_gdt_desc - ap_trampoline_start)]
-
-    ; Reload CS with kernel GDT's 64-bit code segment
-    push    0x08
-    push    qword (0x8000 + (.reload_cs - ap_trampoline_start))
-    retfq
-
-.reload_cs:
-    ; Set up data segments from kernel GDT
-    mov     ax, 0x10
-    mov     ds, ax
-    mov     es, ax
-    mov     ss, ax
-
-    call    enable_sse
-
     ; Load entry point using register-indirect addressing
-    mov     rax, [0x8000 + (ap_data_entry - ap_trampoline_start)]
+    mov     rax, [rbx + (ap_data_entry - ap_trampoline_start)]
     test    rax, rax
     jz      .error_no_entry
 
@@ -118,8 +121,10 @@ long_mode_64:
     and     rsp, -16
     xor     rbp, rbp
 
-    ; Signal ready
-    mov     dword [rbx + (ap_data_ready - ap_trampoline_start)], 1
+    ; Save entry point before enable_sse clobbers RAX
+    push    rax
+    call    enable_sse
+    pop     rax
 
     ; Jump to kernel entry point
     jmp     rax
@@ -198,10 +203,13 @@ ap_data_entry:                  ; offset 538
 ap_data_ready:                  ; offset 546
     dd      0                   ; uint32_t ap_ready
 
+ap_data_boot_stage:             ; offset 550
+    dd      0                   ; uint32_t boot_stage
+
 ; Temporary GDT descriptor for the 32→64 bit mode transition.
 ; Located at an identity-mapped address (trampoline at 0x8000) so that
 ; lgdt in 32-bit compatibility mode can read it (2-byte limit + 4-byte base).
-ap_temp_gdt_desc:               ; offset 550
+ap_temp_gdt_desc:               ; offset 554
     dw      (ap_temp_gdt_end - ap_temp_gdt_start - 1)  ; limit
     dd      0x8000 + (ap_temp_gdt_start - ap_trampoline_start)  ; base (identity)
 
