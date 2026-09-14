@@ -75,8 +75,8 @@ void boot_cpu_init(void) {
   gdt_init();
   idt_init();
   tss_init();
-  interrupts_init();
   syscall_init();
+  interrupts_init();
 
   printk(KERN_OK "CPU initialization complete\n");
 }

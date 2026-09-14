@@ -33,11 +33,14 @@ vm_map_t *vm_map_create(void) {
  */
 void vm_insert_area(vm_map_t *map, vm_area_t *vma) {
   vm_area_t **cur = &map->areas;
-  while (*cur && (*cur)->base < vma->base)
+  vm_area_t *prev = NULL;
+  while (*cur && (*cur)->base < vma->base) {
+    prev = *cur;
     cur = &(*cur)->next;
+  }
 
   vma->next = *cur;
-  vma->prev = (*cur) ? (*cur)->prev : NULL;
+  vma->prev = prev;
   if (*cur)
     (*cur)->prev = vma;
   *cur = vma;
@@ -104,4 +107,33 @@ uint64_t vm_find_free_range(vm_map_t *map, size_t size) {
     vma = vma->next;
   }
   return addr;
+}
+
+/* -- Map Cloning ------------------------------------------------------------ */
+
+/**
+ * @brief Deep-copy a virtual memory map
+ *
+ * @param src Map to copy
+ * @return New independent map, or NULL on failure
+ */
+vm_map_t *vm_map_clone(vm_map_t *src) {
+  vm_map_t *dst = vm_map_create();
+  if (!dst)
+    return NULL;
+
+  for (vm_area_t *vma = src->areas; vma; vma = vma->next) {
+    vm_area_t *copy = kmalloc(sizeof(vm_area_t), GFP_ZERO);
+    if (!copy)
+      return dst; /* best-effort: caller sees a partial clone rather than NULL */
+
+    copy->base = vma->base;
+    copy->size = vma->size;
+    copy->flags = vma->flags;
+    copy->type = vma->type;
+    copy->phys_base = vma->phys_base;
+    vm_insert_area(dst, copy);
+  }
+
+  return dst;
 }

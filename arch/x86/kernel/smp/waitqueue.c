@@ -45,8 +45,8 @@ void waitqueue_wake_all(wait_queue_t *wq) {
   spinlock_acquire(&wq->lock);
 
   for (size_t i = 0; i < wq->count; i++) {
-    wq->tasks[i]->state = TASK_READY;
-    wq->tasks[i]->time_slice = wq->tasks[i]->time_slice_max;
+    wq->tasks[i]->linkage.state = TASK_READY;
+    wq->tasks[i]->sched.time_slice = wq->tasks[i]->sched.time_slice_max;
   }
 
   wq->count = 0;

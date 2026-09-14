@@ -1,10 +1,3 @@
-/*
- * Syscall: read from a file descriptor.
- *
- * Reads data from the kernel file associated with the given file
- * descriptor into a user-provided buffer.
- */
-
 #include <hubble/syscalls.h>
 
 #include "syscall_entry.h"
@@ -23,14 +16,25 @@
  */
 long sys_read(int fd, char *buffer, size_t len) {
   if (fd < 0 || fd >= MAX_FDS || !buffer || len == 0) {
-    return -1;
+    return -EINVAL;
   }
+
+  if (fd == 0) {
+    VFS_File *stdin = vfs_open("/dev/tty0", 0);
+    if (IS_ERR(stdin) || !stdin)
+      return -EIO;
+
+    size_t read_count = vfs_read(stdin, buffer, len);
+    vfs_close(stdin);
+    return (long)read_count;
+  }
+
   task_t *current = get_current_task();
   fd_entry_t *fd_entry = task_get_fd(current, fd);
 
   VFS_File *file = fd_entry->data;
   if (!file)
-    return -1;
+    return -EBADFD;
 
   size_t read_count = vfs_read(file, buffer, len);
   return (long)read_count;

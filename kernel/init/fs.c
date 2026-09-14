@@ -40,7 +40,7 @@ void init_filesystems(void) {
   }
 
   /* Ensure partition device callbacks are set. */
-  for (int i = 1; i < 2; i++) {
+  for (int i = 1; i < gpt_result; i++) {
     if (!partitions[i].device->read) {
       partitions[i].device->read = &ata_read_sector;
       partitions[i].device->write = &ata_write_sector;
@@ -50,6 +50,7 @@ void init_filesystems(void) {
 
   printk(KERN_DEBUG "Mounting FAT32 at LBA %d...\n", partitions[0].first_lba);
   vfs_mount("/", &partitions[0], FS_FAT32);
+  vfs_mount("/ext2", &partitions[1], FS_EXT2);
   vfs_mount("/dev", NULL, FS_DEV);
   vfs_mount("/pipe", NULL, FS_PIPE);
   printk(KERN_INFO "Filesystem mounted\n");

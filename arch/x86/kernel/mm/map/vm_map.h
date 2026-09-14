@@ -102,3 +102,17 @@ vm_area_t *vm_find_area(vm_map_t *map, uint64_t addr);
  * @return Base address of the free range
  */
 uint64_t vm_find_free_range(vm_map_t *map, size_t size);
+
+/**
+ * @brief Deep-copy a virtual memory map
+ *
+ * Creates an independent map containing a copy of every VMA in @p src, in
+ * the same order. Used by fork() so the child has its own bookkeeping list
+ * mirroring the address space it was cloned from — sharing a vm_map between
+ * two tasks causes free-range lookups to silently hand out addresses that
+ * are still live in the other task's page tables.
+ *
+ * @param src Map to copy
+ * @return New independent map, or NULL on failure
+ */
+vm_map_t *vm_map_clone(vm_map_t *src);

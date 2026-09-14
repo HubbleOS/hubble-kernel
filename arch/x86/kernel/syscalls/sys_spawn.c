@@ -5,6 +5,7 @@
  * sys_spawn_file (load and execute a file as a new task).
  */
 
+#include <hubble/errno.h>
 #include <hubble/syscalls.h>
 
 #include <smp/scheduler.h>
@@ -29,16 +30,16 @@
 long sys_spawn(void *entry_point, void *arg, uint32_t priority) {
   (void)arg;
   if (!entry_point)
-    return -1;
+    return -EINVAL;
 
   task_t *task = task_create((void *)entry_point, priority, 1);
   if (!task)
-    return -1;
+    return -EPERM;
 
   task_map_user_stack(task, (uint64_t *)get_cr3());
 
   scheduler_add_task(task);
-  return (long)task->pid;
+  return (long)task->id.pid;
 }
 
 /**
@@ -57,9 +58,9 @@ long sys_spawn_file(const char *path, void *arg, uint32_t priority) {
   (void)arg;
 
   task_t *task = exec(path);
-  task->priority = priority;
-  task->time_slice_max = 5 + priority;
-  task->time_slice = task->time_slice_max;
+  task->sched.priority = priority;
+  task->sched.time_slice_max = 5 + priority;
+  task->sched.time_slice = task->sched.time_slice_max;
   scheduler_add_task(task);
-  return (long)task->pid;
+  return (long)task->id.pid;
 }

@@ -109,7 +109,6 @@ void ap_entry(void) {
   tss_init();
   syscall_init();
   enable_nxe();
-  ap_ready = true;
 
   uint64_t rflags;
   asm volatile("pushfq; pop %0" : "=r"(rflags));
@@ -118,6 +117,8 @@ void ap_entry(void) {
   sti();
   printk(KERN_INFO "\nAP %u online!\nHello from AP %u \n\n", apic_id, apic_id);
   lapic_timer_init(100);
+
+  ap_ready = true;
   while (1) {
     hlt();
   }

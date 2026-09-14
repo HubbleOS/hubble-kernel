@@ -28,4 +28,9 @@ typedef struct {
   uint64_t cpu_id;
 } cpu_local_t;
 
+struct iovec {
+  void *iov_base;
+  size_t iov_len;
+};
+
 _End_C_Header;

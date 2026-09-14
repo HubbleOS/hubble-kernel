@@ -56,6 +56,31 @@ static inline void sti(void) { asm volatile("sti"); }
  */
 static inline void cli(void) { asm volatile("cli"); }
 
+/**
+ * @brief Save RFLAGS and disable interrupts
+ *
+ * Pair with restore_flags() to make a critical section safe against
+ * nesting: restoring the saved flags leaves interrupts disabled if they
+ * already were (e.g. called from within another such section), instead
+ * of unconditionally re-enabling them like a bare sti() would.
+ *
+ * @return Previous RFLAGS value
+ */
+static inline uint64_t save_flags_cli(void) {
+  uint64_t flags;
+  asm volatile("pushfq; pop %0; cli" : "=r"(flags)::"memory");
+  return flags;
+}
+
+/**
+ * @brief Restore RFLAGS previously saved by save_flags_cli()
+ *
+ * @param flags Value returned by save_flags_cli()
+ */
+static inline void restore_flags(uint64_t flags) {
+  asm volatile("push %0; popfq" ::"r"(flags) : "memory", "cc");
+}
+
 /* -- CPU Hints ------------------------------------------------- */
 
 /**

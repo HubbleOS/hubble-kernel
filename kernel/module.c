@@ -615,7 +615,10 @@ int module_load_buffer(const void *image, size_t image_size) {
       memcpy((void *)base, (uint8_t *)image + shdr->sh_offset, shdr->sh_size);
     } else if (shdr->sh_type == SHT_NOBITS) {
       memset((void *)base, 0, shdr->sh_size);
-    } else {
+    } else if(shdr->sh_type == SHT_NOTE){
+      ;
+    }
+    else {
       printk(KERN_ERR "[module] unsupported section type %u"
                       " (%s)\n",
              shdr->sh_type, sec_name);

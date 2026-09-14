@@ -118,12 +118,34 @@ isr128:
     push    r14
     push    r15
 
+    ; GS is deliberately left alone here (no swapgs at all, for either
+    ; isr_common, irq_common or syscall_common): this kernel's GS_BASE is
+    ; a single per-CPU MSR, not something saved/restored per task, and
+    ; irq_handler -> lapic_timer_handler can call schedule() partway
+    ; through, which context-switches to a completely different task
+    ; before this stub ever gets to an exit-side check - so neither "swap
+    ; based on the entering task's CS" nor "swap based on the CS we're
+    ; about to resume into" is safe in isolation, and there's no single
+    ; consistent decision to cache across the call either (see the two
+    ; earlier, both-wrong attempts in git history if curious). Nothing in
+    ; isr_handler/irq_handler/schedule() itself touches %gs, so it doesn't
+    ; need to be right in here - only syscall_entry.asm (self-contained,
+    ; entry and exit always paired within the same instruction stream) and
+    ; task_sleep() (which restores it explicitly, by absolute value, right
+    ; after resuming - see scheduler.c) actually rely on GS_BASE.
+
     ; Set kernel data segments
+    ; %if %3
+    ; ; Зберегти поточний FS.base ПЕРЕД тим, як його зіпсує mov fs,ax
+    ; mov     ecx, 0xC0000100      ; MSR_FS_BASE
+    ; rdmsr
+    ; push    rdx
+    ; push    rax                  ; збережений FS.base (low:high на стеку)
+    ; %endif
+
     mov     ax, 0x10
-    ; mov     ds, ax
-    ; mov     es, ax
     %if %3
-    mov     fs, ax
+    ; mov     fs, ax 
     %endif
 
     ; Align stack to 16 bytes for ABI
@@ -148,6 +170,14 @@ isr128:
     ; Restore original stack
     mov     rsp, rbp
 
+    ; %if %3
+    ; ; Відновити FS.base ПЕРЕД поверненням
+    ; pop     rax
+    ; pop     rdx
+    ; mov     ecx, 0xC0000100
+    ; wrmsr
+    ; %endif
+
     ; Restore all registers
     pop     r15
     pop     r14
@@ -167,7 +197,6 @@ isr128:
 
     ; Clear stack of int_no and err_code
     add     rsp, 16
-
     ; Return from interrupt
     iretq
 %endmacro

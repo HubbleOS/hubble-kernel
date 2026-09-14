@@ -171,16 +171,10 @@ typedef struct {
 
   uint32_t first_lba;
 
-  uint32_t inodes_count;
-  uint32_t blocks_count;
-  uint32_t first_data_block;
-  uint32_t log_block_size;
-  uint32_t blocks_per_group;
-  uint32_t inodes_per_group;
-  uint16_t magic;
   uint32_t block_size;
-
   uint32_t inode_size;
+
+  Ext2Superblock sb;
 
   Ext2GroupDesc *groups;
   Ext2Inode *inodes;

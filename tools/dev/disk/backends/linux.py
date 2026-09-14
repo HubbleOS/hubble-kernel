@@ -30,7 +30,7 @@ class LinuxBackend(Backend):
 
     def format_and_copy(self, config: DiskConfig):
         result = subprocess.run(
-            ["losetup", "--find", "--show", "--partscan", config.path],
+            ["sudo", "losetup", "--find", "--show", "--partscan", config.path],
             check=True, capture_output=True, text=True
         )
         self._loop = result.stdout.strip()
@@ -39,22 +39,24 @@ class LinuxBackend(Backend):
         for i, p in enumerate(config.partitions, start=1):
             dev = f"{self._loop}p{i}"
             if p.fs == "fat32":
-                run(["mkfs.vfat", "-F", "32", "-n", p.label.upper(), dev])
-            elif p.fs == "ext4":
-                run(["mkfs.ext4", "-L", p.label, dev])
+                run(["sudo","mkfs.vfat", "-F", "32", "-n", p.label.upper(), dev])
+            elif p.fs == "ext2":
+                run(["sudo","mkfs.ext2", "-L", p.label, dev])
             elif p.fs == "exfat":
-                run(["mkfs.exfat", "-n", p.label, dev])
+                run(["sudo","mkfs.exfat", "-n", p.label, dev])
 
             if p.files:
                 mnt = f"/tmp/mnt_{p.label}"
-                os.makedirs(mnt, exist_ok=True)
-                run(["mount", dev, mnt])
+                #os.makedirs(mnt, exist_ok=True)
+                run(["sudo","mkdir",mnt])
+                run(["sudo","mount", dev, mnt])
                 for src, dst in p.files:
                     full_dst = os.path.join(mnt, dst.lstrip("/"))
-                    os.makedirs(os.path.dirname(full_dst), exist_ok=True)
-                    run(["cp", "-r", f"{src}/.", full_dst])
-                run(["umount", mnt])
+                    run(["sudo","mkdir",os.path.dirname(full_dst)])
+                    #os.makedirs(os.path.dirname(full_dst), exist_ok=True)
+                    run(["sudo","cp", "-r", f"{src}/.", full_dst])
+                run(["sudo","umount", mnt])
 
     def detach(self):
         if hasattr(self, "_loop"):
-            run(["losetup", "-d", self._loop])
+            run(["sudo","losetup", "-d", self._loop])

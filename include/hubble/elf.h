@@ -44,6 +44,7 @@
 #define SHT_STRTAB 3
 #define SHT_RELA 4
 #define SHT_NOBITS 8
+#define SHT_NOTE 7
 
 /* -- Section flags ----------------------------------------------------------
  */

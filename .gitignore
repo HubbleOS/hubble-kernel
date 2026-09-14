@@ -22,6 +22,7 @@ dist/
 output/
 out/
 iso/
+busy/
 
 # Temporary test outputs
 test/

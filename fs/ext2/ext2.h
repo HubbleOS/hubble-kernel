@@ -27,3 +27,15 @@ Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode);
 
 /** @brief Read an inode from disk into memory. */
 int ext2_read_inode(EXT2_FS *fs, uint32_t inode_number, Ext2Inode *out_inode);
+
+void ext2_read_block(EXT2_FS *fs, uint32_t block_number, void *buf);
+int ext2_write_inode(EXT2_FS *fs, uint32_t inode_num, Ext2Inode *inode);
+int ext2_write_group_desc(EXT2_FS *fs);
+void ext2_write_block(EXT2_FS *fs, uint32_t block_number, void *buf);
+uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t group);
+
+typedef struct {
+  EXT2_FS *fs;
+  Ext2Inode inode;
+  uint32_t inode_number;
+} EXT2_FILE;
