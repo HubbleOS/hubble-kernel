@@ -1,11 +1,7 @@
-/*
- * Syscall: map files or devices into memory.
- *
- * Implements the mmap system call for creating memory mappings, either
- * anonymous (zero-filled) or backed by device memory.  Also provides
- * helper functions for file descriptor lookup used by other syscalls.
- */
 
+
+#include <hubble/errno.h>
+#include <hubble/printk.h>
 #include <hubble/string.h>
 #include <hubble/syscalls.h>
 #include <stddef.h>
@@ -48,7 +44,7 @@
 fd_entry_t *task_get_fd(task_t *task, int fd) {
   if (fd < 0 || fd >= MAX_FDS)
     return NULL;
-  return &task->fds[fd];
+  return &task->fdtable.fds[fd];
 }
 
 /**
@@ -63,8 +59,8 @@ fd_entry_t *task_get_fd(task_t *task, int fd) {
  */
 fd_entry_t *task_get_free_fd(task_t *task) {
   for (int i = 2; i < MAX_FDS; i++) {
-    if (!task->fds[i].data)
-      return &task->fds[i];
+    if (!task->fdtable.fds[i].data)
+      return &task->fdtable.fds[i];
   }
   return NULL;
 }
@@ -92,10 +88,10 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
   }
 
   task_t *current = get_current_task();
-  if (!current->vm_map)
-    current->vm_map = vm_map_create();
-  if (!current->vm_map) {
-    return -1;
+  if (!current->mm.vm_map)
+    current->mm.vm_map = vm_map_create();
+  if (!current->mm.vm_map) {
+    return -EFAULT;
   }
 
   size_t size = PAGE_ALIGN_UP(length);
@@ -104,7 +100,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
   if ((flags & MAP_FIXED) && addr)
     vaddr = addr;
   else
-    vaddr = vm_find_free_range(current->vm_map, size);
+    vaddr = vm_find_free_range(current->mm.vm_map, size);
 
   uint32_t vm_flags = 0;
   if (prot & PROT_READ)
@@ -124,7 +120,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
     for (uint64_t off = 0; off < size; off += PAGE_SIZE) {
       uint64_t phys = pmm_alloc_page();
       if (!phys)
-        return -1;
+        return -EFAULT;
 
       memset((void *)phys_to_virt(phys), 0, PAGE_SIZE);
 
@@ -142,7 +138,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
     vma->size = size;
     vma->flags = vm_flags;
     vma->type = VMA_ANONYMOUS;
-    vm_insert_area(current->vm_map, vma);
+    vm_insert_area(current->mm.vm_map, vma);
     return (long)vaddr;
   }
 
@@ -177,7 +173,70 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
     vma->flags = vm_flags;
     vma->type = VMA_DEVICE;
     vma->phys_base = phys_base;
-    vm_insert_area(current->vm_map, vma);
+    vm_insert_area(current->mm.vm_map, vma);
     return (long)vaddr;
   }
+}
+long sys_munmap(uint64_t addr, size_t length) {
+  if (length == 0) {
+    printk(KERN_ERR "munmap: length is zero\n");
+    return -1;
+  }
+
+  task_t *current = get_current_task();
+  if (!current->mm.vm_map) {
+    printk(KERN_ERR "munmap: no virtual memory map\n");
+    return -1;
+  }
+
+  size_t size = PAGE_ALIGN_UP(length);
+  uint64_t end = addr + size;
+
+  vm_area_t *vma = vm_find_area(current->mm.vm_map, addr);
+  if (!vma || addr < vma->base || end > vma->base + vma->size) {
+    printk(KERN_ERR "munmap: invalid area\n");
+    return -1;
+  }
+
+  /* Actually unmap and free the physical pages in [addr, end). */
+  for (uint64_t va = addr; va < end; va += PAGE_SIZE) {
+    uint64_t phys = vmm_get_phys(va);
+    if (phys) {
+      vmm_unmap_page(va);
+      pmm_free_page(phys);
+    }
+  }
+
+  uint64_t vma_end = vma->base + vma->size;
+
+  if (addr == vma->base && end == vma_end) {
+    /* Case 1: whole VMA unmapped. */
+    vm_remove_area(current->mm.vm_map, vma);
+    kfree(vma);
+  } else if (addr == vma->base) {
+    /* Case 2: shrink from the front. */
+    vma->base = end;
+    vma->size = vma_end - end;
+  } else if (end == vma_end) {
+    /* Case 3: shrink from the back. */
+    vma->size = addr - vma->base;
+  } else {
+    /* Case 4: hole in the middle -> split into two VMAs. */
+    vm_area_t *tail = kmalloc(sizeof(vm_area_t), GFP_ZERO);
+    if (!tail) {
+      printk(KERN_ERR "munmap: out of memory splitting vma\n");
+      return -1;
+    }
+    tail->base = end;
+    tail->size = vma_end - end;
+    tail->flags = vma->flags;
+    tail->type = vma->type;
+    tail->phys_base = vma->phys_base; /* only meaningful for VMA_DEVICE */
+
+    vma->size = addr - vma->base;
+
+    vm_insert_area(current->mm.vm_map, tail);
+  }
+
+  return 0;
 }

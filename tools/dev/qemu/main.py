@@ -83,7 +83,8 @@ def build_qemu_command(opts: QemuOptions):
         f"qemu-system-{opts.arch}",
         "-M", "pc",
         "-cpu", "Haswell",
-        "-m", str(opts.mem),
+        # "-enable-kvm",
+        "-m", str(1024),
         "-smp", str(opts.smp),
 
         # Main disk
@@ -135,11 +136,12 @@ def build_qemu_command(opts: QemuOptions):
     # Debug
     cmd += [
         # "-S", "-s", "-d cpu_reset", "-no-reboot", "-no-shutdown"
-        # "-S -s -d int,cpu_reset -no-reboot -no-shutdown"
-        # "-S", "-s"
-        "-d", "int",
-        "-D", "/tmp/qemu.log",
-        "-no-reboot", "-no-shutdown"
+        # "-S -s -d int,cpu_reset -no-reboot -no-shutdown",
+        # "-icount" ,"shift=auto",
+        "-S", "-s",
+        # # "-d", "int",
+        # # "-D", "/tmp/qemu.log",
+        # " -no-reboot", " -no-shutdown"
     ]
 
     #
