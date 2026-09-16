@@ -45,7 +45,7 @@ long sys_wait4(int pid, int *status, int options, void *rusage) {
 
     task_t *prev = NULL;
     for (task_t *child = parent->linkage.children; child;
-        prev = child, child = child->linkage.sibling) {
+         prev = child, child = child->linkage.sibling) {
       if (pid > 0 && (int)child->id.pid != pid)
         continue;
       if (child->linkage.state != TASK_DEAD)

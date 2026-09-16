@@ -60,5 +60,5 @@ typedef struct {
 } elf_image_t;
 
 int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm,
-            vm_map_t *vm_map);
+             vm_map_t *vm_map);
 int elf_load_sep(const char *path, uint64_t *entry_out, uint64_t *pm);

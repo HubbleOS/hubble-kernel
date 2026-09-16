@@ -123,9 +123,9 @@ typedef struct {
   uint64_t heap_end;
   uint64_t fs_base;
   size_t tls_size; /* size of the kmalloc'd block fs_base points to, 0 if
-                     * fs_base isn't an owned TLS allocation (no TLS, or a
-                     * raw value set via arch_prctl) - lets fork() know
-                     * whether/how much to duplicate rather than alias it */
+                    * fs_base isn't an owned TLS allocation (no TLS, or a
+                    * raw value set via arch_prctl) - lets fork() know
+                    * whether/how much to duplicate rather than alias it */
 } task_mm_t;
 
 // ---- Stacks state ----
