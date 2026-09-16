@@ -10,12 +10,14 @@
 global isr0, isr1, isr2, isr3, isr4, isr5, isr6, isr7
 global isr8, isr9, isr10, isr11, isr12, isr13, isr14, isr15
 global isr16, isr17, isr18, isr19, isr20, isr21
+global df_entry
 global irq0, irq1, irq2, irq3, irq4, irq5, irq6, irq7
 global irq8, irq9, irq10, irq11, irq12, irq13, irq14, irq15
 global isr128
 
 ; Import C handlers
 extern isr_handler
+extern df_handler
 extern irq_handler
 extern syscall_handler_wrapper
 extern need_resched
@@ -93,6 +95,74 @@ isr128:
     push    qword 0             ; Dummy error code
     push    qword 128           ; Interrupt number
     jmp     syscall_common_stub
+
+; -- Double Fault Entry (vector 8, IST1) ------------------------
+; The CPU uses IST1 (TSS.IST[1]) for this handler, providing a
+; guaranteed clean stack even if the faulting RSP is corrupted
+; or exhausted.  The CPU has already pushed the exception frame
+; (error code + RIP/CS/RFLAGS/RSP/SS) onto the IST stack.
+;
+; Triple-fault chain (for reference):
+;   exception -> nested exception -> #DF -> failure while handling #DF -> triple fault -> CPU reset
+; A triple fault CANNOT be caught by the kernel.  The purpose of
+; this handler is to catch and diagnose the #DF before it escalates.
+;
+; This stub is self-contained (does NOT use COMMON_STUB) because
+; the #DF handler uses emergency serial output instead of printk,
+; avoiding spinlock deadlocks on other CPUs.
+df_entry:
+    ; CPU has switched to IST1 and pushed:
+    ;   [rsp+0]  = error code
+    ;   [rsp+8]  = rip
+    ;   [rsp+16] = cs
+    ;   [rsp+24] = rflags
+    ;   [rsp+32] = rsp  (only if privilege-level change)
+    ;   [rsp+40] = ss   (only if privilege-level change)
+
+    ; Push interrupt vector number to match registers_t layout
+    push    qword 8             ; Interrupt number (Double Fault vector)
+
+    ; Save all general-purpose registers
+    push    rax
+    push    rbx
+    push    rcx
+    push    rdx
+    push    rsi
+    push    rdi
+    push    rbp
+    push    r8
+    push    r9
+    push    r10
+    push    r11
+    push    r12
+    push    r13
+    push    r14
+    push    r15
+
+    ; Set kernel data segments
+    mov     ax, 0x10
+    mov     ds, ax
+    mov     es, ax
+    mov     fs, ax
+    mov     gs, ax
+
+    ; Align stack to 16 bytes for ABI.
+    ; After the 16 pushes (128 bytes) plus the CPU frame (32 bytes),
+    ; RSP = IST_TOP - 160, which is already 16-byte aligned.
+    ; and rsp, ~0xF is a no-op here but handles edge cases.
+    ; MUST NOT subtract further — `call` will push 8 bytes, giving
+    ; RSP_entry = RSP - 8 with RSP_entry % 16 == 8 (ABI-correct).
+    mov     rbp, rsp
+    and     rsp, ~0xF
+
+    ; Call C handler — uses emergency serial output, NOT printk
+    mov     rdi, rbp
+    call    df_handler
+
+    ; df_handler must never return.  If it does, halt immediately.
+    cli
+    hlt
+    jmp     $
 
 ; Macro for common ISR/IRQ/Syscall stubs
 ; %1 = stub label suffix

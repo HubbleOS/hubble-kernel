@@ -73,7 +73,7 @@ static inline bool is_power_of_2(size_t n) { return n && ((n & (n - 1)) == 0); }
  */
 static inline bool is_valid_kernel_ptr(void *ptr) {
   uint64_t addr = (uint64_t)ptr;
-  return addr >= DIRECT_MAP_BASE && addr != 0;
+  return is_direct_map(addr) && addr != 0;
 }
 
 /**

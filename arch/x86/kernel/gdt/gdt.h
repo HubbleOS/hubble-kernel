@@ -133,13 +133,18 @@ typedef struct {
 
 #define IDT_ENTRIES 256
 
+/* -- IST (Interrupt Stack Table) -------------------------------- */
+
+#define IST_STACK_SIZE 16384
+#define IST_DF_INDEX 1
+
 /* -- Public Functions ------------------------------------------ */
 
 void gdt_init(void);
 void tss_init(void);
 void idt_init(void);
 void idt_set_gate(uint8_t num, uint64_t handler, uint16_t selector,
-                  uint8_t type_attr);
+                  uint8_t type_attr, uint8_t ist);
 uint64_t get_gdt_base(void);
 uint16_t get_gdt_limit(void);
 void idt_load(void);

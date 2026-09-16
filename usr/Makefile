@@ -1,41 +1,67 @@
-# usr/Makefile
+# initramfs/Makefile
+#
+# Builds the minimal test initramfs for standalone kernel testing.
+#
+# Usage:
+#   make                    Build initramfs (default)
+#   make clean              Remove build artifacts
+#
+# This Makefile compiles a minimal /init and packages it into a CPIO
+# initramfs image using the kernel's initramfs generator.
 
 Q = @
-export Q
 
-OUT_DIR ?= $(abspath ../out)
-BUILD_DIR := $(OUT_DIR)/build/usr
-export OUT_DIR BUILD_DIR
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 
-USR_DIR := $(abspath .)
-export USR_DIR
+KERNEL_PATH ?= $(abspath ..)
+OUT_DIR     ?= $(abspath $(KERNEL_PATH)/out)
+BUILD_DIR   := $(OUT_DIR)/initramfs-build
+ROOT_DIR    := $(BUILD_DIR)/rootfs
+INITRAMFS_IMG := $(OUT_DIR)/initramfs.img
 
-CFLAGS := -ffreestanding -O2 -Wall -Wextra -m64 -g -fno-stack-protector
-export CFLAGS
+# Toolchain — use the kernel's cross-compiler
+CC      ?= x86_64-elf-gcc
+LD      ?= x86_64-elf-ld
 
-BUILD_TOOL := $(OUT_DIR)/tools/dev/build/build_main
-BUILD_TOOL_FLAGS := --log-file $(OUT_DIR)/logs/usr_build.log -v
-export BUILD_TOOL BUILD_TOOL_FLAGS
+CFLAGS  := -ffreestanding -O2 -Wall -Wextra -m64 -g -fno-stack-protector
+LDFLAGS := -nostdlib -static -nostartfiles
 
-subdirs := lib apps apptest
+# Source files
+SRC      := init.c
+LDSCRIPT := link.ld
 
-.PHONY: all build clean rebuild
+# ---------------------------------------------------------------------------
+# Targets
+# ---------------------------------------------------------------------------
 
-all: build
+.PHONY: all clean
 
-build: build-tool
-	@set -e; \
-	mkdir -p $(OUT_DIR)/logs; \
-	for dir in $(subdirs); do \
-		$(MAKE) -C $$dir BUILD_TOOL_FLAGS="$(BUILD_TOOL_FLAGS)"; \
-	done
-	@echo "Userland build complete"
+all: $(INITRAMFS_IMG)
 
-build-tool:
-	@$(MAKE) -C ../tools/dev/build build
+# Compile /init ELF
+$(BUILD_DIR)/init.elf: $(SRC) $(LDSCRIPT)
+	@mkdir -p $(BUILD_DIR)
+	$(Q)$(CC) -ffreestanding -O2 -nostdlib -static -nostartfiles \
+		-T $(LDSCRIPT) $(CFLAGS) \
+		-o $@ $(SRC)
+	@echo "initramfs: built /init -> $@"
+
+# Create rootfs layout and generate initramfs image
+$(INITRAMFS_IMG): $(BUILD_DIR)/init.elf
+	@mkdir -p $(ROOT_DIR)
+	@cp $(BUILD_DIR)/init.elf $(ROOT_DIR)/init
+	@mkdir -p $(ROOT_DIR)/modules
+	@cp -r $(KERNEL_PATH)/out/modules/* $(ROOT_DIR)/modules/
+	@cp -r $(KERNEL_PATH)/busy/* $(ROOT_DIR)/
+	@chmod +x $(ROOT_DIR)/init
+	@python3 $(KERNEL_PATH)/scripts/initramfs.py \
+		--root $(ROOT_DIR) \
+		--output $@
+	@echo "initramfs: generated $@"
 
 clean:
 	@rm -rf $(BUILD_DIR)
-	@echo "Userland clean complete"
-
-rebuild: clean build
+	@rm -f $(INITRAMFS_IMG)
+	@echo "initramfs: clean complete"

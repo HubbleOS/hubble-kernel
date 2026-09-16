@@ -1,9 +1,7 @@
+.deps-obtained
+
 # MacOS system files
 *.DS_Store
-
-# Configuration files
-*.config
-*.toml
 
 # Compiled binaries and images
 *.elf

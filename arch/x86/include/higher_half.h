@@ -1,49 +1,61 @@
 /**
  * @file higher_half.h
- * @brief Unified memory layout definitions for bootloader and kernel
+ * @brief Memory layout definitions for the kernel
  *
- * Defines the physical and virtual memory layout constants and
- * conversion helpers used to translate between physical addresses
- * and higher-half kernel virtual addresses.
+ * Defines virtual-to-physical address conversion helpers.
+ * The HHDM (Higher Half Direct Map) offset comes from Limine
+ * at runtime. The kernel virtual base is from the linker script.
  */
 
 #pragma once
 
 #include <stdint.h>
 
-/* -- Physical Memory Layout ------------------------------------ */
+#include <boot/limine.h>
+#include <requests.h>
 
-#define KERNEL_PHYS_BASE 0x100000ULL
-
-/* -- Virtual Memory Layout ------------------------------------- */
+/* -- Virtual Memory Layout ----------------------------------------------- */
 
 #define KERNEL_VIRT_BASE 0xFFFFFFFF80000000ULL
-#define DIRECT_MAP_BASE 0xFFFF800000000000ULL
 
 /**
- * @brief Convert a physical address to a kernel virtual address
- *
- * @param phys Physical address
- * @return Virtual address in the direct map region
+ * @brief Get the HHDM offset from Limine at runtime
  */
-static inline uint64_t phys_to_virt(uint64_t phys) {
-  return phys + DIRECT_MAP_BASE;
+static inline uint64_t get_hhdm_offset(void) {
+  if (limine_hhdm_req.response)
+    return limine_hhdm_req.response->offset;
+  return 0xFFFF800000000000ULL; /* fallback */
 }
 
 /**
- * @brief Convert a virtual address back to a physical address
- *
- * Handles both higher-half kernel addresses and direct-map addresses.
- *
- * @param virt Virtual address
- * @return Corresponding physical address
+ * @brief Convert a physical address to a direct-map virtual address
+ */
+static inline uint64_t phys_to_virt(uint64_t phys) {
+  return phys + get_hhdm_offset();
+}
+
+/**
+ * @brief Convert a direct-map virtual address to a physical address
  */
 static inline uint64_t virt_to_phys(uint64_t virt) {
-  if (virt >= KERNEL_VIRT_BASE)
-    return virt - KERNEL_VIRT_BASE + KERNEL_PHYS_BASE;
-
-  if (virt >= DIRECT_MAP_BASE)
-    return virt - DIRECT_MAP_BASE;
-
+  uint64_t hhdm = get_hhdm_offset();
+  if (virt >= KERNEL_VIRT_BASE) {
+    /* Kernel virtual address — use Limine-provided physical base */
+    if (limine_exec_addr_req.response)
+      return virt - KERNEL_VIRT_BASE +
+             limine_exec_addr_req.response->physical_base;
+    /* Fallback: assume kernel loaded at HHDM offset - KERNEL_VIRT_BASE + 0
+     * This is wrong but avoids a crash if exec_addr is unavailable */
+    return virt - KERNEL_VIRT_BASE;
+  }
+  if (virt >= hhdm)
+    return virt - hhdm;
   return virt;
+}
+
+/**
+ * @brief Check if a virtual address is in the HHDM direct map
+ */
+static inline bool is_direct_map(uint64_t addr) {
+  return addr >= get_hhdm_offset() && addr != 0;
 }

@@ -14,6 +14,17 @@
 /* -- Page Table Control ---------------------------------------- */
 
 /**
+ * @brief Get the current CR2 value (faulting address on page fault)
+ *
+ * @return Value of CR2 register
+ */
+static inline uint64_t get_cr2(void) {
+  uint64_t cr2;
+  asm volatile("mov %%cr2, %0" : "=r"(cr2));
+  return cr2;
+}
+
+/**
  * @brief Get the current CR3 value (physical address of PML4)
  *
  * @return Physical address of the current top-level page table
@@ -31,6 +42,28 @@ static inline uint64_t get_cr3(void) {
  */
 static inline void set_cr3(uint64_t pml4_phys) {
   asm volatile("mov %0, %%cr3" : : "r"(pml4_phys) : "memory");
+}
+
+/**
+ * @brief Get the current CR0 value (processor control flags)
+ *
+ * @return Value of CR0 register
+ */
+static inline uint64_t get_cr0(void) {
+  uint64_t cr0;
+  asm volatile("mov %%cr0, %0" : "=r"(cr0));
+  return cr0;
+}
+
+/**
+ * @brief Get the current CR4 value (extended processor control flags)
+ *
+ * @return Value of CR4 register
+ */
+static inline uint64_t get_cr4(void) {
+  uint64_t cr4;
+  asm volatile("mov %%cr4, %0" : "=r"(cr4));
+  return cr4;
 }
 
 /* -- TLB Management -------------------------------------------- */

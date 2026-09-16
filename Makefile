@@ -12,7 +12,6 @@ export ROOT_DIR
 
 ARCH ?= x86
 OUT_DIR ?= $(abspath out)
-BUILD_DIR := $(OUT_DIR)/build/$(ARCH)
 ARCH_DIR := $(abspath arch/$(ARCH))
 
 TOOLS_DIR := tools
@@ -26,10 +25,31 @@ ifneq ($(ARCH),$(filter $(ARCH),$(SUPPORTED_ARCHES)))
 endif
 
 # ---------------------------------------------------------------------------
-# Build mode: RELEASE=1 removes debug symbols, uses -O3
+# Build mode
+#   RELEASE=1  removes debug symbols, uses -O3
+#   DEBUG=1    builds with debug symbols and -Og optimization
 # ---------------------------------------------------------------------------
 
+DEBUG ?= 1
 RELEASE ?= 0
+
+ifeq ($(RELEASE),1)
+  DEBUG := 0
+  BUILD_TYPE := release
+  CFLAGS += -ffreestanding -O3 -Wall -Wextra
+else
+  DEBUG := 1
+  BUILD_TYPE := build
+  CFLAGS += -ffreestanding -Og -Wall -Wextra -g -gdwarf-4
+endif
+
+# ---------------------------------------------------------------------------
+# Build directory
+# ---------------------------------------------------------------------------
+
+BUILD_DIR := $(OUT_DIR)/$(BUILD_TYPE)/$(ARCH)
+KERNEL_ELF := $(BUILD_DIR)/kernel.elf
+export KERNEL_ELF
 
 # ---------------------------------------------------------------------------
 # Parallel jobs: defaults to number of CPUs
@@ -72,6 +92,8 @@ export ARCH OUT_DIR BUILD_DIR ARCH_DIR TOOLS_DIR BUILD_TOOL
 
 ifeq ($(RELEASE),1)
 	CFLAGS = -ffreestanding -O3 -Wall -Wextra
+else ifeq ($(DEBUG),1)
+	CFLAGS = -ffreestanding -Og -Wall -Wextra -g -gdwarf-4
 else
 	CFLAGS = -ffreestanding -O2 -Wall -Wextra -g
 endif
@@ -94,6 +116,7 @@ INCLUDES += -I$(abspath .)
 INCLUDES += -I$(abspath include)
 INCLUDES += -I$(ARCH_DIR)/include
 INCLUDES += -I$(ARCH_DIR)/kernel
+INCLUDES += -I$(ARCH_DIR)/boot/limine
 export INCLUDES
 
 # ---------------------------------------------------------------------------
@@ -106,14 +129,6 @@ export LIB_DIR
 LOG_DIR  := $(OUT_DIR)/logs/$(shell date +%Y-%m-%d)
 LOG_FILE := $(LOG_DIR)/$(shell date +%H-%M-%S).log
 export LOG_DIR LOG_FILE
-
-ISO_DIR := $(BUILD_DIR)/iso
-export ISO_DIR
-
-ifeq ($(ARCH),x86)
-	EFI_NAME := BOOTx64.EFI
-	EFI_TARGET := efi-app-x86_64
-endif
 
 ifeq ($(ARCH),arm64)
 	EFI_NAME := BOOTAA64.EFI
@@ -312,19 +327,21 @@ endef
 
 subdirs :=
 $(eval $(call kbuild-subdir,arch/$(ARCH)))
-$(eval $(call kbuild-subdir,tools/dev))
 
 # ---------------------------------------------------------------------------
-# Userland build
+# Default target: build the kernel
 # ---------------------------------------------------------------------------
 
-USR_DIR := $(abspath usr)
-export USR_DIR
+PHONY += all
+all: build
 
-USR_BUILD :=
-ifneq ($(ARCH),arm64)
-  USR_BUILD := $(MAKE) -C $(USR_DIR) -j$(JOBS) BUILD_TOOL_FLAGS="--log-file $(OUT_DIR)/logs/usr_build.log -v --jobs $(JOBS)"
-endif
+# ---------------------------------------------------------------------------
+# Userland: minimal test payload for standalone kernel development
+# ---------------------------------------------------------------------------
+
+PHONY += usr
+usr:
+	@$(MAKE) -C usr KERNEL_PATH=$(ROOT_DIR) OUT_DIR=$(OUT_DIR)
 
 # ---------------------------------------------------------------------------
 # Targets
@@ -369,6 +386,10 @@ format-check:
 		-not -path "*/build/*" \
 		| xargs -r clang-format -style=file --dry-run --Werror
 
+# ---------------------------------------------------------------------------
+# Build kernel + userland (no ISO yet)
+# ---------------------------------------------------------------------------
+
 PHONY += build
 build: build-tool rust
 	@mkdir -p $(LOG_DIR)
@@ -376,26 +397,46 @@ build: build-tool rust
 	$(Q)set -e; for dir in $(filter-out arch/$(ARCH)/kernel,$(subdirs)); do \
 		$(MAKE) -C $$dir; \
 	done
-	$(USR_BUILD)
 	@echo "Build complete"
 
+PHONY += release
+release-build:
+	@$(MAKE) RELEASE=1 build
+
+# ---------------------------------------------------------------------------
+# Run kernel in QEMU (requires Limine)
+# ---------------------------------------------------------------------------
+
 PHONY += run
-run: build
-	$(MAKE) -C arch/$(ARCH)/boot
-	@python3 tools/dev/qemu/main.py
+run: build usr
+	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(KERNEL_ELF) $(OUT_DIR)/kernel-dev.iso
+	@bash $(ROOT_DIR)/scripts/qemu/run-qemu.sh --iso $(OUT_DIR)/kernel-dev.iso
 
-PHONY += disk
-disk:
-	@mkdir -p out/disks
-	@python3 tools/dev/disk/main.py
+# ---------------------------------------------------------------------------
+# Debug: build debug kernel, create minimal ISO, launch QEMU paused
+# ---------------------------------------------------------------------------
 
-PHONY += flash
-flash:
-	@python3 tools/dev/flash/main.py
+PHONY += debug
+debug: build usr
+	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(KERNEL_ELF) $(OUT_DIR)/kernel-debug.iso
+	@bash $(ROOT_DIR)/scripts/qemu/run-qemu.sh --debug --iso $(OUT_DIR)/kernel-debug.iso
 
-PHONY += demo
-demo:
-	@$(MAKE) -C tools/dev/demo run
+# ---------------------------------------------------------------------------
+# GDB: connect to running QEMU debug session
+# ---------------------------------------------------------------------------
+
+PHONY += gdb
+gdb:
+	@gdb -q -ex "file $(KERNEL_ELF)" -ex "target remote :1234"
+
+# ---------------------------------------------------------------------------
+# Release: build release kernel, create minimal ISO, launch QEMU
+# ---------------------------------------------------------------------------
+
+PHONY += release
+release: release-build usr
+	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(KERNEL_ELF) $(OUT_DIR)/kernel.iso
+	@bash $(ROOT_DIR)/scripts/qemu/run-qemu.sh --iso $(OUT_DIR)/kernel.iso
 
 PHONY += clean
 clean:
@@ -416,7 +457,17 @@ mkvars:
 PHONY += help
 help:
 	@echo "Usage: make [TARGET] [ARCH=<arch>]"
-	@echo "Targets: ${PHONY}"
-	@echo "Arches:  ${SUPPORTED_ARCHES}"
+	@echo ""
+	@echo "Targets:"
+	@echo "  build        Build kernel ELF"
+	@echo "  usr          Build minimal test userland"
+	@echo "  run          Build kernel + userland and run in QEMU"
+	@echo "  debug        Build debug kernel + userland and run in QEMU"
+	@echo "  release      Build release kernel + userland and run in QEMU"
+	@echo "  gdb          Connect GDB to running QEMU debug session"
+	@echo "  clean        Remove build artifacts"
+	@echo "  rebuild      Clean and rebuild"
+	@echo ""
+	@echo "Architectures: ${SUPPORTED_ARCHES}"
 
 .PHONY: $(PHONY)
