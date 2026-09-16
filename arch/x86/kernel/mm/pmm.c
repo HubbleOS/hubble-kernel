@@ -4,12 +4,16 @@
  *
  * Manages physical memory pages using a bitmap allocator.
  * Tracks allocated and free pages in the physical address space.
+ *
+ * The PMM obtains its memory layout directly from the Limine
+ * memory map response — no intermediate boot-info structure.
  */
 
 #include <stdbool.h>
 
-#include <bootinfo/bootinfo.h>
+#include <boot/limine.h>
 #include <hubble/string.h>
+#include <requests.h>
 #include <smp/spinlock.h>
 
 #include "asm.h"
@@ -21,8 +25,14 @@
 /* -- Global State ---------------------------------------------------------- */
 
 static pmm_info_t g_pmm_info = {0};
-static uint64_t g_heap_phys_start = 0;
-static uint64_t g_heap_phys_end = 0;
+
+/**
+ * Physical address range managed by the PMM.
+ * Set by start_kernel() from the Limine memory map before pmm_init().
+ */
+uint64_t g_pmm_heap_phys_start = 0;
+uint64_t g_pmm_heap_phys_end = 0;
+
 static uint64_t g_last_search_index = 0;
 
 /* Guards find_consecutive_free_pages()+mark_pages() in pmm_alloc_pages() /
@@ -42,7 +52,7 @@ static inline uint32_t *get_page_meta(uint64_t phys_addr) {
    * agrees on for the same physical page - aliasing some unrelated page's
    * refcount, or once the offset is large enough, writing straight past
    * the array into whatever kernel heap memory follows it. */
-  uint64_t pfn = (phys_addr - g_heap_phys_start) / PAGE_SIZE;
+  uint64_t pfn = (phys_addr - g_pmm_heap_phys_start) / PAGE_SIZE;
   return &g_pmm_info.page_refcounts[pfn];
 }
 
@@ -63,23 +73,10 @@ uint32_t pmm_get_refcount(uint64_t phys_addr) {
 
 /* -- Internal Helpers ------------------------------------------------------ */
 
-/**
- * @brief Convert a page index to a physical address
- *
- * @param index Page index
- * @return Physical address
- */
 static inline uint64_t page_index_to_phys(uint64_t index) {
-  return g_heap_phys_start + (index * PAGE_SIZE);
+  return g_pmm_heap_phys_start + (index * PAGE_SIZE);
 }
 
-/**
- * @brief Mark pages as used or free in the bitmap
- *
- * @param start_index Starting page index
- * @param count Number of pages
- * @param used true to mark as used, false to mark as free
- */
 static void mark_pages(uint64_t start_index, size_t count, bool used) {
   for (size_t i = 0; i < count; i++) {
     uint64_t idx = start_index + i;
@@ -106,13 +103,6 @@ static void mark_pages(uint64_t start_index, size_t count, bool used) {
 
 /* -- Page Allocation ------------------------------------------------------- */
 
-/**
- * @brief Find a range of consecutive free pages
- *
- * @param count Number of pages needed
- * @param start_index Output: starting page index of the found range
- * @return 0 on success, -1 on failure
- */
 static int find_consecutive_free_pages(uint64_t count, uint64_t *start_index) {
   if (count == 0 || count > g_pmm_info.total_pages)
     return -1;
@@ -138,12 +128,6 @@ static int find_consecutive_free_pages(uint64_t count, uint64_t *start_index) {
   return -1;
 }
 
-/**
- * @brief Allocate multiple consecutive physical pages
- *
- * @param count Number of pages to allocate
- * @return Physical address of the first page, or 0 on failure
- */
 uint64_t pmm_alloc_pages(size_t count) {
   if (count == 0)
     return 0;
@@ -187,21 +171,10 @@ uint64_t pmm_alloc_pages(size_t count) {
   return phys_addr;
 }
 
-/**
- * @brief Allocate a single physical page
- *
- * @return Physical address of the page, or 0 on failure
- */
 uint64_t pmm_alloc_page(void) { return pmm_alloc_pages(1); }
 
 /* -- Page Deallocation ----------------------------------------------------- */
 
-/**
- * @brief Free multiple consecutive physical pages
- *
- * @param phys_addr Physical address of the first page
- * @param count Number of pages to free
- */
 void pmm_free_pages(uint64_t phys_addr, size_t count) {
   if (phys_addr == 0 || count == 0)
     return;
@@ -209,18 +182,10 @@ void pmm_free_pages(uint64_t phys_addr, size_t count) {
   if (phys_addr % PAGE_SIZE != 0)
     return;
 
-  if (phys_addr < g_heap_phys_start || phys_addr >= g_heap_phys_end)
+  if (phys_addr < g_pmm_heap_phys_start || phys_addr >= g_pmm_heap_phys_end)
     return;
 
-  /* Same reasoning as pmm_alloc_pages(): the refcount-decrement-then-
-   * maybe-mark-free sequence must be atomic across cores, not just against
-   * local preemption, or a page mid-free can get reallocated by another
-   * core before its bitmap bit is cleared, or (the reverse) get marked
-   * free by us while another core's fresh allocation already bumped its
-   * refcount back up. */
-  irqlock_acquire(&g_pmm_lock);
-
-  uint64_t start_index = (phys_addr - g_heap_phys_start) / PAGE_SIZE;
+  uint64_t start_index = (phys_addr - g_pmm_heap_phys_start) / PAGE_SIZE;
 
   if (start_index + count > g_pmm_info.total_pages)
     count = g_pmm_info.total_pages - start_index;
@@ -238,11 +203,6 @@ void pmm_free_pages(uint64_t phys_addr, size_t count) {
   irqlock_release(&g_pmm_lock);
 }
 
-/**
- * @brief Free a single physical page
- *
- * @param phys_addr Physical address of the page to free
- */
 void pmm_free_page(uint64_t phys_addr) { pmm_free_pages(phys_addr, 1); }
 
 /* -- Initialization -------------------------------------------------------- */
@@ -250,27 +210,27 @@ void pmm_free_page(uint64_t phys_addr) { pmm_free_pages(phys_addr, 1); }
 /**
  * @brief Initialize the Physical Memory Manager
  *
- * Sets up the bitmap from boot info and calculates the heap boundaries.
+ * Uses g_pmm_heap_phys_start / g_pmm_heap_phys_end which were set
+ * by start_kernel() from the Limine memory map before this call.
  */
 void pmm_init(void) {
-
-  uint64_t heap_virt_start = g_boot_info->memory_map.heap_start;
-  uint64_t heap_phys_start = virt_to_phys(heap_virt_start);
-  uint64_t heap_size = g_boot_info->memory_map.heap_size;
-
-  heap_virt_start = PAGE_ALIGN_UP(heap_virt_start);
-  heap_phys_start = PAGE_ALIGN_UP(heap_phys_start);
-  heap_size = PAGE_ALIGN_DOWN(heap_size);
+  uint64_t heap_phys_start = PAGE_ALIGN_UP(g_pmm_heap_phys_start);
+  uint64_t heap_phys_end = g_pmm_heap_phys_end;
+  uint64_t heap_size = heap_phys_end - heap_phys_start;
 
   uint64_t total_pages = heap_size / PAGE_SIZE;
   uint64_t bitmap_size = PAGE_ALIGN_UP((total_pages + 7) / 8);
 
-  g_pmm_info.bitmap = (uint8_t *)heap_virt_start;
+  /* Bitmap is placed at the start of the heap, accessed via HHDM */
+  uint64_t bitmap_phys = heap_phys_start;
+  uint64_t heap_after_bitmap = bitmap_phys + bitmap_size;
+  g_pmm_heap_phys_start = PAGE_ALIGN_UP(heap_after_bitmap);
+
+  uint64_t usable_size = heap_phys_end - g_pmm_heap_phys_start;
+
+  g_pmm_info.bitmap = (uint8_t *)phys_to_virt(bitmap_phys);
   g_pmm_info.bitmap_size = bitmap_size;
   memset(g_pmm_info.bitmap, 0, bitmap_size);
-
-  uint64_t heap_after_bitmap = heap_phys_start + bitmap_size;
-  g_heap_phys_start = PAGE_ALIGN_UP(heap_after_bitmap);
 
   uint64_t refcount_array_size = total_pages * sizeof(uint32_t);
   g_pmm_info.page_refcounts =
@@ -279,12 +239,12 @@ void pmm_init(void) {
 
   uint64_t heap_after_refcounts = heap_after_bitmap + refcount_array_size;
 
-  g_heap_phys_start = PAGE_ALIGN_UP(heap_after_refcounts);
+  g_pmm_heap_phys_start = PAGE_ALIGN_UP(heap_after_refcounts);
 
-  uint64_t usable_size = (heap_phys_start + heap_size) - g_heap_phys_start;
+  usable_size = (heap_phys_start + heap_size) - g_pmm_heap_phys_start;
   g_pmm_info.total_pages = usable_size / PAGE_SIZE;
   g_pmm_info.total_memory = g_pmm_info.total_pages * PAGE_SIZE;
-  g_heap_phys_end = g_heap_phys_start + g_pmm_info.total_memory;
+  g_pmm_heap_phys_end = g_pmm_heap_phys_start + g_pmm_info.total_memory;
 
   g_pmm_info.used_pages = 0;
   g_pmm_info.used_memory = 0;

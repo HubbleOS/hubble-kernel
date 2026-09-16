@@ -203,15 +203,12 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm,
  * @return 0 on success, -1 on failure
  */
 int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm,
-            vm_map_t *vm_map) {
+             vm_map_t *vm_map) {
   VFS_File *f = vfs_open(path, VFS_O_RDONLY);
   printk(KERN_INFO "[ELF] Trying to open %s\n", path);
-  /* vfs_open() reports failure as ERR_PTR(-errno), not NULL - a bare `!f`
-   * lets that encoded-error pseudo-pointer (e.g. -ENOENT) through as if
-   * it were a valid VFS_File*, which then faults the moment vfs_read()
-   * dereferences it. */
   if (IS_ERR(f) || !f) {
-    printk(KERN_ERR "[ELF] ERROR: Failed to open %s\n", path);
+    printk(KERN_ERR "[ELF] ERROR: Failed to open %s (err=%d)\n", path,
+           IS_ERR(f) ? PTR_ERR(f) : -1);
     return -1;
   }
 

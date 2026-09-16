@@ -1,2 +1,2 @@
 # tools/dev/Makefile
-subdir-y += demo/
+# subdir-y += demo/
