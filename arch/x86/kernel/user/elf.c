@@ -203,7 +203,7 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm,
  * @return 0 on success, -1 on failure
  */
 int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm,
-            vm_map_t *vm_map) {
+             vm_map_t *vm_map) {
   VFS_File *f = vfs_open(path, VFS_O_RDONLY);
   printk(KERN_INFO "[ELF] Trying to open %s\n", path);
   if (IS_ERR(f) || !f) {

@@ -355,8 +355,7 @@ void lapic_send_init_ipi(uint8_t dest_apic_id) {
   if (apic_mode == APIC_INIT_X2APIC) {
     /* Intel SDM Vol 3A §10.4.4.1: INIT IPIs must be edge-triggered.
      * Delivery Mode = 5 (INIT), Level = 1 (Assert), Trigger = 0 (Edge). */
-    uint64_t icr =
-        ((uint64_t)dest_apic_id << 32) | (5 << 8) | (1 << 14);
+    uint64_t icr = ((uint64_t)dest_apic_id << 32) | (5 << 8) | (1 << 14);
     wrmsr(IA32_X2APIC_ICR, icr);
   } else {
     /* xAPIC MMIO path: INIT assert, edge-triggered (0x4500 | Level=1). */
@@ -379,8 +378,8 @@ void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector) {
   }
 
   if (apic_mode == APIC_INIT_X2APIC) {
-    uint64_t icr = ((uint64_t)dest_apic_id << 32) | (vector & 0xFF) |
-                   (6 << 8) | (0 << 11) | (1 << 14) | (0 << 15);
+    uint64_t icr = ((uint64_t)dest_apic_id << 32) | (vector & 0xFF) | (6 << 8) |
+                   (0 << 11) | (1 << 14) | (0 << 15);
     wrmsr(IA32_X2APIC_ICR, icr);
   } else {
     lapic_write(LAPIC_ICR_HIGH, ((uint32_t)dest_apic_id) << 24);
@@ -759,8 +758,8 @@ void apic_start_ap(uint8_t apic_id, uint32_t trampoline_addr) {
 
   uint8_t vector = (trampoline_addr >> 12) & 0xFF;
 
-  printk(KERN_INFO "  APIC mode=%d BSP_ID=%u Target=%u vector=%u\n",
-         apic_mode, apic_state.bsp_id, apic_id, vector);
+  printk(KERN_INFO "  APIC mode=%d BSP_ID=%u Target=%u vector=%u\n", apic_mode,
+         apic_state.bsp_id, apic_id, vector);
 
   printk(KERN_INFO "  [1/5] sending INIT IPI\n");
   lapic_send_init_ipi(apic_id);
