@@ -23,10 +23,11 @@
 
 extern void syscall_entry(void);
 
-cpu_local_t cpu_locals[MAX_CPUS];
+cpu_local_t cpu_locals[256];
 
-#define MAX_CPUS 8
-static uint8_t syscall_stacks[MAX_CPUS][64 * 1024] __attribute__((aligned(16)));
+#define SYSCALL_MAX_CPUS 8
+static uint8_t syscall_stacks[SYSCALL_MAX_CPUS][64 * 1024]
+    __attribute__((aligned(16)));
 
 /**
  * @brief Initialise the SYSCALL/SYSRET fast system call mechanism.
@@ -40,8 +41,14 @@ void syscall_init(void) {
 
   uint8_t cpu_id = lapic_get_id();
 
-  cpu_locals[cpu_id].rsp0 =
-      (uint64_t)(syscall_stacks[cpu_id] + sizeof(syscall_stacks[cpu_id]));
+  if (cpu_id < SYSCALL_MAX_CPUS) {
+    cpu_locals[cpu_id].rsp0 =
+        (uint64_t)(syscall_stacks[cpu_id] + sizeof(syscall_stacks[cpu_id]));
+  } else {
+    printk(KERN_WARNING "  Syscall stack not available for cpu_id %u\n",
+           cpu_id);
+    cpu_locals[cpu_id].rsp0 = 0;
+  }
   cpu_locals[cpu_id].cpu_id = cpu_id;
   printk(KERN_INFO "  Syscall stack at 0x%016llx\n", cpu_locals[cpu_id].rsp0);
 

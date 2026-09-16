@@ -1,5 +1,6 @@
 /*
- * Filesystem initialisation — GPT probing, VFS mount setup.
+ * Filesystem initialisation — initramfs as initial root,
+ * then persistent storage discovery.
  */
 
 #include <hubble/init.h>
@@ -30,15 +31,10 @@ static gpt_partition_t partitions[20] = {
 };
 
 void init_filesystems(void) {
-  printk(KERN_DEBUG "GPT init...\n");
-  int gpt_result = gpt_init(partitions);
-  if (gpt_result < 0) {
-    printk(KERN_ERR "GPT initialization failed: %d\n", gpt_result);
-    printk(KERN_WARNING "Continuing without GPT...\n");
-  } else {
-    printk(KERN_OK "GPT initialized with %d partitions\n", gpt_result);
-  }
-
+  /* Mount initramfs as the initial root filesystem */
+  printk(KERN_INFO "Mounting initramfs at /\n");
+  vfs_mount("/", NULL, FS_INITRAMFS);
+  int gpt_result = gpt_init(partitions, 20);
   /* Ensure partition device callbacks are set. */
   for (int i = 1; i < gpt_result; i++) {
     if (!partitions[i].device->read) {
@@ -49,7 +45,7 @@ void init_filesystems(void) {
   }
 
   printk(KERN_DEBUG "Mounting FAT32 at LBA %d...\n", partitions[0].first_lba);
-  vfs_mount("/", &partitions[0], FS_FAT32);
+  // vfs_mount("/", &partitions[0], FS_FAT32);
   vfs_mount("/ext2", &partitions[1], FS_EXT2);
   vfs_mount("/dev", NULL, FS_DEV);
   vfs_mount("/pipe", NULL, FS_PIPE);

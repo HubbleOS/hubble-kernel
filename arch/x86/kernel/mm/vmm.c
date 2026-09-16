@@ -515,8 +515,7 @@ bool vmm_resolve_cow(uint64_t va) {
    * next, corrupting it into old_pa|new_pa instead of new_pa. `pte` still
    * carries old_pa's address bits at this point, so they must be masked out
    * here, not just have PTE_COW cleared. */
-  uint64_t new_flags =
-      (pte & ~0x000FFFFFFFFFF000ULL & ~PTE_COW) | PTE_WRITE;
+  uint64_t new_flags = (pte & ~0x000FFFFFFFFFF000ULL & ~PTE_COW) | PTE_WRITE;
 
   /* "check refcount, then allocate/free based on it" has to happen as one
    * step, and not just against local preemption: this runs from the

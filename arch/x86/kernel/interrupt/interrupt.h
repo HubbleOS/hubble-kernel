@@ -11,6 +11,30 @@
 
 #include <stdint.h>
 
+/* -- CPU Exception Vectors -------------------------------------- */
+
+#define EXC_DIVIDE_BY_ZERO 0
+#define EXC_DEBUG 1
+#define EXC_NMI 2
+#define EXC_BREAKPOINT 3
+#define EXC_OVERFLOW 4
+#define EXC_BOUND_RANGE_EXCEEDED 5
+#define EXC_INVALID_OPCODE 6
+#define EXC_DEVICE_NOT_AVAILABLE 7
+#define EXC_DOUBLE_FAULT 8
+#define EXC_COPROCESSOR_SEGMENT_OVERRUN 9
+#define EXC_INVALID_TSS 10
+#define EXC_SEGMENT_NOT_PRESENT 11
+#define EXC_STACK_SEGMENT_FAULT 12
+#define EXC_GENERAL_PROTECTION_FAULT 13
+#define EXC_PAGE_FAULT 14
+#define EXC_X87_FLOATING_POINT_EXCEPTION 16
+#define EXC_ALIGNMENT_CHECK 17
+#define EXC_MACHINE_CHECK 18
+#define EXC_SIMD_FLOATING_POINT_EXCEPTION 19
+#define EXC_VIRTUALIZATION_EXCEPTION 20
+#define EXC_CONTROL_PROTECTION_EXCEPTION 21
+
 /**
  * @brief CPU register state snapshot pushed during an interrupt/exception
  *
@@ -57,3 +81,7 @@ void irq_uninstall_handler(uint8_t irq);
 
 void isr_handler(registers_t *regs);
 void irq_handler(registers_t *regs);
+
+/* -- Assembly Stubs -------------------------------------------- */
+
+extern void df_entry(void);

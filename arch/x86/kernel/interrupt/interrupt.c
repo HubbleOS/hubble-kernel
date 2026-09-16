@@ -5,6 +5,17 @@
  * Manages the legacy 8259 PIC (used before or alongside APIC),
  * provides an IRQ handler registration table, and implements
  * the common CPU exception and hardware interrupt dispatchers.
+ *
+ * Triple-fault chain (for reference — a triple fault CANNOT be caught):
+ *   ordinary exception
+ *     -> nested exception
+ *     -> #DF (Double Fault)
+ *     -> failure while handling #DF
+ *     -> Triple Fault
+ *     -> CPU reset
+ *
+ * The purpose of this code is to catch and diagnose exceptions —
+ * especially Double Faults — before they escalate into a Triple Fault.
  */
 
 #include "interrupt.h"
@@ -147,6 +158,64 @@ static const char *exception_messages[] = {
     "Control Protection Exception",
 };
 
+/* -- Emergency Serial Output ------------------------------------ */
+
+/**
+ * @brief Minimal emergency serial output — safe in #DF context
+ *
+ * Bypasses the printk infrastructure (spinlocks, ring buffer, format
+ * parsing) and writes directly to COM1.  Used for Double Fault
+ * diagnostics where printk may not be safe (e.g. if the logging
+ * spinlock is held by another CPU, or the fault corrupted kernel
+ * state).
+ *
+ * @param c Character to write
+ */
+static void emergency_putc(char c) { outb(0x3f8, c); }
+
+/**
+ * @brief Write a string directly to COM1 (emergency path)
+ */
+static void emergency_puts(const char *s) {
+  while (*s)
+    emergency_putc(*s++);
+}
+
+/**
+ * @brief Write a fixed-width zero-padded hex value to COM1
+ */
+static void emergency_put_hex(uint64_t value, int width) {
+  static const char hex_chars[] = "0123456789abcdef";
+  char buf[17];
+  int i;
+
+  for (i = width - 1; i >= 0; i--) {
+    buf[i] = hex_chars[value & 0xF];
+    value >>= 4;
+  }
+  buf[width] = '\0';
+  emergency_puts(buf);
+}
+
+/**
+ * @brief Write a decimal unsigned integer to COM1
+ */
+static void emergency_put_u64(uint64_t value) {
+  char buf[21];
+  int i = 20;
+  buf[20] = '\0';
+
+  if (value == 0) {
+    emergency_putc('0');
+    return;
+  }
+  while (value > 0) {
+    buf[--i] = '0' + (value % 10);
+    value /= 10;
+  }
+  emergency_puts(&buf[i]);
+}
+
 /* -- Common Exception Handler ---------------------------------- */
 
 /**
@@ -214,6 +283,7 @@ void isr_handler(registers_t *regs) {
       asm volatile("cli; hlt");
     }
   } else {
+    /* Non-fatal exception: terminate the current task */
     if (is_scheduler_initialized()) {
       task_exit(-1);
     }
@@ -254,6 +324,61 @@ void irq_handler(registers_t *regs) {
     lapic_eoi();
   else
     pic_send_eoi(irq);
+}
+
+/* -- Fatal Exception Handler ----------------------------------- */
+
+/**
+ * @brief Handle Double Fault (vector 8) — dedicated, minimal, safe
+ *
+ * Uses emergency serial output directly (bypasses printk) because
+ * the #DF handler must be as deterministic as possible.  The printk
+ * subsystem acquires a spinlock; if another CPU holds it, we would
+ * deadlock.  Direct COM1 output avoids this.
+ *
+ * INVARIANT: This function must NEVER return.  A Triple Fault
+ * (failure while handling #DF) causes CPU reset and is uncatchable.
+ *
+ * @param regs Register snapshot from the df_entry ISR stub
+ */
+void df_handler(registers_t *regs) {
+  uint64_t cpu = (uint64_t)lapic_get_id();
+
+  emergency_puts("\n");
+  emergency_puts("========== DOUBLE FAULT ==========\n");
+  emergency_puts("CPU:       ");
+  emergency_put_u64(cpu);
+  emergency_puts("\nVector:    8 (#DF)\n");
+  emergency_puts("Error:     0x");
+  emergency_put_hex(regs->err_code, 16);
+  emergency_puts("\n\n");
+  emergency_puts("RIP:       0x");
+  emergency_put_hex(regs->rip, 16);
+  emergency_puts("\nCS:        0x");
+  emergency_put_hex(regs->cs, 4);
+  emergency_puts("\nRFLAGS:    0x");
+  emergency_put_hex(regs->rflags, 16);
+  emergency_puts("\nRSP:       0x");
+  emergency_put_hex(regs->rsp, 16);
+  emergency_puts("\nSS:        0x");
+  emergency_put_hex(regs->ss, 4);
+  emergency_puts("\n\n");
+  emergency_puts("CR0:       0x");
+  emergency_put_hex(get_cr0(), 16);
+  emergency_puts("\nCR2:       0x");
+  emergency_put_hex(get_cr2(), 16);
+  emergency_puts("\nCR3:       0x");
+  emergency_put_hex(get_cr3(), 16);
+  emergency_puts("\nCR4:       0x");
+  emergency_put_hex(get_cr4(), 16);
+
+  emergency_puts("\n===================================\n");
+  emergency_puts("SYSTEM WILL HALT\n");
+
+  /* Do NOT return.  A failure here causes a Triple Fault -> CPU reset. */
+  for (;;) {
+    asm volatile("cli; hlt");
+  }
 }
 
 /* -- Initialisation -------------------------------------------- */
