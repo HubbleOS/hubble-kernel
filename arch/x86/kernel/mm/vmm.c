@@ -8,6 +8,7 @@
 
 #include <hubble/printk.h>
 #include <hubble/string.h>
+#include <smp/spinlock.h>
 
 #include "asm.h"
 #include "higher_half.h"
@@ -15,9 +16,21 @@
 #include "pmm.h"
 #include "vmm.h"
 
+#include <mm/map/vm_map.h>
+
 /* -- Global State ---------------------------------------------------------- */
 
 vmm_info_t g_vmm = {0};
+
+/* Guards the refcount-check-then-act sequence in vmm_resolve_cow(): cli
+ * only blocks preemption on the local core. On SMP, two cores can fault
+ * COW on the same shared physical page at the same time - both read the
+ * same refcount, one decides "sole owner, reuse in place" while the other
+ * decides "shared, copy" and frees the original; whichever PTE write lands
+ * last wins, leaving the mapping pointing at a page that just got freed
+ * (and reused/zeroed) out from under it. A real cross-core lock closes
+ * the window; cli alone does not. */
+static irqlock_t g_cow_lock = IRQLOCK_INIT("cow");
 
 /* -- Internal Helpers ------------------------------------------------------ */
 
@@ -368,18 +381,24 @@ int make_pd_entry_user(uint64_t va) {
  */
 uint64_t *vmm_create_user_pagemap(void) {
   uint64_t phys = pmm_alloc_page();
-  uint64_t *pml4 = (uint64_t *)phys_to_virt(phys);
-  memset(pml4, 0, PAGE_SIZE);
+  uint64_t *new_pml4 = (uint64_t *)phys_to_virt(phys);
+  memset(new_pml4, 0, PAGE_SIZE);
 
-  uint64_t *current_pml4 =
-      (uint64_t *)phys_to_virt(g_vmm.pml4_phys & ~0xFFFULL);
+  uint64_t *old_pml4 = (uint64_t *)phys_to_virt(g_vmm.pml4_phys & ~0xFFFULL);
 
   for (int i = 256; i < 512; i++) {
     if (i == RECURSIVE_PML4_INDEX)
       continue;
-    if (current_pml4[i] & PTE_PRESENT)
-      pml4[i] = current_pml4[i];
+    if (old_pml4[i] & PTE_PRESENT)
+      new_pml4[i] = old_pml4[i];
   }
+
+  //   for (int i = 256; i < 512; i++) {
+  //     if (i == RECURSIVE_PML4_INDEX)
+  //       continue;
+  //     if (current_pml4[i] & PTE_PRESENT)
+  //       pml4[i] = (current_pml4[i] & ~PTE_WRITE) | PTE_COW;
+  //   }
 
   /* User entries (indices 0-255) are intentionally left empty.
    * The kernel PML4 may contain bootloader identity mappings for low
@@ -387,17 +406,157 @@ uint64_t *vmm_create_user_pagemap(void) {
    * User mappings are created on demand by elf_load_segment() and
    * sys_mmap() via vmm_map_page_into() / vmm_map_page(). */
 
-  uint64_t new_phys = virt_to_phys((uint64_t)pml4);
-  pml4[RECURSIVE_PML4_INDEX] = pte_make(new_phys, PTE_PRESENT | PTE_WRITE);
+  uint64_t new_phys = virt_to_phys((uint64_t)new_pml4);
+  new_pml4[RECURSIVE_PML4_INDEX] = pte_make(new_phys, PTE_PRESENT | PTE_WRITE);
 
   return (uint64_t *)new_phys;
+}
+
+/**
+ * @brief Translate a VMA's protection flags into PTE flags
+ *
+ * @param vma VMA to translate
+ * @return PTE_* flags (always PRESENT | USER)
+ */
+static uint64_t pte_flags_for(vm_area_t *vma) {
+  uint64_t flags = PTE_PRESENT | PTE_USER;
+  if (vma->flags & VM_WRITE)
+    flags |= PTE_WRITE;
+  if (!(vma->flags & VM_EXEC))
+    flags |= PTE_NX;
+  return flags;
+}
+
+/**
+ * @brief Build a copy-on-write clone of the current address space
+ *
+ * Creates a new PML4 sharing the kernel half (256-511) directly, and for
+ * every VMA in @p parent_map, shares the same physical pages with the
+ * parent: writable mappings are re-protected read-only with PTE_COW set on
+ * *both* the parent's and the child's PTE (so a write from either side
+ * faults and triggers vmm_resolve_cow()), device mappings are shared as-is.
+ *
+ * The parent's address space must be the currently active one (CR3) when
+ * this is called, since its side of the walk goes through the recursive
+ * mapping.
+ *
+ * @param parent_map Parent task's VMA list
+ * @return Physical address of the new PML4, or NULL on failure
+ */
+uint64_t *vmm_fork_pagemap(vm_map_t *parent_map) {
+  uint64_t phys = pmm_alloc_page();
+  if (!phys)
+    return NULL;
+  uint64_t *new_pml4 = (uint64_t *)phys_to_virt(phys);
+  memset(new_pml4, 0, PAGE_SIZE);
+
+  uint64_t *old_pml4 = (uint64_t *)phys_to_virt(g_vmm.pml4_phys & ~0xFFFULL);
+  for (int i = 256; i < 512; i++) {
+    if (i == RECURSIVE_PML4_INDEX)
+      continue;
+    if (old_pml4[i] & PTE_PRESENT)
+      new_pml4[i] = old_pml4[i];
+  }
+  new_pml4[RECURSIVE_PML4_INDEX] = pte_make(phys, PTE_PRESENT | PTE_WRITE);
+
+  for (vm_area_t *vma = parent_map->areas; vma; vma = vma->next) {
+    uint64_t base_flags = pte_flags_for(vma);
+
+    if (vma->type == VMA_DEVICE) {
+      /* MMIO: shared physical memory, not pmm-managed, no COW. */
+      for (uint64_t off = 0; off < vma->size; off += PAGE_SIZE)
+        vmm_map_page_into((uint64_t *)phys, vma->base + off,
+                          vma->phys_base + off, base_flags | PTE_PCD | PTE_PWT);
+      continue;
+    }
+
+    for (uint64_t off = 0; off < vma->size; off += PAGE_SIZE) {
+      uint64_t va = vma->base + off;
+      uint64_t pa = vmm_get_phys(va);
+      if (!pa)
+        continue; /* hole inside the VMA; shouldn't happen, be safe */
+
+      uint64_t flags = base_flags & ~PTE_WRITE;
+      if (base_flags & PTE_WRITE)
+        flags |= PTE_COW;
+
+      vmm_set_flags(va, flags); /* re-protect the parent's own PTE too */
+      pmm_inc_refcount(pa);
+      vmm_map_page_into((uint64_t *)phys, va, pa, flags);
+    }
+  }
+
+  return (uint64_t *)phys;
+}
+
+/**
+ * @brief Resolve a copy-on-write page fault
+ *
+ * Called from the page-fault handler for a present-but-write-protected
+ * fault. If the faulting PTE is COW, duplicates the page (or, if this task
+ * is already the sole owner, simply restores write access in place) and
+ * returns true so the faulting instruction can be retried. Returns false
+ * for any fault that isn't a COW fault, so the caller can treat it as a
+ * real protection violation.
+ *
+ * @param va Faulting virtual address (CR2)
+ * @return true if the fault was a COW fault and has been resolved
+ */
+bool vmm_resolve_cow(uint64_t va) {
+  uint64_t *pt = pt_table(va);
+  uint64_t pte = pt[PT_INDEX(va)];
+  if (!(pte & PTE_PRESENT) || !(pte & PTE_COW))
+    return false;
+
+  uint64_t old_pa = pte_addr(pte);
+  /* pte_make() ORs its flags argument straight onto the new address, so
+   * "flags" here must contain ONLY control bits (0-11, 52-63) - any leftover
+   * address bits (12-51) get OR'd onto whatever physical address we pass
+   * next, corrupting it into old_pa|new_pa instead of new_pa. `pte` still
+   * carries old_pa's address bits at this point, so they must be masked out
+   * here, not just have PTE_COW cleared. */
+  uint64_t new_flags =
+      (pte & ~0x000FFFFFFFFFF000ULL & ~PTE_COW) | PTE_WRITE;
+
+  /* "check refcount, then allocate/free based on it" has to happen as one
+   * step, and not just against local preemption: this runs from the
+   * page-fault path on an SMP kernel, so the parent and child sharing this
+   * page can fault on it from two different cores at the same instant.
+   * cli only blocks the local core - it does nothing to stop the other
+   * core from reading the same refcount and racing us to decide "sole
+   * owner, reuse in place" vs "shared, copy", whichever PTE write lands
+   * last wins and can leave the mapping pointing at a page the other side
+   * just freed. g_cow_lock gives real cross-core exclusion. */
+  irqlock_acquire(&g_cow_lock);
+
+  if (pmm_get_refcount(old_pa) == 1) {
+    /* Sole owner left: no one else can be looking at this page. */
+    pt[PT_INDEX(va)] = pte_make(old_pa, new_flags);
+  } else {
+    uint64_t new_pa = pmm_alloc_page();
+    if (!new_pa) {
+      irqlock_release(&g_cow_lock);
+      return false; /* OOM: let the caller treat this as fatal */
+    }
+
+    memcpy((void *)phys_to_virt(new_pa), (void *)phys_to_virt(old_pa),
+           PAGE_SIZE);
+    pt[PT_INDEX(va)] = pte_make(new_pa, new_flags);
+    pmm_free_page(
+        old_pa); /* drop our reference; others may still hold theirs */
+  }
+
+  irqlock_release(&g_cow_lock);
+  invlpg((void *)va);
+  return true;
 }
 
 /**
  * @brief Map a page into a specific (non-current) page table
  *
  * Walks the page table hierarchy of the given PML4 and installs a mapping.
- * Handles huge page splitting when an existing 2 MB page needs a 4 KB mapping.
+ * Handles huge page splitting when an existing 2 MB page needs a 4 KB
+ * mapping.
  *
  * @param pml4_phys Physical address of the target PML4
  * @param va Virtual address
@@ -460,6 +619,8 @@ int vmm_map_page_into(uint64_t *pml4_phys, uint64_t va, uint64_t pa,
     invlpg((void *)va);
   return 0;
 }
+
+int vmm_unmap_page_from(uint64_t *pml4_phys, uint64_t va) { return 0; }
 
 /**
  * @brief Get physical address from a specific page table
