@@ -28,7 +28,8 @@ static gdt_ptr_t gdt_ptr;
 
 static tss_t tss[GDT_MAX_CPUS];
 static uint8_t kernel_stacks[GDT_MAX_CPUS][16384] __attribute__((aligned(16)));
-static uint8_t ist_stacks[GDT_MAX_CPUS][IST_STACK_SIZE] __attribute__((aligned(16)));
+static uint8_t ist_stacks[GDT_MAX_CPUS][IST_STACK_SIZE]
+    __attribute__((aligned(16)));
 
 /* -- GDT Helpers (static) -------------------------------------- */
 
@@ -178,8 +179,8 @@ void tss_init(void) {
   uint8_t cpu_id = early_get_apic_id();
 
   if (cpu_id >= GDT_MAX_CPUS) {
-    printk(KERN_ERR "tss_init: cpu_id %u exceeds GDT_MAX_CPUS %u\n",
-           cpu_id, GDT_MAX_CPUS);
+    printk(KERN_ERR "tss_init: cpu_id %u exceeds GDT_MAX_CPUS %u\n", cpu_id,
+           GDT_MAX_CPUS);
     return;
   }
 

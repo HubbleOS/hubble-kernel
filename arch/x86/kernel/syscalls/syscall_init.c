@@ -26,7 +26,8 @@ extern void syscall_entry(void);
 cpu_local_t cpu_locals[256];
 
 #define SYSCALL_MAX_CPUS 8
-static uint8_t syscall_stacks[SYSCALL_MAX_CPUS][64 * 1024] __attribute__((aligned(16)));
+static uint8_t syscall_stacks[SYSCALL_MAX_CPUS][64 * 1024]
+    __attribute__((aligned(16)));
 
 /**
  * @brief Initialise the SYSCALL/SYSRET fast system call mechanism.
