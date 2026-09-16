@@ -417,7 +417,7 @@ run: build usr
 # ---------------------------------------------------------------------------
 
 PHONY += debug
-debug: debug-build usr
+debug: build usr
 	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(KERNEL_ELF) $(OUT_DIR)/kernel-debug.iso
 	@bash $(ROOT_DIR)/scripts/qemu/run-qemu.sh --debug --iso $(OUT_DIR)/kernel-debug.iso
 
