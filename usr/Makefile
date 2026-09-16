@@ -52,6 +52,9 @@ $(BUILD_DIR)/init.elf: $(SRC) $(LDSCRIPT)
 $(INITRAMFS_IMG): $(BUILD_DIR)/init.elf
 	@mkdir -p $(ROOT_DIR)
 	@cp $(BUILD_DIR)/init.elf $(ROOT_DIR)/init
+	@mkdir -p $(ROOT_DIR)/modules
+	@cp -r $(KERNEL_PATH)/out/modules/* $(ROOT_DIR)/modules/
+	@cp -r $(KERNEL_PATH)/busy/* $(ROOT_DIR)/
 	@chmod +x $(ROOT_DIR)/init
 	@python3 $(KERNEL_PATH)/scripts/initramfs.py \
 		--root $(ROOT_DIR) \

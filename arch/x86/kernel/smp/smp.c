@@ -234,11 +234,13 @@ void ap_entry(void) {
    *   IST pointer valid
    *   IDT vector 8 configured with IST1
    */
-  tss_init();
 
   ap_set_boot_stage(data, 7);
 
   idt_load();
+  tss_init();
+  syscall_init();
+  enable_nxe();
 
   ap_set_boot_stage(data, 8);
 
@@ -254,6 +256,8 @@ void ap_entry(void) {
 
   sti();
   lapic_timer_init(100);
+
+  // ap_ready = true;
   while (1) {
     hlt();
   }

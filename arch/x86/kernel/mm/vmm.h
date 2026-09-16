@@ -13,6 +13,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <mm/map/vm_map.h>
+
 /* -- Page Table Constants -------------------------------------------------- */
 
 #define VMM_PAGE_SIZE 4096
@@ -93,6 +95,7 @@ static inline uint64_t *pt_table(uint64_t va) {
 #define PTE_DIRTY (1ULL << 6)
 #define PTE_HUGE (1ULL << 7)
 #define PTE_GLOBAL (1ULL << 8)
+#define PTE_COW (1ULL << 9)
 #define PTE_NX (1ULL << 63)
 
 #define PTE_NOCACHE (PTE_PWT | PTE_PCD)
@@ -230,6 +233,25 @@ int vmm_map_page_into(uint64_t *pml4_phys, uint64_t va, uint64_t pa,
  * @return Physical address, or 0 if not mapped
  */
 uint64_t vmm_get_phys_from(uint64_t *pml4_phys, uint64_t va);
+
+int vmm_unmap_page_from(uint64_t *pml4_phys, uint64_t va);
+
+/**
+ * @brief Build a copy-on-write clone of the current address space
+ *
+ * @param parent_map Parent task's VMA list (must belong to the currently
+ *                    active address space)
+ * @return Physical address of the new PML4, or NULL on failure
+ */
+uint64_t *vmm_fork_pagemap(vm_map_t *parent_map);
+
+/**
+ * @brief Resolve a copy-on-write page fault
+ *
+ * @param va Faulting virtual address (CR2)
+ * @return true if this was a COW fault and it has been resolved
+ */
+bool vmm_resolve_cow(uint64_t va);
 
 /**
  * @brief Debug: dump full page table walk for a virtual address
