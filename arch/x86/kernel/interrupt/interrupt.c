@@ -24,6 +24,7 @@
 #include <io.h>
 
 #include <apic/apic.h>
+#include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <smp/scheduler.h>
 
@@ -227,99 +228,58 @@ static void emergency_put_u64(uint64_t value) {
  * @param regs Register snapshot from the ISR stub
  */
 void isr_handler(registers_t *regs) {
-  uint64_t cpu = (uint64_t)lapic_get_id();
+  /**	COW resolve */
+  if (regs->int_no == 14 && (regs->err_code & 0x3) == 0x3) {
+    uint64_t fault_addr;
+    asm volatile("mov %%cr2, %0" : "=r"(fault_addr));
+    if (fault_addr < 0x0000800000000000ULL && vmm_resolve_cow(fault_addr))
+      return;
+  }
 
-  printk(KERN_EMERG "\n");
-  printk(KERN_EMERG "========== CPU EXCEPTION ==========\n");
-  printk(KERN_EMERG "CPU:       %lu\n", cpu);
-  printk(KERN_EMERG "Vector:    %lu (%s)\n", regs->int_no,
-         regs->int_no < 22 ? exception_messages[regs->int_no] : "Unknown");
-  printk(KERN_EMERG "Error:     0x%016lx\n", regs->err_code);
-  printk(KERN_EMERG "\n");
-  printk(KERN_EMERG "RIP:       0x%016lx\n", regs->rip);
-  printk(KERN_EMERG "CS:        0x%016lx\n", regs->cs);
-  printk(KERN_EMERG "RFLAGS:    0x%016lx\n", regs->rflags);
-  printk(KERN_EMERG "RSP:       0x%016lx\n", regs->rsp);
-  printk(KERN_EMERG "SS:        0x%016lx\n", regs->ss);
-  printk(KERN_EMERG "\n");
-  printk(KERN_EMERG "CR0:       0x%016lx\n", get_cr0());
-  printk(KERN_EMERG "CR2:       0x%016lx\n", get_cr2());
-  printk(KERN_EMERG "CR3:       0x%016lx\n", get_cr3());
-  printk(KERN_EMERG "CR4:       0x%016lx\n", get_cr4());
-  printk(KERN_EMERG "===================================\n");
+  printk(KERN_INFO "\n\tEXCEPTION OCCURRED\n");
 
-  /* Decode page-fault error code */
-  if (regs->int_no == EXC_PAGE_FAULT) {
-    printk(KERN_EMERG "\nPAGE FAULT DETAILS:\n");
-    printk(KERN_EMERG "  Fault address (CR2): 0x%016lx\n", get_cr2());
-    printk(KERN_EMERG "  Error code: 0x%lx [ ", regs->err_code);
-    if (regs->err_code & 1)
-      printk(KERN_EMERG "PRESENT ");
-    else
-      printk(KERN_EMERG "NON-PRESENT ");
-    if (regs->err_code & 2)
-      printk(KERN_EMERG "WRITE ");
-    else
-      printk(KERN_EMERG "READ ");
-    if (regs->err_code & 4)
-      printk(KERN_EMERG "USER ");
-    else
-      printk(KERN_EMERG "SUPERVISOR ");
-    if (regs->err_code & 8)
-      printk(KERN_EMERG "RSVD_BIT_SET ");
-    if (regs->err_code & 0x10)
-      printk(KERN_EMERG "INSTR_FETCH ");
-    printk(KERN_EMERG "]\n");
+  printk(KERN_INFO "Exception: %s (%lu)\n",
+         regs->int_no < 22 ? exception_messages[regs->int_no] : "Unknown",
+         regs->int_no);
+  printk(KERN_ERR "Error code: 0x%lx\n", regs->err_code);
 
-    printk(KERN_EMERG "\nPage table walk for CR2=0x%lx:\n", get_cr2());
-    debug_dump_mapping((uint64_t *)(get_cr3() & ~0xFFFULL), get_cr2());
+  printk(KERN_INFO "Registers");
+  printk(KERN_INFO "RIP: 0x%016lx    RSP: 0x%016lx\n", regs->rip, regs->rsp);
+  printk(KERN_INFO "RAX: 0x%016lx    RBX: 0x%016lx\n", regs->rax, regs->rbx);
+  printk(KERN_INFO "RCX: 0x%016lx    RDX: 0x%016lx\n", regs->rcx, regs->rdx);
+  printk(KERN_INFO "RSI: 0x%016lx    RDI: 0x%016lx\n", regs->rsi, regs->rdi);
+  printk(KERN_INFO "RBP: 0x%016lx    R8:  0x%016lx\n", regs->rbp, regs->r8);
+  printk(KERN_INFO "R9:  0x%016lx    R10: 0x%016lx\n", regs->r9, regs->r10);
+  printk(KERN_INFO "R11: 0x%016lx    R12: 0x%016lx\n", regs->r11, regs->r12);
+  printk(KERN_INFO "R13: 0x%016lx    R14: 0x%016lx\n", regs->r13, regs->r14);
+  printk(KERN_INFO "R15: 0x%016lx\n", regs->r15);
 
-    if (is_scheduler_initialized()) {
+  printk(KERN_INFO "Segments");
+  printk(KERN_INFO "SS:  0x%04lx\n", regs->ss);
+  printk(KERN_INFO "RFLAGS: 0x%016lx\n", regs->rflags);
+
+  uint64_t cr2;
+  asm volatile("mov %%cr2, %0" : "=r"(cr2));
+  printk("CR2 = %p\n", cr2);
+
+  if (regs->int_no == 8 || regs->int_no == 13 || regs->int_no == 14) {
+    printk(KERN_ERR "\nFATAL ERROR - System Halted\n");
+
+    if (regs->int_no == 14) {
+      uint64_t addr;
+      asm volatile("mov %%cr2, %0" : "=r"(addr));
+
+      debug_dump_mapping((uint64_t *)get_cr3(), addr);
+
+      uint64_t cr3;
+      asm volatile("mov %%cr3, %0" : "=r"(cr3));
       task_t *t = get_current_task();
-      if (t) {
-        printk(KERN_EMERG "Fault: active CR3=0x%lx task->page_table=0x%lx "
-                          "match=%d\n",
-               get_cr3(), (uint64_t)t->page_table,
-               get_cr3() == (uint64_t)t->page_table);
-      } else {
-        printk(KERN_EMERG "Fault: active CR3=0x%lx (no current task)\n",
-               get_cr3());
-      }
-    } else {
-      printk(KERN_EMERG "Fault: active CR3=0x%lx (scheduler not init)\n",
-             get_cr3());
+      printk(KERN_INFO
+             "Fault: active CR3=0x%llx task->page_table=0x%llx match=%d\n",
+             cr3, (uint64_t)t->mm.page_table,
+             cr3 == (uint64_t)t->mm.page_table);
     }
-  }
-
-  /* Decode #GP, #SS, #NP, #TS error codes (selector index in bits 15:3) */
-  if (regs->int_no == EXC_GENERAL_PROTECTION_FAULT ||
-      regs->int_no == EXC_STACK_SEGMENT_FAULT ||
-      regs->int_no == EXC_SEGMENT_NOT_PRESENT ||
-      regs->int_no == EXC_INVALID_TSS) {
-    uint16_t selector_index = (regs->err_code >> 3) & 0x1FFF;
-    uint8_t tbl = (regs->err_code >> 1) & 0x3;
-    uint8_t ext = regs->err_code & 1;
-    printk(KERN_EMERG "\nSegment fault details:\n");
-    printk(KERN_EMERG "  Selector index: %u\n", selector_index);
-    printk(KERN_EMERG "  Table: %s\n",
-           tbl == 0 ? "GDT" : tbl == 1 ? "LDT" : "IDT");
-    printk(KERN_EMERG "  External: %s\n", ext ? "yes" : "no");
-  }
-
-  /* Fatal exceptions: halt the CPU.  Do not return.
-   * - #DF (8):  Double Fault — unrecoverable
-   * - #UD (6):  Invalid Opcode in kernel mode — unrecoverable bug
-   * - #GP (13): General Protection Fault — unrecoverable
-   * - #PF (14): Page Fault — unrecoverable in kernel mode
-   *
-   * Non-fatal exceptions (e.g. #BP breakpoint, #DB debug) can be
-   * handled or terminated per-task. */
-  if (regs->int_no == EXC_DOUBLE_FAULT ||
-      regs->int_no == EXC_INVALID_OPCODE ||
-      regs->int_no == EXC_GENERAL_PROTECTION_FAULT ||
-      regs->int_no == EXC_PAGE_FAULT) {
-    printk(KERN_EMERG "\nFATAL EXCEPTION - System Halted\n");
-    for (;;) {
+    while (1) {
       asm volatile("cli; hlt");
     }
   } else {
