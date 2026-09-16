@@ -297,13 +297,13 @@ void kmain_thread(void) {
   //     printk("%c", buf[i]);
   //   }
 
-    // vfs_close(ext2_file);
-    // module_load("/modules/input.ko");
-    // module_load("/modules/tty.ko");
-    // char *argv[] = {"/busybox", "sh", NULL};
-    // task_t *task1 = execv("/busybox", argv, NULL);
-    // if (task1 != NULL)
-    //   scheduler_add_task(task1);
+  // vfs_close(ext2_file);
+  // module_load("/modules/input.ko");
+  // module_load("/modules/tty.ko");
+  // char *argv[] = {"/busybox", "sh", NULL};
+  // task_t *task1 = execv("/busybox", argv, NULL);
+  // if (task1 != NULL)
+  //   scheduler_add_task(task1);
 
   printk(KERN_INFO "kmain thread done, entering idle loop\n");
 

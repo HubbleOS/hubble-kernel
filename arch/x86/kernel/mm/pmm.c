@@ -232,7 +232,6 @@ void pmm_init(void) {
   g_pmm_info.bitmap_size = bitmap_size;
   memset(g_pmm_info.bitmap, 0, bitmap_size);
 
-
   uint64_t refcount_array_size = total_pages * sizeof(uint32_t);
   g_pmm_info.page_refcounts =
       (uint32_t *)(g_pmm_info.bitmap + g_pmm_info.bitmap_size);

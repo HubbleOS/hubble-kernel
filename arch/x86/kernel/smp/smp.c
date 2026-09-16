@@ -127,12 +127,12 @@ static int ensure_identity_mapping(uint64_t va) {
     uint64_t huge_base = pde & 0x000FFFFFFFFFF000ULL;
     if (huge_base == (va & ~0x1FFFFFULL)) {
       printk(KERN_INFO "  Identity mapping via 2MB huge page: "
-             "0x%lx -> 0x%lx\n",
+                       "0x%lx -> 0x%lx\n",
              va & ~0x1FFFFFULL, huge_base);
       return 0;
     }
     printk(KERN_ERR "  ERROR: 2MB huge page at 0x%lx maps to 0x%lx, "
-           "expected 0x%lx\n",
+                    "expected 0x%lx\n",
            va & ~0x1FFFFFULL, huge_base, va & ~0x1FFFFFULL);
   }
 
@@ -202,13 +202,13 @@ void ap_entry(void) {
   asm volatile("lgdt %0" ::"m"(gdtr) : "memory");
 
   /* Reload all data segment registers with the kernel GDT's selector */
-  asm volatile(
-      "mov $0x10, %%ax\n"
-      "mov %%ax, %%ds\n"
-      "mov %%ax, %%es\n"
-      "mov %%ax, %%ss\n"
-      "mov %%ax, %%fs\n"
-      "mov %%ax, %%gs\n" ::: "ax", "memory");
+  asm volatile("mov $0x10, %%ax\n"
+               "mov %%ax, %%ds\n"
+               "mov %%ax, %%es\n"
+               "mov %%ax, %%ss\n"
+               "mov %%ax, %%fs\n"
+               "mov %%ax, %%gs\n" ::
+                   : "ax", "memory");
 
   apic_init_ap();
 
@@ -297,8 +297,9 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id,
   data->gdt_limit = get_gdt_limit();
   /* NOTE: gdt_base is a higher-half virtual address. This works because the AP
    * loads the BSP's CR3 (same page tables) before accessing the GDT. The kernel
-   * higher-half mapping is present in the shared PML4. Do NOT use virt_to_phys()
-   * here — there is no identity mapping for the GDT's physical page. */
+   * higher-half mapping is present in the shared PML4. Do NOT use
+   * virt_to_phys() here — there is no identity mapping for the GDT's physical
+   * page. */
   data->gdt_base = (uint64_t)get_gdt_base();
 
   data->stack_top = (uint64_t)stack_top;
@@ -374,22 +375,22 @@ int smp_init(void) {
 
   if (ensure_identity_mapping(AP_TRAMPOLINE_ADDR) < 0) {
     printk(KERN_ERR "ERROR: Failed to create identity mapping for "
-           "trampoline page 0x%x\n",
+                    "trampoline page 0x%x\n",
            AP_TRAMPOLINE_ADDR);
     return -1;
   }
 
   if (ensure_identity_mapping(AP_TRAMPOLINE_STACK_ADDR) < 0) {
     printk(KERN_ERR "ERROR: Failed to create identity mapping for "
-           "trampoline stack page 0x%x\n",
+                    "trampoline stack page 0x%x\n",
            AP_TRAMPOLINE_STACK_ADDR);
     return -1;
   }
 
   printk(KERN_INFO "  Identity mappings established: "
-         "0x%x->0x%x, 0x%x->0x%x\n",
-         AP_TRAMPOLINE_ADDR, AP_TRAMPOLINE_ADDR,
-         AP_TRAMPOLINE_STACK_ADDR, AP_TRAMPOLINE_STACK_ADDR);
+                   "0x%x->0x%x, 0x%x->0x%x\n",
+         AP_TRAMPOLINE_ADDR, AP_TRAMPOLINE_ADDR, AP_TRAMPOLINE_STACK_ADDR,
+         AP_TRAMPOLINE_STACK_ADDR);
 
   g_trampoline_size = ap_trampoline_end - ap_trampoline_start;
 

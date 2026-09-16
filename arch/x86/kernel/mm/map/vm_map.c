@@ -109,7 +109,8 @@ uint64_t vm_find_free_range(vm_map_t *map, size_t size) {
   return addr;
 }
 
-/* -- Map Cloning ------------------------------------------------------------ */
+/* -- Map Cloning ------------------------------------------------------------
+ */
 
 /**
  * @brief Deep-copy a virtual memory map
@@ -125,7 +126,8 @@ vm_map_t *vm_map_clone(vm_map_t *src) {
   for (vm_area_t *vma = src->areas; vma; vma = vma->next) {
     vm_area_t *copy = kmalloc(sizeof(vm_area_t), GFP_ZERO);
     if (!copy)
-      return dst; /* best-effort: caller sees a partial clone rather than NULL */
+      return dst; /* best-effort: caller sees a partial clone rather than NULL
+                   */
 
     copy->base = vma->base;
     copy->size = vma->size;

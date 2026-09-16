@@ -43,35 +43,35 @@
  * reserved and read as zero.  The offsets below are byte
  * offsets from the MMIO base.
  */
-#define HPET_GENERAL_CAPS       0x000
-#define HPET_GENERAL_CONFIG     0x010
+#define HPET_GENERAL_CAPS 0x000
+#define HPET_GENERAL_CONFIG 0x010
 #define HPET_GENERAL_INT_STATUS 0x020
-#define HPET_MAIN_COUNTER       0x0F0
+#define HPET_MAIN_COUNTER 0x0F0
 
 /* Timer n registers: 128-bit aligned, 0x20 (32) bytes apart */
-#define HPET_TIMER_CONFIG(n)    (0x100 + (n) * 0x20)
+#define HPET_TIMER_CONFIG(n) (0x100 + (n) * 0x20)
 #define HPET_TIMER_COMPARATOR(n) (0x108 + (n) * 0x20)
 
 /* -- General Configuration Bits -------------------------------- */
 
-#define HPET_ENABLE_CNF  (1ULL << 0)
-#define HPET_LEG_RT_CNF  (1ULL << 1)
+#define HPET_ENABLE_CNF (1ULL << 0)
+#define HPET_LEG_RT_CNF (1ULL << 1)
 
 /* -- General Capabilities Bits --------------------------------- */
 
 #define HPET_COUNTER_SIZE_CAP (1ULL << 13)
-#define HPET_LEG_RT_CAP       (1ULL << 15)
+#define HPET_LEG_RT_CAP (1ULL << 15)
 
 /* -- Timer Config Register: Lower 64 bits (R/W) ---------------- */
 
-#define HPET_Tn_INT_TYPE_CNF   (1ULL << 1)  /* 0=edge, 1=level  */
-#define HPET_Tn_INT_ENB_CNF    (1ULL << 2)  /* interrupt enable  */
-#define HPET_Tn_TYPE_CNF       (1ULL << 3)  /* 0=one-shot, 1=periodic */
-#define HPET_Tn_PER_INT_CAP    (1ULL << 4)  /* periodic capable (RO) */
-#define HPET_Tn_SIZE_CAP       (1ULL << 5)  /* 64-bit counter (RO) */
-#define HPET_Tn_VAL_SET_CNF    (1ULL << 6)  /* value set enable  */
-#define HPET_Tn_32MODE_CNF     (1ULL << 8)  /* 32-bit mode       */
-#define HPET_Tn_FSB_DEL_CAP    (1ULL << 15) /* FSB delivery cap (RO) */
+#define HPET_Tn_INT_TYPE_CNF (1ULL << 1) /* 0=edge, 1=level  */
+#define HPET_Tn_INT_ENB_CNF (1ULL << 2)  /* interrupt enable  */
+#define HPET_Tn_TYPE_CNF (1ULL << 3)     /* 0=one-shot, 1=periodic */
+#define HPET_Tn_PER_INT_CAP (1ULL << 4)  /* periodic capable (RO) */
+#define HPET_Tn_SIZE_CAP (1ULL << 5)     /* 64-bit counter (RO) */
+#define HPET_Tn_VAL_SET_CNF (1ULL << 6)  /* value set enable  */
+#define HPET_Tn_32MODE_CNF (1ULL << 8)   /* 32-bit mode       */
+#define HPET_Tn_FSB_DEL_CAP (1ULL << 15) /* FSB delivery cap (RO) */
 
 /* -- Timer Config Register: Upper 64 bits (R/W) --------------- */
 
@@ -205,9 +205,7 @@ uint64_t hpet_get_counter(void) {
  *
  * @return Nanoseconds corresponding to the current counter
  */
-uint64_t hpet_get_time_ns(void) {
-  return hpet_ticks_to_ns(hpet_get_counter());
-}
+uint64_t hpet_get_time_ns(void) { return hpet_ticks_to_ns(hpet_get_counter()); }
 
 /* -- Time Conversion (overflow-safe) --------------------------- */
 
@@ -370,8 +368,7 @@ int hpet_timer_oneshot(uint8_t timer_num, uint64_t ns, uint8_t vector) {
  * @param vector     Interrupt vector (32-255)
  * @return 0 on success, -1 on failure
  */
-int hpet_timer_periodic(uint8_t timer_num, uint64_t period_ns,
-                        uint8_t vector) {
+int hpet_timer_periodic(uint8_t timer_num, uint64_t period_ns, uint8_t vector) {
   if (!hpet_state.initialized || timer_num >= hpet_state.num_timers)
     return -1;
 
