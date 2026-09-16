@@ -12,5 +12,5 @@ class Partition:
 @dataclass
 class DiskConfig:
     path: str
-    size_mb: int
+    size: int
     partitions: list[Partition]

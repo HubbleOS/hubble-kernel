@@ -20,7 +20,7 @@ class MacBackend(Backend):
                 os.remove(p)
                 print(f"Removed old image: {p}")
 
-        run(["hdiutil", "create", "-size", f"{config.size_mb}m",
+        run(["hdiutil", "create", "-size", f"{config.size}m",
              "-layout", "GPTSPUD", "-o", config.path])
 
         if os.path.exists(dmg_path):
@@ -42,7 +42,7 @@ class MacBackend(Backend):
                 str(len(config.partitions)), "GPT"]
         for p in config.partitions:
             args += [fs_map.get(p.fs, "ExFAT"), p.label,
-                     p.size if p.size != "0" else "0"]
+                     p.size + "m" if p.size != "0m" else "0"]
         run(args)
 
     def format_and_copy(self, config: DiskConfig):
