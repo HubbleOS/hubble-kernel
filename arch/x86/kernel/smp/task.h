@@ -11,6 +11,10 @@
 #include <fs/vfs/vfs.h>
 #include <mm/map/vm_map.h>
 
+/* Forward-declared, not included: waitqueue.h includes scheduler.h, which
+ * includes this header - a plain pointer only needs the incomplete type. */
+struct wait_queue;
+
 /* -- Constants ---------------------------------------------------------- */
 
 #define MAX_FDS 64
@@ -83,52 +87,91 @@ typedef struct __attribute__((packed)) {
 /**
  * @brief Task Control Block (TCB)
  */
-typedef struct task {
-  uint32_t pid;
-  uint32_t tid;
-  char name[32];
 
-  task_state_t state;
-  int exit_code;
-
-  uint8_t cpu;
+// ---- Schedualer state ----
+typedef struct {
   uint32_t priority;
   uint64_t time_slice;
   uint64_t time_slice_max;
   uint64_t total_runtime;
   uint64_t last_scheduled;
-  uint16_t signal;
+  uint8_t cpu;
+} task_sched_t;
 
-  uint16_t lock;
-
+// ---- Exec state ----
+typedef struct {
   cpu_context_t context;
   bool context_saved;
   bool in_syscall;
   uint64_t in_syscall_rsp;
   uint32_t rsp0_size;
   uint64_t rsp0;
+} task_exec_t;
 
-  void (*entry_point)(void *arg);
-  void *entry_arg;
+// ---- Identity state ----
+typedef struct {
+  uint32_t pid;
+  uint32_t tid;
+  char name[32];
+} task_id_t;
 
+// ---- Memory state ----
+typedef struct {
   uint64_t *page_table;
+  vm_map_t *vm_map;
+  uint64_t heap_start;
+  uint64_t heap_end;
+  uint64_t fs_base;
+  size_t tls_size; /* size of the kmalloc'd block fs_base points to, 0 if
+                     * fs_base isn't an owned TLS allocation (no TLS, or a
+                     * raw value set via arch_prctl) - lets fork() know
+                     * whether/how much to duplicate rather than alias it */
+} task_mm_t;
+
+// ---- Stacks state ----
+typedef struct {
   uint64_t kernel_stack;
   uint64_t user_stack;
   size_t stack_size;
+  bool userspace;
+} task_stacks_t;
 
-  vm_map_t *vm_map;
+// ---- Entry state ----
+typedef struct {
+  void (*entry_point)(void *arg);
+  void *entry_arg;
+} task_entry_t;
 
-  struct task *next;
-  struct task *prev;
-
-  struct task *parent;
-  struct task *children;
-  struct task *sibling;
-
+typedef struct {
   fd_entry_t fds[MAX_FDS];
+} task_fdtable_t;
 
+// ---- Signal state ----
+typedef struct {
+  uint16_t signal;
   void *signal_handlers;
+} task_signals_t;
 
+// ---- Linkage state ----
+typedef struct {
+  task_state_t state;
+  int exit_code;
+  uint16_t lock;
   uint8_t spinlocks;
 
+  struct task *next, *prev;
+  struct task *parent, *children, *sibling;
+} task_linkage_t;
+
+typedef struct task {
+  task_id_t id;
+  task_sched_t sched;
+  task_exec_t exec;
+  task_mm_t mm;
+  task_stacks_t stacks;
+  task_entry_t entry;
+  task_fdtable_t fdtable;
+  task_signals_t signals;
+  task_linkage_t linkage;
+  struct wait_queue *child_wait; /* woken by task_exit() for wait4() */
 } task_t;
