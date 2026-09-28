@@ -63,24 +63,53 @@ protected_mode_32:
     mov     eax, [0x8200]       ; pml4 phys
     mov     cr3, eax
 
-    ; 3. LME
+    ; 3. Load the FINAL (64-bit-capable) temporary GDT now, while still
+    ; in plain 32-bit protected mode with paging off. EFER.LMA is 0 at
+    ; this point (it only becomes 1 once CR0.PG is set below, with LME
+    ; already on), so LGDT's operand size is unambiguously 32-bit here
+    ; (2-byte limit + 4-byte base, matching ap_temp_gdt_desc's layout
+    ; exactly) - and this is a plain physical-address read, no page
+    ; tables involved yet either way.
+    ;
+    ; Loading it here - before enabling long mode - instead of doing a
+    ; second lgdt+retfq dance AFTER, avoids a real bug that dance had:
+    ; the far jump below then lands DIRECTLY on a code descriptor with
+    ; L=1, so the CPU is in true 64-bit mode (not 32-bit compatibility
+    ; submode) from the very first instruction after the jump. The old
+    ; two-step version jumped into "long mode" using the STILL-32-bit
+    ; temp_gdt_start descriptor first (L=0), meaning everything up to
+    ; its own retfq actually ran in compatibility submode despite being
+    ; assembled as [BITS 64] - and REX prefixes (required for retfq's
+    ; 64-bit operand size, and for `push qword`) are not recognised at
+    ; all in compatibility submode. The CPU decoded that retfq's 0x48
+    ; REX.W byte as the legacy opcode for `dec eax` instead, corrupting
+    ; the far return.
+    lgdt    [0x8000 + (ap_temp_gdt_desc - ap_trampoline_start)]
+
+    ; 4. LME
     mov     ecx, 0xC0000080
     rdmsr
     or      eax, (1 << 8)
     wrmsr
 
-    ; 4. PG
+    ; 5. PG - EFER.LMA becomes 1 the instant this is set (LME is already
+    ; on), so from here on LGDT/LIDT would read a 10-byte descriptor
+    ; regardless of CS.L - moot now, we don't lgdt again after this.
     mov     eax, cr0
     or      eax, (1 << 31)
     and     eax, ~((1 << 29) | (1 << 30))  ; Clear NW and CD
     mov     cr0, eax
 
-    ; Now we're in compatibility mode, jump to 64-bit code
+    ; Far jump straight into TRUE 64-bit mode: selector 0x08 in the GDT
+    ; just loaded is ap_temp_gdt_start's code descriptor, which has L=1.
+    ; No intermediate compatibility-submode code needed at all.
     jmp     0x08:0x8000 + long_mode_64 - ap_trampoline_start
 
 [BITS 64]
 default abs
 long_mode_64:
+    ; Genuinely in 64-bit mode (CS.L=1) from this instruction on.
+
     ; Enable NXE before accessing higher-half kernel mappings with NX PTEs.
     mov     ecx, 0xC0000080
     rdmsr
@@ -94,18 +123,6 @@ long_mode_64:
     ; Stage 3: Long-mode entry
     mov     dword [0x8000 + (ap_data_boot_stage - ap_trampoline_start)], 3
 
-    ; Step 1: Load TEMPORARY GDT from identity-mapped trampoline area.
-    ; CPU is still in 32-bit compatibility mode (CS.L=0, CS.D=1), so
-    ; lgdt reads a 6-byte descriptor (2-byte limit + 4-byte base).
-    lgdt    [0x8000 + (ap_temp_gdt_desc - ap_trampoline_start)]
-
-    ; Far return to true 64-bit long mode via temp GDT's 64-bit code segment
-    push    0x08
-    push    qword (0x8000 + (.enter_long_mode - ap_trampoline_start))
-    retfq
-
-.enter_long_mode:
-    ; Now in true 64-bit mode (CS.L=1). Use temp GDT's flat segments.
     mov     rbx, 0x8000
 
     ; Load entry point using register-indirect addressing
@@ -144,10 +161,11 @@ long_mode_64:
     hlt
     jmp     .hang
 
-; Temporary GDT for transitioning to protected/long mode
-; This is a minimal flat GDT just to get into 64-bit mode
 align 16
 
+; Sets up SSE/FXSAVE state (CR0.EM/TS/NW/CD, CR4.OSFXSR/OSXMMEXCPT) and
+; runs a clean FPU init. Called once true 64-bit mode is reached, right
+; before jumping to the kernel entry point.
 enable_sse:
     mov     rax, cr0
 
@@ -171,6 +189,9 @@ enable_sse:
     fninit                      ; Now without fault
     ret
 
+; Temporary GDT for the 16-bit real mode -> 32-bit protected mode
+; transition. EFER.LMA is 0 the whole time this one is in use, so its
+; code segment doesn't need (and mustn't have) L=1.
 temp_gdt_start:
     dq      0x0000000000000000  ; Null descriptor
     dq      0x00CF9A000000FFFF  ; Code segment (32-bit)
@@ -180,6 +201,16 @@ temp_gdt_end:
 temp_gdt_ptr:
     dw      temp_gdt_end - temp_gdt_start - 1     ; Limit
     dd      0x8000 + temp_gdt_start - ap_trampoline_start  ; Base (physical)
+
+; Everything from here down (code + data) must fit before offset 512:
+; ap_data_start below is padded to land at exactly that offset, and
+; AP_TRAMPOLINE_ADDR+512 is a hardcoded constant on the C side (smp.c's
+; start_ap_callback casts it straight to `struct ap_startup_data *`) -
+; see the %if size check at the end of this file, which turns any future
+; overflow of this budget into a build error instead of silently
+; desyncing where the BSP writes pml4_phys/stack/entry/etc. from where
+; this trampoline's own (relative-offset) labels actually read them.
+ap_data_area_check:
 
 ; Pad to offset 512 for data area
 times 512 - ($ - ap_trampoline_start) db 0
@@ -206,16 +237,18 @@ ap_data_ready:                  ; offset 546
 ap_data_boot_stage:             ; offset 550
     dd      0                   ; uint32_t boot_stage
 
-; Temporary GDT descriptor for the 32→64 bit mode transition.
-; Located at an identity-mapped address (trampoline at 0x8000) so that
-; lgdt in 32-bit compatibility mode can read it (2-byte limit + 4-byte base).
-ap_temp_gdt_desc:               ; offset 554
+; Temporary GDT descriptor for the 32-bit protected mode -> true 64-bit
+; long mode transition, read while still in plain protected mode
+; (EFER.LMA=0, so a 32-bit/6-byte LGDT read - see the comment at its use
+; site above). Located at an identity-mapped address (trampoline at
+; 0x8000) so LGDT can read it before paging is even on.
+ap_temp_gdt_desc:
     dw      (ap_temp_gdt_end - ap_temp_gdt_start - 1)  ; limit
     dd      0x8000 + (ap_temp_gdt_start - ap_trampoline_start)  ; base (identity)
 
-ap_temp_gdt_start:              ; offset 556
+ap_temp_gdt_start:
     dq      0x0000000000000000  ; null descriptor (index 0)
-    dq      0x00AF9A000000FFFF  ; 64-bit code (index 1, selector 0x08)
+    dq      0x00AF9A000000FFFF  ; 64-bit code (index 1, selector 0x08, L=1)
     dq      0x00AF92000000FFFF  ; 64-bit data (index 2, selector 0x10)
 ap_temp_gdt_end:
 
@@ -223,7 +256,11 @@ ap_data_end:
 
 ap_trampoline_end:
 
-; Size check
+; Size checks
+%if (ap_data_area_check - ap_trampoline_start) > 512
+    %error "AP trampoline code before the data area exceeds the 512-byte budget - ap_data_start's offset is hardcoded as AP_TRAMPOLINE_ADDR+512 on the C side (smp.c). Growing the code before ap_data_area_check (e.g. adding debug instructions) shrinks - or, once it overflows, silently zeroes - the 'times 512-...' padding below, desyncing where the BSP writes ap_startup_data from where this file's own labels place it. If you need more room, grow the padding target and the C-side offset together, not just one of them."
+%endif
+
 %if (ap_trampoline_end - ap_trampoline_start) > 4096
     %error "Trampoline too large!"
 %endif

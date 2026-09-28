@@ -255,12 +255,34 @@ void isr_handler(registers_t *regs) {
   printk(KERN_INFO "R15: 0x%016lx\n", regs->r15);
 
   printk(KERN_INFO "Segments");
-  printk(KERN_INFO "SS:  0x%04lx\n", regs->ss);
+  printk(KERN_INFO "CS:  0x%04lx    SS:  0x%04lx\n", regs->cs, regs->ss);
   printk(KERN_INFO "RFLAGS: 0x%016lx\n", regs->rflags);
 
   uint64_t cr2;
   asm volatile("mov %%cr2, %0" : "=r"(cr2));
   printk("CR2 = %p\n", cr2);
+
+  /* CPU exceptions taken while already at CPL0 (e.g. a #GP on the iretq at
+   * the tail of irq_common_stub, itself running in ring 0) do NOT get RSP
+   * or SS pushed by hardware at all - only RFLAGS/CS/RIP(+error code) are.
+   * registers_t unconditionally has rsp/ss fields though, so for exactly
+   * this exception class regs->rsp/regs->ss above are not real captured
+   * values - they alias whatever was already sitting in the two stack
+   * slots directly above the (shorter, 3/4-word) hardware frame. In the
+   * specific case of a #GP raised mid-iretq, that memory happens to BE
+   * the failed iretq's own not-yet-popped source frame - i.e. regs->rsp
+   * here is coincidentally the address of [RIP,CS,RFLAGS,RSP,SS] iretq
+   * was trying to load. Dump it directly instead of trusting the aliased
+   * fields above, which is the only way to see the real target CS/SS. */
+  if (regs->int_no == 13) {
+    uint64_t *frame = (uint64_t *)regs->rsp;
+    printk(KERN_INFO "Raw stack at RSP (candidate faulting iretq frame):\n");
+    printk(KERN_INFO "  [rsp+0]  RIP?    = 0x%016lx\n", frame[0]);
+    printk(KERN_INFO "  [rsp+8]  CS?     = 0x%016lx\n", frame[1]);
+    printk(KERN_INFO "  [rsp+16] RFLAGS? = 0x%016lx\n", frame[2]);
+    printk(KERN_INFO "  [rsp+24] RSP?    = 0x%016lx\n", frame[3]);
+    printk(KERN_INFO "  [rsp+32] SS?     = 0x%016lx\n", frame[4]);
+  }
 
   if (regs->int_no == 8 || regs->int_no == 13 || regs->int_no == 14) {
     printk(KERN_ERR "\nFATAL ERROR - System Halted\n");

@@ -235,17 +235,22 @@ void ap_entry(void) {
    *   IDT vector 8 configured with IST1
    */
 
+  /* tss_init() before idt_load() - see the invariant above. This used to
+   * be the other way around (idt_load() first), which silently violated
+   * it; it only didn't show up as a triple fault because nothing happened
+   * to fault in that narrow window. syscall_init() and enable_nxe() were
+   * also each being called twice back to back here for no reason - besides
+   * the wasted MSR writes, each call does ~8 printk lines, and with the
+   * framebuffer/serial console being the bottleneck it is during AP
+   * bring-up, doubling that output was very likely why this stage was
+   * seen sitting right at the edge of (or past) the bring-up deadline. */
+  tss_init();
   ap_set_boot_stage(data, 7);
 
   idt_load();
-  tss_init();
-  syscall_init();
-  enable_nxe();
-
   ap_set_boot_stage(data, 8);
 
   syscall_init();
-
   ap_set_boot_stage(data, 9);
 
   ap_set_boot_stage(data, 10);
@@ -271,11 +276,28 @@ void ap_entry(void) {
  * @param processor_id ACPI processor ID
  * @param ctx User context (unused)
  */
+/* Set once any AP fails to come up within the real-time deadline below.
+ * The trampoline code page and ap_startup_data at AP_TRAMPOLINE_ADDR are
+ * a SINGLE shared resource reused for every AP in turn - if we can't be
+ * sure a timed-out AP has actually died (vs. just running slowly), it's
+ * not safe to hand that same memory to another AP while the first one
+ * might still be reading/writing it mid-flight. So a timeout here is
+ * fatal to the whole bring-up sequence, not just this one AP. */
+static volatile bool g_ap_bringup_failed = false;
+
 static void start_ap_callback(uint8_t apic_id, uint8_t processor_id,
                               void *ctx) {
   uint8_t bsp_id = lapic_get_id();
   if (apic_id == bsp_id)
     return;
+
+  if (g_ap_bringup_failed) {
+    printk(KERN_ERR
+           "Skipping AP %u: an earlier AP timed out, shared trampoline "
+           "state at 0x%x is no longer safe to reuse\n",
+           apic_id, AP_TRAMPOLINE_ADDR);
+    return;
+  }
 
   printk(KERN_INFO "Starting AP %u", apic_id);
 
@@ -310,36 +332,55 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id,
 
   asm volatile("mfence" ::: "memory");
 
-  printk(KERN_INFO "Data structure setup:\n");
-  printk(KERN_INFO "  pml4_phys: 0x%lx\n", data->pml4_phys);
-  printk(KERN_INFO "  gdt_limit: 0x%x\n", data->gdt_limit);
-  printk(KERN_INFO "  gdt_base: 0x%lx\n", data->gdt_base);
-  printk(KERN_INFO "  stack_top: 0x%lx\n", data->stack_top);
-  printk(KERN_INFO "  entry_point: 0x%lx\n", data->entry_point);
+  //   printk(KERN_INFO "Data structure setup:\n");
+  //   printk(KERN_INFO "  pml4_phys: 0x%lx\n", data->pml4_phys);
+  //   printk(KERN_INFO "  gdt_limit: 0x%x\n", data->gdt_limit);
+  //   printk(KERN_INFO "  gdt_base: 0x%lx\n", data->gdt_base);
+  //   printk(KERN_INFO "  stack_top: 0x%lx\n", data->stack_top);
+  //   printk(KERN_INFO "  entry_point: 0x%lx\n", data->entry_point);
 
   printk(KERN_INFO "Starting AP %u...\n", apic_id);
   apic_start_ap(apic_id, AP_TRAMPOLINE_ADDR);
 
-  /* Poll boot_stage with a bounded, I/O-free wait. */
+  /* Poll boot_stage against a REAL deadline (hpet_get_time_ns()), not an
+   * instruction-iteration count. An iteration count has no fixed relation
+   * to wall-clock time - it "worked" before only because a fast enough
+   * loop body happened to take long enough on whatever was running it at
+   * the time. Anything that changes per-iteration cost (a slower core, a
+   * debugger single-stepping this exact AP, different compiler codegen)
+   * changes how much real time the "same" timeout actually allows,
+   * without changing the number here - which is exactly backwards for a
+   * deadline. 100ms is generous; real AP bring-up is normally low-single
+   * digit milliseconds - this is also the worst-case stall per AP if one
+   * genuinely fails to come up, so it's worth keeping tight rather than
+   * padding it further "just in case". */
   uint32_t stage = 0;
-  uint64_t timeout = 10000000ULL;
-  while (timeout > 0) {
+  uint64_t deadline_ns = hpet_get_time_ns() + 800ULL * 1000000ULL;
+  while (hpet_get_time_ns() < deadline_ns) {
     asm volatile("" ::: "memory");
     stage = data->boot_stage;
     if (stage >= 10)
       break;
-    timeout--;
+    cpu_pause();
   }
 
   asm volatile("mfence" ::: "memory");
   uint32_t ready = data->ap_ready;
 
-  printk(KERN_INFO "AP boot stage = %u\n", stage);
-  printk(KERN_INFO "AP boot wait completed (remaining=%lu)\n", timeout);
+  //   printk(KERN_INFO "AP boot stage = %u\n", stage);
   if (ready == 1) {
-    printk(KERN_OK "AP %u started successfully!\n", apic_id);
+    // printk(KERN_OK "AP %u started successfully!\n", apic_id);
   } else {
-    printk(KERN_INFO "ap_ready = %u\n", ready);
+    /* Did NOT confirm ap_ready within the deadline - the AP may still be
+     * mid-flight (just slow) rather than actually dead, and it's using
+     * the shared trampoline state at AP_TRAMPOLINE_ADDR right now. We
+     * can't tell those apart, and reusing that memory for another AP
+     * while this one might still be alive is exactly the corruption this
+     * is guarding against - so stop bringing up any further APs. */
+    printk(KERN_ERR "ERROR: AP %u did not signal ready within the deadline "
+                    "(stage=%u, ap_ready=%u) - halting further AP bring-up\n",
+           apic_id, stage, ready);
+    // g_ap_bringup_failed = true;
   }
 }
 

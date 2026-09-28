@@ -265,13 +265,13 @@ void kmain_thread(void) {
   //   printk("%s\n", check.entries[i].name);
   // }
 
-  //     char *argv[] = {NULL};
+  //   char *argv[] = {NULL};
   //   task_t *task1 = execv("/init", argv, NULL);
 
   // // task_t *task1 = exec("/init");
   // //   task_t *task1 = exec("/usr/user.elf");
-  // if (task1 != NULL)
-  //   scheduler_add_task(task1);
+  //   if (task1 != NULL)
+  //     scheduler_add_task(task1);
   //   VFS_File *ext2_file = vfs_open("/ext2/test", VFS_O_RDWR);
 
   //   if (IS_ERR(ext2_file) || ext2_file == NULL) {
@@ -299,11 +299,11 @@ void kmain_thread(void) {
 
   // vfs_close(ext2_file);
   // module_load("/modules/input.ko");
-  // module_load("/modules/tty.ko");
-  // char *argv[] = {"/busybox", "sh", NULL};
-  // task_t *task1 = execv("/busybox", argv, NULL);
-  // if (task1 != NULL)
-  //   scheduler_add_task(task1);
+  //   module_load("/modules/tty.ko");
+  char *argv[] = {"/busybox", "sh", NULL};
+  task_t *task1 = execv("/busybox", argv, NULL);
+  if (task1 != NULL)
+    scheduler_add_task(task1);
 
   printk(KERN_INFO "kmain thread done, entering idle loop\n");
 

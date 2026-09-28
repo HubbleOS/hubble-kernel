@@ -52,6 +52,8 @@ static uint64_t next_user_stack = 0x6ff00000ULL;
 static void task_state_load(task_t *task, registers_t *regs);
 static uint64_t alloc_user_stack(void);
 
+extern void switch_to_kernel_task(cpu_context_t *new) __attribute__((noreturn));
+
 task_t *get_next_task(uint8_t cpu_id);
 void scheduler_add_task(task_t *task);
 void task_wrapper(void);
@@ -539,6 +541,13 @@ void schedule(registers_t *regs) {
   if (!new_task || new_task == old_task)
     return;
 
+  printk("[SCHED] cpu=%u %p(pid=%d,cs=%lx,ss=%lx) -> %p(pid=%d,cs=%lx,ss=%lx)\n",
+         cpu_id, old_task, old_task ? (int)old_task->id.pid : -1,
+         old_task ? old_task->exec.context.cs : 0,
+         old_task ? old_task->exec.context.ss : 0,
+         new_task, (int)new_task->id.pid, new_task->exec.context.cs,
+         new_task->exec.context.ss);
+
   if (new_task && new_task == runqueues[cpu_id].idle_task) {
     if (old_task && old_task->linkage.state == TASK_RUNNING) {
       return;
@@ -576,6 +585,24 @@ void schedule(registers_t *regs) {
     printk("load fs_base loaded\n");
   }
 
+  /* NOTE: new_task->exec.context.cs can legitimately be a ring0 selector
+   * here (idle_task, kmain_thread, any other kernel-only task). iretq only
+   * reloads RSP/SS from the stack on an actual privilege change, so this
+   * same-privilege case doesn't get the target's own rsp0 - it keeps
+   * running on whatever kernel stack the *previous* task's interrupt
+   * frame was using. That's a real bug (see the analysis handed back with
+   * this pass), but an attempted fix here (switch_to_kernel_task(),
+   * bypassing the shared iretq epilogue with an explicit rsp load + a
+   * plain `ret`) produced a WORSE, intermittent regression under real
+   * SMP timing (KVM, -smp 2) - kmain_thread's very first scheduling would
+   * sometimes never reach its first instruction, jumping to a null RIP
+   * instead - that I could not pin down with confidence in this sandbox
+   * (gdb session flakiness made live tracing unreliable, and the one
+   * successful breakpoint hit showed the source context was already
+   * correct at function entry, meaning the corruption is either racy or
+   * happens later in that path). Reverted rather than ship something
+   * unverified; see the handoff notes for the reasoning and a suggested
+   * safer next step. */
   task_state_load(new_task, regs);
 }
 
@@ -661,6 +688,17 @@ void scheduler_init(void) {
     runqueues[i].count = 0;
     runqueues[i].next_index = 0;
     task_t *idle = task_create(idle_task, 255, 0);
+    /* time_slice_max = BASE_SLICE + priority (5 + 255 = 260 ticks, i.e.
+     * ~2.6s at the 100Hz rate lapic_timer_init() runs at) is right for a
+     * real low-priority task, but idle isn't that - it's the filler that
+     * runs only when nothing else is ready, and lapic_timer_handler()
+     * only calls schedule() once time_slice hits 0. Left at 260, a task
+     * that becomes ready right after idle starts its slice would sit in
+     * the runqueue for up to ~2.6s before the CPU it landed on ever looks
+     * again - exactly the "loaded and structured but takes forever to
+     * land on a CPU" symptom. Force idle to re-check every tick instead. */
+    idle->sched.time_slice_max = 1;
+    idle->sched.time_slice = 1;
     runqueues[i].idle_task = idle;
     current_task[i] = NULL;
   }

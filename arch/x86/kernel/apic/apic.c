@@ -764,7 +764,7 @@ void apic_start_ap(uint8_t apic_id, uint32_t trampoline_addr) {
   printk(KERN_INFO "  [1/5] sending INIT IPI\n");
   lapic_send_init_ipi(apic_id);
   printk(KERN_INFO "  [2/5] INIT IPI sent, waiting 10ms\n");
-  hpet_delay_ms(10);
+  hpet_delay_ms(20);
   printk(KERN_INFO "  [3/5] sending SIPI #1 and #2\n");
 
   /* Send SIPI #1 only. After delivery, the AP vCPU starts running and

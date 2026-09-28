@@ -53,10 +53,14 @@ fi
 # Build QEMU command
 QEMU_CMD=(
     qemu-system-x86_64
+    -enable-kvm
     -M pc
-    -cpu Haswell
-    -m 256M
-    -smp 10
+    # -cpu Haswell
+    -cpu host
+    -m 800M
+    # -d int,cpu_reset
+    # -D /tmp/qemu.log
+    -smp 2
     # -accel tcg,thread=on
     -cdrom "$ISO_PATH"
     -serial stdio

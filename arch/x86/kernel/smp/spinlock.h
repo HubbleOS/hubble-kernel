@@ -129,3 +129,18 @@ static inline void irqlock_release(irqlock_t *lock) {
   if (lock->flags & (1 << 9))
     asm volatile("sti" ::: "memory");
 }
+
+static inline bool irqlock_try_acquire(irqlock_t *lock) {
+  asm volatile("pushfq\n"
+               "pop %0\n"
+               "cli\n"
+               : "=r"(lock->flags)::"memory");
+
+  if (spinlock_try_acquire(&lock->lock))
+    return true;
+
+  if (lock->flags & (1 << 9))
+    asm volatile("sti" ::: "memory");
+
+  return false;
+}

@@ -18,6 +18,11 @@
 #include <asm.h>
 #include <smp/spinlock.h>
 
+static char early_buffer[PRINTK_BUFFER_SIZE];
+static size_t early_log_head;
+static size_t early_log_tail;
+static size_t early_log_size;
+
 /* -- Ring buffer ------------------------------------------------------------
  */
 
@@ -38,7 +43,7 @@ static void *console_user_data;
 /* -- State ------------------------------------------------------------------
  */
 
-static spinlock_t printk_lock = SPINLOCK_INIT("printk");
+static irqlock_t printk_lock = IRQLOCK_INIT("printk");
 static bool printk_at_line_start = true;
 static color_t current_color = COLOR_WHITE;
 
@@ -49,6 +54,13 @@ static color_t current_color = COLOR_WHITE;
  * @brief Set the single-character output function (early boot path).
  */
 void printk_set_output(void (*fn)(char c)) { output_fn = fn; }
+
+void printk_set_early_output() {
+
+  early_log_head = 0;
+  early_log_tail = 0;
+  early_log_size = 0;
+}
 
 /**
  * @brief Set the color-aware single-character output function.
@@ -667,9 +679,9 @@ void printk(const char *fmt, ...) {
   va_list args;
   va_start(args, fmt);
 
-  spinlock_acquire(&printk_lock);
+  irqlock_acquire(&printk_lock);
   vprintk(fmt, args);
-  spinlock_release(&printk_lock);
+  irqlock_release(&printk_lock);
 
   va_end(args);
 }

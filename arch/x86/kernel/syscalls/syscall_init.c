@@ -57,9 +57,30 @@ void syscall_init(void) {
   wrmsr(MSR_EFER, efer);
   printk(KERN_OK "  EFER.SCE enabled\n");
 
+  /* STAR[63:48] is conventionally programmed as the plain (RPL-less)
+   * kernel data selector (0x10) and left to SYSRET to OR in RPL=3 for
+   * both CS ((STAR[63:48]+16)|3) and SS ((STAR[63:48]+8)|3) on return -
+   * that's what this used to do, and it's what the AMD64 manual documents.
+   * Empirically (traced live with a hardware watchpoint on a task's saved
+   * SS field: it flips from the correct 0x1B to 0x18 - RPL bits gone -
+   * the very first time a task returns from a syscall and is later
+   * resumed via iretq) that OR-3 isn't happening for SS on this
+   * KVM/host CPU combination, even though it clearly does for CS (0x23,
+   * confirmed correct in the same traces). iretq then rejects that stale
+   * SS: CS.RPL=3 vs SS.RPL=0 is exactly error code 0x18 (GDT selector
+   * index 3, i.e. the SS descriptor) on General Protection Fault. This
+   * matches a known class of SYSRET erratum/emulation bug (e.g. a long-
+   * standing QEMU TCG bug tracked as LP #1428352 had the identical
+   * "0x2b -> 0x28" symptom from the same missing OR-3 on SS).
+   *
+   * Fix: bake RPL=3 into STAR[63:48] itself (0x13 instead of 0x10), so
+   * SS ends up correct (0x13+8=0x1B) even without hardware adding the
+   * RPL bits. This is harmless on hardware that *does* OR in RPL=3
+   * (0x1B|3 == 0x1B, idempotent) and likewise for CS (0x23|3 == 0x23),
+   * so it isn't a regression for a correctly-behaving SYSRET either. */
   uint64_t star = 0;
   star |= ((uint64_t)0x08 << 32);
-  star |= ((uint64_t)0x10 << 48);
+  star |= ((uint64_t)0x13 << 48);
   wrmsr(MSR_STAR, star);
   printk(KERN_INFO "  STAR = 0x%016llx\n", star);
 
