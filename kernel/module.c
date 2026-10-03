@@ -39,6 +39,13 @@ extern void waitqueue_init(void);
 extern void waitqueue_sleep(void);
 extern void waitqueue_wake_all(void);
 
+/* Limine request blocks live in the kernel image; modules reach them
+ * through higher_half.h inline helpers (virt_to_phys, ...). */
+struct limine_hhdm_request;
+struct limine_executable_address_request;
+extern volatile struct limine_hhdm_request limine_hhdm_req;
+extern volatile struct limine_executable_address_request limine_exec_addr_req;
+
 /* -- Kernel export table --------------------------------------------------- */
 
 /**
@@ -107,6 +114,8 @@ static const module_export_t g_exports[] = {
     {"isalpha", (uint64_t)(uintptr_t)isalpha},
     {"tolower", (uint64_t)(uintptr_t)tolower},
     {"toupper", (uint64_t)(uintptr_t)toupper},
+    {"limine_hhdm_req", (uint64_t)(uintptr_t)&limine_hhdm_req},
+    {"limine_exec_addr_req", (uint64_t)(uintptr_t)&limine_exec_addr_req},
 };
 
 #define EXPORT_COUNT (sizeof(g_exports) / sizeof(g_exports[0]))
@@ -301,6 +310,28 @@ static int module_apply_relocation(uint64_t target_base, size_t target_size,
 
   uint64_t symbol = module_resolve_symbol(&syms[sym_index], sections,
                                           section_count, strtab, strtab_size);
+
+  /* An unresolvable named import used to be patched as address ~0 with
+   * success returned — the module then died with a null-RIP fetch fault
+   * far away from the real cause. Fail the load here instead, naming
+   * the symbol. (Anonymous symbol-0 with zero addend is just an
+   * absolute zero and stays legal.) */
+  if (type != R_X86_64_NONE && symbol == 0 &&
+      syms[sym_index].st_shndx == SHN_UNDEF &&
+      syms[sym_index].st_name != 0) {
+    char namebuf[64];
+    size_t ni = 0;
+    if (strtab) {
+      uint32_t off = syms[sym_index].st_name;
+      while (ni < sizeof(namebuf) - 1 && off < strtab_size &&
+             strtab[off] != '\0')
+        namebuf[ni++] = strtab[off++];
+    }
+    namebuf[ni] = '\0';
+    printk(KERN_ERR "[module] unresolved symbol: %s\n",
+           ni > 0 ? namebuf : "?");
+    return -ENOEXEC;
+  }
 
   switch (type) {
   case R_X86_64_64:

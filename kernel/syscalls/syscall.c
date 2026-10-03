@@ -65,8 +65,5 @@ uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
     printk(KERN_ERR "[SYSCALL] Invalid syscall: %d\n", num);
     return -ENOSYS;
   }
-  uint64_t ret = syscall_table[num](a1, a2, a3, a4, a5, a6);
-  printk(KERN_DEBUG "[SYSCALL] %d(%d, %d, %d, %d, %d, %d) --> %ld\n", num, a1,
-         a2, a3, a4, a5, a6, ret);
-  return ret;
+  return syscall_table[num](a1, a2, a3, a4, a5, a6);
 }

@@ -111,12 +111,16 @@ static inline void irqlock_init(irqlock_t *lock, const char *name) {
  * @param lock Pointer to irqlock
  */
 static inline void irqlock_acquire(irqlock_t *lock) {
+  uint64_t flags;
   asm volatile("pushfq\n"
                "pop %0\n"
                "cli\n"
-               : "=r"(lock->flags)::"memory");
+               : "=r"(flags)::"memory");
 
   spinlock_acquire(&lock->lock);
+  /* Only the holder may write flags: storing it before the lock was
+   * taken let a waiting CPU overwrite the holder's saved IF. */
+  lock->flags = flags;
 }
 
 /**
@@ -124,22 +128,28 @@ static inline void irqlock_acquire(irqlock_t *lock) {
  * @param lock Pointer to irqlock
  */
 static inline void irqlock_release(irqlock_t *lock) {
+  /* Read flags while still holding the lock; after release the next
+   * holder may already have replaced it. */
+  uint64_t flags = lock->flags;
   spinlock_release(&lock->lock);
 
-  if (lock->flags & (1 << 9))
+  if (flags & (1 << 9))
     asm volatile("sti" ::: "memory");
 }
 
 static inline bool irqlock_try_acquire(irqlock_t *lock) {
+  uint64_t flags;
   asm volatile("pushfq\n"
                "pop %0\n"
                "cli\n"
-               : "=r"(lock->flags)::"memory");
+               : "=r"(flags)::"memory");
 
-  if (spinlock_try_acquire(&lock->lock))
+  if (spinlock_try_acquire(&lock->lock)) {
+    lock->flags = flags;
     return true;
+  }
 
-  if (lock->flags & (1 << 9))
+  if (flags & (1 << 9))
     asm volatile("sti" ::: "memory");
 
   return false;

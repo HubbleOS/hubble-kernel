@@ -107,7 +107,9 @@ static void keyboard_init_hw(void) {
   act = keyboard_read();
   printk(KERN_INFO "Keyboard active: %02x\n", act);
 
-  keyboard_write(0x01);
+  /* Set 2: the only set every keyboard supports. The controller
+   * translates it to set 1, which process_scancode_once() decodes. */
+  keyboard_write(0x02);
   act = keyboard_read();
   printk(KERN_INFO "Keyboard active: %02x\n", act);
 

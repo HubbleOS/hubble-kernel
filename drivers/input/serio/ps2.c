@@ -44,9 +44,10 @@ void ps2_init(void) {
   ps2_wait_output();
   uint8_t config = inb(PS2_DATA);
 
-  /* 4. Disable IRQs + translation */
+  /* 4. Disable IRQs, enable set 2 -> set 1 translation (the keyboard
+   * driver decodes set 1; see keyboard_init_hw) */
   config &= ~0x03;
-  config &= ~0x40;
+  config |= 0x40;
 
   ps2_wait_input();
   outb(PS2_COMMAND, 0x60);
@@ -72,7 +73,7 @@ void ps2_init(void) {
 
   config |= 0x01;  /* enable IRQ1 */
   config |= 0x02;  /* enable IRQ12 (mouse) */
-  config &= ~0x40; /* keep translation disabled */
+  config |= 0x40;  /* keep translation enabled */
 
   ps2_wait_input();
   outb(PS2_COMMAND, 0x60);

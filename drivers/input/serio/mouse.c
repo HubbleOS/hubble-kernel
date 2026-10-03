@@ -121,7 +121,7 @@ void mouse_init(void) {
   config |= 0x01;
   config |= 0x02;
   config &= ~0x20;
-  config &= ~0x40;
+  config |= 0x40; /* keyboard relies on set 2 -> set 1 translation */
 
   ps2_wait_input();
   outb(PS2_COMMAND, PS2_DATA);

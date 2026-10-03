@@ -122,7 +122,6 @@ static VFS_Mount *vfs_find_mount_for_path(const char *path) {
 
 /** @brief Open a file by path with the given flags. */
 VFS_File *vfs_open(const char *path, int flags) {
-  printk(KERN_INFO "VFS: opening file %s\n", path);
   VFS_Mount *mnt = vfs_find_mount_for_path(path);
   if (!mnt)
     return ERR_PTR(-ENOENT);
@@ -131,17 +130,13 @@ VFS_File *vfs_open(const char *path, int flags) {
   if (*relpath == '/')
     relpath++;
 
-  printk(KERN_INFO "VFS: opening file %s\n", relpath);
   VFS_Node *node = mnt->fs->open(mnt->fs, relpath);
-  printk(KERN_INFO "after open\n");
 
   if (!node && (flags & VFS_O_CREAT))
     node = mnt->fs->create_file(mnt->fs, relpath);
 
   if (!node)
     return ERR_PTR(-ENOENT);
-
-  printk(KERN_INFO "node pointer: %p\n", node);
 
   VFS_File *f = kmalloc(sizeof(VFS_File), GFP_KERNEL);
   f->node = node;
