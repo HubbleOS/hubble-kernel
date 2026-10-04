@@ -39,6 +39,8 @@ static syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_munmap] = (syscall_fn_t)sys_munmap,
     [SYS_open] = (syscall_fn_t)sys_open,
     [SYS_stat] = (syscall_fn_t)sys_stat,
+    [SYS_lstat] = (syscall_fn_t)sys_lstat,
+    [SYS_fstat] = (syscall_fn_t)sys_fstat,
     [SYS_close] = (syscall_fn_t)sys_close,
     [SYS_spawn] = (syscall_fn_t)sys_spawn,
     [SYS_spawn_file] = (syscall_fn_t)sys_spawn_file,
@@ -57,6 +59,11 @@ static syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_getcwd] = (syscall_fn_t)sys_getcwd,
     [SYS_getuid] = (syscall_fn_t)sys_getuid,
     [SYS_wait4] = (syscall_fn_t)sys_wait4,
+    [SYS_getdents64] = (syscall_fn_t)sys_getdents64,
+    [SYS_ioctl] = (syscall_fn_t)sys_ioctl,
+    [SYS_fcntl] = (syscall_fn_t)sys_fcntl,
+    [SYS_clock_gettime] = (syscall_fn_t)sys_clock_gettime,
+    [SYS_gettimeofday] = (syscall_fn_t)sys_gettimeofday,
 };
 
 uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,

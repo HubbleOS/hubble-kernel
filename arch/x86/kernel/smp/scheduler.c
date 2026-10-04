@@ -358,7 +358,7 @@ void task_exit(int exit_code) {
   task_t *task = get_current_task();
 
   outb(0x3f8, 'E');
-  printk("exited with code: %d", exit_code);
+  printk("exited with code: %d\n", exit_code);
   if (!task)
     return;
 

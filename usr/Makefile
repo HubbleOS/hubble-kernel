@@ -32,6 +32,10 @@ LDFLAGS := -nostdlib -static -nostartfiles
 SRC      := init.c
 LDSCRIPT := link.ld
 
+# # Busybox applets exposed as /bin/<name> -> /busybox symlinks. busybox
+# # picks the applet from argv[0], so a symlink is all an applet needs.
+# BUSYBOX_APPLETS := ls cat echo pwd uname mkdir rm cp mv sleep
+
 # ---------------------------------------------------------------------------
 # Targets
 # ---------------------------------------------------------------------------
@@ -55,6 +59,8 @@ $(INITRAMFS_IMG): $(BUILD_DIR)/init.elf
 	@mkdir -p $(ROOT_DIR)/modules
 	@cp -r $(KERNEL_PATH)/out/modules/* $(ROOT_DIR)/modules/
 	@cp -r $(KERNEL_PATH)/busy/* $(ROOT_DIR)/
+# 	@mkdir -p $(ROOT_DIR)/bin
+# 	@for a in $(BUSYBOX_APPLETS); do ln -sfn /busybox $(ROOT_DIR)/bin/$$a; done
 	@chmod +x $(ROOT_DIR)/init
 	@python3 $(KERNEL_PATH)/scripts/initramfs.py \
 		--root $(ROOT_DIR) \

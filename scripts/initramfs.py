@@ -147,8 +147,10 @@ def build_cpio_entry(entry: CpioEntry) -> bytes:
     # Filename.
     result += name_bytes
 
-    # Filename padding.
-    result += b"\x00" * (align4(namesize) - namesize)
+    # Filename padding: newc aligns header + name together, so the file
+    # data starts on a 4-byte boundary of the archive.
+    name_end = CPIO_HEADER_SIZE + namesize
+    result += b"\x00" * (align4(name_end) - name_end)
 
     # File data.
     result += entry.data

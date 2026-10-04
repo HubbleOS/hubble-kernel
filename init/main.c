@@ -301,7 +301,9 @@ void kmain_thread(void) {
   module_load("/modules/input.ko");
   module_load("/modules/tty.ko");
   char *argv[] = {"/busybox", "sh", "-i", NULL};
-  task_t *task1 = execv("/busybox", argv, NULL);
+  char *envp[] = {"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "HOME=/", "TERM=dumb",
+                  NULL};
+  task_t *task1 = execv("/busybox", argv, envp);
   if (task1 != NULL)
     scheduler_add_task(task1);
 

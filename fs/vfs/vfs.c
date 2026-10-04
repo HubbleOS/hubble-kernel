@@ -138,10 +138,17 @@ VFS_File *vfs_open(const char *path, int flags) {
   if (!node)
     return ERR_PTR(-ENOENT);
 
-  VFS_File *f = kmalloc(sizeof(VFS_File), GFP_KERNEL);
+  /* The path is kept inline after the struct so it has exactly the
+   * lifetime of the VFS_File with no separate free. */
+  size_t path_len = strlen(path) + 1;
+  VFS_File *f = kmalloc(sizeof(VFS_File) + path_len, GFP_KERNEL);
+  if (!f)
+    return ERR_PTR(-ENOMEM);
+  memcpy(f + 1, path, path_len);
   f->node = node;
   f->flags = flags;
   f->pos = 0;
+  f->path = (const char *)(f + 1);
   return f;
 }
 
@@ -189,9 +196,9 @@ bool vfs_mkdir(const char *path) {
 /** @brief Read a directory listing. */
 Directory vfs_readdir(const char *path) {
   VFS_Mount *mnt = vfs_find_mount_for_path(path);
-  const char *relpath = vfs_get_relpath(path, mnt->mountpoint);
   if (!mnt)
     return (Directory){0};
+  const char *relpath = vfs_get_relpath(path, mnt->mountpoint);
 
   return mnt->fs->readdir(mnt->fs, relpath);
 }

@@ -14,13 +14,6 @@
 
 #include <hubble/string.h>
 
-#define EXT2_ATTR_READ_ONLY 0x01
-#define EXT2_ATTR_HIDDEN 0x02
-#define EXT2_ATTR_SYSTEM 0x04
-#define EXT2_ATTR_VOLUME_ID 0x08
-#define EXT2_ATTR_DIRECTORY 0x10
-#define EXT2_ATTR_ARCHIVE 0x20
-
 #define EXT2_BLOCK_SIZE 1024
 
 /** @brief Mount wrapper: initialise EXT2 filesystem. */
@@ -53,17 +46,13 @@ static VFS_Node *ext2_vfs_open(VFS_FS *fs, const char *path) {
   }
   EXT2_FS *e_fs = (EXT2_FS *)fs->fs;
 
-  uint32_t inode = ext2_parse_path(e_fs, 2, path);
-  if (inode == 0) {
-    printk(KERN_INFO "inode not found\n");
+  uint32_t inode = ext2_parse_path(e_fs, EXT2_ROOT_INO, path);
+  if (inode == 0)
     return NULL;
-  }
 
   Ext2Inode inode_buf;
-  if (ext2_read_inode(e_fs, inode, &inode_buf) < 0) {
-    printk(KERN_INFO "failed to read inode %u\n", inode);
+  if (ext2_read_inode(e_fs, inode, &inode_buf) < 0)
     return NULL;
-  }
 
   EXT2_FILE *file = kmalloc(sizeof(EXT2_FILE), GFP_KERNEL);
   if (!file)
@@ -78,12 +67,12 @@ static VFS_Node *ext2_vfs_open(VFS_FS *fs, const char *path) {
     return NULL;
   }
   node->fs = fs;
-  node->is_dir = inode_buf.mode & EXT2_ATTR_DIRECTORY;
+  /* mode & 0x10 (the old FAT attribute constant) is the group-write
+   * permission bit, not the directory type. */
+  node->is_dir = ext2_is_dir(inode_buf.mode);
   node->fs_node = file;
   node->size = inode_buf.size;
   node->pos = 0;
-
-  printk(KERN_INFO "opened inode: %u\n", inode);
   return node;
 }
 
@@ -97,20 +86,17 @@ int ext2_vfs_read(VFS_File *file, void *buffer, uint32_t size) {
   EXT2_FILE *ext2_file = (EXT2_FILE *)file->node->fs_node;
   Ext2Inode *inode = &ext2_file->inode;
 
-  if (inode->mode & EXT2_ATTR_DIRECTORY) {
+  if (ext2_is_dir(inode->mode)) {
     printk(KERN_ERR "cannot read directory\n");
     return -1;
   }
 
   size_t file_size = inode->size;
-  if (file->pos >= file_size) {
-    printk(KERN_INFO "EOF\n");
+  if (file->pos >= file_size)
     return 0;
-  }
 
   size_t to_read =
       (file->pos + size > file_size) ? (file_size - file->pos) : size;
-  printk(KERN_INFO "Reading %u bytes block_size=%u\n", to_read, fs->block_size);
   uint8_t *block_buf = kmalloc(fs->block_size, GFP_KERNEL);
   if (!block_buf) {
     printk(KERN_ERR "failed to allocate block buffer\n");
@@ -123,22 +109,16 @@ int ext2_vfs_read(VFS_File *file, void *buffer, uint32_t size) {
     uint32_t block_index = abs_pos / fs->block_size;
     uint32_t offset_in_block = abs_pos % fs->block_size;
 
-    if (block_index >= 12) {
-      printk(KERN_ERR "indirect blocks not supported\n");
-      break;
-    }
-
-    uint32_t block_num = inode->block[block_index];
-    if (block_num == 0)
-      break;
-
-    ext2_read_block(fs, block_num, block_buf);
-
     size_t space_in_block = fs->block_size - offset_in_block;
     size_t remaining = to_read - read;
     size_t chunk = (remaining < space_in_block) ? remaining : space_in_block;
 
-    memcpy((uint8_t *)buffer + read, block_buf + offset_in_block, chunk);
+    /* A hole (block 0) reads as zeros; buffer was cleared above. */
+    uint32_t block_num = ext2_bmap(fs, inode, block_index);
+    if (block_num) {
+      ext2_read_block(fs, block_num, block_buf);
+      memcpy((uint8_t *)buffer + read, block_buf + offset_in_block, chunk);
+    }
 
     read += chunk;
   }
@@ -157,7 +137,7 @@ int ext2_vfs_write(VFS_File *file, const void *buffer, uint32_t size) {
   EXT2_FILE *ext2_file = (EXT2_FILE *)file->node->fs_node;
   Ext2Inode *inode = &ext2_file->inode;
 
-  if (inode->mode & EXT2_ATTR_DIRECTORY) {
+  if (ext2_is_dir(inode->mode)) {
     printk(KERN_ERR "cannot write directory\n");
     return -1;
   }
@@ -251,11 +231,11 @@ bool ext2_vfs_mkdir(VFS_FS *fs, const char *path) { return 0; }
 
 /** @brief Readdir wrapper: parse path and list directory. */
 Directory ext2_vfs_readdir(VFS_FS *fs, const char *path) {
-
-  printk(KERN_INFO "path: %s\n", path);
-  Ext2Inode *inode = kmalloc(sizeof(Ext2Inode), GFP_KERNEL);
-  ext2_read_inode(fs->fs, ext2_parse_path(fs->fs, 2, path), inode);
-  return ext2_list_dir(fs->fs, inode);
+  Ext2Inode inode;
+  if (ext2_read_inode(fs->fs, ext2_parse_path(fs->fs, EXT2_ROOT_INO, path),
+                      &inode) < 0)
+    return Directory_init((Directory){.entries = NULL});
+  return ext2_list_dir(fs->fs, &inode);
 }
 
 /** @brief Initialise VFS dispatch table for EXT2. */

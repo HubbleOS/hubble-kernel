@@ -13,7 +13,8 @@
 /** @brief Initialise EXT2 filesystem state. */
 int ext2_init(EXT2_FS *fs);
 
-/** @brief Resolve a path to an inode number starting from a given inode. */
+/** @brief Resolve a path to an inode number, following symlinks.
+ * Relative paths start at @p inode, absolute ones at the root. */
 uint32_t ext2_parse_path(EXT2_FS *fs, uint32_t inode, const char *path);
 
 /** @brief Find a directory entry by name within a given inode. */
@@ -24,6 +25,9 @@ uint32_t ext2_create_file(EXT2_FS *fs, uint32_t parent_inode, const char *name);
 
 /** @brief List contents of a directory inode. */
 Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode);
+
+/** @brief Map a file-relative block index to a disk block (0 = hole). */
+uint32_t ext2_bmap(EXT2_FS *fs, const Ext2Inode *inode, uint32_t index);
 
 /** @brief Read an inode from disk into memory. */
 int ext2_read_inode(EXT2_FS *fs, uint32_t inode_number, Ext2Inode *out_inode);

@@ -30,8 +30,9 @@ _Begin_C_Header
 /** @brief VFS file descriptor (per-open instance). */
 typedef struct {
   uint32_t flags;
-  uint32_t pos;
+  uint32_t pos; /* byte offset, or entry index for a directory */
   VFS_Node *node;
+  const char *path; /* path it was opened by; stored inline after it */
 } VFS_File;
 
 /** @brief VFS filesystem dispatch table. */

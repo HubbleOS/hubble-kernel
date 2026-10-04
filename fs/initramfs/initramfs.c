@@ -34,17 +34,30 @@
 /* -- In-memory filesystem tree ----------------------------------------- */
 
 #define MAX_NAME_LEN 256
-#define MAX_CHILDREN 64
+#define MAX_SYMLINK_DEPTH 8
+
+#define S_IFMT_ 0170000
+#define S_IFDIR_ 0040000
+#define S_IFLNK_ 0120000
 
 typedef struct initramfs_node {
   char name[MAX_NAME_LEN];
   uint32_t mode;
-  uint8_t *data;
+  uint8_t *data; /* file contents, or the target path of a symlink */
   uint32_t size;
-  struct initramfs_node *children[MAX_CHILDREN];
+  struct initramfs_node **children;
   int child_count;
+  int child_cap;
   struct initramfs_node *parent;
 } initramfs_node_t;
+
+static bool node_is_dir(const initramfs_node_t *n) {
+  return (n->mode & S_IFMT_) == S_IFDIR_;
+}
+
+static bool node_is_symlink(const initramfs_node_t *n) {
+  return (n->mode & S_IFMT_) == S_IFLNK_;
+}
 
 static initramfs_node_t *g_root = NULL;
 static void *g_archive_data = NULL;
@@ -92,7 +105,18 @@ static initramfs_node_t *create_node(const char *name, uint32_t mode,
   node->mode = mode;
   node->parent = parent;
 
-  if (parent && parent->child_count < MAX_CHILDREN) {
+  if (parent) {
+    if (parent->child_count == parent->child_cap) {
+      int cap = parent->child_cap ? parent->child_cap * 2 : 8;
+      initramfs_node_t **grown = krealloc(
+          parent->children, cap * sizeof(*grown), GFP_KERNEL);
+      if (!grown) {
+        kfree(node);
+        return NULL;
+      }
+      parent->children = grown;
+      parent->child_cap = cap;
+    }
     parent->children[parent->child_count++] = node;
   }
 
@@ -112,52 +136,107 @@ static initramfs_node_t *find_child(initramfs_node_t *parent,
 }
 
 /**
- * @brief Navigate to or create a path in the tree
+ * @brief Copy the next '/'-separated component of *p into out
+ * @return Component length, 0 at end of path, -1 if it is too long
  */
-static initramfs_node_t *resolve_path(const char *path, uint32_t mode,
-                                      int create) {
-  if (!g_root)
-    return NULL;
+static int next_component(const char **p, char out[MAX_NAME_LEN]) {
+  while (**p == '/')
+    (*p)++;
+  const char *start = *p;
+  while (**p != '\0' && **p != '/')
+    (*p)++;
 
-  initramfs_node_t *current = g_root;
-  const char *p = path;
+  size_t len = *p - start;
+  if (len >= MAX_NAME_LEN)
+    return -1;
+  memcpy(out, start, len);
+  out[len] = '\0';
+  return (int)len;
+}
 
-  /* Skip leading slash */
-  while (*p == '/')
-    p++;
+/**
+ * @brief Find or create the node for an archive path
+ *
+ * Archive names are taken literally (no symlink following). Missing
+ * parents are created as directories, since an archive may list a file
+ * before its directory; the entry's own mode is applied by the caller.
+ */
+static initramfs_node_t *create_path(const char *path) {
+  initramfs_node_t *cur = g_root;
+  char comp[MAX_NAME_LEN];
+  int len;
 
-  while (*p != '\0') {
-    /* Extract next component */
-    const char *start = p;
-    while (*p != '\0' && *p != '/')
-      p++;
-    size_t len = p - start;
-    if (len == 0) {
-      p++;
+  while ((len = next_component(&path, comp)) > 0) {
+    if (strcmp(comp, ".") == 0)
+      continue;
+    if (strcmp(comp, "..") == 0) {
+      if (cur->parent)
+        cur = cur->parent;
       continue;
     }
 
-    char component[MAX_NAME_LEN];
-    if (len >= MAX_NAME_LEN)
-      len = MAX_NAME_LEN - 1;
-    memcpy(component, start, len);
-    component[len] = '\0';
-
-    initramfs_node_t *child = find_child(current, component);
-    if (!child && create) {
-      child = create_node(component, mode, current);
+    initramfs_node_t *child = find_child(cur, comp);
+    if (!child) {
+      child = create_node(comp, S_IFDIR_ | 0755, cur);
       if (!child)
         return NULL;
     }
+    cur = child;
+  }
+  return len < 0 ? NULL : cur;
+}
+
+/**
+ * @brief Look up a path, following symlinks (including the last one)
+ *
+ * Relative paths and relative link targets resolve from @p start (a
+ * link's own directory); absolute ones from the initramfs root, which
+ * is mounted at "/".
+ */
+static initramfs_node_t *lookup(initramfs_node_t *start, const char *path,
+                                int depth) {
+  if (depth > MAX_SYMLINK_DEPTH)
+    return NULL;
+
+  initramfs_node_t *cur = (*path == '/') ? g_root : start;
+  char comp[MAX_NAME_LEN];
+  int len;
+
+  while ((len = next_component(&path, comp)) > 0) {
+    if (strcmp(comp, ".") == 0)
+      continue;
+    if (strcmp(comp, "..") == 0) {
+      if (cur->parent)
+        cur = cur->parent;
+      continue;
+    }
+    if (!node_is_dir(cur))
+      return NULL;
+
+    initramfs_node_t *child = find_child(cur, comp);
     if (!child)
       return NULL;
 
-    current = child;
-    while (*p == '/')
-      p++;
-  }
+    if (node_is_symlink(child)) {
+      if (!child->data || child->size == 0)
+        return NULL;
 
-  return current;
+      /* Continue with "<target>/<rest of path>". */
+      size_t rest = strlen(path);
+      char *next = kmalloc(child->size + 1 + rest + 1, GFP_KERNEL);
+      if (!next)
+        return NULL;
+      memcpy(next, child->data, child->size);
+      next[child->size] = '/';
+      memcpy(next + child->size + 1, path, rest + 1);
+
+      initramfs_node_t *found = lookup(cur, next, depth + 1);
+      kfree(next);
+      return found;
+    }
+    cur = child;
+  }
+  return len < 0 ? NULL : cur;
 }
 
 /* -- CPIO Archive Parsing ---------------------------------------------- */
@@ -195,9 +274,12 @@ static int parse_cpio(void *data, uint64_t size) {
       return -1;
     }
 
-    if (offset + CPIO_HEADER_SIZE + cpio_align4(namesize) +
-            cpio_align4(filesize) >
-        size) {
+    /* newc pads header + name together (not the name alone) to 4 bytes,
+     * so the file data starts 4-byte aligned in the archive. */
+    uint64_t data_offset =
+        offset + cpio_align4(CPIO_HEADER_SIZE + (uint64_t)namesize);
+
+    if (data_offset + cpio_align4(filesize) > size) {
       printk(KERN_ERR
              "[initramfs] entry exceeds archive bounds at offset %llu\n",
              offset);
@@ -213,47 +295,32 @@ static int parse_cpio(void *data, uint64_t size) {
       break;
     }
 
-    /* File data follows the name (aligned to 4 bytes) */
-    uint64_t data_offset = offset + CPIO_HEADER_SIZE + cpio_align4(namesize);
     uint8_t *file_data = base + data_offset;
 
-    /* Strip trailing slash from name for directory entries */
-    char clean_name[MAX_NAME_LEN];
-    size_t name_len = namesize > 0 ? namesize - 1 : 0;
-    if (name_len >= MAX_NAME_LEN)
-      name_len = MAX_NAME_LEN - 1;
-    memcpy(clean_name, name, name_len);
-    clean_name[name_len] = '\0';
+    /* namesize counts the terminating NUL; copy so it is guaranteed. */
+    char *clean_name = kmalloc(namesize, GFP_KERNEL);
+    if (!clean_name)
+      return -1;
+    memcpy(clean_name, name, namesize - 1);
+    clean_name[namesize - 1] = '\0';
 
-    /* Remove trailing slash */
-    if (name_len > 0 && clean_name[name_len - 1] == '/')
-      clean_name[name_len - 1] = '\0';
-
-    /* Skip empty names */
-    if (clean_name[0] == '\0') {
-      offset = data_offset + cpio_align4(filesize);
-      continue;
-    }
-
-    /* Determine if this is a directory (mode has S_IFDIR bit set) */
-    int is_dir = (mode & 0170000) == 0040000;
-
-    /* Resolve or create parent path */
-    initramfs_node_t *node = resolve_path(clean_name, mode, 1);
-    if (node) {
+    initramfs_node_t *node = create_path(clean_name);
+    if (!node) {
+      printk(KERN_ERR "[initramfs] cannot add '%s', skipping\n", clean_name);
+    } else if (node != g_root) {
       node->mode = mode;
-      if (!is_dir && filesize > 0) {
-        /* Allocate and copy file data */
+      if (!node_is_dir(node) && filesize > 0) {
         node->data = kmalloc(filesize, GFP_KERNEL);
         if (node->data) {
           memcpy(node->data, file_data, filesize);
           node->size = filesize;
+        } else {
+          printk(KERN_ERR "[initramfs] out of memory for '%s'\n",
+                 clean_name);
         }
       }
     }
-
-    printk(KERN_DEBUG "[initramfs] %s: %s (size=%u, mode=0%o)\n",
-           is_dir ? "dir " : "file", clean_name, filesize, mode & 0777);
+    kfree(clean_name);
 
     offset = data_offset + cpio_align4(filesize);
   }
@@ -316,18 +383,14 @@ static initramfs_node_t *find_node_by_path(const char *path) {
   if (!g_root)
     return NULL;
 
-  /* Root path */
-  if (strcmp(path, "/") == 0 || path[0] == '\0')
-    return g_root;
-
-  return resolve_path(path, 0, 0);
+  return lookup(g_root, path, 0);
 }
 
 /**
  * @brief Get file mode type bits for VFS
  */
 static uint32_t get_vfs_mode(initramfs_node_t *node) {
-  if ((node->mode & 0170000) == 0040000)
+  if (node_is_dir(node))
     return MODE_DIR;
   return MODE_FILE;
 }
@@ -347,7 +410,7 @@ static VFS_Node *initramfs_open(VFS_FS *fs, const char *path) {
 
   strncpy(vfs_node->name, node->name, 255);
   vfs_node->name[255] = '\0';
-  vfs_node->is_dir = ((node->mode & 0170000) == 0040000);
+  vfs_node->is_dir = node_is_dir(node);
   vfs_node->size = node->size;
   vfs_node->mode = get_vfs_mode(node);
   vfs_node->pos = 0;
@@ -396,10 +459,10 @@ static int initramfs_close(VFS_File *file) {
  */
 static Directory initramfs_readdir(VFS_FS *fs, const char *path) {
   (void)fs;
-  Directory dir = Directory_init(dir);
+  Directory dir = Directory_init((Directory){.entries = NULL});
 
   initramfs_node_t *node = find_node_by_path(path);
-  if (!node || (node->mode & 0170000) != 0040000)
+  if (!node || !node_is_dir(node) || node->child_count == 0)
     return dir;
 
   dir.entries = kmalloc(node->child_count * sizeof(Entry), GFP_KERNEL);
@@ -413,7 +476,7 @@ static Directory initramfs_readdir(VFS_FS *fs, const char *path) {
     if (dir.entries[i].name) {
       strcpy(dir.entries[i].name, node->children[i]->name);
     }
-    dir.entries[i].is_dir = ((node->children[i]->mode & 0170000) == 0040000);
+    dir.entries[i].is_dir = node_is_dir(node->children[i]);
     dir.entries[i].cluster = 0;
   }
 

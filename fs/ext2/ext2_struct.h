@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <stdbool.h>
+
 #include <stdint.h>
 
 /** @brief EXT2 superblock structure (packed on-disk format). */
@@ -192,3 +194,22 @@ typedef struct {
   int count;
   PathPart_ext parts[MAX_PARTS];
 } PathParts_ext;
+
+/* -- Inode mode / dirent type --------------------------------------- */
+
+#define EXT2_ROOT_INO 2
+
+#define EXT2_S_IFMT 0xF000
+#define EXT2_S_IFLNK 0xA000
+#define EXT2_S_IFREG 0x8000
+#define EXT2_S_IFDIR 0x4000
+
+#define EXT2_FT_DIR 2
+
+static inline bool ext2_is_dir(uint16_t mode) {
+  return (mode & EXT2_S_IFMT) == EXT2_S_IFDIR;
+}
+
+static inline bool ext2_is_symlink(uint16_t mode) {
+  return (mode & EXT2_S_IFMT) == EXT2_S_IFLNK;
+}

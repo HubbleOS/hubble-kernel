@@ -10,17 +10,15 @@ The generic syscall table lives in `kernel/syscalls/syscall.c`. The x86-64 entry
 
 Kernel-side syscall numbers are declared in `include/hubble/syscall.h`.
 
+Numbers below 500 follow the Linux x86_64 ABI so static libc binaries
+(busybox) run unmodified. Kernel-private calls live at 500 and above:
+
 | Number | Name | Handler |
 | --- | --- | --- |
-| 1 | `SYS_write` | `sys_write` |
-| 2 | `SYS_read` | `sys_read` |
-| 3 | `SYS_mmap` | `sys_mmap` |
-| 4 | `SYS_open` | `sys_open` |
-| 5 | `SYS_close` | `sys_close` |
-| 6 | `SYS_spawn` | `sys_spawn` |
-| 7 | `SYS_spawn_file` | `sys_spawn_file` |
-| 8 | `SYS_lseek` | `sys_lseek` |
+| 500 | `SYS_spawn` | `sys_spawn` |
+| 501 | `SYS_spawn_file` | `sys_spawn_file` |
+| 502 | `SYS_module_load` | `sys_module_load` |
+| 503 | `SYS_module_unload` | `sys_module_unload` |
 
-`SYSCALL_COUNT` is currently 256.
+`SYSCALL_COUNT` is currently 512.
 
-Note: `usr/include/sys/syscall.h` currently defines user-side numbers only through `SYS_spawn` and does not include `SYS_spawn_file` or `SYS_lseek`.
