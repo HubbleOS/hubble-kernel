@@ -271,8 +271,8 @@ static int e1000_probe(struct pci_device *pci_dev) {
 /* -- Driver registration ---------------------------------- */
 
 static const struct pci_device_id e1000_ids[] = {
-    {E1000_VENDOR_ID, E1000_DEVICE_ID},
-    {0, 0},
+    PCI_DEVICE(E1000_VENDOR_ID, E1000_DEVICE_ID),
+    {0},
 };
 
 static struct pci_driver e1000_driver = {

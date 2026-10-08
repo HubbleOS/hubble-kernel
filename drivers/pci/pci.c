@@ -6,6 +6,7 @@
 #include <hubble/printk.h>
 #include <io.h>
 #include <mm/kmalloc.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 /* -- Configuration space helpers -------------------------- */
@@ -54,7 +55,18 @@ static struct pci_device *allocate_pci_device_struct(uint8_t bus, uint8_t slot,
   uint32_t bar0 = pci_read_config(bus, slot, func, PCI_BAR0);
   dev->bar0 = bar0 & PCI_BAR_ADDR_MASK;
 
+  /* A 64-bit memory BAR keeps its upper half in the next BAR register. */
+  if (!(bar0 & PCI_BAR_IO) && (bar0 & PCI_BAR_MEM_TYPE) == PCI_BAR_MEM_64)
+    dev->bar0 |= (uint64_t)pci_read_config(bus, slot, func, PCI_BAR1) << 32;
+
   return dev;
+}
+
+static bool pci_id_matches(const struct pci_device_id *id, uint16_t vendor,
+                           uint16_t device, uint32_t class_code) {
+  if (id->class_mask)
+    return (class_code & id->class_mask) == id->class_code;
+  return id->vendor == vendor && id->device == device;
 }
 
 /* -- Driver registration and bus scan --------------------- */
@@ -72,9 +84,14 @@ int pci_register_driver(struct pci_driver *drv) {
           continue;
 
         uint16_t device = PCI_GET_DEVICE(reg);
+        uint32_t rev = pci_read_config(bus, slot, func, PCI_REVISION_ID);
+        uint32_t class_code = (PCI_GET_CLASS(rev) << 16) |
+                              (PCI_GET_SUBCLASS(rev) << 8) |
+                              PCI_GET_PROGIF(rev);
 
-        for (const struct pci_device_id *id = drv->id_table; id->vendor; id++) {
-          if (id->vendor != vendor || id->device != device)
+        for (const struct pci_device_id *id = drv->id_table;
+             id->vendor || id->class_mask; id++) {
+          if (!pci_id_matches(id, vendor, device, class_code))
             continue;
 
           struct pci_device *dev = allocate_pci_device_struct(bus, slot, func);

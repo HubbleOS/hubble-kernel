@@ -270,6 +270,26 @@ long tty_ioctl(tty_t *tty, unsigned long request, void *arg) {
   case TTY_TIOCSWINSZ: /* the console decides its own size */
     return 0;
 
+  /* A graphical program takes the display (KD_GRAPHICS) so console
+   * output stops drawing over it, and gives it back with KD_TEXT. */
+  case TTY_KDSETMODE: { /* arg is the mode, passed by value */
+    uintptr_t mode = (uintptr_t)arg;
+    if (mode != TTY_KD_TEXT && mode != TTY_KD_GRAPHICS)
+      return -EINVAL;
+    if (tty->console && tty->console->set_output)
+      tty->console->set_output(mode == TTY_KD_TEXT);
+    return 0;
+  }
+
+  case TTY_KDGETMODE: {
+    if (!arg)
+      return -EFAULT;
+    bool text = !tty->console || !tty->console->output_enabled ||
+                tty->console->output_enabled();
+    *(int *)arg = text ? TTY_KD_TEXT : TTY_KD_GRAPHICS;
+    return 0;
+  }
+
   case TTY_FIONREAD:
     if (!arg)
       return -EFAULT;

@@ -75,16 +75,25 @@ struct pci_device {
   uint8_t slot;
   uint8_t func;
   uint32_t class_code;
-  uint64_t bar0;
+  uint64_t bar0; /**< Base address; a 64-bit memory BAR includes BAR1 */
 };
 
 /**
- * @brief Vendor/device ID pair for driver matching
+ * @brief Driver match entry
+ *
+ * Matches on vendor/device, or — when class_mask is non-zero — on
+ * (class_code & class_mask) == class_code, for drivers that serve a whole
+ * device class (e.g. every xHCI controller). A zeroed entry ends the table.
  */
 struct pci_device_id {
   uint16_t vendor;
   uint16_t device;
+  uint32_t class_code; /**< (class << 16) | (subclass << 8) | prog_if */
+  uint32_t class_mask;
 };
+
+#define PCI_DEVICE(vend, dev) {.vendor = (vend), .device = (dev)}
+#define PCI_DEVICE_CLASS(cls, mask) {.class_code = (cls), .class_mask = (mask)}
 
 /**
  * @brief PCI driver — callbacks invoked on device match

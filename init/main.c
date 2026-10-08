@@ -216,6 +216,7 @@ void start_kernel(void) {
   boot_cpu_init();
   acpi_init(rsdp);
   boot_memory_init();
+  console_init_late();
   hpet_init();
   apic_init_bsp();
 
@@ -300,6 +301,7 @@ void kmain_thread(void) {
   // vfs_close(ext2_file);
   module_load("/modules/input.ko");
   module_load("/modules/tty.ko");
+  module_load("/modules/usb.ko"); /* after input.ko: registers keyboards */
   module_load("/modules/procfs.ko");
   char *argv[] = {"/busybox", "sh", "-i", NULL};
   char *envp[] = {"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "HOME=/", "TERM=linux",

@@ -11,7 +11,9 @@
 #include <hubble/input.h>
 #include <hubble/module.h>
 #include <lib/misc.k.h>
+#include <mm/kmalloc.h>
 #include <smp/scheduler.h>
+#include <smp/spinlock.h>
 #include <smp/waitqueue.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -208,20 +210,29 @@ static bool tty_kbd_match(input_handler_t *handler, input_dev_t *dev) {
   return input_test_bit(EV_KEY, dev->evbit);
 }
 
-static input_handle_t tty_kbd_handle;
-
+/* Every keyboard (PS/2, USB, ...) needs its own handle: a handle is a
+ * node in that device's handle list. */
 static int tty_kbd_connect(input_handler_t *handler, input_dev_t *dev) {
-  tty_kbd_handle.dev = dev;
-  tty_kbd_handle.handler = handler;
-  tty_kbd_handle.private = NULL;
+  input_handle_t *handle = kzalloc(sizeof(*handle));
+  if (!handle)
+    return -1;
 
-  input_link_handle(&tty_kbd_handle);
+  handle->dev = dev;
+  handle->handler = handler;
+
+  input_link_handle(handle);
   return 0;
 }
 
 static void tty_kbd_disconnect(input_handle_t *handle) {
   input_unlink_handle(handle);
+  kfree(handle);
 }
+
+/* Keyboards report from IRQ context (PS/2) and from kernel threads (USB),
+ * possibly on different CPUs at once; the modifier state and the tty
+ * line buffer must see one key at a time. */
+static irqlock_t tty_kbd_lock = IRQLOCK_INIT("tty_kbd");
 
 static void tty_kbd_event(input_handle_t *handle, input_raw_event_t *ev) {
   (void)handle;
@@ -234,12 +245,16 @@ static void tty_kbd_event(input_handle_t *handle, input_raw_event_t *ev) {
   bool pressed = ev->value == 1;
   bool repeat = ev->value == 2;
 
+  irqlock_acquire(&tty_kbd_lock);
+
   update_modifiers(ev->code, pressed);
 
   if (pressed || repeat)
     tty_handle_key(ev->code, true);
   else
     tty_handle_key(ev->code, false);
+
+  irqlock_release(&tty_kbd_lock);
 }
 
 static input_handler_t tty_kbd_handler = {

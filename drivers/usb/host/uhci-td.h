@@ -51,14 +51,3 @@ struct uhci_qh {
   uint32_t head_link;
   uint32_t element_link;
 } __attribute__((packed, aligned(16)));
-
-/* -- USB Setup Packet (8 bytes) --------------------------- */
-
-/** @brief Standard USB setup packet for control transfers */
-struct usb_setup_packet {
-  uint8_t bmRequestType;
-  uint8_t bRequest;
-  uint16_t wValue;
-  uint16_t wIndex;
-  uint16_t wLength;
-} __attribute__((packed));

@@ -36,6 +36,8 @@
 extern void early_putchar(void);
 extern void console_clear(void);
 extern void console_get_size(void);
+extern void console_set_output(void);
+extern void console_output_enabled(void);
 extern void hpet_delay_ms(void);
 extern void waitqueue_init(void);
 extern void hpet_get_time_ns(void);
@@ -43,6 +45,10 @@ extern void smp_get_cpu_count(void);
 extern void waitqueue_sleep(void);
 extern void waitqueue_wake_all(void);
 extern void waitqueue_wait_event(void);
+extern void _task_create_with_arg(void);
+extern void scheduler_add_task(void);
+extern void task_prepare_wait(void);
+extern void task_wait(void);
 
 /* Limine request blocks live in the kernel image; modules reach them
  * through higher_half.h inline helpers (virt_to_phys, ...). */
@@ -114,6 +120,8 @@ static const module_export_t g_exports[] = {
     {"early_putchar", (uint64_t)(uintptr_t)early_putchar},
     {"console_clear", (uint64_t)(uintptr_t)console_clear},
     {"console_get_size", (uint64_t)(uintptr_t)console_get_size},
+    {"console_set_output", (uint64_t)(uintptr_t)console_set_output},
+    {"console_output_enabled", (uint64_t)(uintptr_t)console_output_enabled},
     {"printk_console_write", (uint64_t)(uintptr_t)printk_console_write},
     {"hpet_delay_ms", (uint64_t)(uintptr_t)hpet_delay_ms},
     {"waitqueue_init", (uint64_t)(uintptr_t)waitqueue_init},
@@ -128,6 +136,10 @@ static const module_export_t g_exports[] = {
     {"pmm_get_stats", (uint64_t)(uintptr_t)pmm_get_stats},
     {"hpet_get_time_ns", (uint64_t)(uintptr_t)hpet_get_time_ns},
     {"smp_get_cpu_count", (uint64_t)(uintptr_t)smp_get_cpu_count},
+    {"_task_create_with_arg", (uint64_t)(uintptr_t)_task_create_with_arg},
+    {"scheduler_add_task", (uint64_t)(uintptr_t)scheduler_add_task},
+    {"task_prepare_wait", (uint64_t)(uintptr_t)task_prepare_wait},
+    {"task_wait", (uint64_t)(uintptr_t)task_wait},
     {"limine_hhdm_req", (uint64_t)(uintptr_t)&limine_hhdm_req},
     {"limine_exec_addr_req", (uint64_t)(uintptr_t)&limine_exec_addr_req},
 };

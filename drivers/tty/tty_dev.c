@@ -16,6 +16,8 @@ static tty_t tty0;
 extern void printk_console_write(const char *buf, size_t len);
 extern void console_clear(void);
 extern void console_get_size(uint16_t *cols, uint16_t *rows);
+extern void console_set_output(bool enabled);
+extern bool console_output_enabled(void);
 
 /* Echo runs in the keyboard IRQ; going through the printk lock keeps it
  * from interleaving with output on another CPU mid escape sequence. */
@@ -25,6 +27,8 @@ static const tty_console_ops_t tty0_console_ops = {
     .putchar = tty0_putchar,
     .clear = console_clear,
     .get_size = console_get_size,
+    .set_output = console_set_output,
+    .output_enabled = console_output_enabled,
 };
 
 /* -- VFS callbacks ---------------------------------------- */

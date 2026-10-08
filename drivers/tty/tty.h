@@ -19,6 +19,9 @@ typedef struct {
   void (*clear)(void);
   /* Text grid size, for TIOCGWINSZ. Optional (80x25 if NULL). */
   void (*get_size)(uint16_t *cols, uint16_t *rows);
+  /* Display ownership, for KDSETMODE/KDGETMODE. Optional. */
+  void (*set_output)(bool enabled);
+  bool (*output_enabled)(void);
 } tty_console_ops_t;
 
 /* -- termios (Linux x86_64 kernel ABI for TCGETS/TCSETS) -- */
@@ -68,6 +71,12 @@ typedef struct {
 #define TTY_TCFLSH 0x540B
 #define TTY_TIOCGWINSZ 0x5413
 #define TTY_TIOCSWINSZ 0x5414
+#define TTY_KDSETMODE 0x4B3A
+#define TTY_KDGETMODE 0x4B3B
+
+/* KDSETMODE modes: who draws on the display */
+#define TTY_KD_TEXT 0x00
+#define TTY_KD_GRAPHICS 0x01
 #define TTY_FIONREAD 0x541B
 
 /* -- Buffer sizes ----------------------------------------- */

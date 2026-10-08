@@ -6,6 +6,7 @@
 #include "uhci-hcd.h"
 #include "uhci-td.h"
 #include <drivers/pci/pci.h>
+#include <drivers/usb/usb.h>
 #include <higher_half.h>
 #include <hpet/hpet.h>
 #include <hubble/init.h>
@@ -36,67 +37,7 @@ static int uhci_set_configuration(struct uhci_hcd *hcd, uint8_t dev_addr,
 static int uhci_interrupt_transfer(struct uhci_hcd *hcd, uint8_t dev_addr);
 static int uhci_wait_td(struct uhci_td *td, char *label);
 
-/* -- Descriptor types (on-stack, not part of TD layout) --- */
-
-struct usb_config_descriptor {
-  uint8_t bLength;
-  uint8_t bDescriptorType;
-  uint16_t wTotalLength;
-  uint8_t bNumInterfaces;
-  uint8_t bConfigurationValue;
-  uint8_t iConfiguration;
-  uint8_t bmAttributes;
-  uint8_t bMaxPower;
-} __attribute__((packed));
-
-struct usb_interface_descriptor {
-  uint8_t bLength;
-  uint8_t bDescriptorType;
-  uint8_t bInterfaceNumber;
-  uint8_t bAlternateSetting;
-  uint8_t bNumEndpoints;
-  uint8_t bInterfaceClass;
-  uint8_t bInterfaceSubClass;
-  uint8_t bInterfaceProtocol;
-  uint8_t iInterface;
-} __attribute__((packed));
-
-struct usb_endpoint_descriptor {
-  uint8_t bLength;
-  uint8_t bDescriptorType;
-  uint8_t bEndpointAddress;
-  uint8_t bmAttributes;
-  uint16_t wMaxPacketSize;
-  uint8_t bInterval;
-} __attribute__((packed));
-
-struct usb_device_descriptor {
-  uint8_t bLength;
-  uint8_t bDescriptorType;
-  uint16_t bcdUSB;
-  uint8_t bDeviceClass;
-  uint8_t bDeviceSubClass;
-  uint8_t bDeviceProtocol;
-  uint8_t bMaxPacketSize0;
-  uint16_t idVendor;
-  uint16_t idProduct;
-  uint16_t bcdDevice;
-  uint8_t iManufacturer;
-  uint8_t iProduct;
-  uint8_t iSerialNumber;
-  uint8_t bNumConfigurations;
-} __attribute__((packed));
-
-/* -- USB descriptor constants ----------------------------- */
-
-#define USB_DESC_DEVICE 0x01
-#define USB_DESC_CONFIGURATION 0x02
-#define USB_DESC_INTERFACE 0x04
-#define USB_DESC_ENDPOINT 0x05
-
-#define USB_CLASS_HID 0x03
-#define USB_PROTOCOL_KEYBOARD 0x01
-#define USB_PROTOCOL_MOUSE 0x02
+/* -- Transfer sizes ---------------------------------------- */
 
 #define USB_DEVICE_DESC_SIZE 18
 #define CONFIG_DESC_BUF_SIZE 255
@@ -717,9 +658,9 @@ static int uhci_probe(struct pci_device *pci_dev) {
 /* -- Driver registration ---------------------------------- */
 
 static const struct pci_device_id uhci_ids[] = {
-    {0x8086, 0x7020},
-    {0x8086, 0x7112},
-    {0, 0},
+    PCI_DEVICE(0x8086, 0x7020),
+    PCI_DEVICE(0x8086, 0x7112),
+    {0},
 };
 
 static struct pci_driver uhci_driver = {

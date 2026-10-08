@@ -9,12 +9,15 @@
  * sequences full-screen programs (busybox vi, less, line editing) use.
  */
 
+#include <higher_half.h>
 #include <hubble/color.h>
 #include <hubble/fb.h>
 #include <hubble/font.h>
 #include <hubble/printk.h>
 #include <hubble/string.h>
 #include <io.h>
+#include <mm/pmm.h>
+#include <smp/spinlock.h>
 #include <stdbool.h>
 
 /* -- Constants ------------------------------------------------- */
@@ -83,40 +86,54 @@ static void serial_set_color(color_t color) {
   serial_color = color;
 }
 
-/* -- Framebuffer and shadow ------------------------------------ */
+/* -- Console surface ------------------------------------------- */
 
 static framebuffer_info_t *early_fb = NULL;
 
-/* Scrolling has to know what's already on screen to shift it up a row.
- * Reading that back from the real framebuffer is fine under TCG, but on
- * real hardware and under KVM the framebuffer is typically
- * write-combined: reads from it are drastically slower than writes. So
- * every pixel is also written to this plain-RAM mirror, scrolling
- * shifts the mirror, and the result is copied to the framebuffer in one
- * sequential write pass - the cheap direction for write-combined memory.
+/* The console draws only into its own surface: plain RAM, one 32-bit
+ * pixel per dot, stride = width. present() copies the changed rectangle
+ * to the framebuffer at (origin_x, origin_y) - but only while the
+ * console owns the display. When a graphical program takes the display
+ * (KDSETMODE KD_GRAPHICS) the console keeps drawing into its surface,
+ * so nothing is lost and nothing scribbles over the program; taking the
+ * display back is one full copy.
  *
- * This runs before the memory allocator is up (printk_init() is called
- * before boot_memory_init() in main.c), so it is a static buffer sized
- * for a generous but bounded resolution. A bigger framebuffer falls
- * back to scrolling the framebuffer directly (slow but correct). */
-#define FB_SHADOW_MAX_BYTES (8u * 1024 * 1024)
-static uint8_t g_fb_shadow[FB_SHADOW_MAX_BYTES];
-static bool g_fb_shadow_active = false;
+ * Scrolling shifts the surface, never the framebuffer: framebuffers are
+ * typically write-combined, where reads are drastically slower than
+ * writes, so the framebuffer is only ever written, sequentially.
+ *
+ * printk_init() runs before the memory allocator (boot_memory_init() in
+ * main.c), so the console starts on static buffers; if they can't hold
+ * the whole screen it uses the top rows only, and console_init_late()
+ * moves it to full-size buffers once pages can be allocated. */
+#define SURFACE_EARLY_BYTES (8u * 1024 * 1024)
+static uint32_t g_surface_early[SURFACE_EARLY_BYTES / sizeof(uint32_t)];
+
+static struct {
+  uint32_t *pixels;
+  int width, height;
+  int origin_x, origin_y; /* top-left corner on the framebuffer */
+  bool presenting;        /* the console owns the display */
+  int dirty_x0, dirty_y0, dirty_x1, dirty_y1; /* empty if x0 >= x1 */
+} surface;
+
+/* Console state is shared by printk (any CPU, IRQ context) and the tty
+ * mode switch. */
+static irqlock_t console_lock = IRQLOCK_INIT("console");
 
 /* -- Terminal state -------------------------------------------- */
 
 /* What each cell shows, so the cursor can be drawn and erased over it
- * without reading the framebuffer. Sized like the shadow: one cell per
- * 8x8 pixels of an FB_SHADOW_MAX_BYTES framebuffer at 32 bpp. */
+ * and a scroll can move text without reading pixels back. */
 typedef struct {
   char ch;
   color_t fg;
   color_t bg;
 } cell_t;
 
-#define CELLS_MAX (FB_SHADOW_MAX_BYTES / (CHAR_WIDTH * CHAR_HEIGHT * 4))
-static cell_t g_cells[CELLS_MAX];
-static bool g_cells_active = false;
+#define CELLS_EARLY (SURFACE_EARLY_BYTES / (CHAR_WIDTH * CHAR_HEIGHT * 4))
+static cell_t g_cells_early[CELLS_EARLY];
+static cell_t *g_cells = g_cells_early;
 
 #define DEFAULT_FG COLOR_WHITE
 #define DEFAULT_BG COLOR_BLACK
@@ -155,44 +172,82 @@ static struct {
 
 /* -- Pixel output ---------------------------------------------- */
 
-static inline uint32_t *fb_row(int py) {
-  return (uint32_t *)((uint8_t *)early_fb->base + (size_t)py * early_fb->pitch);
+static inline uint32_t *surface_row(int py) {
+  return surface.pixels + (size_t)py * surface.width;
 }
 
-static inline uint32_t *shadow_row(int py) {
-  return (uint32_t *)(g_fb_shadow + (size_t)py * early_fb->pitch);
+static void mark_dirty(int x0, int y0, int x1, int y1) {
+  if (surface.dirty_x0 >= surface.dirty_x1) {
+    surface.dirty_x0 = x0;
+    surface.dirty_y0 = y0;
+    surface.dirty_x1 = x1;
+    surface.dirty_y1 = y1;
+    return;
+  }
+  if (x0 < surface.dirty_x0)
+    surface.dirty_x0 = x0;
+  if (y0 < surface.dirty_y0)
+    surface.dirty_y0 = y0;
+  if (x1 > surface.dirty_x1)
+    surface.dirty_x1 = x1;
+  if (y1 > surface.dirty_y1)
+    surface.dirty_y1 = y1;
 }
 
-/* Draw one glyph with an opaque background into the framebuffer (and
- * shadow). Writes only, never reads the framebuffer. */
+/* Copy the dirty rectangle to the framebuffer, clipped to it. */
+static void present(void) {
+  int x0 = surface.dirty_x0, y0 = surface.dirty_y0;
+  int x1 = surface.dirty_x1, y1 = surface.dirty_y1;
+  if (x0 >= x1 || !surface.presenting)
+    return;
+  surface.dirty_x0 = surface.dirty_x1 = 0;
+
+  int fb_w = (int)early_fb->width, fb_h = (int)early_fb->height;
+  int fx0 = surface.origin_x + x0, fx1 = surface.origin_x + x1;
+  if (fx0 < 0) {
+    x0 -= fx0;
+    fx0 = 0;
+  }
+  if (fx1 > fb_w)
+    fx1 = fb_w;
+  if (fx0 >= fx1)
+    return;
+
+  for (int py = y0; py < y1; py++) {
+    int fy = surface.origin_y + py;
+    if (fy < 0 || fy >= fb_h)
+      continue;
+    uint8_t *dst = (uint8_t *)early_fb->base + (size_t)fy * early_fb->pitch;
+    memcpy((uint32_t *)dst + fx0, surface_row(py) + x0,
+           (size_t)(fx1 - fx0) * sizeof(uint32_t));
+  }
+}
+
+static void mark_all_dirty(void) {
+  mark_dirty(0, 0, surface.width, surface.height);
+}
+
+/* Draw one glyph with an opaque background. */
 static void render_glyph(int col, int row, char ch, color_t fg, color_t bg) {
   const uint8_t *glyph = font[(unsigned char)ch];
   int px = col * CHAR_WIDTH;
   for (int y = 0; y < CHAR_HEIGHT; y++) {
-    int py = row * CHAR_HEIGHT + y;
+    uint32_t *line = surface_row(row * CHAR_HEIGHT + y) + px;
     uint8_t bits = glyph[y];
-    uint32_t line[CHAR_WIDTH];
     for (int x = 0; x < CHAR_WIDTH; x++)
       line[x] = (bits & (0x80 >> x)) ? fg : bg;
-    memcpy(fb_row(py) + px, line, sizeof(line));
-    if (g_fb_shadow_active)
-      memcpy(shadow_row(py) + px, line, sizeof(line));
   }
+  mark_dirty(px, row * CHAR_HEIGHT, px + CHAR_WIDTH, (row + 1) * CHAR_HEIGHT);
 }
 
 /* Fill whole text rows [row0, row1) of pixels with one colour. */
 static void fill_rows_pixels(int row0, int row1, color_t color) {
-  int width = term.cols * CHAR_WIDTH;
   for (int py = row0 * CHAR_HEIGHT; py < row1 * CHAR_HEIGHT; py++) {
-    /* Write both copies; never read the framebuffer back (slow). */
-    uint32_t *dst = fb_row(py);
-    uint32_t *shadow = g_fb_shadow_active ? shadow_row(py) : NULL;
-    for (int x = 0; x < width; x++) {
-      dst[x] = color;
-      if (shadow)
-        shadow[x] = color;
-    }
+    uint32_t *line = surface_row(py);
+    for (int x = 0; x < surface.width; x++)
+      line[x] = color;
   }
+  mark_dirty(0, row0 * CHAR_HEIGHT, surface.width, row1 * CHAR_HEIGHT);
 }
 
 /* -- Cells ----------------------------------------------------- */
@@ -201,21 +256,15 @@ static inline cell_t *cell_at(int col, int row) {
   return &g_cells[row * term.cols + col];
 }
 
-static color_t effective_fg(void) {
-  return term.reverse ? term.bg : term.fg;
-}
+static color_t effective_fg(void) { return term.reverse ? term.bg : term.fg; }
 
-static color_t effective_bg(void) {
-  return term.reverse ? term.fg : term.bg;
-}
+static color_t effective_bg(void) { return term.reverse ? term.fg : term.bg; }
 
 static void set_cell(int col, int row, char ch, color_t fg, color_t bg) {
-  if (g_cells_active) {
-    cell_t *c = cell_at(col, row);
-    c->ch = ch;
-    c->fg = fg;
-    c->bg = bg;
-  }
+  cell_t *c = cell_at(col, row);
+  c->ch = ch;
+  c->fg = fg;
+  c->bg = bg;
   render_glyph(col, row, ch, fg, bg);
 }
 
@@ -231,11 +280,9 @@ static void erase_rows(int row0, int row1) {
   if (row0 >= row1)
     return;
   color_t bg = effective_bg();
-  if (g_cells_active) {
-    for (int row = row0; row < row1; row++)
-      for (int col = 0; col < term.cols; col++)
-        *cell_at(col, row) = (cell_t){' ', term.fg, bg};
-  }
+  for (int row = row0; row < row1; row++)
+    for (int col = 0; col < term.cols; col++)
+      *cell_at(col, row) = (cell_t){' ', term.fg, bg};
   fill_rows_pixels(row0, row1, bg);
 }
 
@@ -243,15 +290,12 @@ static void erase_rows(int row0, int row1) {
 static void move_rows(int dst, int src, int count) {
   if (count <= 0 || dst == src)
     return;
-  size_t row_bytes = (size_t)early_fb->pitch * CHAR_HEIGHT;
-  uint8_t *base = g_fb_shadow_active ? g_fb_shadow : (uint8_t *)early_fb->base;
-  memmove(base + dst * row_bytes, base + src * row_bytes, count * row_bytes);
-  if (g_fb_shadow_active)
-    memcpy((uint8_t *)early_fb->base + dst * row_bytes,
-           g_fb_shadow + dst * row_bytes, count * row_bytes);
-  if (g_cells_active)
-    memmove(cell_at(0, dst), cell_at(0, src),
-            (size_t)count * term.cols * sizeof(cell_t));
+  size_t row_pixels = (size_t)surface.width * CHAR_HEIGHT;
+  memmove(surface.pixels + dst * row_pixels, surface.pixels + src * row_pixels,
+          count * row_pixels * sizeof(uint32_t));
+  memmove(cell_at(0, dst), cell_at(0, src),
+          (size_t)count * term.cols * sizeof(cell_t));
+  mark_dirty(0, dst * CHAR_HEIGHT, surface.width, (dst + count) * CHAR_HEIGHT);
 }
 
 /* Scroll the region [top, bottom] up by n rows (text moves up). */
@@ -275,8 +319,6 @@ static void scroll_down(int top, int bottom, int n) {
 /* -- Cursor ---------------------------------------------------- */
 
 static void draw_cursor(bool inverted) {
-  if (!g_cells_active)
-    return;
   int col = term.cx < term.cols ? term.cx : term.cols - 1;
   const cell_t *c = cell_at(col, term.cy);
   if (inverted)
@@ -301,7 +343,9 @@ static void cursor_show(void) {
 
 /* -- Cursor movement ------------------------------------------- */
 
-static int clamp(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
+static int clamp(int v, int lo, int hi) {
+  return v < lo ? lo : v > hi ? hi : v;
+}
 
 /* LF: down one row, scrolling the region when at its bottom margin. */
 static void line_feed(void) {
@@ -402,8 +446,6 @@ static void erase_line(int mode) {
 
 /* Shift the rest of the line right by n (ICH) or left by n (DCH). */
 static void shift_line(int n, bool insert) {
-  if (!g_cells_active)
-    return;
   int row = term.cy;
   n = clamp(n, 0, term.cols - term.cx);
   if (insert) {
@@ -672,12 +714,15 @@ void early_putchar_color(char c, color_t color) {
   serial_set_color(color);
   serial_putc(c);
 
-  if (!early_fb || !early_fb->base || term.cols == 0)
+  if (term.cols == 0)
     return;
 
+  irqlock_acquire(&console_lock);
   cursor_hide();
   term_feed(c, color);
   cursor_show();
+  present();
+  irqlock_release(&console_lock);
 }
 
 /**
@@ -689,19 +734,48 @@ void early_putchar(char c) { early_putchar_color(c, COLOR_WHITE); }
 
 /** @brief Clear the framebuffer console and home the cursor. */
 void console_clear(void) {
-  if (!early_fb || term.cols == 0)
+  if (term.cols == 0)
     return;
+  irqlock_acquire(&console_lock);
   cursor_hide();
   erase_rows(0, term.rows);
   term.cx = term.cy = 0;
   term.wrap_pending = false;
   cursor_show();
+  present();
+  irqlock_release(&console_lock);
 }
 
 /** @brief Text grid size of the framebuffer console (80x25 without one). */
 void console_get_size(uint16_t *cols, uint16_t *rows) {
   *cols = term.cols ? (uint16_t)term.cols : 80;
   *rows = term.rows ? (uint16_t)term.rows : 25;
+}
+
+void console_set_output(bool enabled) {
+  if (term.cols == 0)
+    return;
+  irqlock_acquire(&console_lock);
+  if (enabled && !surface.presenting) {
+    surface.presenting = true;
+    mark_all_dirty(); /* the display holds someone else's pixels */
+    present();
+  }
+  surface.presenting = enabled;
+  irqlock_release(&console_lock);
+}
+
+bool console_output_enabled(void) { return surface.presenting; }
+
+void console_set_origin(int x, int y) {
+  if (term.cols == 0)
+    return;
+  irqlock_acquire(&console_lock);
+  surface.origin_x = x;
+  surface.origin_y = y;
+  mark_all_dirty();
+  present();
+  irqlock_release(&console_lock);
 }
 
 /* -- Initialisation -------------------------------------------- */
@@ -717,17 +791,75 @@ void printk_init(framebuffer_info_t *fb) {
   printk_set_output(early_putchar);
   printk_set_color_output(early_putchar_color);
 
-  if (!fb || !fb->base || fb->bpp != 32) {
+  if (!fb || !fb->base || fb->bpp != 32 || fb->width < CHAR_WIDTH ||
+      fb->height < CHAR_HEIGHT) {
     term.cols = term.rows = 0; /* serial only */
     return;
   }
 
-  term.cols = fb->width / CHAR_WIDTH;
-  term.rows = fb->height / CHAR_HEIGHT;
+  /* As many rows as the static buffers hold; console_init_late() grows
+   * them to the full screen. */
+  int cols = fb->width / CHAR_WIDTH;
+  int rows = fb->height / CHAR_HEIGHT;
+  int rows_fit = (int)(CELLS_EARLY / cols);
+  term.cols = cols;
+  term.rows = rows < rows_fit ? rows : rows_fit;
 
-  g_fb_shadow_active = (size_t)fb->pitch * fb->height <= FB_SHADOW_MAX_BYTES;
-  g_cells_active = (size_t)term.cols * term.rows <= CELLS_MAX;
+  surface.pixels = g_surface_early;
+  surface.width = term.cols * CHAR_WIDTH;
+  surface.height = term.rows * CHAR_HEIGHT;
+  surface.presenting = true;
 
   terminal_reset();
   cursor_show();
+  present();
+}
+
+/**
+ * @brief Move the console to buffers sized for the whole screen
+ *
+ * Needs the page allocator. Only does work when the screen was too big
+ * for the static buffers; existing text and the cursor stay put.
+ */
+void console_init_late(void) {
+  if (term.cols == 0)
+    return;
+
+  int rows = (int)early_fb->height / CHAR_HEIGHT;
+  if (rows <= term.rows)
+    return;
+
+  size_t pixel_bytes = (size_t)surface.width * rows * CHAR_HEIGHT * 4;
+  size_t cell_bytes = (size_t)term.cols * rows * sizeof(cell_t);
+  uint64_t pixels_phys = pmm_alloc_pages((pixel_bytes + 4095) / 4096);
+  uint64_t cells_phys = pmm_alloc_pages((cell_bytes + 4095) / 4096);
+  if (!pixels_phys || !cells_phys) {
+    if (pixels_phys)
+      pmm_free_pages(pixels_phys, (pixel_bytes + 4095) / 4096);
+    if (cells_phys)
+      pmm_free_pages(cells_phys, (cell_bytes + 4095) / 4096);
+    printk(KERN_WARNING "console: no memory for a full-screen buffer\n");
+    return;
+  }
+
+  irqlock_acquire(&console_lock);
+
+  /* Same width, so the old contents are a prefix of the new layout. */
+  uint32_t *pixels = (uint32_t *)phys_to_virt(pixels_phys);
+  cell_t *cells = (cell_t *)phys_to_virt(cells_phys);
+  memcpy(pixels, surface.pixels, (size_t)surface.width * surface.height * 4);
+  memcpy(cells, g_cells, (size_t)term.cols * term.rows * sizeof(cell_t));
+
+  int old_rows = term.rows;
+  surface.pixels = pixels;
+  surface.height = rows * CHAR_HEIGHT;
+  g_cells = cells;
+  term.rows = rows;
+  if (term.bottom == old_rows - 1)
+    term.bottom = rows - 1;
+
+  erase_rows(old_rows, rows);
+  present();
+
+  irqlock_release(&console_lock);
 }

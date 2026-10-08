@@ -254,8 +254,24 @@ int vmm_set_flags(uint64_t va, uint64_t flags) {
  * @return true if mapped
  */
 bool vmm_is_mapped(uint64_t va) {
-  uint64_t *pt = pt_table(va);
-  return pte_present(pt[PT_INDEX(va)]);
+  /* Walk top-down: a missing upper table would fault when touched
+   * through the recursive mapping, and a huge entry has no table below. */
+  if (!pte_present(pml4_table()[PML4_INDEX(va)]))
+    return false;
+
+  uint64_t pdpte = pdpt_table(va)[PDPT_INDEX(va)];
+  if (!pte_present(pdpte))
+    return false;
+  if (pdpte & PTE_HUGE)
+    return true;
+
+  uint64_t pde = pd_table(va)[PD_INDEX(va)];
+  if (!pte_present(pde))
+    return false;
+  if (pde & PTE_HUGE)
+    return true;
+
+  return pte_present(pt_table(va)[PT_INDEX(va)]);
 }
 
 /* -- User Page Management -------------------------------------------------- */
