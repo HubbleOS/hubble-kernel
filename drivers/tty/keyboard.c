@@ -58,10 +58,12 @@ const keymap_entry_t keymap[] = {
     {.id = {KEY_0, false}, '0', ')'},
 
     {.id = {KEY_SPACE, false}, ' ', ' '},
-    {.id = {KEY_ENTER, false}, '\n', '\n'},
+    /* What a terminal sends: Enter is CR (the tty's ICRNL makes it NL
+     * for cooked readers), Backspace is DEL (termios VERASE). */
+    {.id = {KEY_ENTER, false}, '\r', '\r'},
     {.id = {KEY_TAB, false}, '\t', '\t'},
     {.id = {KEY_ESC, false}, 27, 27},
-    {.id = {KEY_BACKSPACE, false}, '\b', '\b'},
+    {.id = {KEY_BACKSPACE, false}, 0x7F, 0x7F},
 
     {.id = {KEY_MINUS, false}, '-', '_'},
     {.id = {KEY_EQUAL, false}, '=', '+'},
@@ -136,60 +138,58 @@ static void tty_handle_key(uint16_t code, bool pressed) {
   uint8_t sc = code & 0xFF;
   bool extended = code & 0x100;
 
+  if (!pressed)
+    return;
+
+  /* Ctrl+letter (and Ctrl+[ \\ ] ^ _) sends the control code, as on any
+   * terminal: ^C = 0x03, ^D = VEOF, ^L = form feed, ^[ = ESC. */
   if (kbd_state.ctrl && !extended) {
-    if (!pressed)
-      return;
-    switch (sc) {
-    case KEY_C:
-      tty_input_char(tty_current, 0x03);
-      return;
-    case KEY_D:
-      tty_input_char(tty_current, 0x04);
-      return;
-    case KEY_L:
-      tty_input_char(tty_current, '\f');
+    char base = keymap_lookup_char(sc, false, false, false);
+    if ((base >= 'a' && base <= 'z') || (base >= '[' && base <= '_')) {
+      tty_input_char(tty_current, (char)(base & 0x1F));
       return;
     }
   }
 
-  if (!pressed)
-    return;
-
+  /* Navigation keys arrive as the VT100/xterm input sequences, fed to
+   * the reader like typed bytes (they used to be written to the screen). */
   if (extended) {
+    const char *seq = NULL;
     switch (sc) {
     case KEY_UP:
-      tty_write(tty_current, "\x1b[A", 3);
-      return;
+      seq = "\x1b[A";
+      break;
     case KEY_DOWN:
-      tty_write(tty_current, "\x1b[B", 3);
-      return;
+      seq = "\x1b[B";
+      break;
     case KEY_RIGHT:
-      tty_write(tty_current, "\x1b[C", 3);
-      return;
+      seq = "\x1b[C";
+      break;
     case KEY_LEFT:
-      tty_write(tty_current, "\x1b[D", 3);
-      return;
+      seq = "\x1b[D";
+      break;
     case KEY_HOME:
-      tty_write(tty_current, "\x1b[H", 3);
-      return;
+      seq = "\x1b[H";
+      break;
     case KEY_END:
-      tty_write(tty_current, "\x1b[F", 3);
-      return;
+      seq = "\x1b[F";
+      break;
     case KEY_DELETE:
-      tty_write(tty_current, "\x1b[3~", 4);
-      return;
+      seq = "\x1b[3~";
+      break;
     case KEY_INSERT:
-      tty_write(tty_current, "\x1b[2~", 4);
-      return;
+      seq = "\x1b[2~";
+      break;
     case KEY_PAGEUP:
-      tty_write(tty_current, "\x1b[5~", 4);
-      return;
+      seq = "\x1b[5~";
+      break;
     case KEY_PAGEDOWN:
-      tty_write(tty_current, "\x1b[6~", 4);
-      return;
-    default:
-      return;
+      seq = "\x1b[6~";
+      break;
     }
+    if (seq)
+      tty_input_string(tty_current, seq);
+    return;
   }
 
   if (sc >= KEY_F1 && sc <= KEY_F10)

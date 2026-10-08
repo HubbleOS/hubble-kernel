@@ -21,7 +21,7 @@ extern df_handler
 extern irq_handler
 extern syscall_handler_wrapper
 extern need_resched
-extern schedule
+extern schedule_irq
 
 ; -- ISR Macros -------------------------------------------------
 
@@ -233,7 +233,7 @@ df_entry:
     je      %%restore
     mov     byte [need_resched], 0
     mov     rdi, rbp
-    call    schedule
+    call    schedule_irq
 %%restore:
     %endif
 

@@ -13,6 +13,7 @@
 
 #include <apic/apic.h>
 #include <asm.h>
+#include <hpet/hpet.h>
 #include <msr.h>
 
 #include <gdt/gdt.h>
@@ -416,16 +417,35 @@ void task_exit(int exit_code) {
  * @brief Put the current task to sleep (blocked state)
  */
 void task_sleep(void) {
+  task_prepare_wait();
+  task_wait(0);
+}
+
+void task_prepare_wait(void) {
+  task_t *current = get_current_task();
+  if (!current)
+    return;
+  current->linkage.state = TASK_BLOCKED;
+}
+
+void task_cancel_wait(void) {
+  task_t *current = get_current_task();
+  if (current)
+    current->linkage.state = TASK_RUNNING;
+}
+
+void task_wait(uint64_t deadline_ns) {
   task_t *current = get_current_task();
   if (!current)
     return;
 
-  uint64_t user_rsp, user_rip, user_rflags;
-  asm volatile("mov %%gs:8, %0" : "=r"(user_rsp));
-  asm volatile("mov %%rcx,  %0" : "=r"(user_rip));
-  asm volatile("mov %%r11,  %0" : "=r"(user_rflags));
+  /* Woken between task_prepare_wait() and here: don't sleep. */
+  if (current->linkage.state != TASK_BLOCKED) {
+    current->linkage.state = TASK_RUNNING;
+    return;
+  }
 
-  current->linkage.state = TASK_BLOCKED;
+  current->sched.wake_at_ns = deadline_ns;
   current->sched.time_slice = 0;
 
   /* GS_BASE is a single per-CPU MSR, not saved/restored per task: while
@@ -438,6 +458,10 @@ void task_sleep(void) {
    * else); swap back in once we actually resume. task_exit() mirrors the
    * swap-out half of this on its own way out, for the same reason. */
   if (current->exec.in_syscall) {
+    /* The user RSP saved by syscall_entry; only meaningful (and only
+     * safe to read: GS is the per-cpu block) inside a syscall. */
+    uint64_t user_rsp;
+    asm volatile("mov %%gs:8, %0" : "=r"(user_rsp));
     current->exec.in_syscall_rsp = user_rsp;
     asm volatile("swapgs");
   }
@@ -446,6 +470,8 @@ void task_sleep(void) {
 
   if (current->exec.in_syscall)
     asm volatile("swapgs");
+
+  current->sched.wake_at_ns = 0;
 }
 
 /**
@@ -503,6 +529,20 @@ task_t *get_next_task(uint8_t cpu_id) {
   if (rq->count == 0) {
     spinlock_release(&rq->lock);
     return rq->idle_task;
+  }
+
+  /* Expire timed waits (poll/nanosleep deadlines) on this CPU. */
+  uint64_t now = 0;
+  for (size_t i = 0; i < rq->count; i++) {
+    task_t *t = rq->queue[i];
+    if (t->linkage.state == TASK_BLOCKED && t->sched.wake_at_ns) {
+      if (!now)
+        now = hpet_get_time_ns();
+      if (now >= t->sched.wake_at_ns) {
+        t->sched.wake_at_ns = 0;
+        t->linkage.state = TASK_READY;
+      }
+    }
   }
 
   for (size_t i = 0; i < rq->count; i++) {
@@ -578,6 +618,32 @@ void schedule(registers_t *regs) {
   task_state_load(new_task, regs);
 }
 
+/* Whether a task on this CPU's run queue sleeps with an expired timeout.
+ * Checked every tick so a timeout ends a wait on time instead of when the
+ * running task's slice runs out (up to BASE_SLICE + priority ticks). */
+static bool timed_wake_due(uint8_t cpu_id) {
+  cpu_runqueue_t *rq = &runqueues[cpu_id];
+  uint64_t now = 0;
+  bool due = false;
+
+  spinlock_acquire(&rq->lock);
+  for (size_t i = 0; i < rq->count && !due; i++) {
+    task_t *t = rq->queue[i];
+    if (t->linkage.state == TASK_BLOCKED && t->sched.wake_at_ns) {
+      if (!now)
+        now = hpet_get_time_ns();
+      due = now >= t->sched.wake_at_ns;
+    }
+  }
+  spinlock_release(&rq->lock);
+  return due;
+}
+
+void schedule_irq(registers_t *regs) {
+  save_context(get_current_task(), regs);
+  schedule(regs);
+}
+
 /* -- Timer handler ------------------------------------------------------ */
 
 /**
@@ -597,6 +663,8 @@ void lapic_timer_handler(registers_t *regs) {
 
     if (current->sched.time_slice > 0)
       current->sched.time_slice--;
+    if (current->sched.time_slice > 0 && timed_wake_due(lapic_get_id()))
+      current->sched.time_slice = 0;
   }
   // cannary for stack overflow, not very usefull, mostly debuging thing
   if (current && current->exec.rsp0) {

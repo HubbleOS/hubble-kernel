@@ -685,3 +685,17 @@ void printk(const char *fmt, ...) {
 
   va_end(args);
 }
+
+void printk_console_write(const char *buf, size_t len) {
+  irqlock_acquire(&printk_lock);
+  if (console_write) {
+    console_write(buf, len, console_user_data);
+  } else if (color_output_fn) {
+    for (size_t i = 0; i < len; i++)
+      color_output_fn(buf[i], COLOR_WHITE);
+  } else if (output_fn) {
+    for (size_t i = 0; i < len; i++)
+      output_fn(buf[i]);
+  }
+  irqlock_release(&printk_lock);
+}

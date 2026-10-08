@@ -300,15 +300,19 @@ void kmain_thread(void) {
   // vfs_close(ext2_file);
   module_load("/modules/input.ko");
   module_load("/modules/tty.ko");
+  module_load("/modules/procfs.ko");
   char *argv[] = {"/busybox", "sh", "-i", NULL};
-  char *envp[] = {"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "HOME=/", "TERM=dumb",
+  char *envp[] = {"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "HOME=/", "TERM=linux",
                   NULL};
   task_t *task1 = execv("/busybox", argv, envp);
   if (task1 != NULL)
     scheduler_add_task(task1);
 
-  printk(KERN_INFO "kmain thread done, entering idle loop\n");
+  printk(KERN_INFO "kmain thread done\n");
 
+  /* Nothing left to do: block for good. Spinning in hlt here kept this
+   * task "running" for its whole (long, priority-255) slice, delaying
+   * every other task on this CPU - e.g. a poll() timeout in vi. */
   while (1)
-    hlt();
+    task_sleep();
 }

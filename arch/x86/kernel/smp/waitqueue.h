@@ -34,6 +34,19 @@ void waitqueue_init(wait_queue_t *wq);
 void waitqueue_sleep(wait_queue_t *wq);
 
 /**
+ * @brief Block until @p cond(@p arg) holds, a wakeup on @p wq makes it
+ *        hold, or @p deadline_ns (HPET time; 0 = none) passes.
+ *
+ * Race-free: the task is registered on @p wq before the condition is
+ * re-checked, so a wakeup between check and sleep is not lost. It is
+ * always removed from @p wq again before returning.
+ *
+ * @return true if the condition holds, false on timeout
+ */
+bool waitqueue_wait_event(wait_queue_t *wq, bool (*cond)(void *), void *arg,
+                          uint64_t deadline_ns);
+
+/**
  * @brief Wake all tasks sleeping on a wait queue
  * @param wq Pointer to wait queue
  */

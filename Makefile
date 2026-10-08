@@ -367,6 +367,33 @@ rust:
 		--target $(RUST_TARGET) \
 		--release
 
+# ---------------------------------------------------------------------------
+# Rust loadable modules
+# ---------------------------------------------------------------------------
+# Each directory is a no_std staticlib crate with a module.ld. The archive
+# is linked into one relocatable .ko (ld -r) the way C modules are, then:
+# --gc-sections drops unused core/alloc code (rooted at <name>_init), debug
+# info is stripped, and every symbol is made local so the module exports
+# nothing. Same code model as C modules (kernel, static relocations).
+
+RUST_MODULES := fs/procfs
+
+PHONY += rust-modules
+rust-modules:
+	@mkdir -p $(OUT_DIR)/modules
+	$(Q)set -e; for dir in $(RUST_MODULES); do \
+		name=$$(basename $$dir); \
+		echo "Building Rust module $$name..."; \
+		RUSTFLAGS="-C code-model=kernel -C relocation-model=static" \
+			cargo build --manifest-path $(ROOT_DIR)/$$dir/Cargo.toml \
+			--target $(RUST_TARGET) --release; \
+		$(LD) -r --gc-sections -u $${name}_init -T $(ROOT_DIR)/$$dir/module.ld \
+			--whole-archive $(ROOT_DIR)/$$dir/target/$(RUST_TARGET)/release/lib$$name.a \
+			-o $(OUT_DIR)/modules/$$name.ko; \
+		$(OBJCOPY) --strip-debug --wildcard --localize-symbol='*' \
+			$(OUT_DIR)/modules/$$name.ko; \
+	done
+
 SRC_DIRS := .
 
 PHONY: format
@@ -391,7 +418,7 @@ format-check:
 # ---------------------------------------------------------------------------
 
 PHONY += build
-build: build-tool rust
+build: build-tool rust rust-modules
 	@mkdir -p $(LOG_DIR)
 	$(foreach mod,$(MODULES),$(call load-module,$(mod)))
 	$(Q)set -e; for dir in $(filter-out arch/$(ARCH)/kernel,$(subdirs)); do \

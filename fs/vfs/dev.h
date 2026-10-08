@@ -16,12 +16,22 @@ typedef struct {
   uint64_t (*read)(uint64_t offset, size_t size);
 } VFS_device_file;
 
+struct wait_queue;
+
 /** @brief Registered device descriptor (linked list node). */
 typedef struct VFS_device_reg {
   char name[32];
   uint64_t (*mmap)(uint64_t offset, size_t size);
   uint64_t (*read)(uint64_t offset, size_t size, void *buf);
   uint64_t (*write)(uint64_t offset, size_t size, const void *buf);
+
+  /* Optional character-device hooks (set via dev_vfs_set_char_ops):
+   * ioctl() serves the ioctl syscall; readable() and read_wq let poll()
+   * test for input and sleep until it arrives. */
+  long (*ioctl)(unsigned long request, void *arg);
+  bool (*readable)(void);
+  struct wait_queue *read_wq;
+
   struct VFS_device_reg *next;
 } VFS_device_reg;
 
@@ -39,6 +49,14 @@ uint64_t mmap_device(VFS_File *file, uint64_t offset, size_t size);
 
 /** @brief Find a registered device by path. */
 VFS_device_reg *dev_vfs_find_device(VFS_FS *fs, const char *path);
+
+/**
+ * @brief Attach character-device hooks to a registered device.
+ * @return false if no device called @p name is registered
+ */
+bool dev_vfs_set_char_ops(const char *name,
+                          long (*ioctl)(unsigned long request, void *arg),
+                          bool (*readable)(void), struct wait_queue *read_wq);
 
 /** @brief Register a new device with the VFS layer. */
 void dev_vfs_register(const char *name, uint64_t (*mmap)(uint64_t, size_t),

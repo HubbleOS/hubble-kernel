@@ -43,7 +43,8 @@ typedef enum {
   FS_EXT2,
   FS_DEV,
   FS_PIPE,
-  FS_INITRAMFS
+  FS_INITRAMFS,
+  FS_PROC
 } FileSystemType;
 
 /** @brief Abstract block device descriptor. */

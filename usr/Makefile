@@ -32,9 +32,15 @@ LDFLAGS := -nostdlib -static -nostartfiles
 SRC      := init.c
 LDSCRIPT := link.ld
 
-# # Busybox applets exposed as /bin/<name> -> /busybox symlinks. busybox
-# # picks the applet from argv[0], so a symlink is all an applet needs.
-# BUSYBOX_APPLETS := ls cat echo pwd uname mkdir rm cp mv sleep
+# Busybox applets, linked as /<dir>/<name> -> /busybox. Busybox picks the
+# applet from argv[0], so a symlink is all an applet needs. The list comes
+# from the binary itself (--list-full gives bin/ls, sbin/init, ...), so it
+# always matches what busybox was built with. Older builds without
+# --list-full fall back to --list (all in bin/). This runs busybox on the
+# build host, which only works when it is built for the host's CPU.
+BUSYBOX := $(KERNEL_PATH)/busy/busybox
+BUSYBOX_APPLETS := $(shell $(BUSYBOX) --list-full 2>/dev/null || \
+	$(BUSYBOX) --list 2>/dev/null | sed 's|^|bin/|')
 
 # ---------------------------------------------------------------------------
 # Targets
@@ -52,15 +58,30 @@ $(BUILD_DIR)/init.elf: $(SRC) $(LDSCRIPT)
 		-o $@ $(SRC)
 	@echo "initramfs: built /init -> $@"
 
-# Create rootfs layout and generate initramfs image
-$(INITRAMFS_IMG): $(BUILD_DIR)/init.elf
+# Everything that ends up in the image. Depending on init.elf alone meant
+# rebuilt modules (or a new busybox) were never copied in once the image
+# existed - the kernel then booted with stale .ko files.
+INITRAMFS_INPUTS := $(BUILD_DIR)/init.elf \
+	$(wildcard $(KERNEL_PATH)/out/modules/*.ko) \
+	$(wildcard $(KERNEL_PATH)/busy/*) \
+	$(KERNEL_PATH)/scripts/initramfs.py \
+	$(lastword $(MAKEFILE_LIST))
+
+# Create rootfs layout and generate initramfs image. The rootfs is rebuilt
+# from scratch so files removed from the inputs do not linger.
+$(INITRAMFS_IMG): $(INITRAMFS_INPUTS)
+	@rm -rf $(ROOT_DIR)
 	@mkdir -p $(ROOT_DIR)
 	@cp $(BUILD_DIR)/init.elf $(ROOT_DIR)/init
 	@mkdir -p $(ROOT_DIR)/modules
 	@cp -r $(KERNEL_PATH)/out/modules/* $(ROOT_DIR)/modules/
 	@cp -r $(KERNEL_PATH)/busy/* $(ROOT_DIR)/
-# 	@mkdir -p $(ROOT_DIR)/bin
-# 	@for a in $(BUSYBOX_APPLETS); do ln -sfn /busybox $(ROOT_DIR)/bin/$$a; done
+	@mkdir -p $(ROOT_DIR)/bin $(ROOT_DIR)/proc
+	@[ -n "$(BUSYBOX_APPLETS)" ] || echo "initramfs: warning: could not list busybox applets (no --list-full/--list, or not runnable on this host); no applet links created"
+	@for a in $(BUSYBOX_APPLETS); do \
+		mkdir -p "$(ROOT_DIR)/$$(dirname "$$a")"; \
+		ln -sfn /busybox "$(ROOT_DIR)/$$a"; \
+	done
 	@chmod +x $(ROOT_DIR)/init
 	@python3 $(KERNEL_PATH)/scripts/initramfs.py \
 		--root $(ROOT_DIR) \

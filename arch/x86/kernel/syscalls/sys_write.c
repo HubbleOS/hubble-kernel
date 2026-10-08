@@ -21,22 +21,19 @@ long sys_write(int fd, const char *buffer, size_t len) {
   if (!buffer) {
     return -EINVAL;
   }
-  if (fd == 1) {
-    printk("%.*s", (int)len, buffer);
-    return len;
-  }
-  if (fd == 2) {
-    printk("%.*s", (int)len, buffer);
+  if (fd == 1 || fd == 2) {
+    /* Straight to the console: program output (including a full-screen
+     * editor's escape sequences) is not kernel log material. */
+    printk_console_write(buffer, len);
     return len;
   }
   task_t *task = get_current_task();
 
   fd_entry_t *fd_entry = task_get_fd(task, fd);
+  if (!fd_entry || !fd_entry->data)
+    return -EBADF;
 
   VFS_File *file = fd_entry->data;
-  if (!file) {
-    return -ENOENT;
-  }
 
   size_t written = vfs_write(file, buffer, len);
   return (long)written;

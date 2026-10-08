@@ -118,3 +118,15 @@ uint64_t mmap_device(VFS_File *file, uint64_t offset, size_t size) {
     return dev->mmap(offset, size);
   return 0;
 }
+
+bool dev_vfs_set_char_ops(const char *name,
+                          long (*ioctl)(unsigned long request, void *arg),
+                          bool (*readable)(void), struct wait_queue *read_wq) {
+  VFS_device_reg *dev = dev_vfs_find_device(NULL, name);
+  if (!dev)
+    return false;
+  dev->ioctl = ioctl;
+  dev->readable = readable;
+  dev->read_wq = read_wq;
+  return true;
+}

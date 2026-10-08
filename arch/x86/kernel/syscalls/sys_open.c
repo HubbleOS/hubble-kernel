@@ -5,6 +5,7 @@
  * descriptor entries in the current task's file descriptor table.
  */
 
+#include <hubble/errno.h>
 #include <hubble/syscalls.h>
 
 #include <fs/vfs/vfs.h>
@@ -13,23 +14,69 @@
 
 #include "syscall_entry.h"
 
+/* Linux open(2) flags (x86_64). */
+#define L_O_ACCMODE 0x3
+#define L_O_WRONLY 0x1
+#define L_O_RDWR 0x2
+#define L_O_CREAT 0x40
+#define L_O_EXCL 0x80
+#define L_O_TRUNC 0x200
+#define L_O_APPEND 0x400
+#define L_O_DIRECTORY 0x10000
+
+/* Linux open flags -> VFS_O_* (the two number their flags differently;
+ * passing Linux values through made O_CREAT read as VFS_O_TRUNC). */
+static int vfs_open_flags(int flags) {
+  int vfs;
+  switch (flags & L_O_ACCMODE) {
+  case L_O_WRONLY:
+    vfs = VFS_O_WRONLY;
+    break;
+  case L_O_RDWR:
+    vfs = VFS_O_RDWR;
+    break;
+  default:
+    vfs = VFS_O_RDONLY;
+    break;
+  }
+  if (flags & L_O_CREAT)
+    vfs |= VFS_O_CREAT;
+  if (flags & L_O_EXCL)
+    vfs |= VFS_O_EXCL;
+  if (flags & L_O_TRUNC)
+    vfs |= VFS_O_TRUNC;
+  if (flags & L_O_APPEND)
+    vfs |= VFS_O_APPEND;
+  return vfs;
+}
+
 /**
  * @brief Open a file.
  *
- * Opens the file at @p path with the given @p flags and allocates a
- * new file descriptor in the current task's FD table.
+ * @param path  Path to the file (relative paths are taken from "/").
+ * @param flags Linux open flags (O_RDONLY, O_CREAT, O_TRUNC, ...).
+ * @param mode  Permissions for a created file (no permission model yet).
  *
- * @param path  Path to the file to open.
- * @param flags Open flags (e.g. O_RDONLY, O_WRONLY).
- *
- * @return File descriptor number on success, or -1 on error.
+ * @return File descriptor number on success, or negative errno.
  */
-long sys_open(const char *path, int flags) {
+long sys_open(const char *path, int flags, int mode) {
+  (void)mode;
   task_t *current = get_current_task();
 
-  VFS_File *file = vfs_open(path, flags);
-  if (IS_ERR(file) || !file)
+  char abs[SYS_PATH_MAX];
+  if (!sys_abs_path(path, abs, sizeof(abs)))
+    return path ? -ENAMETOOLONG : -EFAULT;
+
+  VFS_File *file = vfs_open(abs, vfs_open_flags(flags));
+  if (IS_ERR(file))
+    return PTR_ERR(file);
+  if (!file)
     return -ENOENT;
+
+  if ((flags & L_O_DIRECTORY) && !file->node->is_dir) {
+    vfs_close(file);
+    return -ENOTDIR;
+  }
 
   for (int i = 3; i < MAX_FDS; i++) {
     if (!current->fdtable.fds[i].data) {
@@ -40,7 +87,7 @@ long sys_open(const char *path, int flags) {
     }
   }
   vfs_close(file);
-  return -EBADF;
+  return -EMFILE;
 }
 
 /**

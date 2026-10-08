@@ -94,6 +94,35 @@ void task_wake(task_t *task);
  */
 void task_sleep(void);
 
+/**
+ * @brief Begin a wait: mark the current task blocked *before* checking
+ *        the condition it waits for.
+ *
+ * Race-free waiting is prepare -> register for wakeup -> re-check the
+ * condition -> task_wait(). A wakeup landing anywhere after prepare sets
+ * the task ready again, so task_wait() returns instead of sleeping and
+ * the wakeup is not lost. task_cancel_wait() backs out if the re-check
+ * already succeeded.
+ */
+void task_prepare_wait(void);
+
+/** @brief Back out of task_prepare_wait() without sleeping. */
+void task_cancel_wait(void);
+
+/**
+ * @brief Sleep after task_prepare_wait() until woken or the deadline.
+ * @param deadline_ns HPET time (hpet_get_time_ns) to wake at; 0 = none
+ */
+void task_wait(uint64_t deadline_ns);
+
+/**
+ * @brief Reschedule from a non-timer interrupt (need_resched path).
+ *
+ * Saves the interrupted task's registers first; schedule() alone would
+ * switch away from it with a stale saved context.
+ */
+void schedule_irq(registers_t *regs);
+
 /* -- Task creation ------------------------------------------------------ */
 
 /**

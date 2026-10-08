@@ -54,9 +54,28 @@ typedef struct VFS_FS {
 
   int (*close)(VFS_File *file);
   Directory (*readdir)(struct VFS_FS *fs, const char *path);
+
+  /* Optional; NULL = not supported. Appended at the end so the offsets
+   * above stay stable (the Rust procfs mirrors this struct). */
+  int (*truncate)(VFS_File *file, uint32_t size);
+  bool (*rename)(struct VFS_FS *fs, const char *from, const char *to);
 } VFS_FS;
 
+/* fs/procfs/src/kernel.rs mirrors these layouts (and asserts the same
+ * sizes on its side). A change here must be made there too. */
+_Static_assert(sizeof(VFS_Node) == 288, "update fs/procfs/src/kernel.rs");
+_Static_assert(sizeof(VFS_File) == 24, "update fs/procfs/src/kernel.rs");
+_Static_assert(sizeof(VFS_FS) == 120, "update fs/procfs/src/kernel.rs");
+
 /** @brief Mount a filesystem partition at the given mountpoint. */
+/**
+ * @brief Mount an already set-up filesystem instance.
+ *
+ * For filesystems that live outside vfs.c (e.g. loadable modules): the
+ * caller fills @p fs's operations and keeps it alive while mounted.
+ */
+bool vfs_mount_fs(const char *mountpoint, VFS_FS *fs);
+
 bool vfs_mount(const char *mountpoint, gpt_partition_t *partition,
                FileSystemType type);
 
@@ -74,6 +93,15 @@ bool vfs_mkdir(const char *path);
 
 /** @brief Unlink (delete) a file or directory. */
 bool vfs_unlink(const char *path);
+
+/** @brief Resize an open file. @return 0 or negative errno */
+int vfs_truncate(VFS_File *file, uint32_t size);
+
+/**
+ * @brief Rename within one filesystem.
+ * @return 0, -EXDEV across mounts, -EROFS if unsupported, -ENOENT
+ */
+int vfs_rename(const char *from, const char *to);
 
 /** @brief Read a directory listing. */
 Directory vfs_readdir(const char *path);

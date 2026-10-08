@@ -95,6 +95,7 @@ typedef struct {
   uint64_t time_slice_max;
   uint64_t total_runtime;
   uint64_t last_scheduled;
+  uint64_t wake_at_ns; /* blocked with a timeout: wake at this HPET time */
   uint8_t cpu;
 } task_sched_t;
 

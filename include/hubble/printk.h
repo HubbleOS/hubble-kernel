@@ -68,6 +68,15 @@ void printk_unregister_console(void);
 void printk(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 /**
+ * @brief Write bytes to the console exactly as given.
+ *
+ * For program output (stdout/stderr): no formatting, no level labels,
+ * not recorded in the kernel log. Serialised with printk so the two
+ * never interleave mid-character.
+ */
+void printk_console_write(const char *buf, size_t len);
+
+/**
  * @brief va_list variant of printk.
  */
 void vprintk(const char *fmt, va_list args);

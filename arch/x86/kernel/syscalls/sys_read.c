@@ -31,10 +31,10 @@ long sys_read(int fd, char *buffer, size_t len) {
 
   task_t *current = get_current_task();
   fd_entry_t *fd_entry = task_get_fd(current, fd);
+  if (!fd_entry || !fd_entry->data)
+    return -EBADF;
 
   VFS_File *file = fd_entry->data;
-  if (!file)
-    return -EBADFD;
 
   size_t read_count = vfs_read(file, buffer, len);
   return (long)read_count;

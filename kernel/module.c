@@ -34,10 +34,15 @@
 /* -- Extern declarations for symbols exported to modules ------------------- */
 
 extern void early_putchar(void);
+extern void console_clear(void);
+extern void console_get_size(void);
 extern void hpet_delay_ms(void);
 extern void waitqueue_init(void);
+extern void hpet_get_time_ns(void);
+extern void smp_get_cpu_count(void);
 extern void waitqueue_sleep(void);
 extern void waitqueue_wake_all(void);
+extern void waitqueue_wait_event(void);
 
 /* Limine request blocks live in the kernel image; modules reach them
  * through higher_half.h inline helpers (virt_to_phys, ...). */
@@ -105,7 +110,11 @@ static const module_export_t g_exports[] = {
     {"pci_write_config", (uint64_t)(uintptr_t)pci_write_config},
     {"pci_set_command", (uint64_t)(uintptr_t)pci_set_command},
     {"dev_vfs_register", (uint64_t)(uintptr_t)dev_vfs_register},
+    {"dev_vfs_set_char_ops", (uint64_t)(uintptr_t)dev_vfs_set_char_ops},
     {"early_putchar", (uint64_t)(uintptr_t)early_putchar},
+    {"console_clear", (uint64_t)(uintptr_t)console_clear},
+    {"console_get_size", (uint64_t)(uintptr_t)console_get_size},
+    {"printk_console_write", (uint64_t)(uintptr_t)printk_console_write},
     {"hpet_delay_ms", (uint64_t)(uintptr_t)hpet_delay_ms},
     {"waitqueue_init", (uint64_t)(uintptr_t)waitqueue_init},
     {"waitqueue_sleep", (uint64_t)(uintptr_t)waitqueue_sleep},
@@ -114,6 +123,11 @@ static const module_export_t g_exports[] = {
     {"isalpha", (uint64_t)(uintptr_t)isalpha},
     {"tolower", (uint64_t)(uintptr_t)tolower},
     {"toupper", (uint64_t)(uintptr_t)toupper},
+    {"waitqueue_wait_event", (uint64_t)(uintptr_t)waitqueue_wait_event},
+    {"vfs_mount_fs", (uint64_t)(uintptr_t)vfs_mount_fs},
+    {"pmm_get_stats", (uint64_t)(uintptr_t)pmm_get_stats},
+    {"hpet_get_time_ns", (uint64_t)(uintptr_t)hpet_get_time_ns},
+    {"smp_get_cpu_count", (uint64_t)(uintptr_t)smp_get_cpu_count},
     {"limine_hhdm_req", (uint64_t)(uintptr_t)&limine_hhdm_req},
     {"limine_exec_addr_req", (uint64_t)(uintptr_t)&limine_exec_addr_req},
 };
@@ -293,14 +307,17 @@ static uint64_t module_resolve_symbol(const Elf64_Sym *sym,
  *
  * Supports the x86-64 relocation types used by GCC-generated .ko files:
  * R_X86_64_64, R_X86_64_PC32, R_X86_64_PLT32, R_X86_64_32, R_X86_64_32S,
- * R_X86_64_16, R_X86_64_8.
+ * R_X86_64_16, R_X86_64_8, plus the GOT-relative forms (GOTPCREL,
+ * GOTPCRELX, REX_GOTPCRELX) that position-independent code emits - e.g.
+ * Rust's precompiled core. Those go through @p got_base: one 8-byte slot
+ * per symbol-table index holding the symbol's address.
  */
 static int module_apply_relocation(uint64_t target_base, size_t target_size,
                                    const Elf64_Rela *rela,
                                    const Elf64_Sym *syms, size_t sym_count,
                                    const char *strtab, size_t strtab_size,
                                    const module_section_t *sections,
-                                   size_t section_count) {
+                                   size_t section_count, uint64_t got_base) {
   uint32_t type = ELF64_R_TYPE(rela->r_info);
   uint32_t sym_index = ELF64_R_SYM(rela->r_info);
   size_t patch_size;
@@ -341,6 +358,9 @@ static int module_apply_relocation(uint64_t target_base, size_t target_size,
   case R_X86_64_PLT32:
   case R_X86_64_32:
   case R_X86_64_32S:
+  case R_X86_64_GOTPCREL:
+  case R_X86_64_GOTPCRELX:
+  case R_X86_64_REX_GOTPCRELX:
     patch_size = 4;
     break;
   case R_X86_64_16:
@@ -381,6 +401,22 @@ static int module_apply_relocation(uint64_t target_base, size_t target_size,
   case R_X86_64_PLT32: {
     int64_t reloc =
         (int64_t)symbol + rela->r_addend - (int64_t)(uintptr_t)where;
+    int32_t out = (int32_t)reloc;
+    memcpy(where, &out, sizeof(out));
+    return 0;
+  }
+
+  case R_X86_64_GOTPCREL:
+  case R_X86_64_GOTPCRELX:
+  case R_X86_64_REX_GOTPCRELX: {
+    /* G + GOT + A - P: the field addresses the symbol's GOT slot. */
+    if (!got_base)
+      return -ENOEXEC;
+    uint64_t slot = got_base + (uint64_t)sym_index * sizeof(uint64_t);
+    *(uint64_t *)(uintptr_t)slot = symbol;
+    int64_t reloc = (int64_t)slot + rela->r_addend - (int64_t)location;
+    if (reloc != (int32_t)reloc)
+      return -ENOEXEC;
     int32_t out = (int32_t)reloc;
     memcpy(where, &out, sizeof(out));
     return 0;
@@ -662,6 +698,36 @@ int module_load_buffer(const void *image, size_t image_size) {
     return -ENOEXEC;
   }
 
+  /* -- GOT for position-independent relocations ---------------------- */
+
+  /* Allocated right after the sections, so the module's address range
+   * (and unload) covers it. Only modules that need it get one. */
+  uint64_t got_base = 0;
+  size_t got_size = 0;
+  for (size_t i = 0; i < section_count && !got_base; i++) {
+    const Elf64_Shdr *shdr = &shdrs[i];
+    if (shdr->sh_type != SHT_RELA || shdr->sh_entsize != sizeof(Elf64_Rela) ||
+        shdr->sh_offset + shdr->sh_size > image_size)
+      continue;
+    const Elf64_Rela *relas =
+        (const Elf64_Rela *)((uint8_t *)image + shdr->sh_offset);
+    for (size_t j = 0; j < shdr->sh_size / sizeof(Elf64_Rela); j++) {
+      uint32_t type = ELF64_R_TYPE(relas[j].r_info);
+      if (type == R_X86_64_GOTPCREL || type == R_X86_64_GOTPCRELX ||
+          type == R_X86_64_REX_GOTPCRELX) {
+        got_size = sym_count * sizeof(uint64_t);
+        got_base = module_map_region(got_size, SHF_ALLOC | SHF_WRITE,
+                                     sizeof(uint64_t));
+        if (!got_base) {
+          kfree(sections);
+          return -ENOMEM;
+        }
+        memset((void *)(uintptr_t)got_base, 0, got_size);
+        break;
+      }
+    }
+  }
+
   /* -- Pass 2: apply relocations ------------------------------------- */
 
   for (size_t i = 0; i < section_count; i++) {
@@ -686,7 +752,7 @@ int module_load_buffer(const void *image, size_t image_size) {
     for (size_t j = 0; j < rela_count; j++) {
       int ret = module_apply_relocation(
           target_base, sections[shdr->sh_info].size, &relas[j], symtab,
-          sym_count, strtab, strtab_size, sections, section_count);
+          sym_count, strtab, strtab_size, sections, section_count, got_base);
       if (ret < 0) {
         kfree(sections);
         return ret;
@@ -754,6 +820,13 @@ int module_load_buffer(const void *image, size_t image_size) {
       if (end > mod_size)
         mod_size = end - mod_base;
     }
+  }
+
+  if (got_base) {
+    if (mod_base == 0 || got_base < mod_base)
+      mod_base = got_base;
+    if (got_base + got_size > mod_base + mod_size)
+      mod_size = got_base + got_size - mod_base;
   }
 
   /* -- Register module (exports become visible) ----------------------- */

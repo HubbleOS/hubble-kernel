@@ -250,3 +250,10 @@ void pmm_init(void) {
   g_pmm_info.used_memory = 0;
   g_last_search_index = 0;
 }
+
+void pmm_get_stats(uint64_t *total_bytes, uint64_t *used_bytes) {
+  if (total_bytes)
+    *total_bytes = g_pmm_info.total_pages * PAGE_SIZE;
+  if (used_bytes)
+    *used_bytes = g_pmm_info.used_pages * PAGE_SIZE;
+}

@@ -85,3 +85,10 @@ void pmm_inc_refcount(uint64_t phys_addr);
  * @return Current reference count
  */
 uint32_t pmm_get_refcount(uint64_t phys_addr);
+
+/**
+ * @brief Report physical memory totals in bytes (for procfs and the like)
+ * @param total_bytes Usable physical memory managed by the PMM
+ * @param used_bytes  Currently allocated physical memory
+ */
+void pmm_get_stats(uint64_t *total_bytes, uint64_t *used_bytes);

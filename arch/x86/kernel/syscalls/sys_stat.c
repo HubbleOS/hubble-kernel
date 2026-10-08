@@ -56,8 +56,14 @@ static void fill_stat_file(struct stat *st, VFS_File *f) {
 }
 
 long sys_stat(const char *path, struct stat *st) {
-  VFS_File *f = vfs_open(path, VFS_O_RDONLY);
-  if (IS_ERR(f) || !f)
+  char abs[SYS_PATH_MAX];
+  if (!sys_abs_path(path, abs, sizeof(abs)))
+    return path ? -ENAMETOOLONG : -EFAULT;
+
+  VFS_File *f = vfs_open(abs, VFS_O_RDONLY);
+  if (IS_ERR(f))
+    return PTR_ERR(f);
+  if (!f)
     return -ENOENT;
 
   fill_stat_file(st, f);
