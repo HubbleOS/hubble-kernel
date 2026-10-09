@@ -7,12 +7,14 @@
 #include <stddef.h>
 
 #include <fs/vfs/dev.h>
+#include <fs/vfs/file.h>
 #include <fs/vfs/vfs.h>
 #include <fs/vfs/vfs_standart_struct.h>
 #include <mm/kmalloc.h>
 #include <mm/map/vm_map.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
+#include <smp/fdtable.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
 
@@ -31,39 +33,6 @@
 #define PF_X 0x1
 #define PF_W 0x2
 #define PF_R 0x4
-
-/**
- * @brief Look up a file descriptor entry by number.
- *
- * @param task Task whose FD table to search.
- * @param fd   File descriptor number.
- *
- * @return Pointer to the fd_entry_t on success, or NULL if @p fd is
- *         out of range.
- */
-fd_entry_t *task_get_fd(task_t *task, int fd) {
-  if (fd < 0 || fd >= MAX_FDS)
-    return NULL;
-  return &task->fdtable.fds[fd];
-}
-
-/**
- * @brief Find a free file descriptor entry.
- *
- * Scans the task's FD table starting from fd 2 and returns the first
- * unused entry.
- *
- * @param task Task whose FD table to search.
- *
- * @return Pointer to a free fd_entry_t, or NULL if none is available.
- */
-fd_entry_t *task_get_free_fd(task_t *task) {
-  for (int i = 2; i < MAX_FDS; i++) {
-    if (!task->fdtable.fds[i].data)
-      return &task->fdtable.fds[i];
-  }
-  return NULL;
-}
 
 /**
  * @brief Map files or devices into memory.
@@ -145,10 +114,12 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
   if (fd < 0)
     return -1;
 
-  fd_entry_t *fd_entry = task_get_fd(current, fd);
-  VFS_File *file = fd_entry->data;
+  file_t *open_file = fd_file(current, fd);
+  if (!open_file)
+    return -EBADF;
+  VFS_File *file = open_file->vfs;
   if (!file)
-    return -1;
+    return -ENODEV; /* a pipe */
   VFS_device_reg *dev = (VFS_device_reg *)(file->node->fs_node);
 
   if (!dev) {

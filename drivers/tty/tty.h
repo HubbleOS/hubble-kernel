@@ -16,6 +16,8 @@
  */
 typedef struct {
   void (*putchar)(char c);
+  /* A whole buffer at once (one lock round for the console). Optional. */
+  void (*write)(const char *buf, size_t len);
   void (*clear)(void);
   /* Text grid size, for TIOCGWINSZ. Optional (80x25 if NULL). */
   void (*get_size)(uint16_t *cols, uint16_t *rows);

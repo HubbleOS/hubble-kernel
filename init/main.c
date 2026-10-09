@@ -21,6 +21,7 @@
 #include <acpi/acpi.h>
 #include <apic/apic.h>
 #include <hpet/hpet.h>
+#include <smp/fdtable.h>
 #include <smp/scheduler.h>
 #include <smp/smp.h>
 #include <smp/spinlock.h>
@@ -312,8 +313,11 @@ void kmain_thread(void) {
   char *envp[] = {"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "HOME=/", "TERM=linux",
                   NULL};
   task_t *task1 = execv("/busybox", argv, envp);
-  if (task1 != NULL)
+  if (task1 != NULL) {
+    if (fd_open_console(task1) < 0)
+      printk(KERN_ERR "init: cannot open /dev/tty0 for the shell\n");
     scheduler_add_task(task1);
+  }
 
   printk(KERN_INFO "kmain thread done\n");
 

@@ -23,6 +23,7 @@
 #include <smp/smp.h>
 #include <syscalls/syscall_entry.h>
 
+#include "fdtable.h"
 #include "io.h"
 #include "scheduler.h"
 #include "task.h"
@@ -365,6 +366,10 @@ void task_exit(int exit_code) {
   /* Captured now, used after free_context() below - see the comment
    * further down at the matching swapgs. */
   bool was_in_syscall = task->exec.in_syscall;
+
+  /* Before the parent hears about it: a pipe's reader must see EOF once
+   * the writer is gone. */
+  fd_close_all(task);
 
   task->linkage.exit_code = exit_code;
   task->linkage.state = TASK_DEAD;

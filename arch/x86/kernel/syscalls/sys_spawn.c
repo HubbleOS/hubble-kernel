@@ -8,6 +8,7 @@
 #include <hubble/errno.h>
 #include <hubble/syscalls.h>
 
+#include <smp/fdtable.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
 #include <user/exec.h>
@@ -37,6 +38,7 @@ long sys_spawn(void *entry_point, void *arg, uint32_t priority) {
     return -EPERM;
 
   task_map_user_stack(task, (uint64_t *)get_cr3());
+  fd_copy_table(task, get_current_task());
 
   scheduler_add_task(task);
   return (long)task->id.pid;
@@ -58,6 +60,9 @@ long sys_spawn_file(const char *path, void *arg, uint32_t priority) {
   (void)arg;
 
   task_t *task = exec(path);
+  if (!task)
+    return -ENOEXEC;
+  fd_copy_table(task, get_current_task());
   task->sched.priority = priority;
   task->sched.time_slice_max = 5 + priority;
   task->sched.time_slice = task->sched.time_slice_max;

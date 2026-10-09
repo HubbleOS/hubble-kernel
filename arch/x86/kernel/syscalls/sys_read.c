@@ -1,5 +1,8 @@
 #include <hubble/syscalls.h>
 
+#include <fs/vfs/file.h>
+#include <smp/fdtable.h>
+
 #include "syscall_entry.h"
 
 /**
@@ -12,30 +15,17 @@
  * @param buffer  Destination buffer for the read data.
  * @param len     Maximum number of bytes to read.
  *
- * @return Number of bytes read on success, or -1 on error.
+ * @return Number of bytes read (0 at end of file), or negative errno.
  */
 long sys_read(int fd, char *buffer, size_t len) {
-  if (fd < 0 || fd >= MAX_FDS || !buffer || len == 0) {
-    return -EINVAL;
-  }
-
-  if (fd == 0) {
-    VFS_File *stdin = vfs_open("/dev/tty0", 0);
-    if (IS_ERR(stdin) || !stdin)
-      return -EIO;
-
-    size_t read_count = vfs_read(stdin, buffer, len);
-    vfs_close(stdin);
-    return (long)read_count;
-  }
-
-  task_t *current = get_current_task();
-  fd_entry_t *fd_entry = task_get_fd(current, fd);
-  if (!fd_entry || !fd_entry->data)
+  file_t *file = fd_file(get_current_task(), fd);
+  if (!file)
     return -EBADF;
-
-  VFS_File *file = fd_entry->data;
-
-  size_t read_count = vfs_read(file, buffer, len);
-  return (long)read_count;
+  if (!file->ops->read)
+    return -EBADF; /* e.g. a pipe's write end */
+  if (len == 0)
+    return 0;
+  if (!buffer)
+    return -EFAULT;
+  return file->ops->read(file, buffer, len);
 }

@@ -8,7 +8,9 @@
 #include <hubble/errno.h>
 #include <hubble/syscalls.h>
 
+#include <fs/vfs/file.h>
 #include <fs/vfs/vfs.h>
+#include <smp/fdtable.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
 
@@ -22,7 +24,9 @@
 #define L_O_EXCL 0x80
 #define L_O_TRUNC 0x200
 #define L_O_APPEND 0x400
+#define L_O_NONBLOCK 0x800
 #define L_O_DIRECTORY 0x10000
+#define L_O_CLOEXEC 0x80000
 
 /* Linux open flags -> VFS_O_* (the two number their flags differently;
  * passing Linux values through made O_CREAT read as VFS_O_TRUNC). */
@@ -78,33 +82,27 @@ long sys_open(const char *path, int flags, int mode) {
     return -ENOTDIR;
   }
 
-  for (int i = 3; i < MAX_FDS; i++) {
-    if (!current->fdtable.fds[i].data) {
-      current->fdtable.fds[i].data = file;
-      current->fdtable.fds[i].flags = flags;
-      current->fdtable.fds[i].type = FD_FILE;
-      return i;
-    }
+  file_t *f =
+      file_from_vfs(file, flags & (L_O_ACCMODE | L_O_APPEND | L_O_NONBLOCK));
+  if (!f) {
+    vfs_close(file);
+    return -ENOMEM;
   }
-  vfs_close(file);
-  return -EMFILE;
+
+  int fd = fd_install(current, f, 0, (flags & L_O_CLOEXEC) ? FD_CLOEXEC : 0);
+  if (fd < 0)
+    file_put(f);
+  return fd;
 }
 
 /**
  * @brief Close a file descriptor.
  *
- * Closes the file associated with the given file descriptor @p fd and
- * frees the descriptor slot in the current task's FD table.
+ * Frees the descriptor slot; the open file itself closes once no other
+ * descriptor (dup()ed, or inherited across fork()) refers to it.
  *
  * @param fd File descriptor to close.
  *
- * @return 0 on success, or -1 on error.
+ * @return 0 on success, or -EBADF.
  */
-long sys_close(int fd) {
-  task_t *current = get_current_task();
-  if (fd < 0 || fd >= MAX_FDS || !current->fdtable.fds[fd].data)
-    return -EBADF;
-  vfs_close(current->fdtable.fds[fd].data);
-  current->fdtable.fds[fd].data = NULL;
-  return 0;
-}
+long sys_close(int fd) { return fd_close(get_current_task(), fd); }

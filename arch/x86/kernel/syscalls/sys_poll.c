@@ -7,6 +7,8 @@
 #include <hubble/syscalls.h>
 
 #include <fs/vfs/dev.h>
+#include <fs/vfs/file.h>
+#include <smp/fdtable.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
 #include <smp/waitqueue.h>
@@ -35,20 +37,13 @@ typedef struct {
   long ready;
 } poll_ctx_t;
 
-/* What an fd can do right now. Character devices answer through their
- * readable() hook; everything else (regular files, pipes - which have
- * no readiness hook yet) is reported ready, as files are on Linux. */
+/* What an fd can do right now (the open file decides; files without a
+ * poll hook are always ready, as on Linux). */
 static short fd_ready_events(int fd) {
-  if (fd > 2) {
-    fd_entry_t *entry = task_get_fd(get_current_task(), fd);
-    if (!entry || !entry->data)
-      return POLLNVAL;
-  }
-
-  VFS_device_reg *dev = fd_get_device(fd);
-  if (dev && dev->readable)
-    return POLLOUT | (dev->readable() ? POLLIN : 0);
-  return POLLIN | POLLOUT;
+  file_t *file = fd_file(get_current_task(), fd);
+  if (!file)
+    return POLLNVAL;
+  return file->ops->poll ? file->ops->poll(file) : POLLIN | POLLOUT;
 }
 
 /* Fill revents for every fd; true if any has something to report. */
@@ -68,14 +63,15 @@ static bool poll_scan(void *arg) {
   return ctx->ready > 0;
 }
 
-/* The one wait queue a poll can sleep on: the first watched device's. */
+/* The one wait queue a poll can sleep on: the first watched file's
+ * (a tty's input queue, a pipe). */
 static wait_queue_t *poll_wait_queue(poll_ctx_t *ctx) {
   for (unsigned long i = 0; i < ctx->nfds; i++) {
-    if (ctx->fds[i].fd < 0 || !(ctx->fds[i].events & POLLIN))
+    if (ctx->fds[i].fd < 0 || !(ctx->fds[i].events & (POLLIN | POLLOUT)))
       continue;
-    VFS_device_reg *dev = fd_get_device(ctx->fds[i].fd);
-    if (dev && dev->read_wq)
-      return (wait_queue_t *)dev->read_wq;
+    file_t *file = fd_file(get_current_task(), ctx->fds[i].fd);
+    if (file && file->ops->wait_queue && file->ops->wait_queue(file))
+      return (wait_queue_t *)file->ops->wait_queue(file);
   }
   return NULL;
 }

@@ -6,7 +6,9 @@
 #include <hubble/string.h>
 #include <hubble/syscalls.h>
 
+#include <fs/vfs/file.h>
 #include <fs/vfs/vfs.h>
+#include <smp/fdtable.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
 
@@ -34,11 +36,13 @@ struct linux_dirent64 {
  * @return Bytes written, 0 at end of directory, or negative errno.
  */
 long sys_getdents64(int fd, void *dirp, size_t count) {
-  fd_entry_t *entry = task_get_fd(get_current_task(), fd);
-  if (!entry || !entry->data || entry->type != FD_FILE)
+  file_t *open_file = fd_file(get_current_task(), fd);
+  if (!open_file)
     return -EBADF;
+  if (!open_file->vfs)
+    return -ENOTDIR;
 
-  VFS_File *file = entry->data;
+  VFS_File *file = open_file->vfs;
   if (!file->node->is_dir)
     return -ENOTDIR;
 

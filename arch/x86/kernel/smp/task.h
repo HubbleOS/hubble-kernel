@@ -47,22 +47,19 @@ typedef enum {
   SIG_IGNORED
 } signals_t;
 
-/* -- File descriptor type enumeration ---------------------------------- */
-
-/**
- * @brief File descriptor types
- */
-typedef enum { FD_PIPE_READ, FD_PIPE_WRITE, FD_FILE, FD_DEV, FD_MAX } fd_type_t;
-
 /* -- File descriptor entry --------------------------------------------- */
 
+struct file;
+
+#define FD_CLOEXEC 1
+
 /**
- * @brief A single file descriptor entry
+ * @brief A file descriptor: a slot pointing at a shared open file
+ *        (fs/vfs/file.h); managed through smp/fdtable.h
  */
 typedef struct {
-  void *data;
-  int type;
-  int flags;
+  struct file *file; /**< NULL: the slot is free */
+  int fd_flags;      /**< FD_CLOEXEC */
 } fd_entry_t;
 
 /* -- CPU context ------------------------------------------------------- */

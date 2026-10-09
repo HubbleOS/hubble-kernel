@@ -25,6 +25,7 @@ static void tty0_putchar(char c) { printk_console_write(&c, 1); }
 
 static const tty_console_ops_t tty0_console_ops = {
     .putchar = tty0_putchar,
+    .write = printk_console_write,
     .clear = console_clear,
     .get_size = console_get_size,
     .set_output = console_set_output,

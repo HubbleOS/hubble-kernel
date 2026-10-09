@@ -1,3 +1,4 @@
+#include <fs/vfs/file.h>
 #include <fs/vfs/vfs.h>
 #include <hubble/errno.h>
 #include <hubble/string.h>
@@ -5,6 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <smp/fdtable.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
 
@@ -35,6 +37,7 @@ struct stat {
 };
 _Static_assert(sizeof(struct stat) == 144, "x86_64 struct stat is 144 bytes");
 
+#define S_IFIFO 0010000
 #define S_IFCHR 0020000
 #define S_IFDIR 0040000
 #define S_IFREG 0100000
@@ -52,7 +55,10 @@ static void fill_stat(struct stat *st, uint32_t type, uint64_t size) {
 }
 
 static void fill_stat_file(struct stat *st, VFS_File *f) {
-  fill_stat(st, f->node->is_dir ? S_IFDIR : S_IFREG, f->node->size);
+  if (f->node->fs && f->node->fs->type == FS_DEV)
+    fill_stat(st, S_IFCHR, 0); /* /dev/tty0, /dev/fb0, ... */
+  else
+    fill_stat(st, f->node->is_dir ? S_IFDIR : S_IFREG, f->node->size);
 }
 
 long sys_stat(const char *path, struct stat *st) {
@@ -78,25 +84,16 @@ long sys_stat(const char *path, struct stat *st) {
  * itself yet, so this describes the target, like stat. Correct for
  * everything except "is this a symlink" (ls -l shows no "->").
  */
-long sys_lstat(const char *path, struct stat *st) {
-  return sys_stat(path, st);
-}
+long sys_lstat(const char *path, struct stat *st) { return sys_stat(path, st); }
 
 long sys_fstat(int fd, struct stat *st) {
-  /* 0-2 are the console, served by sys_read/sys_write directly. */
-  if (fd >= 0 && fd <= 2) {
-    fill_stat(st, S_IFCHR, 0);
-    return 0;
-  }
-
-  fd_entry_t *entry = task_get_fd(get_current_task(), fd);
-  if (!entry || !entry->data)
+  file_t *file = fd_file(get_current_task(), fd);
+  if (!file)
     return -EBADF;
-  if (entry->type != FD_FILE) {
-    fill_stat(st, S_IFCHR, 0);
-    return 0;
-  }
 
-  fill_stat_file(st, entry->data);
+  if (file->vfs)
+    fill_stat_file(st, file->vfs);
+  else
+    fill_stat(st, S_IFIFO, 0); /* a pipe end */
   return 0;
 }

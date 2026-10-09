@@ -307,6 +307,10 @@ size_t tty_write(tty_t *tty, const char *buf, size_t size) {
   if (!tty || !buf || !tty->console || !tty->console->putchar)
     return -1;
 
+  if (tty->console->write) {
+    tty->console->write(buf, size);
+    return size;
+  }
   for (size_t i = 0; i < size; i++)
     tty->console->putchar(buf[i]);
 

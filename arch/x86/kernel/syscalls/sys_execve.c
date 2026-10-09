@@ -5,6 +5,7 @@
 #include <mm/kmalloc.h>
 #include <msr.h>
 
+#include <smp/fdtable.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
 #include <user/exec.h>
@@ -112,6 +113,10 @@ long sys_execve(registers_t *regs) {
   asm volatile("mov %0, %%cr3" ::"r"(current->mm.page_table) : "memory");
   if (current->mm.fs_base)
     wrmsr(0xC0000100, current->mm.fs_base);
+
+  /* The old program is gone: so are the descriptors it marked
+   * close-on-exec. The rest carry over (the shell's redirections). */
+  fd_close_on_exec(current);
 
   uint64_t new_rip = image->exec.context.rip;
   uint64_t new_rsp = image->exec.context.rsp;

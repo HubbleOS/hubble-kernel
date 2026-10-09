@@ -41,7 +41,12 @@
 #define SYS_clock_gettime 228
 #define SYS_openat 257
 #define SYS_getcwd 79
+#define SYS_pipe 22
+#define SYS_dup 32
+#define SYS_dup2 33
 #define SYS_getpid 39
+#define SYS_dup3 292
+#define SYS_pipe2 293
 #define SYS_getppid 110
 #define SYS_gettid 186
 #define SYS_getuid 107

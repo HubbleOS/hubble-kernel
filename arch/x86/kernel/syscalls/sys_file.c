@@ -8,7 +8,9 @@
 #include <hubble/string.h>
 #include <hubble/syscalls.h>
 
+#include <fs/vfs/file.h>
 #include <fs/vfs/vfs.h>
+#include <smp/fdtable.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
 
@@ -70,13 +72,12 @@ long sys_openat(int dirfd, const char *path, int flags, int mode) {
 long sys_ftruncate(int fd, long length) {
   if (length < 0 || length > (long)UINT32_MAX)
     return -EINVAL;
-  fd_entry_t *entry = task_get_fd(get_current_task(), fd);
-  if (!entry || !entry->data || entry->type != FD_FILE)
+  file_t *file = fd_file(get_current_task(), fd);
+  if (!file)
     return -EBADF;
-  VFS_File *file = entry->data;
-  if (!(file->flags & VFS_O_WRONLY))
-    return -EINVAL; /* not open for writing */
-  return vfs_truncate(file, (uint32_t)length);
+  if (!file->vfs || !(file->vfs->flags & VFS_O_WRONLY))
+    return -EINVAL; /* a pipe, or not open for writing */
+  return vfs_truncate(file->vfs, (uint32_t)length);
 }
 
 long sys_truncate(const char *path, long length) {
@@ -133,9 +134,4 @@ long sys_rename(const char *from, const char *to) {
 }
 
 /* Everything is in memory or written through: nothing to flush. */
-long sys_fsync(int fd) {
-  fd_entry_t *entry = task_get_fd(get_current_task(), fd);
-  if (fd > 2 && (!entry || !entry->data))
-    return -EBADF;
-  return 0;
-}
+long sys_fsync(int fd) { return fd_file(get_current_task(), fd) ? 0 : -EBADF; }

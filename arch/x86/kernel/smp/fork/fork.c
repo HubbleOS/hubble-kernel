@@ -20,6 +20,7 @@
 #include <mm/kmalloc.h>
 #include <mm/map/vm_map.h>
 #include <mm/vmm.h>
+#include <smp/fdtable.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
 
@@ -108,10 +109,9 @@ long sys_fork(registers_t *regs) {
     child->mm.fs_base = parent->mm.fs_base;
   }
 
-  /* File descriptors: shared by value (this kernel has no per-fd
-   * refcounting yet, so this is exactly as sound - and as limited - as
-   * the rest of the current fd handling). */
-  child->fdtable = parent->fdtable;
+  /* The child's descriptors refer to the parent's open files (shared
+   * offsets, as after dup()); each holds its own reference. */
+  fd_copy_table(child, parent);
 
   child->linkage.parent = parent;
   child->linkage.sibling = parent->linkage.children;
