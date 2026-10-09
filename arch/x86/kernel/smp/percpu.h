@@ -13,7 +13,9 @@
 
 /* -- Constants ---------------------------------------------------------- */
 
-#define MAX_CPUS 256
+/* Logical CPUs brought up. Every per-CPU array is indexed by the logical id
+ * (this_cpu_id()), never by APIC ID: real hardware leaves gaps in APIC IDs. */
+#define MAX_CPUS 16
 
 /* -- Per-CPU information structure ------------------------------------- */
 
@@ -69,9 +71,9 @@ void percpu_init_bsp(void);
 void percpu_init_ap(uint8_t apic_id);
 
 /**
- * @brief Get current CPU ID (fast path using LAPIC)
- * @return Current CPU's APIC ID
+ * @brief Get the current CPU's logical id (0 .. smp_get_cpu_count() - 1)
+ * @return Index into per-CPU arrays
  */
-static inline uint8_t cpu_id(void) { return lapic_get_id(); }
+uint8_t this_cpu_id(void);
 
 #endif /* PERCPU_H */

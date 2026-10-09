@@ -643,7 +643,7 @@ int module_load_buffer(const void *image, size_t image_size) {
   void (*mod_exit_fn)(void) = NULL;
 
   /* -- Pass 1: collect symtab/strtab, map allocatable sections -------- */
-
+  printk(KERN_DEBUG "[module] loading module, %zu sections\n", section_count);
   for (size_t i = 0; i < section_count; i++) {
     const Elf64_Shdr *shdr = &shdrs[i];
     const char *sec_name = module_section_name(shstrtab, shdr);
@@ -713,7 +713,7 @@ int module_load_buffer(const void *image, size_t image_size) {
   }
 
   /* -- GOT for position-independent relocations ---------------------- */
-
+  printk(KERN_DEBUG "[module] checking for GOT relocations\n");
   /* Allocated right after the sections, so the module's address range
    * (and unload) covers it. Only modules that need it get one. */
   uint64_t got_base = 0;
@@ -742,6 +742,7 @@ int module_load_buffer(const void *image, size_t image_size) {
     }
   }
 
+  printk(KERN_DEBUG "[module] applying relocations\n");
   /* -- Pass 2: apply relocations ------------------------------------- */
 
   for (size_t i = 0; i < section_count; i++) {
@@ -775,7 +776,7 @@ int module_load_buffer(const void *image, size_t image_size) {
   }
 
   /* -- Pass 3: collect exported symbols ------------------------------ */
-
+printk(KERN_DEBUG "[module] collecting exports\n");
   module_sym_export_t mod_exports[MODULE_MAX_EXPORTS];
   int mod_export_count = 0;
 
@@ -812,7 +813,7 @@ int module_load_buffer(const void *image, size_t image_size) {
 
   uint64_t mod_base = 0;
   size_t mod_size = 0;
-
+printk(KERN_DEBUG "[module] determining module base/extent\n");
   for (size_t i = 0; i < section_count; i++) {
     if (!sections[i].base || !sections[i].name)
       continue;
@@ -862,7 +863,7 @@ int module_load_buffer(const void *image, size_t image_size) {
   g_modules_list = mod;
 
   /* -- Pass 4: run initialisation ------------------------------------ */
-
+printk(KERN_DEBUG "[module] running initialisation\n");
   /* Try .module.init section first (modern, placed by module_init()). */
   for (size_t i = 0; i < section_count; i++) {
     if (!sections[i].base || !sections[i].name)
@@ -872,7 +873,7 @@ int module_load_buffer(const void *image, size_t image_size) {
 
     size_t count = sections[i].size / sizeof(initcall_t);
     initcall_t *calls = (initcall_t *)sections[i].base;
-
+    printk(KERN_DEBUG "[module] found .module.init section with %zu calls\n", count);
     for (size_t j = 0; j < count; j++) {
       if (!calls[j])
         continue;
@@ -886,9 +887,10 @@ int module_load_buffer(const void *image, size_t image_size) {
         return ret;
       }
     }
+  
     goto load_done;
   }
-
+printk(KERN_DEBUG "[module] no .module.init section found\n");
   /* Fall back to .initcalls.* sections (legacy kernel style). */
   for (size_t i = 0; i < section_count; i++) {
     if (!sections[i].base || !sections[i].name)
@@ -914,7 +916,7 @@ int module_load_buffer(const void *image, size_t image_size) {
     }
     goto load_done;
   }
-
+printk(KERN_DEBUG "[module] no .initcalls.* sections found\n");
   /* Last resort: look for a symbol called "module_init". */
   for (size_t i = 0; i < sym_count; i++) {
     if (symtab[i].st_name >= strtab_size)
@@ -945,6 +947,7 @@ int module_load_buffer(const void *image, size_t image_size) {
   }
 
 load_done:
+printk(KERN_DEBUG "[module] module loaded successfully\n");
   kfree(sections);
   return 0;
 }
@@ -961,35 +964,35 @@ load_done:
 int module_load(const char *path) {
   if (!path)
     return -EINVAL;
-
+  printk(KERN_INFO "[module] loading %s\n", path);
   VFS_File *file = vfs_open(path, VFS_O_RDONLY);
   if (IS_ERR(file))
     return PTR_ERR(file);
   if (!file)
     return -ENOENT;
-
+  printk(KERN_INFO "[module] opened %s\n", path);
   size_t size = file->node ? file->node->size : 0;
   if (size == 0) {
     vfs_close(file);
     return -ENOEXEC;
   }
-
+  printk(KERN_INFO "[module] reading %zu bytes from %s\n", size, path);
   uint8_t *image = kmalloc(size, GFP_KERNEL);
   if (!image) {
     vfs_close(file);
     return -ENOMEM;
   }
-
+  printk(KERN_INFO "[module] allocated %zu bytes for %s\n", size, path);
   if (vfs_lseek(file, 0, SEEK_SET) < 0 ||
       vfs_read(file, image, size) != (int)size) {
     kfree(image);
     vfs_close(file);
     return -EIO;
   }
-
+  printk(KERN_INFO "[module] read %zu bytes from %s\n", size, path);
   vfs_close(file);
   int ret = module_load_buffer(image, size);
-
+  printk(KERN_INFO "[module] module_load_buffer returned %d for %s\n", ret, path);
   if (ret == 0) {
     const char *filename = strrchr(path, '/');
     if (filename)
@@ -1012,11 +1015,11 @@ int module_load(const char *path) {
       filename++;
     else
       filename = path;
-
+    printk(KERN_ERR "[module] failed to load %s: %d\n", path, ret); 
     if (strncmp(filename, "._", 2) != 0 && filename[0] != '.')
       printk(KERN_ERR "[module] failed to load %s: %d\n", path, ret);
   }
-
+  printk(KERN_INFO "[module] freeing image buffer for %s\n", path);
   kfree(image);
   return ret;
 }

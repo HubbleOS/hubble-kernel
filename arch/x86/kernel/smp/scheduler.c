@@ -356,7 +356,7 @@ void free_context(task_t *task) {
  * @param exit_code Exit status code
  */
 void task_exit(int exit_code) {
-  uint8_t cpu_id = lapic_get_id();
+  uint8_t cpu_id = this_cpu_id();
   task_t *task = get_current_task();
 
   printk(KERN_DEBUG "exited with code: %d\n", exit_code);
@@ -569,7 +569,7 @@ task_t *get_next_task(uint8_t cpu_id) {
  * @return Pointer to current task, or NULL if none
  */
 task_t *get_current_task(void) {
-  uint8_t cpu_id = lapic_get_id();
+  uint8_t cpu_id = this_cpu_id();
   return current_task[cpu_id];
 }
 
@@ -578,7 +578,7 @@ task_t *get_current_task(void) {
  * @param regs Register state at interrupt time
  */
 void schedule(registers_t *regs) {
-  uint8_t cpu_id = lapic_get_id();
+  uint8_t cpu_id = this_cpu_id();
   task_t *old_task = get_current_task();
   task_t *new_task = get_next_task(cpu_id);
 
@@ -667,7 +667,7 @@ void lapic_timer_handler(registers_t *regs) {
 
     if (current->sched.time_slice > 0)
       current->sched.time_slice--;
-    if (current->sched.time_slice > 0 && timed_wake_due(lapic_get_id()))
+    if (current->sched.time_slice > 0 && timed_wake_due(this_cpu_id()))
       current->sched.time_slice = 0;
   }
   // cannary for stack overflow, not very usefull, mostly debuging thing

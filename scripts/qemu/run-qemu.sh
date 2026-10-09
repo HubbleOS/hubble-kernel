@@ -67,6 +67,7 @@ QEMU_CMD=(
     -debugcon file:/tmp/debugcon.log
     -no-reboot
     -no-shutdown
+    -device qemu-xhci,id=xhci -device usb-kbd,bus=xhci.0
 )
 
 if [ "$DEBUG" = true ]; then

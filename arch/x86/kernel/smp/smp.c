@@ -291,6 +291,12 @@ static void start_ap_callback(uint8_t apic_id, uint8_t processor_id,
   if (apic_id == bsp_id)
     return;
 
+  if (num_cpus_online >= MAX_CPUS) {
+    printk(KERN_WARNING "Skipping AP %u: MAX_CPUS (%u) reached\n", apic_id,
+           MAX_CPUS);
+    return;
+  }
+
   if (g_ap_bringup_failed) {
     printk(KERN_ERR
            "Skipping AP %u: an earlier AP timed out, shared trampoline "

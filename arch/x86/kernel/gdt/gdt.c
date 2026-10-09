@@ -12,10 +12,10 @@
 #include <hubble/string.h>
 
 #include <apic/apic.h>
+#include <smp/percpu.h>
 
 /* -- Constants ------------------------------------------------- */
 
-#define GDT_MAX_CPUS 8
 
 /* --- Global Tables -------------------------------------------- */
 
@@ -26,9 +26,9 @@ static struct {
 
 static gdt_ptr_t gdt_ptr;
 
-static tss_t tss[GDT_MAX_CPUS];
-static uint8_t kernel_stacks[GDT_MAX_CPUS][16384] __attribute__((aligned(16)));
-static uint8_t ist_stacks[GDT_MAX_CPUS][IST_STACK_SIZE]
+static tss_t tss[MAX_CPUS];
+static uint8_t kernel_stacks[MAX_CPUS][16384] __attribute__((aligned(16)));
+static uint8_t ist_stacks[MAX_CPUS][IST_STACK_SIZE]
     __attribute__((aligned(16)));
 
 /* -- GDT Helpers (static) -------------------------------------- */
@@ -145,21 +145,8 @@ uint16_t get_gdt_limit(void) { return gdt_ptr.limit; }
  * @param rsp0 Stack pointer value
  */
 void tss_set_rsp0(uint64_t rsp0) {
-  uint8_t cpu_id = lapic_get_id();
+  uint8_t cpu_id = this_cpu_id();
   tss[cpu_id].rsp0 = rsp0;
-}
-
-/**
- * @brief Get the APIC ID via CPUID (works before APIC is initialized)
- *
- * Uses CPUID leaf 1, EBX bits 24-31 to read the initial APIC ID.
- * This is safe to call during early boot when the LAPIC MMIO is
- * not yet mapped.
- */
-static uint8_t early_get_apic_id(void) {
-  uint32_t eax, ebx, ecx, edx;
-  asm volatile("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(1));
-  return (ebx >> 24) & 0xFF;
 }
 
 /**
@@ -172,15 +159,15 @@ static uint8_t early_get_apic_id(void) {
  * with a valid IST1 stack pointer. This must happen BEFORE idt_load()
  * so that the IDT can safely reference IST1 for vector 8.
  *
- * Uses CPUID for the APIC ID since the LAPIC MMIO is not
- * yet available during early boot.
+ * this_cpu_id() is safe this early: without LAPIC MMIO it reads the APIC
+ * ID via CPUID, and an AP registers itself before calling this.
  */
 void tss_init(void) {
-  uint8_t cpu_id = early_get_apic_id();
+  uint8_t cpu_id = this_cpu_id();
 
-  if (cpu_id >= GDT_MAX_CPUS) {
-    printk(KERN_ERR "tss_init: cpu_id %u exceeds GDT_MAX_CPUS %u\n", cpu_id,
-           GDT_MAX_CPUS);
+  if (cpu_id >= MAX_CPUS) {
+    printk(KERN_ERR "tss_init: cpu_id %u exceeds MAX_CPUS %u\n", cpu_id,
+           MAX_CPUS);
     return;
   }
 

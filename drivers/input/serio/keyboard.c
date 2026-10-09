@@ -90,28 +90,18 @@ void keyboard_irq(registers_t *r) {
 
 /* -- Hardware helpers ------------------------------------- */
 
-static void keyboard_write(uint8_t cmd) {
-  ps2_wait_input();
-  outb(PS2_DATA, cmd);
-}
-
-static uint8_t keyboard_read(void) {
-  ps2_wait_output();
-  return inb(PS2_DATA);
-}
-
 static void keyboard_init_hw(void) {
   __asm__ volatile("cli");
 
-  uint8_t act;
-  keyboard_write(0xF0);
-  act = keyboard_read();
+  int act;
+  ps2_send(PS2_DATA, 0xF0);
+  act = ps2_recv(50);
   printk(KERN_INFO "Keyboard active: %02x\n", act);
 
   /* Set 2: the only set every keyboard supports. The controller
    * translates it to set 1, which process_scancode_once() decodes. */
-  keyboard_write(0x02);
-  act = keyboard_read();
+  ps2_send(PS2_DATA, 0x02);
+  act = ps2_recv(50);
   printk(KERN_INFO "Keyboard active: %02x\n", act);
 
   __asm__ volatile("sti");
@@ -121,7 +111,8 @@ static void keyboard_init_hw(void) {
 /* -- Initcall --------------------------------------------- */
 
 static int keyboard_initcall(void) {
-  ps2_init();
+  if (!ps2_init())
+    return 0;
   keyboard_init_hw();
 
   input_set_bit(EV_KEY, kbd_input_dev.evbit);

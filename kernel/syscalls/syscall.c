@@ -92,5 +92,7 @@ uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
     printk(KERN_ERR "[SYSCALL] Invalid syscall: %d\n", num);
     return -ENOSYS;
   }
+  // printk(KERN_DEBUG "[SYSCALL] %d called with args: %llu, %llu, %llu, %llu, %llu, %llu\n",
+  //        num, a1, a2, a3, a4, a5, a6);
   return syscall_table[num](a1, a2, a3, a4, a5, a6);
 }

@@ -4,7 +4,6 @@
  *        core events
  */
 #include "ps2.h"
-#include <hpet/hpet.h>
 #include <hubble/input.h>
 #include <hubble/module.h>
 #include <hubble/printk.h>
@@ -12,10 +11,6 @@
 #include <io.h>
 #include <stdbool.h>
 #include <stdint.h>
-
-#define PS2_STATUS_OUTPUT_FULL 0x01
-#define PS2_STATUS_INPUT_FULL 0x02
-#define PS2_STATUS_AUX_DATA 0x20
 
 #define MOUSE_ACK 0xFA
 #define MOUSE_CMD_RESET 0xFF
@@ -83,29 +78,6 @@ static void mouse_irq(registers_t *regs) {
 
 /* -- Hardware helpers ------------------------------------- */
 
-/* Bounded waits: a machine without a PS/2 aux port must not hang here. */
-static bool ps2_wait_status(uint8_t mask, uint8_t want, uint64_t timeout_ms) {
-  uint64_t deadline = hpet_get_time_ns() + timeout_ms * 1000000ULL;
-  while ((inb(PS2_STATUS) & mask) != want)
-    if (hpet_get_time_ns() > deadline)
-      return false;
-  return true;
-}
-
-static bool ps2_send(uint8_t port, uint8_t byte) {
-  if (!ps2_wait_status(PS2_STATUS_INPUT_FULL, 0, 50))
-    return false;
-  outb(port, byte);
-  return true;
-}
-
-static int ps2_recv(uint64_t timeout_ms) {
-  if (!ps2_wait_status(PS2_STATUS_OUTPUT_FULL, PS2_STATUS_OUTPUT_FULL,
-                       timeout_ms))
-    return -1;
-  return inb(PS2_DATA);
-}
-
 /** Send a command to the mouse and wait for its ACK. */
 static bool mouse_command(uint8_t cmd) {
   return ps2_send(PS2_COMMAND, 0xD4) && ps2_send(PS2_DATA, cmd) &&
@@ -138,7 +110,8 @@ static bool mouse_init_hw(void) {
 /* -- Initcall --------------------------------------------- */
 
 static int mouse_initcall(void) {
-  ps2_init();
+  if (!ps2_init())
+    return 0;
 
   /* The keyboard IRQ must not swallow the mouse's replies. */
   __asm__ volatile("cli");

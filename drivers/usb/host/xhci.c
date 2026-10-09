@@ -67,6 +67,7 @@ struct xhci_dev {
 };
 
 struct xhci_hc {
+  uint64_t bar;
   volatile uint8_t *cap, *op, *rt, *db;
   uint32_t max_slots;
   uint32_t max_ports;
@@ -703,6 +704,10 @@ static void xhci_bios_handoff(struct xhci_hc *hc) {
   uint32_t off = HCC1_XECP(rd32(hc->cap, XHCI_HCCPARAMS1)) * 4;
 
   while (off) {
+    /* Extended capabilities can sit far past the registers mapped at
+     * probe (0x8000+ on real controllers): map each one before use. */
+    if (xhci_map_mmio(hc->bar + off, 8) < 0)
+      return;
     uint32_t cap = rd32(hc->cap, off);
 
     if (XECP_ID(cap) == XECP_ID_LEGACY) {
@@ -815,6 +820,7 @@ static int xhci_probe(struct pci_device *pci) {
   if (!hc)
     return -1;
 
+  hc->bar = bar;
   hc->cap = (volatile uint8_t *)phys_to_virt(bar);
   uint32_t caplen = rd32(hc->cap, XHCI_CAPLENGTH) & 0xFF;
   uint32_t hcs1 = rd32(hc->cap, XHCI_HCSPARAMS1);

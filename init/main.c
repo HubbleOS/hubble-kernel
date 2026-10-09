@@ -254,6 +254,7 @@ void kmain_thread(void) {
     while (1)
       hlt();
   }
+  printk(KERN_INFO "opened pipe /pipe/term\n");
 
   VFS_File *tty_out = vfs_open("/pipe/tty0_out", VFS_O_RDWR | VFS_O_CREAT);
   if (IS_ERR(tty_out) || tty_out == NULL) {
@@ -262,52 +263,18 @@ void kmain_thread(void) {
     while (1)
       hlt();
   }
-  // Directory check = vfs_readdir("/ext2/busy/");
-  // for (int i = 0; i < check.count; i++) {
-  //   printk("%s\n", check.entries[i].name);
-  // }
-
-  //   char *argv[] = {NULL};
-  //   task_t *task1 = execv("/init", argv, NULL);
-
-  // // task_t *task1 = exec("/init");
-  // //   task_t *task1 = exec("/usr/user.elf");
-  //   if (task1 != NULL)
-  //     scheduler_add_task(task1);
-  //   VFS_File *ext2_file = vfs_open("/ext2/test", VFS_O_RDWR);
-
-  //   if (IS_ERR(ext2_file) || ext2_file == NULL) {
-  //     printk(KERN_ERR "failed to open file /ext2/busy/busybox: %d\n",
-  //            IS_ERR(ext2_file) ? PTR_ERR(ext2_file) : -1);
-  //     while (1)
-  //       hlt();
-  //   }
-  //   char buf[1024];
-  //   vfs_read(ext2_file, buf, 1024);
-  //   for (int i = 0; i < 1024; i++) {
-  //     printk("%c", buf[i]);
-  //   }
-
-  //   vfs_lseek(ext2_file, 0, SEEK_SET);
-
-  //   vfs_write(ext2_file, "miku teto miku", 14);
-
-  //   vfs_lseek(ext2_file, 0, SEEK_SET);
-
-  //   vfs_read(ext2_file, buf, 1024);
-  //   for (int i = 0; i < 1024; i++) {
-  //     printk("%c", buf[i]);
-  //   }
-
-  // vfs_close(ext2_file);
+  // printk(KERN_INFO "opened pipe /pipe/tty0_out\n");
   module_load("/modules/input.ko");
+  // printk(KERN_INFO "loaded input.ko\n");
   module_load("/modules/tty.ko");
+  // printk(KERN_INFO "loaded tty.ko\n");
   module_load("/modules/usb.ko"); /* after input.ko: registers keyboards */
-  module_load("/modules/procfs.ko");
+  // printk(KERN_INFO "loaded usb.ko\n");
+  // module_load("/modules/procfs.ko");
 
   /* Boot is done: from here on the screen belongs to the shell. The full
    * log stays in /proc/kmsg; `echo 8 > /proc/loglevel` brings it back. */
-  printk_set_console_level(CONSOLE_LOGLEVEL_QUIET);
+  // printk_set_console_level(CONSOLE_LOGLEVEL_QUIET);
 
   char *argv[] = {"/busybox", "sh", "-i", NULL};
   char *envp[] = {"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "HOME=/", "TERM=linux",
@@ -317,6 +284,9 @@ void kmain_thread(void) {
     if (fd_open_console(task1) < 0)
       printk(KERN_ERR "init: cannot open /dev/tty0 for the shell\n");
     scheduler_add_task(task1);
+  }
+  else {
+    printk(KERN_ERR "init: cannot exec /busybox: %d\n", task1 == NULL ? -1 : 0);
   }
 
   printk(KERN_INFO "kmain thread done\n");

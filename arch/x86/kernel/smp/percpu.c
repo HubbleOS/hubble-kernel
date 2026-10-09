@@ -14,21 +14,21 @@
 cpu_info_t cpu_data[MAX_CPUS];
 volatile uint32_t num_cpus_online = 0;
 
+/* APIC ID -> logical id. Zero-initialised, so the BSP reads as CPU 0 even
+ * before percpu_init_bsp() runs (tss_init/syscall_init come earlier). */
+static uint8_t apic_to_cpu[256];
+
+uint8_t this_cpu_id(void) { return apic_to_cpu[lapic_get_id() & 0xFF]; }
+
 /* -- CPU info access ---------------------------------------------------- */
 
 /**
- * @brief Get current CPU info structure using APIC ID
+ * @brief Get current CPU info structure
  * @return Pointer to current CPU's cpu_info_t, or NULL on failure
  */
 cpu_info_t *get_current_cpu(void) {
-  uint8_t apic_id = lapic_get_id();
-
-  for (int i = 0; i < MAX_CPUS; i++) {
-    if (cpu_data[i].online && cpu_data[i].apic_id == apic_id)
-      return &cpu_data[i];
-  }
-
-  return NULL;
+  cpu_info_t *cpu = &cpu_data[this_cpu_id()];
+  return cpu->online ? cpu : NULL;
 }
 
 /**
@@ -52,6 +52,7 @@ void percpu_init_bsp(void) {
 
   uint8_t apic_id = lapic_get_id();
 
+  apic_to_cpu[apic_id] = 0;
   cpu_data[0].apic_id = apic_id;
   cpu_data[0].cpu_id = 0;
   cpu_data[0].online = true;
@@ -76,6 +77,7 @@ void percpu_init_ap(uint8_t apic_id) {
     return;
   }
 
+  apic_to_cpu[apic_id] = cpu_id;
   cpu_data[cpu_id].apic_id = apic_id;
   cpu_data[cpu_id].cpu_id = cpu_id;
   cpu_data[cpu_id].online = true;
