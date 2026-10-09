@@ -41,6 +41,9 @@
 #define SYS_clock_gettime 228
 #define SYS_openat 257
 #define SYS_getcwd 79
+#define SYS_getpid 39
+#define SYS_getppid 110
+#define SYS_gettid 186
 #define SYS_getuid 107
 #define SYS_arch_prctl 158
 #define SYS_set_tid_address 218

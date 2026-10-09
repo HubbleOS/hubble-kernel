@@ -112,8 +112,8 @@ struct usb_endpoint_descriptor {
 struct usb_device;
 
 /** @brief Called with each completed interrupt IN transfer */
-typedef void (*usb_complete_t)(struct usb_device *dev, const uint8_t *data,
-                               int len);
+typedef void (*usb_complete_t)(struct usb_device *dev, void *ctx,
+                               const uint8_t *data, int len);
 
 /** @brief Operations a host controller driver provides for its devices */
 struct usb_hcd_ops {
@@ -125,12 +125,21 @@ struct usb_hcd_ops {
                  void *data);
   /**
    * Enable an interrupt IN endpoint and keep it polled: @p complete runs
-   * for every report until the device goes away.
+   * with @p ctx for every report until the device goes away.
    */
   int (*interrupt_in)(struct usb_device *dev,
                       const struct usb_endpoint_descriptor *ep,
-                      usb_complete_t complete);
+                      usb_complete_t complete, void *ctx);
 };
+
+/** @brief A class driver bound to one interface of a device */
+struct usb_binding {
+  void *data; /**< The driver's state; passed back to disconnect */
+  void (*disconnect)(struct usb_device *dev, void *data);
+};
+
+/* Combined receivers expose a keyboard and a mouse interface (and more). */
+#define USB_MAX_BINDINGS 4
 
 /** @brief One addressed USB device, owned by its host controller driver */
 struct usb_device {
@@ -139,8 +148,8 @@ struct usb_device {
   uint8_t speed;  /**< USB_SPEED_* */
   uint8_t port;   /**< Root hub port, 1-based */
   struct usb_device_descriptor desc;
-  void *driver_data;                          /**< Bound class driver's state */
-  void (*disconnect)(struct usb_device *dev); /**< Set by the class driver */
+  struct usb_binding bindings[USB_MAX_BINDINGS];
+  int nbindings;
 };
 
 /* -- Core API --------------------------------------------- */
@@ -149,10 +158,17 @@ int usb_control_msg(struct usb_device *dev, uint8_t request_type,
                     uint8_t request, uint16_t value, uint16_t index, void *data,
                     uint16_t length);
 
-/** Read descriptors, set the configuration and bind a class driver. */
+/** Read descriptors, set the configuration and bind class drivers. */
 int usb_probe_device(struct usb_device *dev);
 
-/** Detach the bound class driver; the HCD frees the device afterwards. */
+/** Record a class driver's binding; called from its probe. */
+int usb_bind(struct usb_device *dev, void *data,
+             void (*disconnect)(struct usb_device *dev, void *data));
+
+/**
+ * Detach all bound class drivers; the HCD stops delivering completions
+ * first and frees the device afterwards.
+ */
 void usb_disconnect_device(struct usb_device *dev);
 
 /* -- Class drivers ---------------------------------------- */
@@ -160,3 +176,6 @@ void usb_disconnect_device(struct usb_device *dev);
 int usb_kbd_probe(struct usb_device *dev,
                   const struct usb_interface_descriptor *iface,
                   const struct usb_endpoint_descriptor *ep);
+int usb_mouse_probe(struct usb_device *dev,
+                    const struct usb_interface_descriptor *iface,
+                    const struct usb_endpoint_descriptor *ep);

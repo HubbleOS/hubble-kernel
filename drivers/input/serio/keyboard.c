@@ -85,6 +85,7 @@ void keyboard_irq(registers_t *r) {
   };
 
   input_report(&kbd_input_dev, &ev);
+  input_sync(&kbd_input_dev);
 }
 
 /* -- Hardware helpers ------------------------------------- */

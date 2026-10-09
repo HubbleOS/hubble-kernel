@@ -207,7 +207,9 @@ static void tty_handle_key(uint16_t code, bool pressed) {
 
 static bool tty_kbd_match(input_handler_t *handler, input_dev_t *dev) {
   (void)handler;
-  return input_test_bit(EV_KEY, dev->evbit);
+  /* Pointing devices report their buttons as EV_KEY too. */
+  return input_test_bit(EV_KEY, dev->evbit) &&
+         !input_test_bit(EV_REL, dev->evbit);
 }
 
 /* Every keyboard (PS/2, USB, ...) needs its own handle: a handle is a

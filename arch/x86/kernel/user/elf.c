@@ -204,6 +204,10 @@ int elf_load_segment(VFS_File *f, Elf64_Phdr *phdr, uint64_t *target_pm,
  */
 int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm,
              vm_map_t *vm_map) {
+  /* Fields are only set when the binary has them (TLS): start clean so
+   * a binary without TLS doesn't inherit whatever the buffer held. */
+  memset(entry_out, 0, sizeof(*entry_out));
+
   VFS_File *f = vfs_open(path, VFS_O_RDONLY);
   printk(KERN_INFO "[ELF] Trying to open %s\n", path);
   if (IS_ERR(f) || !f) {
@@ -286,7 +290,7 @@ int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm,
         if (!entry_out->tls_init) {
           kfree(phdrs);
           vfs_close(f);
-          printk("error 0");
+          printk(KERN_ERR "[ELF] out of memory for the TLS image\n");
           return -1;
         }
 
@@ -294,7 +298,7 @@ int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm,
           kfree(entry_out->tls_init);
           kfree(phdrs);
           vfs_close(f);
-          printk("error 1");
+          printk(KERN_ERR "[ELF] cannot seek to the TLS image\n");
           return -1;
         }
 
@@ -302,7 +306,7 @@ int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm,
           kfree(entry_out->tls_init);
           kfree(phdrs);
           vfs_close(f);
-          printk("error 2");
+          printk(KERN_ERR "[ELF] cannot read the TLS image\n");
           return -1;
         }
       } else {

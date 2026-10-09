@@ -69,6 +69,10 @@ typedef struct {
 
 static const module_export_t g_exports[] = {
     {"printk", (uint64_t)(uintptr_t)printk},
+    {"printk_get_log", (uint64_t)(uintptr_t)printk_get_log},
+    {"printk_log_size", (uint64_t)(uintptr_t)printk_log_size},
+    {"printk_set_console_level", (uint64_t)(uintptr_t)printk_set_console_level},
+    {"printk_get_console_level", (uint64_t)(uintptr_t)printk_get_console_level},
     {"kmalloc", (uint64_t)(uintptr_t)kmalloc},
     {"kfree", (uint64_t)(uintptr_t)kfree},
     {"kzalloc", (uint64_t)(uintptr_t)kzalloc},
@@ -346,8 +350,7 @@ static int module_apply_relocation(uint64_t target_base, size_t target_size,
    * the symbol. (Anonymous symbol-0 with zero addend is just an
    * absolute zero and stays legal.) */
   if (type != R_X86_64_NONE && symbol == 0 &&
-      syms[sym_index].st_shndx == SHN_UNDEF &&
-      syms[sym_index].st_name != 0) {
+      syms[sym_index].st_shndx == SHN_UNDEF && syms[sym_index].st_name != 0) {
     char namebuf[64];
     size_t ni = 0;
     if (strtab) {
@@ -357,8 +360,7 @@ static int module_apply_relocation(uint64_t target_base, size_t target_size,
         namebuf[ni++] = strtab[off++];
     }
     namebuf[ni] = '\0';
-    printk(KERN_ERR "[module] unresolved symbol: %s\n",
-           ni > 0 ? namebuf : "?");
+    printk(KERN_ERR "[module] unresolved symbol: %s\n", ni > 0 ? namebuf : "?");
     return -ENOEXEC;
   }
 

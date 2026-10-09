@@ -26,26 +26,40 @@
 #define input_clear_bit(bit, arr)                                              \
   ((arr)[(bit) / BITS_PER_LONG] &= ~(1UL << ((bit) % BITS_PER_LONG)))
 
-/* -- Event type flags (evbit) -----------------------------------------------
+/* -- Event types and codes --------------------------------------------------
+ *
+ * Event types and relative axes use the Linux numbering, so evdev hands
+ * them to user space unchanged. Key codes depend on the device:
+ *   - keyboards report EV_KEY with PS/2 set-1 scancodes, 0x100 marking an
+ *     E0-prefixed key (what the tty keymap decodes);
+ *   - pointing devices (those with EV_REL) report buttons as BTN_*.
+ * A driver ends each batch of related events with input_sync().
  */
 
-#define EV_KEY 0 /**< Keys / buttons.                        */
-#define EV_REL 1 /**< Relative motion (mouse, scroll).       */
-#define EV_ABS 2 /**< Absolute coordinates (touchscreen).    */
-#define EV_CNT 3 /**< Number of event types — must be last.  */
+#define EV_SYN 0x00 /**< Separates batches of events.           */
+#define EV_KEY 0x01 /**< Keys / buttons.                        */
+#define EV_REL 0x02 /**< Relative motion (mouse, scroll).       */
+#define EV_ABS 0x03 /**< Absolute coordinates (touchscreen).    */
+#define EV_CNT 0x04 /**< Number of event types — must be last.  */
+
+#define SYN_REPORT 0
 
 /* -- Key code bitmap size ---------------------------------------------------
  */
 
 #define KEY_CNT 256
 
+#define BTN_LEFT 0x110
+#define BTN_RIGHT 0x111
+#define BTN_MIDDLE 0x112
+
 /* -- Relative axis identifiers (relbit) -------------------------------------
  */
 
-#define REL_X 0
-#define REL_Y 1
-#define REL_WHEEL 2
-#define REL_CNT 3
+#define REL_X 0x00
+#define REL_Y 0x01
+#define REL_WHEEL 0x08
+#define REL_CNT 0x10
 
 /* -- Input event ------------------------------------------------------------
  */
@@ -117,3 +131,15 @@ void input_link_handle(input_handle_t *handle);
 void input_unlink_handle(input_handle_t *handle);
 
 void input_report(input_dev_t *dev, input_raw_event_t *event);
+
+/** Report one event: input_report() without building the struct. */
+static inline void input_event(input_dev_t *dev, uint16_t type, uint16_t code,
+                               int32_t value) {
+  input_raw_event_t ev = {.type = type, .code = code, .value = value};
+  input_report(dev, &ev);
+}
+
+/** End a batch of events (one mouse packet, one keyboard report). */
+static inline void input_sync(input_dev_t *dev) {
+  input_event(dev, EV_SYN, SYN_REPORT, 0);
+}

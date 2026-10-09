@@ -28,8 +28,9 @@
 #define KERN_OK "<8>"      /**< Successful status messages.    */
 
 #define PRINTK_BUFFER_SIZE                                                     \
-  (16 * 1024) /**< Size of the internal ring buffer.                           \
-               */
+  (16 * 1024)                        /**< Size of the internal ring buffer.    \
+                                      */
+#define PRINTK_LOG_SIZE (256 * 1024) /**< Kernel log kept for /proc/kmsg. */
 
 _Begin_C_Header;
 
@@ -41,7 +42,19 @@ void printk_set_output(void (*fn)(char c));
 /**
  * @brief Set the colour-aware single-character output function.
  */
-void printk_set_color_output(void (*fn)(char c, color_t color));
+void printk_set_color_output(void (*fn)(char c, color_t color, bool screen));
+
+/**
+ * @brief Set which messages reach the screen: those with a level below
+ *        @p level (0-8; 8 shows everything). Serial and the log get all.
+ */
+void printk_set_console_level(int level);
+
+/* Everything is on screen while booting, where a hang leaves nothing
+ * else to look at; init/main.c drops to QUIET when the shell starts. */
+#define CONSOLE_LOGLEVEL_BOOT 8
+#define CONSOLE_LOGLEVEL_QUIET 5 /* errors and warnings */
+int printk_get_console_level(void);
 
 /**
  * @brief Register a full console backend.

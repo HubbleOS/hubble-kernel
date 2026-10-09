@@ -534,12 +534,12 @@ uint32_t ext2_create_file(EXT2_FS *fs, uint32_t parent_inode,
 
   uint32_t new_inode = ext2_allocate_inode(fs, parent_inode);
   if (!new_inode) {
-    printk("Failed to allocate inode\n");
+    printk(KERN_ERR "ext2: failed to allocate inode\n");
     return 0;
   }
   uint32_t new_block = ext2_allocate_block(fs, new_inode);
   if (!new_block) {
-    printk("Failed to allocate block\n");
+    printk(KERN_ERR "ext2: failed to allocate block\n");
     ext2_free_inode(fs, new_inode);
     return 0;
   }

@@ -65,6 +65,8 @@ int dev_vfs_write_device(VFS_File *file, const void *buf, uint32_t size) {
 VFS_Node *dev_vfs_open_device(VFS_FS *fs, const char *path) {
   VFS_device_reg *dev = dev_vfs_find_device(fs, path);
   if (dev) {
+    if (dev->open)
+      dev->open();
     VFS_Node *node = kmalloc(sizeof(VFS_Node), GFP_KERNEL);
     memset(node, 0, sizeof(VFS_Node));
     strncpy(node->name, path, 255);
@@ -119,12 +121,13 @@ uint64_t mmap_device(VFS_File *file, uint64_t offset, size_t size) {
   return 0;
 }
 
-bool dev_vfs_set_char_ops(const char *name,
+bool dev_vfs_set_char_ops(const char *name, void (*open)(void),
                           long (*ioctl)(unsigned long request, void *arg),
                           bool (*readable)(void), struct wait_queue *read_wq) {
   VFS_device_reg *dev = dev_vfs_find_device(NULL, name);
   if (!dev)
     return false;
+  dev->open = open;
   dev->ioctl = ioctl;
   dev->readable = readable;
   dev->read_wq = read_wq;

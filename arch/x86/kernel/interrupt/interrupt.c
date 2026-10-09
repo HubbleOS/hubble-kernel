@@ -236,31 +236,31 @@ void isr_handler(registers_t *regs) {
       return;
   }
 
-  printk(KERN_INFO "\n\tEXCEPTION OCCURRED\n");
+  printk(KERN_ERR "\n\tEXCEPTION OCCURRED\n");
 
-  printk(KERN_INFO "Exception: %s (%lu)\n",
+  printk(KERN_ERR "Exception: %s (%lu)\n",
          regs->int_no < 22 ? exception_messages[regs->int_no] : "Unknown",
          regs->int_no);
   printk(KERN_ERR "Error code: 0x%lx\n", regs->err_code);
 
-  printk(KERN_INFO "Registers");
-  printk(KERN_INFO "RIP: 0x%016lx    RSP: 0x%016lx\n", regs->rip, regs->rsp);
-  printk(KERN_INFO "RAX: 0x%016lx    RBX: 0x%016lx\n", regs->rax, regs->rbx);
-  printk(KERN_INFO "RCX: 0x%016lx    RDX: 0x%016lx\n", regs->rcx, regs->rdx);
-  printk(KERN_INFO "RSI: 0x%016lx    RDI: 0x%016lx\n", regs->rsi, regs->rdi);
-  printk(KERN_INFO "RBP: 0x%016lx    R8:  0x%016lx\n", regs->rbp, regs->r8);
-  printk(KERN_INFO "R9:  0x%016lx    R10: 0x%016lx\n", regs->r9, regs->r10);
-  printk(KERN_INFO "R11: 0x%016lx    R12: 0x%016lx\n", regs->r11, regs->r12);
-  printk(KERN_INFO "R13: 0x%016lx    R14: 0x%016lx\n", regs->r13, regs->r14);
-  printk(KERN_INFO "R15: 0x%016lx\n", regs->r15);
+  printk(KERN_ERR "Registers");
+  printk(KERN_ERR "RIP: 0x%016lx    RSP: 0x%016lx\n", regs->rip, regs->rsp);
+  printk(KERN_ERR "RAX: 0x%016lx    RBX: 0x%016lx\n", regs->rax, regs->rbx);
+  printk(KERN_ERR "RCX: 0x%016lx    RDX: 0x%016lx\n", regs->rcx, regs->rdx);
+  printk(KERN_ERR "RSI: 0x%016lx    RDI: 0x%016lx\n", regs->rsi, regs->rdi);
+  printk(KERN_ERR "RBP: 0x%016lx    R8:  0x%016lx\n", regs->rbp, regs->r8);
+  printk(KERN_ERR "R9:  0x%016lx    R10: 0x%016lx\n", regs->r9, regs->r10);
+  printk(KERN_ERR "R11: 0x%016lx    R12: 0x%016lx\n", regs->r11, regs->r12);
+  printk(KERN_ERR "R13: 0x%016lx    R14: 0x%016lx\n", regs->r13, regs->r14);
+  printk(KERN_ERR "R15: 0x%016lx\n", regs->r15);
 
-  printk(KERN_INFO "Segments");
-  printk(KERN_INFO "CS:  0x%04lx    SS:  0x%04lx\n", regs->cs, regs->ss);
-  printk(KERN_INFO "RFLAGS: 0x%016lx\n", regs->rflags);
+  printk(KERN_ERR "Segments");
+  printk(KERN_ERR "CS:  0x%04lx    SS:  0x%04lx\n", regs->cs, regs->ss);
+  printk(KERN_ERR "RFLAGS: 0x%016lx\n", regs->rflags);
 
   uint64_t cr2;
   asm volatile("mov %%cr2, %0" : "=r"(cr2));
-  printk("CR2 = %p\n", cr2);
+  printk(KERN_ERR "CR2 = %p\n", cr2);
 
   /* CPU exceptions taken while already at CPL0 (e.g. a #GP on the iretq at
    * the tail of irq_common_stub, itself running in ring 0) do NOT get RSP
@@ -276,12 +276,12 @@ void isr_handler(registers_t *regs) {
    * fields above, which is the only way to see the real target CS/SS. */
   if (regs->int_no == 13) {
     uint64_t *frame = (uint64_t *)regs->rsp;
-    printk(KERN_INFO "Raw stack at RSP (candidate faulting iretq frame):\n");
-    printk(KERN_INFO "  [rsp+0]  RIP?    = 0x%016lx\n", frame[0]);
-    printk(KERN_INFO "  [rsp+8]  CS?     = 0x%016lx\n", frame[1]);
-    printk(KERN_INFO "  [rsp+16] RFLAGS? = 0x%016lx\n", frame[2]);
-    printk(KERN_INFO "  [rsp+24] RSP?    = 0x%016lx\n", frame[3]);
-    printk(KERN_INFO "  [rsp+32] SS?     = 0x%016lx\n", frame[4]);
+    printk(KERN_ERR "Raw stack at RSP (candidate faulting iretq frame):\n");
+    printk(KERN_ERR "  [rsp+0]  RIP?    = 0x%016lx\n", frame[0]);
+    printk(KERN_ERR "  [rsp+8]  CS?     = 0x%016lx\n", frame[1]);
+    printk(KERN_ERR "  [rsp+16] RFLAGS? = 0x%016lx\n", frame[2]);
+    printk(KERN_ERR "  [rsp+24] RSP?    = 0x%016lx\n", frame[3]);
+    printk(KERN_ERR "  [rsp+32] SS?     = 0x%016lx\n", frame[4]);
   }
 
   if (regs->int_no == 8 || regs->int_no == 13 || regs->int_no == 14) {
@@ -296,7 +296,7 @@ void isr_handler(registers_t *regs) {
       uint64_t cr3;
       asm volatile("mov %%cr3, %0" : "=r"(cr3));
       task_t *t = get_current_task();
-      printk(KERN_INFO
+      printk(KERN_ERR
              "Fault: active CR3=0x%llx task->page_table=0x%llx match=%d\n",
              cr3, (uint64_t)t->mm.page_table,
              cr3 == (uint64_t)t->mm.page_table);

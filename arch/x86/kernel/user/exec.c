@@ -95,13 +95,13 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
 
   elf_image_t *image = kmalloc(sizeof(elf_image_t), GFP_KERNEL);
   if (elf_load(path, image, pml4, vm_map) == -1) {
-    printk("exited");
+    printk(KERN_ERR "exec: cannot load %s\n", path);
     return NULL;
   }
 
   task_t *task = task_create((void *)image->entry, 200, 1);
   task->mm.vm_map = vm_map;
-  printk("task->fs_base: %lx\n", task->mm.fs_base);
+  printk(KERN_DEBUG "task->fs_base: %lx\n", task->mm.fs_base);
 
   task->mm.heap_end = image->initial_brk;
   task->mm.heap_start = image->initial_brk;
@@ -114,7 +114,7 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
 
     task->mm.fs_base = (uint64_t)tls;
     task->mm.tls_size = image->tls_memsz;
-    printk("task->fs_base: %lx\n", task->mm.fs_base);
+    printk(KERN_DEBUG "task->fs_base: %lx\n", task->mm.fs_base);
 
     kfree(image->tls_init);
   } else {
@@ -124,11 +124,11 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
     // *(uint64_t *)tcb =
     //     (uint64_t)tcb; // self-pointer -- %fs:0 має вказувати сам на себе
     // task->fs_base = (uint64_t)tcb;
-    printk("no tls\n");
+    printk(KERN_DEBUG "no tls\n");
   }
 
   task_map_user_stack(task, pml4);
-  printk("task->exec.context.rsp: %lx\n", task->exec.context.rsp);
+  printk(KERN_DEBUG "task->exec.context.rsp: %lx\n", task->exec.context.rsp);
 
   size_t path_len = strlen(path) + 1;
   char *path_copy = kmalloc(path_len, GFP_KERNEL);
@@ -154,7 +154,7 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
   asm volatile("rdmsr" : "=a"(lo), "=d"(hi) : "c"(0xC0000100));
 
   uint64_t fsbase = ((uint64_t)hi << 32) | lo;
-  printk("FS.base = %p\n", fsbase);
+  printk(KERN_DEBUG "FS.base = %p\n", fsbase);
 
   task->mm.page_table = pml4;
   kfree(image);

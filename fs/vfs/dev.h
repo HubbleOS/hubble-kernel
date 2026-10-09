@@ -26,8 +26,10 @@ typedef struct VFS_device_reg {
   uint64_t (*write)(uint64_t offset, size_t size, const void *buf);
 
   /* Optional character-device hooks (set via dev_vfs_set_char_ops):
-   * ioctl() serves the ioctl syscall; readable() and read_wq let poll()
-   * test for input and sleep until it arrives. */
+   * open() runs on every open; ioctl() serves the ioctl syscall;
+   * readable() and read_wq let poll() test for input and sleep until it
+   * arrives. */
+  void (*open)(void);
   long (*ioctl)(unsigned long request, void *arg);
   bool (*readable)(void);
   struct wait_queue *read_wq;
@@ -54,7 +56,7 @@ VFS_device_reg *dev_vfs_find_device(VFS_FS *fs, const char *path);
  * @brief Attach character-device hooks to a registered device.
  * @return false if no device called @p name is registered
  */
-bool dev_vfs_set_char_ops(const char *name,
+bool dev_vfs_set_char_ops(const char *name, void (*open)(void),
                           long (*ioctl)(unsigned long request, void *arg),
                           bool (*readable)(void), struct wait_queue *read_wq);
 

@@ -1,4 +1,4 @@
- //! procfs: a read-only /proc for Hubble, as a loadable Rust module.
+//! procfs: /proc for Hubble, as a loadable Rust module.
 //!
 //! Mounted at /proc by module init. Each regular file's text is
 //! generated on open (see files.rs); the root is the only directory.
@@ -41,13 +41,13 @@ extern "C" fn procfs_init() -> c_int {
         create_file: None,
         open: Some(procfs_open),
         read: Some(procfs_read),
-        write: None,
+        write: Some(procfs_write),
         mmap: None,
         mkdir: None,
         unlink: None,
         close: Some(procfs_close),
         readdir: Some(procfs_readdir),
-        truncate: None,
+        truncate: Some(procfs_truncate),
         rename: None,
     }));
 
@@ -69,7 +69,10 @@ unsafe fn relative(path: *const c_char) -> &'static [u8] {
     }
     let bytes = unsafe { CStr::from_ptr(path) }.to_bytes();
     let start = bytes.iter().position(|&c| c != b'/').unwrap_or(bytes.len());
-    let end = bytes.iter().rposition(|&c| c != b'/').map_or(start, |i| i + 1);
+    let end = bytes
+        .iter()
+        .rposition(|&c| c != b'/')
+        .map_or(start, |i| i + 1);
     &bytes[start..end.max(start)]
 }
 
@@ -103,7 +106,9 @@ unsafe extern "C" fn procfs_open(fs: *mut VfsFs, path: *const c_char) -> *mut Vf
 }
 
 unsafe extern "C" fn procfs_read(file: *mut VfsFile, buf: *mut c_void, size: u32) -> c_int {
-    let Some(file) = (unsafe { file.as_mut() }) else { return -1 };
+    let Some(file) = (unsafe { file.as_mut() }) else {
+        return -1;
+    };
     let node = unsafe { &*file.node };
     if node.fs_node.is_null() {
         return -1; // directory
@@ -117,8 +122,40 @@ unsafe extern "C" fn procfs_read(file: *mut VfsFile, buf: *mut c_void, size: u32
     n as c_int
 }
 
+/// The /proc file behind an open node.
+unsafe fn node_file(file: *mut VfsFile) -> Option<&'static files::ProcFile> {
+    let file = unsafe { file.as_ref() }?;
+    let node = unsafe { file.node.as_ref() }?;
+    let len = node
+        .name
+        .iter()
+        .position(|&c| c == 0)
+        .unwrap_or(node.name.len());
+    let name = unsafe { core::slice::from_raw_parts(node.name.as_ptr() as *const u8, len) };
+    files::find(name)
+}
+
+unsafe extern "C" fn procfs_write(file: *mut VfsFile, buf: *const c_void, size: u32) -> c_int {
+    let Some(write) = (unsafe { node_file(file) }).and_then(|f| f.write) else {
+        return -EROFS;
+    };
+    let data = unsafe { core::slice::from_raw_parts(buf as *const u8, size as usize) };
+    if write(data) { size as c_int } else { -EINVAL }
+}
+
+/// `echo 5 > /proc/loglevel` opens with O_TRUNC; writable files accept
+/// it and ignore it, as Linux's /proc does.
+unsafe extern "C" fn procfs_truncate(file: *mut VfsFile, _size: u32) -> c_int {
+    match unsafe { node_file(file) } {
+        Some(f) if f.write.is_some() => 0,
+        _ => -EROFS,
+    }
+}
+
 unsafe extern "C" fn procfs_close(file: *mut VfsFile) -> c_int {
-    let Some(file) = (unsafe { file.as_mut() }) else { return -1 };
+    let Some(file) = (unsafe { file.as_mut() }) else {
+        return -1;
+    };
     if file.node.is_null() {
         return 0;
     }
@@ -131,14 +168,22 @@ unsafe extern "C" fn procfs_close(file: *mut VfsFile) -> c_int {
 }
 
 unsafe extern "C" fn procfs_readdir(_fs: *mut VfsFs, path: *const c_char) -> Directory {
-    let mut dir = Directory { entries: ptr::null_mut(), count: 0, free_entries: Some(procfs_free_entries) };
+    let mut dir = Directory {
+        entries: ptr::null_mut(),
+        count: 0,
+        free_entries: Some(procfs_free_entries),
+    };
     if !unsafe { relative(path) }.is_empty() {
         return dir; // only the root is a directory
     }
 
     let entries: Box<[Entry]> = files::FILES
         .iter()
-        .map(|f| Entry { cluster: 0, name: f.name.as_ptr(), is_dir: false })
+        .map(|f| Entry {
+            cluster: 0,
+            name: f.name.as_ptr(),
+            is_dir: false,
+        })
         .collect();
     dir.count = entries.len() as c_int;
     dir.entries = Box::into_raw(entries) as *mut Entry;
@@ -147,7 +192,9 @@ unsafe extern "C" fn procfs_readdir(_fs: *mut VfsFs, path: *const c_char) -> Dir
 
 /// Names point at static strings; only the array itself is owned.
 unsafe extern "C" fn procfs_free_entries(dir: *mut Directory) -> bool {
-    let Some(dir) = (unsafe { dir.as_mut() }) else { return false };
+    let Some(dir) = (unsafe { dir.as_mut() }) else {
+        return false;
+    };
     if !dir.entries.is_null() {
         let slice = ptr::slice_from_raw_parts_mut(dir.entries, dir.count as usize);
         drop(unsafe { Box::from_raw(slice) });

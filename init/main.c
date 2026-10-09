@@ -303,6 +303,11 @@ void kmain_thread(void) {
   module_load("/modules/tty.ko");
   module_load("/modules/usb.ko"); /* after input.ko: registers keyboards */
   module_load("/modules/procfs.ko");
+
+  /* Boot is done: from here on the screen belongs to the shell. The full
+   * log stays in /proc/kmsg; `echo 8 > /proc/loglevel` brings it back. */
+  printk_set_console_level(CONSOLE_LOGLEVEL_QUIET);
+
   char *argv[] = {"/busybox", "sh", "-i", NULL};
   char *envp[] = {"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "HOME=/", "TERM=linux",
                   NULL};

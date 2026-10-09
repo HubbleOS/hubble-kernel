@@ -358,8 +358,7 @@ void task_exit(int exit_code) {
   uint8_t cpu_id = lapic_get_id();
   task_t *task = get_current_task();
 
-  outb(0x3f8, 'E');
-  printk("exited with code: %d\n", exit_code);
+  printk(KERN_DEBUG "exited with code: %d\n", exit_code);
   if (!task)
     return;
 

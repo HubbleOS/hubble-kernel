@@ -35,13 +35,34 @@ static int usb_get_descriptor(struct usb_device *dev, uint8_t type, void *buf,
 
 /* -- Class driver binding --------------------------------- */
 
+static int usb_probe_interface(struct usb_device *dev,
+                               const struct usb_interface_descriptor *iface,
+                               const struct usb_endpoint_descriptor *ep) {
+  if (dev->nbindings == USB_MAX_BINDINGS ||
+      iface->bInterfaceClass != USB_CLASS_HID ||
+      iface->bInterfaceSubClass != USB_SUBCLASS_BOOT)
+    return -1;
+
+  switch (iface->bInterfaceProtocol) {
+  case USB_PROTOCOL_KEYBOARD:
+    return usb_kbd_probe(dev, iface, ep);
+  case USB_PROTOCOL_MOUSE:
+    return usb_mouse_probe(dev, iface, ep);
+  default:
+    return -1;
+  }
+}
+
 /**
- * Walk the configuration's interfaces and bind the first one a class
- * driver supports. Only HID boot keyboards are handled for now.
+ * Offer every interface (default alternate setting) with an interrupt IN
+ * endpoint to the class drivers: a wireless receiver is a keyboard and a
+ * mouse at once. Only HID boot devices are handled for now. Returns the
+ * number of interfaces bound.
  */
-static int usb_bind_driver(struct usb_device *dev, const uint8_t *cfg,
-                           uint16_t total) {
+static int usb_bind_drivers(struct usb_device *dev, const uint8_t *cfg,
+                            uint16_t total) {
   const struct usb_interface_descriptor *iface = NULL;
+  int bound = 0;
 
   for (uint16_t off = 0; off + 2 <= total && cfg[off] >= 2; off += cfg[off]) {
     if (off + cfg[off] > total)
@@ -50,6 +71,8 @@ static int usb_bind_driver(struct usb_device *dev, const uint8_t *cfg,
     if (cfg[off + 1] == USB_DESC_INTERFACE &&
         cfg[off] >= sizeof(struct usb_interface_descriptor)) {
       iface = (const struct usb_interface_descriptor *)&cfg[off];
+      if (iface->bAlternateSetting != 0)
+        iface = NULL;
       continue;
     }
 
@@ -62,14 +85,23 @@ static int usb_bind_driver(struct usb_device *dev, const uint8_t *cfg,
     bool int_in =
         (ep->bEndpointAddress & USB_ENDPOINT_DIR_IN) &&
         (ep->bmAttributes & USB_ENDPOINT_XFER_MASK) == USB_ENDPOINT_XFER_INT;
+    if (!int_in)
+      continue;
 
-    if (int_in && iface->bInterfaceClass == USB_CLASS_HID &&
-        iface->bInterfaceSubClass == USB_SUBCLASS_BOOT &&
-        iface->bInterfaceProtocol == USB_PROTOCOL_KEYBOARD)
-      return usb_kbd_probe(dev, iface, ep);
+    if (usb_probe_interface(dev, iface, ep) == 0)
+      bound++;
+    iface = NULL; /* one report endpoint per interface */
   }
 
-  return -1;
+  return bound;
+}
+
+int usb_bind(struct usb_device *dev, void *data,
+             void (*disconnect)(struct usb_device *dev, void *data)) {
+  if (dev->nbindings == USB_MAX_BINDINGS)
+    return -1;
+  dev->bindings[dev->nbindings++] = (struct usb_binding){data, disconnect};
+  return 0;
 }
 
 /* -- Enumeration ------------------------------------------ */
@@ -118,8 +150,9 @@ int usb_probe_device(struct usb_device *dev) {
     goto out;
   }
 
-  ret = usb_bind_driver(dev, cfg, total);
-  if (ret < 0)
+  if (usb_bind_drivers(dev, cfg, total) > 0)
+    ret = 0;
+  else
     printk(KERN_INFO "[usb] port %d: no driver for this device\n", dev->port);
 
 out:
@@ -128,8 +161,7 @@ out:
 }
 
 void usb_disconnect_device(struct usb_device *dev) {
-  if (dev->disconnect)
-    dev->disconnect(dev);
-  dev->disconnect = NULL;
-  dev->driver_data = NULL;
+  for (int i = 0; i < dev->nbindings; i++)
+    dev->bindings[i].disconnect(dev, dev->bindings[i].data);
+  dev->nbindings = 0;
 }

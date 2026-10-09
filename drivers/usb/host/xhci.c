@@ -48,6 +48,7 @@ struct xhci_ep {
   uint64_t buf_phys;
   uint16_t len;
   usb_complete_t complete;
+  void *ctx;
 };
 
 struct xhci_hc;
@@ -236,7 +237,7 @@ static void xhci_interrupt_done(struct xhci_dev *dev, uint8_t dci,
 
   uint32_t residue = TRB_TRANSFER_LEN(ev->status);
   int len = residue < ep->len ? (int)(ep->len - residue) : 0;
-  ep->complete(&dev->udev, ep->buf, len);
+  ep->complete(&dev->udev, ep->ctx, ep->buf, len);
   xhci_queue_interrupt(dev, dci);
 }
 
@@ -448,7 +449,7 @@ static uint8_t xhci_ep_interval(uint8_t speed, uint8_t b_interval) {
 
 static int xhci_interrupt_in(struct usb_device *udev,
                              const struct usb_endpoint_descriptor *desc,
-                             usb_complete_t complete) {
+                             usb_complete_t complete, void *ctx) {
   struct xhci_dev *dev = udev->hcd_priv;
   struct xhci_hc *hc = dev->hc;
   uint8_t num = desc->bEndpointAddress & USB_ENDPOINT_NUMBER_MASK;
@@ -482,12 +483,12 @@ static int xhci_interrupt_in(struct usb_device *udev,
   slot[3] = 0; /* device address and slot state are output-only */
 
   uint32_t esit = max_packet * (burst + 1);
-  uint32_t *ctx = xhci_in_ctx(dev, 1 + dci);
-  ctx[0] = EP_INTERVAL(xhci_ep_interval(udev->speed, desc->bInterval));
-  ctx[1] = EP_CERR(3) | EP_TYPE(EP_TYPE_INT_IN) | EP_MAX_BURST(burst) |
-           EP_MAX_PACKET(max_packet);
-  xhci_set_ep_dequeue(ctx, &ep->ring);
-  ctx[4] = EP_AVG_TRB_LEN(max_packet) | EP_MAX_ESIT_LO(esit);
+  uint32_t *ep_ctx = xhci_in_ctx(dev, 1 + dci);
+  ep_ctx[0] = EP_INTERVAL(xhci_ep_interval(udev->speed, desc->bInterval));
+  ep_ctx[1] = EP_CERR(3) | EP_TYPE(EP_TYPE_INT_IN) | EP_MAX_BURST(burst) |
+              EP_MAX_PACKET(max_packet);
+  xhci_set_ep_dequeue(ep_ctx, &ep->ring);
+  ep_ctx[4] = EP_AVG_TRB_LEN(max_packet) | EP_MAX_ESIT_LO(esit);
 
   if (xhci_command(hc, dev->in_ctx_phys,
                    TRB_TYPE(TRB_CONFIGURE_EP) | TRB_SLOT(dev->slot),
@@ -500,6 +501,7 @@ static int xhci_interrupt_in(struct usb_device *udev,
   }
 
   ep->complete = complete;
+  ep->ctx = ctx;
   xhci_queue_interrupt(dev, dci);
   return 0;
 }
@@ -615,6 +617,12 @@ static void xhci_detach(struct xhci_hc *hc, uint8_t port) {
   hc->ports[port] = NULL;
 
   printk(KERN_INFO "[xhci] port %d: device disconnected\n", port);
+
+  /* No more reports: events still queued for this slot are dispatched
+   * while Disable Slot runs, after the class drivers are gone. */
+  for (int dci = 0; dci <= XHCI_DCI_MAX; dci++)
+    if (dev->eps[dci])
+      dev->eps[dci]->complete = NULL;
   usb_disconnect_device(&dev->udev);
 
   /* Once Disable Slot completes the controller no longer touches the

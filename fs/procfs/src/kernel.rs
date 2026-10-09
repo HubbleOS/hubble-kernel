@@ -49,19 +49,21 @@ pub struct VfsFs {
     pub create_file: Unused,
     pub open: Option<unsafe extern "C" fn(*mut VfsFs, *const c_char) -> *mut VfsNode>,
     pub read: Option<unsafe extern "C" fn(*mut VfsFile, *mut c_void, u32) -> c_int>,
-    pub write: Unused,
+    pub write: Option<unsafe extern "C" fn(*mut VfsFile, *const c_void, u32) -> c_int>,
     pub mmap: Unused,
     pub mkdir: Unused,
     pub unlink: Unused,
     pub close: Option<unsafe extern "C" fn(*mut VfsFile) -> c_int>,
     pub readdir: Option<unsafe extern "C" fn(*mut VfsFs, *const c_char) -> Directory>,
-    pub truncate: Unused,
+    pub truncate: Option<unsafe extern "C" fn(*mut VfsFile, u32) -> c_int>,
     pub rename: Unused,
 }
 
 /// FileSystemType::FS_PROC in fs/vfs/vfs_standart_struct.h.
 pub const FS_PROC: u32 = 6;
 pub const GFP_KERNEL: u32 = 0;
+pub const EINVAL: c_int = 22;
+pub const EROFS: c_int = 30;
 
 const _: () = {
     assert!(size_of::<VfsNode>() == 288);
@@ -93,4 +95,8 @@ unsafe extern "C" {
     pub fn pmm_get_stats(total_bytes: *mut u64, used_bytes: *mut u64);
     pub fn hpet_get_time_ns() -> u64;
     pub fn smp_get_cpu_count() -> u32;
+    pub fn printk_get_log(dest: *mut c_char, max_len: usize) -> usize;
+    pub fn printk_log_size() -> usize;
+    pub fn printk_set_console_level(level: c_int);
+    pub fn printk_get_console_level() -> c_int;
 }

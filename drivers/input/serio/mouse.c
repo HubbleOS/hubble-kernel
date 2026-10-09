@@ -1,146 +1,163 @@
 /**
  * @file mouse.c
- * @brief PS/2 mouse driver — IRQ handler, initialisation, VFS callbacks
+ * @brief PS/2 mouse driver — aux port setup and packet decoding into input
+ *        core events
  */
-#include "mouse.h"
 #include "ps2.h"
-#include <higher_half.h>
+#include <hpet/hpet.h>
+#include <hubble/input.h>
 #include <hubble/module.h>
 #include <hubble/printk.h>
-#include <hubble/string.h>
 #include <interrupt/interrupt.h>
 #include <io.h>
-#include <mm/kmalloc.h>
-#include <mm/pmm.h>
-#include <mm/vmm.h>
-#include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
 
-/* -- Global state ----------------------------------------- */
+#define PS2_STATUS_OUTPUT_FULL 0x01
+#define PS2_STATUS_INPUT_FULL 0x02
+#define PS2_STATUS_AUX_DATA 0x20
 
-static mouse_t *mouse_g = NULL;
-static uint8_t mouse_packet[3];
-static uint8_t mouse_cycle = 0;
+#define MOUSE_ACK 0xFA
+#define MOUSE_CMD_RESET 0xFF
+#define MOUSE_CMD_DEFAULTS 0xF6
+#define MOUSE_CMD_ENABLE 0xF4
 
-/* -- VFS callbacks ---------------------------------------- */
+/* First packet byte */
+#define PKT_BUTTONS 0x07
+#define PKT_ALWAYS_ONE 0x08
+#define PKT_X_SIGN 0x10
+#define PKT_Y_SIGN 0x20
+#define PKT_OVERFLOW 0xC0
 
-mouse_t *get_mouse_info(void) { return mouse_g; }
-
-uint64_t mouse_mmap(uint64_t offset, size_t size) {
-  (void)offset;
-  (void)size;
-  return (uint64_t)virt_to_phys((uint64_t)mouse_g);
-}
-
-uint64_t mouse_read_file(uint64_t offset, size_t size, void *buf) {
-  (void)offset;
-  memcpy(buf, mouse_g, size);
-  return size;
-}
+static input_dev_t mouse_input_dev = {
+    .name = "ps2-mouse",
+};
 
 /* -- IRQ handler ------------------------------------------ */
 
-void mouse_handler(registers_t *regs) {
+static const uint16_t button_codes[3] = {BTN_LEFT, BTN_RIGHT, BTN_MIDDLE};
+
+static void mouse_irq(registers_t *regs) {
   (void)regs;
-  if (!(inb(PS2_COMMAND) & 0x20))
+  static uint8_t packet[3];
+  static int cycle;
+  static uint8_t buttons;
+
+  if ((inb(PS2_STATUS) & (PS2_STATUS_OUTPUT_FULL | PS2_STATUS_AUX_DATA)) !=
+      (PS2_STATUS_OUTPUT_FULL | PS2_STATUS_AUX_DATA))
     return;
 
-  mouse_packet[mouse_cycle++] = inb(PS2_DATA);
+  uint8_t byte = inb(PS2_DATA);
 
-  if (mouse_cycle < 3)
+  /* Resynchronise: a packet always starts with bit 3 set. */
+  if (cycle == 0 && !(byte & PKT_ALWAYS_ONE))
     return;
 
-  mouse_cycle = 0;
-
-  uint8_t flags = mouse_packet[0];
-
-  if (!(flags & 0x08))
+  packet[cycle++] = byte;
+  if (cycle < 3)
     return;
+  cycle = 0;
 
-  if ((flags & 0x40) || (flags & 0x80))
-    return;
+  uint8_t flags = packet[0];
+  int dx = 0, dy = 0;
+  if (!(flags & PKT_OVERFLOW)) {
+    dx = packet[1] - ((flags & PKT_X_SIGN) ? 256 : 0);
+    dy = packet[2] - ((flags & PKT_Y_SIGN) ? 256 : 0);
+  }
+  uint8_t changed = (flags & PKT_BUTTONS) ^ buttons;
+  buttons = flags & PKT_BUTTONS;
 
-  int32_t x = mouse_packet[1] - ((flags & 0x10) ? 256 : 0);
-  int32_t y = mouse_packet[2] - ((flags & 0x20) ? 256 : 0);
+  if (!dx && !dy && !changed)
+    return; /* nothing to report: no empty batch */
 
-  mouse_g->x += x;
-  mouse_g->y -= y;
+  if (dx)
+    input_event(&mouse_input_dev, EV_REL, REL_X, dx);
+  if (dy) /* PS/2 counts up; REL_Y grows downwards */
+    input_event(&mouse_input_dev, EV_REL, REL_Y, -dy);
+  for (int i = 0; i < 3; i++)
+    if (changed & (1 << i))
+      input_event(&mouse_input_dev, EV_KEY, button_codes[i], (flags >> i) & 1);
 
-  mouse_g->left = (flags & 0x01) != 0;
-  mouse_g->right = (flags & 0x02) != 0;
-  mouse_g->middle = (flags & 0x04) != 0;
-
-  static uint8_t prev_buttons = 0;
-  uint8_t curr_buttons = flags & 0x07;
-
-  if ((curr_buttons & 0x01) && !(prev_buttons & 0x01))
-    mouse_g->left_clicked = true;
-  if ((curr_buttons & 0x02) && !(prev_buttons & 0x02))
-    mouse_g->right_clicked = true;
-
-  if (!(curr_buttons & 0x01))
-    mouse_g->left_clicked = false;
-  if (!(curr_buttons & 0x02))
-    mouse_g->right_clicked = false;
-
-  prev_buttons = curr_buttons;
+  input_sync(&mouse_input_dev);
 }
 
 /* -- Hardware helpers ------------------------------------- */
 
-static void mouse_write(uint8_t cmd) {
-  ps2_wait_input();
-  outb(PS2_COMMAND, 0xD4);
-  ps2_wait_input();
-  outb(PS2_DATA, cmd);
+/* Bounded waits: a machine without a PS/2 aux port must not hang here. */
+static bool ps2_wait_status(uint8_t mask, uint8_t want, uint64_t timeout_ms) {
+  uint64_t deadline = hpet_get_time_ns() + timeout_ms * 1000000ULL;
+  while ((inb(PS2_STATUS) & mask) != want)
+    if (hpet_get_time_ns() > deadline)
+      return false;
+  return true;
 }
 
-static uint8_t mouse_read(void) {
-  ps2_wait_output();
+static bool ps2_send(uint8_t port, uint8_t byte) {
+  if (!ps2_wait_status(PS2_STATUS_INPUT_FULL, 0, 50))
+    return false;
+  outb(port, byte);
+  return true;
+}
+
+static int ps2_recv(uint64_t timeout_ms) {
+  if (!ps2_wait_status(PS2_STATUS_OUTPUT_FULL, PS2_STATUS_OUTPUT_FULL,
+                       timeout_ms))
+    return -1;
   return inb(PS2_DATA);
 }
 
-void mouse_init(void) {
-  mouse_g = kmalloc(sizeof(mouse_t), GFP_KERNEL);
-  if (!mouse_g) {
-    printk(KERN_ERR "[MOUSE] Failed to allocate mouse state\n");
-    return;
-  }
-  memset(mouse_g, 0, sizeof(mouse_t));
-
-  __asm__ volatile("cli");
-
-  ps2_wait_input();
-  outb(PS2_COMMAND, 0xA8);
-
-  ps2_wait_input();
-  outb(PS2_COMMAND, 0x20);
-  ps2_wait_output();
-  uint8_t config = inb(PS2_DATA);
-
-  config |= 0x01;
-  config |= 0x02;
-  config &= ~0x20;
-  config |= 0x40; /* keyboard relies on set 2 -> set 1 translation */
-
-  ps2_wait_input();
-  outb(PS2_COMMAND, PS2_DATA);
-  ps2_wait_input();
-  outb(PS2_DATA, config);
-
-  mouse_write(0xFF);
-  uint8_t ack = mouse_read();
-  printk(KERN_INFO "Mouse reset ack: 0x%x (expect 0xFA)\n", ack);
-  uint8_t bat = mouse_read();
-  uint8_t id = mouse_read();
-  printk(KERN_INFO "Mouse BAT: 0x%x, ID: 0x%x\n", bat, id);
-
-  mouse_write(0xF6);
-  mouse_read();
-
-  mouse_write(0xF4);
-  mouse_read();
-
-  __asm__ volatile("sti");
-  printk(KERN_OK "Mouse initialized\n");
+/** Send a command to the mouse and wait for its ACK. */
+static bool mouse_command(uint8_t cmd) {
+  return ps2_send(PS2_COMMAND, 0xD4) && ps2_send(PS2_DATA, cmd) &&
+         ps2_recv(50) == MOUSE_ACK;
 }
+
+static bool mouse_init_hw(void) {
+  /* Enable the aux port and its interrupt. */
+  if (!ps2_send(PS2_COMMAND, 0xA8) || !ps2_send(PS2_COMMAND, 0x20))
+    return false;
+  int config = ps2_recv(50);
+  if (config < 0)
+    return false;
+  config |= 0x03;  /* IRQ1 and IRQ12 */
+  config &= ~0x20; /* aux clock on */
+  config |= 0x40;  /* keyboard relies on set 2 -> set 1 translation */
+  if (!ps2_send(PS2_COMMAND, 0x60) || !ps2_send(PS2_DATA, (uint8_t)config))
+    return false;
+
+  /* Reset: ACK, then self-test result (0xAA) and device ID. */
+  if (!mouse_command(MOUSE_CMD_RESET))
+    return false;
+  int bat = ps2_recv(750);
+  int id = ps2_recv(50);
+  printk(KERN_INFO "[mouse] self-test 0x%x, id 0x%x\n", bat, id);
+
+  return mouse_command(MOUSE_CMD_DEFAULTS) && mouse_command(MOUSE_CMD_ENABLE);
+}
+
+/* -- Initcall --------------------------------------------- */
+
+static int mouse_initcall(void) {
+  ps2_init();
+
+  /* The keyboard IRQ must not swallow the mouse's replies. */
+  __asm__ volatile("cli");
+  bool ok = mouse_init_hw();
+  __asm__ volatile("sti");
+
+  if (!ok) {
+    printk(KERN_INFO "[mouse] no PS/2 mouse\n");
+    return 0;
+  }
+
+  input_set_bit(EV_KEY, mouse_input_dev.evbit);
+  input_set_bit(EV_REL, mouse_input_dev.evbit);
+  input_register_device(&mouse_input_dev);
+  irq_install_handler(12, mouse_irq);
+
+  printk(KERN_OK "[mouse] PS/2 mouse ready\n");
+  return 0;
+}
+
+module_init(mouse_initcall);
+MODULE_NAME("serio_mouse");

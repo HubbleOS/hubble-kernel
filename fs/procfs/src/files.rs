@@ -2,25 +2,59 @@
 //!
 //! Every file is a generator run once when the file is opened; reads
 //! then serve that snapshot, so a reader sees consistent content across
-//! partial reads (like Linux seq_file).
+//! partial reads (like Linux seq_file). A file with a `write` handler is
+//! also writable; each write() call is handed over whole.
 
 use alloc::string::String;
 use core::arch::x86_64::__cpuid;
 use core::fmt::Write;
 
-use crate::kernel::{hpet_get_time_ns, pmm_get_stats, smp_get_cpu_count};
+use alloc::vec;
+
+use crate::kernel::{
+    hpet_get_time_ns, pmm_get_stats, printk_get_console_level, printk_get_log, printk_log_size,
+    printk_set_console_level, smp_get_cpu_count,
+};
 
 pub struct ProcFile {
     /// NUL-terminated so it can go straight into a readdir entry.
     pub name: &'static core::ffi::CStr,
     pub generate: fn(&mut String),
+    /// Takes the written bytes; false rejects them (EINVAL).
+    pub write: Option<fn(&[u8]) -> bool>,
 }
 
 pub static FILES: &[ProcFile] = &[
-    ProcFile { name: c"version", generate: version },
-    ProcFile { name: c"uptime", generate: uptime },
-    ProcFile { name: c"meminfo", generate: meminfo },
-    ProcFile { name: c"cpuinfo", generate: cpuinfo },
+    ProcFile {
+        name: c"version",
+        generate: version,
+        write: None,
+    },
+    ProcFile {
+        name: c"uptime",
+        generate: uptime,
+        write: None,
+    },
+    ProcFile {
+        name: c"meminfo",
+        generate: meminfo,
+        write: None,
+    },
+    ProcFile {
+        name: c"cpuinfo",
+        generate: cpuinfo,
+        write: None,
+    },
+    ProcFile {
+        name: c"kmsg",
+        generate: kmsg,
+        write: None,
+    },
+    ProcFile {
+        name: c"loglevel",
+        generate: loglevel,
+        write: Some(set_loglevel),
+    },
 ];
 
 pub fn find(name: &[u8]) -> Option<&'static ProcFile> {
@@ -56,6 +90,32 @@ fn cpuinfo(out: &mut String) {
         let _ = writeln!(out, "vendor_id\t: {}", as_text(&vendor));
         let _ = writeln!(out, "model name\t: {}", as_text(&brand).trim());
         let _ = writeln!(out);
+    }
+}
+
+/// The kernel log, every level, as far back as the log buffer reaches.
+/// Unlike Linux's /proc/kmsg, reading it does not consume it.
+fn kmsg(out: &mut String) {
+    let mut buf = vec![0u8; unsafe { printk_log_size() }];
+    let n = unsafe { printk_get_log(buf.as_mut_ptr() as *mut core::ffi::c_char, buf.len()) };
+    buf.truncate(n);
+    out.push_str(&String::from_utf8_lossy(&buf));
+}
+
+/// Console log level: messages with a lower level reach the screen
+/// (`echo 8 > /proc/loglevel` shows everything).
+fn loglevel(out: &mut String) {
+    let _ = writeln!(out, "{}", unsafe { printk_get_console_level() });
+}
+
+fn set_loglevel(data: &[u8]) -> bool {
+    let text = core::str::from_utf8(data).unwrap_or("");
+    match text.trim().parse::<i32>() {
+        Ok(level @ 0..=8) => {
+            unsafe { printk_set_console_level(level) };
+            true
+        }
+        _ => false,
     }
 }
 

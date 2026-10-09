@@ -116,14 +116,8 @@ struct usb_kbd {
 };
 
 static void usb_kbd_key(struct usb_kbd *kbd, uint16_t code, bool pressed) {
-  if (!code)
-    return;
-  input_raw_event_t ev = {
-      .type = EV_KEY,
-      .code = code,
-      .value = pressed ? 1 : 0,
-  };
-  input_report(&kbd->input, &ev);
+  if (code)
+    input_event(&kbd->input, EV_KEY, code, pressed ? 1 : 0);
 }
 
 static bool report_has_key(const uint8_t *report, uint8_t usage) {
@@ -139,10 +133,11 @@ static bool report_has_key(const uint8_t *report, uint8_t usage) {
  * A boot report is the full keyboard state: diff it against the previous
  * one to get press and release events.
  */
-static void usb_kbd_report(struct usb_device *dev, const uint8_t *report,
-                           int len) {
-  struct usb_kbd *kbd = dev->driver_data;
-  if (!kbd || len < KBD_REPORT_SIZE)
+static void usb_kbd_report(struct usb_device *dev, void *ctx,
+                           const uint8_t *report, int len) {
+  (void)dev;
+  struct usb_kbd *kbd = ctx;
+  if (len < KBD_REPORT_SIZE)
     return;
 
   /* Too many keys down: the device reports "rollover" and no state. */
@@ -167,10 +162,12 @@ static void usb_kbd_report(struct usb_device *dev, const uint8_t *report,
   }
 
   memcpy(kbd->last, report, KBD_REPORT_SIZE);
+  input_sync(&kbd->input);
 }
 
-static void usb_kbd_disconnect(struct usb_device *dev) {
-  struct usb_kbd *kbd = dev->driver_data;
+static void usb_kbd_disconnect(struct usb_device *dev, void *data) {
+  (void)dev;
+  struct usb_kbd *kbd = data;
   input_unregister_device(&kbd->input);
   kfree(kbd);
 }
@@ -199,15 +196,14 @@ int usb_kbd_probe(struct usb_device *dev,
   kbd->input.name = "usb-keyboard";
   input_set_bit(EV_KEY, kbd->input.evbit);
 
-  dev->driver_data = kbd;
-  dev->disconnect = usb_kbd_disconnect;
   input_register_device(&kbd->input);
 
-  if (dev->ops->interrupt_in(dev, ep, usb_kbd_report) < 0) {
+  if (dev->ops->interrupt_in(dev, ep, usb_kbd_report, kbd) < 0) {
     printk(KERN_ERR "[usb-kbd] failed to start the report endpoint\n");
-    usb_disconnect_device(dev);
+    usb_kbd_disconnect(dev, kbd);
     return -1;
   }
+  usb_bind(dev, kbd, usb_kbd_disconnect);
 
   printk(KERN_OK "[usb-kbd] keyboard ready on port %d\n", dev->port);
   return 0;

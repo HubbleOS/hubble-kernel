@@ -704,17 +704,19 @@ static void term_feed(char c, color_t color) {
 /* -- Public interface ------------------------------------------ */
 
 /**
- * @brief Write one character to both serial and framebuffer
+ * @brief Write one character to serial and, optionally, the framebuffer
  *
- * @param c     Character to write
- * @param color Colour override for this character (printk levels);
- *              COLOR_WHITE means "use the terminal's current colour"
+ * @param c      Character to write
+ * @param color  Colour override for this character (printk levels);
+ *               COLOR_WHITE means "use the terminal's current colour"
+ * @param screen Also draw it on the framebuffer console (printk leaves
+ *               messages below the console log level off the screen)
  */
-void early_putchar_color(char c, color_t color) {
+void early_putchar_color(char c, color_t color, bool screen) {
   serial_set_color(color);
   serial_putc(c);
 
-  if (term.cols == 0)
+  if (!screen || term.cols == 0)
     return;
 
   irqlock_acquire(&console_lock);
@@ -730,7 +732,7 @@ void early_putchar_color(char c, color_t color) {
  *
  * @param c Character to write
  */
-void early_putchar(char c) { early_putchar_color(c, COLOR_WHITE); }
+void early_putchar(char c) { early_putchar_color(c, COLOR_WHITE, true); }
 
 /** @brief Clear the framebuffer console and home the cursor. */
 void console_clear(void) {

@@ -56,7 +56,7 @@ static bool tty_vfs_readable(void) { return tty_readable(&tty0); }
 static int tty_dev_init(void) {
   tty_init(&tty0, &tty0_console_ops);
   dev_vfs_register("tty0", NULL, tty_vfs_read, tty_vfs_write);
-  dev_vfs_set_char_ops("tty0", tty_vfs_ioctl, tty_vfs_readable,
+  dev_vfs_set_char_ops("tty0", NULL, tty_vfs_ioctl, tty_vfs_readable,
                        (struct wait_queue *)&tty0.read_wq);
   return 0;
 }

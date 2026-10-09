@@ -26,7 +26,7 @@ static size_t early_log_size;
 /* -- Ring buffer ------------------------------------------------------------
  */
 
-static char log_buffer[PRINTK_BUFFER_SIZE];
+static char log_buffer[PRINTK_LOG_SIZE];
 static size_t log_head;
 static size_t log_tail;
 static size_t log_size;
@@ -36,7 +36,7 @@ static bool log_wrapped;
  */
 
 static void (*output_fn)(char c);
-static void (*color_output_fn)(char c, color_t color);
+static void (*color_output_fn)(char c, color_t color, bool screen);
 static void (*console_write)(const char *buf, size_t len, void *data);
 static void *console_user_data;
 
@@ -65,7 +65,7 @@ void printk_set_early_output() {
 /**
  * @brief Set the color-aware single-character output function.
  */
-void printk_set_color_output(void (*fn)(char c, color_t color)) {
+void printk_set_color_output(void (*fn)(char c, color_t color, bool screen)) {
   color_output_fn = fn;
 }
 
@@ -151,13 +151,13 @@ static int printk_token_len(const char *str, size_t len, color_t *color) {
 static void log_buffer_append(const char *buf, size_t len) {
   for (size_t i = 0; i < len; i++) {
     log_buffer[log_head] = buf[i];
-    log_head = (log_head + 1) % PRINTK_BUFFER_SIZE;
+    log_head = (log_head + 1) % PRINTK_LOG_SIZE;
 
-    if (log_size < PRINTK_BUFFER_SIZE) {
+    if (log_size < PRINTK_LOG_SIZE) {
       log_size++;
     } else {
       log_wrapped = true;
-      log_tail = (log_tail + 1) % PRINTK_BUFFER_SIZE;
+      log_tail = (log_tail + 1) % PRINTK_LOG_SIZE;
     }
   }
 }
@@ -165,14 +165,40 @@ static void log_buffer_append(const char *buf, size_t len) {
 /* -- Output plumbing --------------------------------------------------------
  */
 
+/* -- Console log level -----------------------------------------------------
+ *
+ * Every message goes to the log buffer and the serial port; only those
+ * more important than the console log level also reach the screen. As on
+ * Linux, a message shows when its level < console_loglevel, so 8 shows
+ * everything. KERN_OK ranks with KERN_INFO. A message without a level
+ * continues the current line's level, or counts as a warning on a line
+ * of its own.
+ */
+#define DEFAULT_MESSAGE_LOGLEVEL 4
+
+static int console_loglevel = CONSOLE_LOGLEVEL_BOOT;
+static int message_loglevel = DEFAULT_MESSAGE_LOGLEVEL;
+static bool message_on_screen = true;
+
+void printk_set_console_level(int level) {
+  if (level < 0)
+    level = 0;
+  if (level > 8)
+    level = 8;
+  console_loglevel = level;
+}
+
+int printk_get_console_level(void) { return console_loglevel; }
+
 static void output_plain_string(const char *str, size_t len, color_t color) {
   log_buffer_append(str, len);
 
   if (console_write) {
-    console_write(str, len, console_user_data);
+    if (message_on_screen)
+      console_write(str, len, console_user_data);
   } else if (color_output_fn) {
     for (size_t i = 0; i < len; i++)
-      color_output_fn(str[i], color);
+      color_output_fn(str[i], color, message_on_screen);
   } else if (output_fn) {
     for (size_t i = 0; i < len; i++)
       output_fn(str[i]);
@@ -239,11 +265,11 @@ void printk_register_console(void (*write_fn)(const char *, size_t, void *),
 
     while (remaining > 0) {
       size_t chunk = remaining;
-      if (pos + chunk > PRINTK_BUFFER_SIZE)
-        chunk = PRINTK_BUFFER_SIZE - pos;
+      if (pos + chunk > PRINTK_LOG_SIZE)
+        chunk = PRINTK_LOG_SIZE - pos;
 
       console_write(log_buffer + pos, chunk, console_user_data);
-      pos = (pos + chunk) % PRINTK_BUFFER_SIZE;
+      pos = (pos + chunk) % PRINTK_LOG_SIZE;
       remaining -= chunk;
     }
   }
@@ -269,7 +295,7 @@ size_t printk_get_log(char *dest, size_t max_len) {
 
   while (copied < to_copy) {
     dest[copied++] = log_buffer[pos];
-    pos = (pos + 1) % PRINTK_BUFFER_SIZE;
+    pos = (pos + 1) % PRINTK_LOG_SIZE;
   }
   return copied;
 }
@@ -480,6 +506,14 @@ void vprintk(const char *fmt, va_list args) {
 
   if (level >= 0)
     fmt += 3;
+
+  if (level == 8)
+    message_loglevel = 6; /* KERN_OK */
+  else if (level >= 0)
+    message_loglevel = level;
+  else if (printk_at_line_start)
+    message_loglevel = DEFAULT_MESSAGE_LOGLEVEL;
+  message_on_screen = message_loglevel < console_loglevel;
 
   while (*fmt == '\n' || *fmt == '\r') {
     char c = *fmt++;
@@ -692,7 +726,7 @@ void printk_console_write(const char *buf, size_t len) {
     console_write(buf, len, console_user_data);
   } else if (color_output_fn) {
     for (size_t i = 0; i < len; i++)
-      color_output_fn(buf[i], COLOR_WHITE);
+      color_output_fn(buf[i], COLOR_WHITE, true);
   } else if (output_fn) {
     for (size_t i = 0; i < len; i++)
       output_fn(buf[i]);
