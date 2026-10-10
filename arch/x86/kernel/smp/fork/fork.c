@@ -113,6 +113,7 @@ long sys_fork(registers_t *regs) {
    * offsets, as after dup()); each holds its own reference. */
   fd_copy_table(child, parent);
 
+  memcpy(child->id.name, parent->id.name, sizeof(child->id.name));
   child->linkage.parent = parent;
   child->linkage.sibling = parent->linkage.children;
   parent->linkage.children = child;

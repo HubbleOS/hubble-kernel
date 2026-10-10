@@ -158,6 +158,18 @@ static VFS_pipes_node *pipe_vfs_find_pipe_node(VFS_pipes_tree *pipe_tree,
 
 /** @brief Open an existing pipe by path. */
 VFS_Node *pipe_vfs_open_pipe(VFS_FS *fs, const char *path) {
+  /* The empty path is the mountpoint itself: the filesystem's root
+   * directory, which stat (ls probing /dev) has to be able to open. */
+  if (!*path) {
+    VFS_Node *root = kmalloc(sizeof(VFS_Node), GFP_KERNEL);
+    if (!root)
+      return NULL;
+    memset(root, 0, sizeof(VFS_Node));
+    root->fs = fs;
+    root->is_dir = true;
+    return root;
+  }
+
   VFS_Node *node = kmalloc(sizeof(VFS_Node), GFP_KERNEL);
   PathParts parts = format_pipe_path(path);
   parts.count--;

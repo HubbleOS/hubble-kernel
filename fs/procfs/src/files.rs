@@ -4,6 +4,8 @@
 //! then serve that snapshot, so a reader sees consistent content across
 //! partial reads (like Linux seq_file). A file with a `write` handler is
 //! also writable; each write() call is handed over whole.
+//!
+//! The per-task directories /proc/<pid> live in pid.rs.
 
 use alloc::string::String;
 use core::arch::x86_64::__cpuid;
@@ -13,8 +15,9 @@ use alloc::vec;
 
 use crate::kernel::{
     hpet_get_time_ns, pmm_get_stats, printk_get_console_level, printk_get_log, printk_log_size,
-    printk_set_console_level, smp_get_cpu_count,
+    printk_set_console_level, smp_get_cpu_count, vfs_get_mounts,
 };
+use crate::pid;
 
 pub struct ProcFile {
     /// NUL-terminated so it can go straight into a readdir entry.
@@ -55,10 +58,35 @@ pub static FILES: &[ProcFile] = &[
         generate: loglevel,
         write: Some(set_loglevel),
     },
+    ProcFile {
+        name: c"mounts",
+        generate: mounts,
+        write: None,
+    },
+    ProcFile {
+        name: c"tasks",
+        generate: tasks,
+        write: None,
+    },
 ];
 
 pub fn find(name: &[u8]) -> Option<&'static ProcFile> {
     FILES.iter().find(|f| f.name.to_bytes() == name)
+}
+
+/// One line per task: pid ppid state cpu name.
+fn tasks(out: &mut String) {
+    for t in pid::snapshot() {
+        let _ = writeln!(
+            out,
+            "{} {} {} {} {}",
+            t.pid,
+            t.ppid,
+            pid::state_char(t.state),
+            t.cpu,
+            as_text(&t.name)
+        );
+    }
 }
 
 fn version(out: &mut String) {
@@ -93,6 +121,14 @@ fn cpuinfo(out: &mut String) {
     }
 }
 
+fn mounts(out: &mut String) {
+    let mut mount = unsafe { vfs_get_mounts() };
+    while !mount.is_null() {
+        let mountpoint = unsafe { as_text(&(*mount).mountpoint) };
+        let _ = writeln!(out, "{} ", mountpoint);
+        mount = unsafe { (*mount).next };
+    }
+}
 /// The kernel log, every level, as far back as the log buffer reaches.
 /// Unlike Linux's /proc/kmsg, reading it does not consume it.
 fn kmsg(out: &mut String) {
@@ -144,7 +180,7 @@ fn cpu_brand() -> [u8; 48] {
 }
 
 /// Bytes up to the first NUL, as text ('?' if not UTF-8).
-fn as_text(bytes: &[u8]) -> &str {
+pub fn as_text(bytes: &[u8]) -> &str {
     let end = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
     core::str::from_utf8(&bytes[..end]).unwrap_or("?")
 }

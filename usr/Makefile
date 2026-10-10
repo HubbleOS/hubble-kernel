@@ -76,7 +76,9 @@ $(INITRAMFS_IMG): $(INITRAMFS_INPUTS)
 	@mkdir -p $(ROOT_DIR)/modules
 	@cp -r $(KERNEL_PATH)/out/modules/* $(ROOT_DIR)/modules/
 	@cp -r $(KERNEL_PATH)/busy/* $(ROOT_DIR)/
-	@mkdir -p $(ROOT_DIR)/bin $(ROOT_DIR)/proc
+	@# Mountpoints: kernel/init/fs.c and modules mount over these.
+	@mkdir -p $(ROOT_DIR)/bin $(ROOT_DIR)/proc $(ROOT_DIR)/dev \
+		$(ROOT_DIR)/ext2 $(ROOT_DIR)/pipe
 	@[ -n "$(BUSYBOX_APPLETS)" ] || echo "initramfs: warning: could not list busybox applets (no --list-full/--list, or not runnable on this host); no applet links created"
 	@for a in $(BUSYBOX_APPLETS); do \
 		mkdir -p "$(ROOT_DIR)/$$(dirname "$$a")"; \

@@ -740,12 +740,77 @@ void scheduler_init(void) {
 
   extern void kmain_thread(void);
   task_t *kmain = task_create(kmain_thread, 255, 0);
+  strcpy(kmain->id.name, "kmain");
   scheduler_add_task(kmain);
 
   initialized = true;
   while (1) {
     hlt();
   }
+}
+
+/* Caller holds the lock of the runqueue @p t is on. */
+static void task_fill_info(task_t *t, int cpu, task_info_t *info) {
+  info->pid = t->id.pid;
+  info->ppid = t->linkage.parent ? t->linkage.parent->id.pid : 0;
+  info->state = t->linkage.state;
+  info->cpu = cpu;
+  memcpy(info->name, t->id.name, sizeof(info->name));
+  info->name[sizeof(info->name) - 1] = '\0';
+}
+
+/**
+ * @brief Copy up to @p max tasks into @p out
+ *
+ * Every live task (ready, running, blocked or zombie) sits in some CPU's
+ * runqueue, so walking them all lists every process. Each queue is copied
+ * under its lock; the result is consistent per CPU, not globally, which is
+ * enough for ps.
+ *
+ * @return Number of tasks copied
+ */
+size_t task_snapshot(task_info_t *out, size_t max) {
+  size_t n = 0;
+  /* All MAX_CPUS slots: runqueues are indexed by APIC ID in places, which
+   * can exceed the CPU count. Unused slots are zeroed (count 0). */
+  for (int cpu = 0; cpu < MAX_CPUS && n < max; cpu++) {
+    cpu_runqueue_t *rq = &runqueues[cpu];
+    /* The timer handler takes this lock on this CPU; holding it with
+     * interrupts on would deadlock against our own scheduler tick. */
+    uint64_t flags = save_flags_cli();
+    spinlock_acquire(&rq->lock);
+    for (size_t i = 0; i < rq->count && n < max; i++)
+      task_fill_info(rq->queue[i], cpu, &out[n++]);
+    spinlock_release(&rq->lock);
+    restore_flags(flags);
+  }
+  return n;
+}
+
+/**
+ * @brief Copy the info of the task with @p pid into @p out
+ *
+ * Same walk and locking as task_snapshot(), stopping at the match.
+ *
+ * @return false if no such task exists (anymore)
+ */
+bool task_get_info(uint32_t pid, task_info_t *out) {
+  for (int cpu = 0; cpu < MAX_CPUS; cpu++) {
+    cpu_runqueue_t *rq = &runqueues[cpu];
+    uint64_t flags = save_flags_cli();
+    spinlock_acquire(&rq->lock);
+    for (size_t i = 0; i < rq->count; i++) {
+      if (rq->queue[i]->id.pid == pid) {
+        task_fill_info(rq->queue[i], cpu, out);
+        spinlock_release(&rq->lock);
+        restore_flags(flags);
+        return true;
+      }
+    }
+    spinlock_release(&rq->lock);
+    restore_flags(flags);
+  }
+  return false;
 }
 
 /**

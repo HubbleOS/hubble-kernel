@@ -61,6 +61,12 @@ typedef struct VFS_FS {
   bool (*rename)(struct VFS_FS *fs, const char *from, const char *to);
 } VFS_FS;
 
+typedef struct VFS_Mount {
+  char mountpoint[10];
+  VFS_FS *fs;
+  struct VFS_Mount *next;
+} VFS_Mount;
+
 /* fs/procfs/src/kernel.rs mirrors these layouts (and asserts the same
  * sizes on its side). A change here must be made there too. */
 _Static_assert(sizeof(VFS_Node) == 288, "update fs/procfs/src/kernel.rs");
@@ -96,6 +102,8 @@ bool vfs_unlink(const char *path);
 
 /** @brief Resize an open file. @return 0 or negative errno */
 int vfs_truncate(VFS_File *file, uint32_t size);
+
+VFS_Mount *vfs_get_mounts(void);
 
 /**
  * @brief Rename within one filesystem.

@@ -263,18 +263,10 @@ void kmain_thread(void) {
     while (1)
       hlt();
   }
-  // printk(KERN_INFO "opened pipe /pipe/tty0_out\n");
   module_load("/modules/input.ko");
-  // printk(KERN_INFO "loaded input.ko\n");
   module_load("/modules/tty.ko");
-  // printk(KERN_INFO "loaded tty.ko\n");
   module_load("/modules/usb.ko"); /* after input.ko: registers keyboards */
-  // printk(KERN_INFO "loaded usb.ko\n");
-  // module_load("/modules/procfs.ko");
-
-  /* Boot is done: from here on the screen belongs to the shell. The full
-   * log stays in /proc/kmsg; `echo 8 > /proc/loglevel` brings it back. */
-  // printk_set_console_level(CONSOLE_LOGLEVEL_QUIET);
+  module_load("/modules/procfs.ko");
 
   char *argv[] = {"/busybox", "sh", "-i", NULL};
   char *envp[] = {"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "HOME=/", "TERM=linux",
@@ -284,8 +276,7 @@ void kmain_thread(void) {
     if (fd_open_console(task1) < 0)
       printk(KERN_ERR "init: cannot open /dev/tty0 for the shell\n");
     scheduler_add_task(task1);
-  }
-  else {
+  } else {
     printk(KERN_ERR "init: cannot exec /busybox: %d\n", task1 == NULL ? -1 : 0);
   }
 

@@ -12,6 +12,8 @@
 #include <smp/scheduler.h>
 #include <smp/task.h>
 
+#include <hubble/printk.h>
+
 #include "syscall_entry.h"
 
 /* Linux struct linux_dirent64; records are padded to 8 bytes. */

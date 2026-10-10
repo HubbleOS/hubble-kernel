@@ -47,6 +47,8 @@ extern void waitqueue_wake_all(void);
 extern void waitqueue_wait_event(void);
 extern void _task_create_with_arg(void);
 extern void scheduler_add_task(void);
+extern void task_snapshot(void);
+extern void task_get_info(void);
 extern void task_prepare_wait(void);
 extern void task_wait(void);
 
@@ -146,7 +148,9 @@ static const module_export_t g_exports[] = {
     {"task_wait", (uint64_t)(uintptr_t)task_wait},
     {"limine_hhdm_req", (uint64_t)(uintptr_t)&limine_hhdm_req},
     {"limine_exec_addr_req", (uint64_t)(uintptr_t)&limine_exec_addr_req},
-};
+    {"vfs_get_mounts", (uint64_t)(uintptr_t)vfs_get_mounts},
+    {"task_snapshot", (uint64_t)(uintptr_t)task_snapshot},
+    {"task_get_info", (uint64_t)(uintptr_t)task_get_info}};
 
 #define EXPORT_COUNT (sizeof(g_exports) / sizeof(g_exports[0]))
 
@@ -776,7 +780,7 @@ int module_load_buffer(const void *image, size_t image_size) {
   }
 
   /* -- Pass 3: collect exported symbols ------------------------------ */
-printk(KERN_DEBUG "[module] collecting exports\n");
+  printk(KERN_DEBUG "[module] collecting exports\n");
   module_sym_export_t mod_exports[MODULE_MAX_EXPORTS];
   int mod_export_count = 0;
 
@@ -813,7 +817,7 @@ printk(KERN_DEBUG "[module] collecting exports\n");
 
   uint64_t mod_base = 0;
   size_t mod_size = 0;
-printk(KERN_DEBUG "[module] determining module base/extent\n");
+  printk(KERN_DEBUG "[module] determining module base/extent\n");
   for (size_t i = 0; i < section_count; i++) {
     if (!sections[i].base || !sections[i].name)
       continue;
@@ -863,7 +867,7 @@ printk(KERN_DEBUG "[module] determining module base/extent\n");
   g_modules_list = mod;
 
   /* -- Pass 4: run initialisation ------------------------------------ */
-printk(KERN_DEBUG "[module] running initialisation\n");
+  printk(KERN_DEBUG "[module] running initialisation\n");
   /* Try .module.init section first (modern, placed by module_init()). */
   for (size_t i = 0; i < section_count; i++) {
     if (!sections[i].base || !sections[i].name)
@@ -873,7 +877,8 @@ printk(KERN_DEBUG "[module] running initialisation\n");
 
     size_t count = sections[i].size / sizeof(initcall_t);
     initcall_t *calls = (initcall_t *)sections[i].base;
-    printk(KERN_DEBUG "[module] found .module.init section with %zu calls\n", count);
+    printk(KERN_DEBUG "[module] found .module.init section with %zu calls\n",
+           count);
     for (size_t j = 0; j < count; j++) {
       if (!calls[j])
         continue;
@@ -887,10 +892,10 @@ printk(KERN_DEBUG "[module] running initialisation\n");
         return ret;
       }
     }
-  
+
     goto load_done;
   }
-printk(KERN_DEBUG "[module] no .module.init section found\n");
+  printk(KERN_DEBUG "[module] no .module.init section found\n");
   /* Fall back to .initcalls.* sections (legacy kernel style). */
   for (size_t i = 0; i < section_count; i++) {
     if (!sections[i].base || !sections[i].name)
@@ -916,7 +921,7 @@ printk(KERN_DEBUG "[module] no .module.init section found\n");
     }
     goto load_done;
   }
-printk(KERN_DEBUG "[module] no .initcalls.* sections found\n");
+  printk(KERN_DEBUG "[module] no .initcalls.* sections found\n");
   /* Last resort: look for a symbol called "module_init". */
   for (size_t i = 0; i < sym_count; i++) {
     if (symtab[i].st_name >= strtab_size)
@@ -947,7 +952,7 @@ printk(KERN_DEBUG "[module] no .initcalls.* sections found\n");
   }
 
 load_done:
-printk(KERN_DEBUG "[module] module loaded successfully\n");
+  printk(KERN_DEBUG "[module] module loaded successfully\n");
   kfree(sections);
   return 0;
 }
@@ -992,7 +997,8 @@ int module_load(const char *path) {
   printk(KERN_INFO "[module] read %zu bytes from %s\n", size, path);
   vfs_close(file);
   int ret = module_load_buffer(image, size);
-  printk(KERN_INFO "[module] module_load_buffer returned %d for %s\n", ret, path);
+  printk(KERN_INFO "[module] module_load_buffer returned %d for %s\n", ret,
+         path);
   if (ret == 0) {
     const char *filename = strrchr(path, '/');
     if (filename)
@@ -1015,7 +1021,7 @@ int module_load(const char *path) {
       filename++;
     else
       filename = path;
-    printk(KERN_ERR "[module] failed to load %s: %d\n", path, ret); 
+    printk(KERN_ERR "[module] failed to load %s: %d\n", path, ret);
     if (strncmp(filename, "._", 2) != 0 && filename[0] != '.')
       printk(KERN_ERR "[module] failed to load %s: %d\n", path, ret);
   }

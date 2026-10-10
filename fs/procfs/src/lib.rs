@@ -1,7 +1,8 @@
 //! procfs: /proc for Hubble, as a loadable Rust module.
 //!
 //! Mounted at /proc by module init. Each regular file's text is
-//! generated on open (see files.rs); the root is the only directory.
+//! generated on open (see files.rs); the root and /proc/<pid> are the
+//! directories.
 
 #![no_std]
 
@@ -10,8 +11,11 @@ extern crate alloc;
 mod files;
 mod heap;
 mod kernel;
+mod pid;
 
 use alloc::boxed::Box;
+use alloc::ffi::CString;
+use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -60,6 +64,35 @@ extern "C" fn procfs_init() -> c_int {
     }
 }
 
+/* -- Path routing ---------------------------------------------------------- */
+
+/// What a path under /proc (relative, no surrounding slashes) refers to.
+enum Target {
+    Root,
+    File(&'static files::ProcFile),           // /proc/meminfo
+    Pid,                                      // /proc/42 (the task exists)
+    PidFile(TaskInfo, &'static pid::PidFile), // /proc/42/status
+}
+
+fn lookup(path: &[u8]) -> Option<Target> {
+    if path.is_empty() {
+        return Some(Target::Root);
+    }
+    let mut parts = path.splitn(2, |&c| c == b'/');
+    let first = parts.next()?;
+    let rest = parts.next();
+
+    match (pid::parse_pid(first), rest) {
+        (None, None) => files::find(first).map(Target::File),
+        (None, Some(_)) => None, // "meminfo/x"
+        (Some(pid), None) => pid::task(pid).map(|_| Target::Pid),
+        (Some(pid), Some(name)) => {
+            let file = pid::PID_FILES.iter().find(|f| f.name.to_bytes() == name)?;
+            pid::task(pid).map(|t| Target::PidFile(t, file))
+        }
+    }
+}
+
 /* -- VFS operations -------------------------------------------------------- */
 
 /// Path relative to /proc with surrounding slashes removed ("" = root).
@@ -79,15 +112,20 @@ unsafe fn relative(path: *const c_char) -> &'static [u8] {
 unsafe extern "C" fn procfs_open(fs: *mut VfsFs, path: *const c_char) -> *mut VfsNode {
     let name = unsafe { relative(path) };
 
-    let (is_dir, contents) = if name.is_empty() {
-        (true, None)
-    } else if let Some(file) = files::find(name) {
-        let mut text = String::new();
-        (file.generate)(&mut text);
-        (false, Some(Box::new(text.into_bytes())))
-    } else {
-        return ptr::null_mut();
+    let mut text = String::new();
+    let is_dir = match lookup(name) {
+        Some(Target::Root | Target::Pid) => true,
+        Some(Target::File(f)) => {
+            (f.generate)(&mut text);
+            false
+        }
+        Some(Target::PidFile(task, f)) => {
+            (f.generate)(&task, &mut text);
+            false
+        }
+        None => return ptr::null_mut(),
     };
+    let contents = (!is_dir).then(|| Box::new(text.into_bytes()));
 
     let size = contents.as_ref().map_or(0, |c| c.len() as u32);
     let mut node = Box::new(VfsNode {
@@ -173,16 +211,33 @@ unsafe extern "C" fn procfs_readdir(_fs: *mut VfsFs, path: *const c_char) -> Dir
         count: 0,
         free_entries: Some(procfs_free_entries),
     };
-    if !unsafe { relative(path) }.is_empty() {
-        return dir; // only the root is a directory
+
+    let mut names: Vec<(CString, bool)> = Vec::new(); // (name, is_dir)
+    match lookup(unsafe { relative(path) }) {
+        Some(Target::Root) => {
+            for f in files::FILES {
+                names.push((f.name.into(), false));
+            }
+            for t in pid::snapshot() {
+                // A number never contains a NUL.
+                names.push((CString::new(format!("{}", t.pid)).unwrap(), true));
+            }
+        }
+        Some(Target::Pid) => {
+            for f in pid::PID_FILES {
+                names.push((f.name.into(), false));
+            }
+        }
+        _ => return dir, // not a directory
     }
 
-    let entries: Box<[Entry]> = files::FILES
-        .iter()
-        .map(|f| Entry {
+    // Exactly count entries long, so procfs_free_entries can rebuild the Box.
+    let entries: Box<[Entry]> = names
+        .into_iter()
+        .map(|(name, is_dir)| Entry {
             cluster: 0,
-            name: f.name.as_ptr(),
-            is_dir: false,
+            name: name.into_raw(), // owned by the Directory until free_entries
+            is_dir,
         })
         .collect();
     dir.count = entries.len() as c_int;
@@ -190,14 +245,17 @@ unsafe extern "C" fn procfs_readdir(_fs: *mut VfsFs, path: *const c_char) -> Dir
     dir
 }
 
-/// Names point at static strings; only the array itself is owned.
+/// Every name is a CString handed out with into_raw, and the array a Box.
 unsafe extern "C" fn procfs_free_entries(dir: *mut Directory) -> bool {
     let Some(dir) = (unsafe { dir.as_mut() }) else {
         return false;
     };
     if !dir.entries.is_null() {
         let slice = ptr::slice_from_raw_parts_mut(dir.entries, dir.count as usize);
-        drop(unsafe { Box::from_raw(slice) });
+        let entries = unsafe { Box::from_raw(slice) };
+        for e in entries.iter() {
+            drop(unsafe { CString::from_raw(e.name as *mut c_char) });
+        }
     }
     dir.entries = ptr::null_mut();
     dir.count = 0;

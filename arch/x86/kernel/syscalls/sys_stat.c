@@ -37,10 +37,10 @@ struct stat {
 };
 _Static_assert(sizeof(struct stat) == 144, "x86_64 struct stat is 144 bytes");
 
-#define S_IFIFO 0010000
-#define S_IFCHR 0020000
-#define S_IFDIR 0040000
-#define S_IFREG 0100000
+#define S_IFIFO 0010000 // FIFO (named pipe)
+#define S_IFCHR 0020000 // Character device
+#define S_IFDIR 0040000 // Directory
+#define S_IFREG 0100000 // Regular file
 
 /* No permission model yet: everything is owned by root and allowed. */
 static void fill_stat(struct stat *st, uint32_t type, uint64_t size) {
@@ -55,8 +55,8 @@ static void fill_stat(struct stat *st, uint32_t type, uint64_t size) {
 }
 
 static void fill_stat_file(struct stat *st, VFS_File *f) {
-  if (f->node->fs && f->node->fs->type == FS_DEV)
-    fill_stat(st, S_IFCHR, 0); /* /dev/tty0, /dev/fb0, ... */
+  if (f->node->fs && f->node->fs->type == FS_DEV && !f->node->is_dir)
+    fill_stat(st, S_IFCHR, 0);
   else
     fill_stat(st, f->node->is_dir ? S_IFDIR : S_IFREG, f->node->size);
 }

@@ -101,6 +101,12 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
 
   task_t *task = task_create((void *)image->entry, 200, 1);
   task->mm.vm_map = vm_map;
+
+  /* Like Linux's comm: the program's file name, so "/bin/ls" (a busybox
+   * link) shows up as "ls" in ps. */
+  const char *base = strrchr(path, '/');
+  strncpy(task->id.name, base ? base + 1 : path, sizeof(task->id.name) - 1);
+  task->id.name[sizeof(task->id.name) - 1] = '\0';
   printk(KERN_DEBUG "task->fs_base: %lx\n", task->mm.fs_base);
 
   task->mm.heap_end = image->initial_brk;

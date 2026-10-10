@@ -109,6 +109,7 @@ long sys_execve(registers_t *regs) {
   current->mm.heap_end = image->mm.heap_end;
   current->mm.fs_base = image->mm.fs_base;
   current->mm.tls_size = image->mm.tls_size;
+  memcpy(current->id.name, image->id.name, sizeof(current->id.name));
 
   asm volatile("mov %0, %%cr3" ::"r"(current->mm.page_table) : "memory");
   if (current->mm.fs_base)

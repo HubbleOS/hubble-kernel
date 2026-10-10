@@ -38,6 +38,35 @@ pub struct Directory {
     pub free_entries: Option<unsafe extern "C" fn(*mut Directory) -> bool>,
 }
 
+// typedef struct VFS_Mount {
+//   char mountpoint[10];
+//   VFS_FS *fs;
+//   struct VFS_Mount *next;
+// } VFS_Mount;
+#[repr(C)]
+pub struct VfsMount {
+    pub mountpoint: [u8; 10],
+    pub fs: *mut VfsFs,
+    pub next: *mut VfsMount,
+}
+
+// typedef struct {
+//   uint32_t pid;
+//   uint32_t ppid;  /* 0 when there is no parent */
+//   uint32_t state; /* task_state_t */
+//   uint32_t cpu;
+//   char name[32];  /* NUL-terminated */
+// } task_info_t;    /* 48 bytes, checked by _Static_assert */
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct TaskInfo {
+    pub pid: u32,
+    pub ppid: u32,
+    pub state: u32,
+    pub cpu: u32,
+    pub name: [u8; 32],
+}
+
 type Unused = Option<unsafe extern "C" fn()>;
 
 #[repr(C)]
@@ -85,6 +114,12 @@ const _: () = {
     assert!(offset_of!(VfsFs, read) == 48);
     assert!(offset_of!(VfsFs, close) == 88);
     assert!(offset_of!(VfsFs, readdir) == 96);
+    assert!(size_of::<TaskInfo>() == 48);
+    assert!(offset_of!(TaskInfo, pid) == 0);
+    assert!(offset_of!(TaskInfo, ppid) == 4);
+    assert!(offset_of!(TaskInfo, state) == 8);
+    assert!(offset_of!(TaskInfo, cpu) == 12);
+    assert!(offset_of!(TaskInfo, name) == 16);
 };
 
 unsafe extern "C" {
@@ -99,4 +134,7 @@ unsafe extern "C" {
     pub fn printk_log_size() -> usize;
     pub fn printk_set_console_level(level: c_int);
     pub fn printk_get_console_level() -> c_int;
+    pub fn vfs_get_mounts() -> *mut VfsMount;
+    pub fn task_snapshot(tasks: *mut TaskInfo, max_tasks: usize) -> usize;
+    pub fn task_get_info(pid: u32, out: *mut TaskInfo) -> bool;
 }

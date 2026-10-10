@@ -13,12 +13,6 @@
 #include <mm/kmalloc.h>
 #include <stdarg.h>
 
-typedef struct VFS_Mount {
-  char mountpoint[10];
-  VFS_FS *fs;
-  struct VFS_Mount *next;
-} VFS_Mount;
-
 static VFS_Mount *vfs_mounts = NULL;
 
 /** @brief Get the relative path portion after a mountpoint prefix. */
@@ -37,6 +31,8 @@ static const char *vfs_get_relpath(const char *path, const char *mountpoint) {
 
   return NULL;
 }
+
+VFS_Mount *vfs_get_mounts(void) { return vfs_mounts; }
 
 /** @brief Mount a filesystem at the given mountpoint. */
 bool vfs_mount(const char *mountpoint, gpt_partition_t *partition,
@@ -101,6 +97,20 @@ bool vfs_mount_fs(const char *mountpoint, VFS_FS *fs) {
       strlen(mountpoint) >= sizeof(((VFS_Mount *)0)->mountpoint))
     return false;
 
+  if (vfs_mounts) {
+    VFS_File *dir = vfs_open(mountpoint, VFS_O_RDONLY);
+    if (IS_ERR(dir)) {
+      printk(KERN_ERR "VFS: mountpoint %s does not exist\n", mountpoint);
+      return false;
+    }
+    bool is_dir = dir->node->is_dir;
+    vfs_close(dir);
+    if (!is_dir) {
+      printk(KERN_ERR "VFS: mountpoint %s is not a directory\n", mountpoint);
+      return false;
+    }
+  }
+
   VFS_Mount *mnt = kmalloc(sizeof(VFS_Mount), GFP_KERNEL);
   if (!mnt)
     return false;
@@ -117,14 +127,13 @@ bool vfs_mount_fs(const char *mountpoint, VFS_FS *fs) {
 static VFS_Mount *vfs_find_mount_for_path(const char *path) {
   VFS_Mount *best = NULL;
   size_t best_len = 0;
-
+  printk(KERN_DEBUG "vfs_find_mount_for_path: path=%s\n", path);
   for (VFS_Mount *m = vfs_mounts; m; m = m->next) {
     size_t len = strlen(m->mountpoint);
-    /* Match whole path components only: "/proc" must not claim
-     * "/processes". A mountpoint ending in '/' (the root) matches
-     * everything under it. */
+
     bool boundary = path[len] == '\0' || path[len] == '/' ||
                     (len > 0 && m->mountpoint[len - 1] == '/');
+
     if (strncmp(path, m->mountpoint, len) == 0 && boundary) {
       if (len > best_len) {
         best = m;
@@ -132,6 +141,7 @@ static VFS_Mount *vfs_find_mount_for_path(const char *path) {
       }
     }
   }
+
   return best;
 }
 
@@ -228,6 +238,8 @@ int vfs_write(VFS_File *file, const void *buf, uint32_t size) {
   /* VFS_O_WRONLY's bit is set for both write-only and read-write. */
   if (!(file->flags & VFS_O_WRONLY))
     return -EBADF;
+  if (file->node->is_dir)
+    return -EISDIR;
   if (!file->node->fs->write)
     return -EROFS;
   if (file->flags & VFS_O_APPEND)
@@ -269,7 +281,8 @@ Directory vfs_readdir(const char *path) {
   if (!mnt)
     return (Directory){0};
   const char *relpath = vfs_get_relpath(path, mnt->mountpoint);
-
+  if (!mnt->fs->readdir)
+    return (Directory){0};
   return mnt->fs->readdir(mnt->fs, relpath);
 }
 

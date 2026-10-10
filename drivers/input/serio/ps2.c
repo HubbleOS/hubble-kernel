@@ -9,8 +9,6 @@
 
 /* -- Port I/O --------------------------------------------- */
 
-/* Bounded waits: a machine without a PS/2 controller (or port) must not
- * hang here. */
 bool ps2_wait_status(uint8_t mask, uint8_t want, uint64_t timeout_ms) {
   uint64_t deadline = hpet_get_time_ns() + timeout_ms * 1000000ULL;
   while ((inb(PS2_STATUS) & mask) != want)
@@ -32,8 +30,6 @@ int ps2_recv(uint64_t timeout_ms) {
     return -1;
   return inb(PS2_DATA);
 }
-
-/* -- Controller initialisation ---------------------------- */
 
 static bool init_done = false;
 static bool present = false;
@@ -63,23 +59,18 @@ static bool ps2_init_hw(void) {
   if (config < 0)
     return false;
 
-  /* 4. Disable IRQs, enable set 2 -> set 1 translation (the keyboard
-   * driver decodes set 1; see keyboard_init_hw) */
   config &= ~0x03;
   config |= 0x40;
   if (!ps2_send(PS2_COMMAND, 0x60) || !ps2_send(PS2_DATA, (uint8_t)config))
     return false;
 
-  /* 5. Enable first port */
   if (!ps2_send(PS2_COMMAND, 0xAE))
     return false;
 
-  /* 6. Enable keyboard scanning (no ACK just means no keyboard yet) */
   if (!ps2_send(PS2_DATA, 0xF4))
     return false;
   (void)ps2_recv(50);
 
-  /* 7. Re-enable IRQs in config */
   if (!ps2_send(PS2_COMMAND, 0x20))
     return false;
   config = ps2_recv(50);

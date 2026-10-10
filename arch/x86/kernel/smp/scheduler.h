@@ -173,6 +173,35 @@ void task_kill_by_task(task_t *task);
  */
 void task_kill_by_pid(uint32_t pid);
 
+/**
+ * @brief Copy of the public facts about one task, for /proc and the like.
+ *
+ * Callers get a copy rather than a task_t pointer: the task may exit
+ * and be freed right after the snapshot, and task_t's layout is private
+ * to the scheduler. Shared with Rust (fs/procfs), so keep it stable.
+ */
+typedef struct {
+  uint32_t pid;
+  uint32_t ppid;  /* 0 when there is no parent */
+  uint32_t state; /* task_state_t */
+  uint32_t cpu;
+  char name[32]; /* NUL-terminated */
+} task_info_t;
+
+_Static_assert(sizeof(task_info_t) == 48, "task_info_t is shared with Rust");
+
+/**
+ * @brief Copy up to @p max tasks into @p out
+ * @return Number of tasks copied
+ */
+size_t task_snapshot(task_info_t *out, size_t max);
+
+/**
+ * @brief Copy the info of the task with @p pid into @p out
+ * @return false if no such task exists (anymore)
+ */
+bool task_get_info(uint32_t pid, task_info_t *out);
+
 #define task_kill(...)                                                         \
   _task_kill_select(__VA_ARGS__, task_kill_by_pid,                             \
                     task_kill_by_task)(__VA_ARGS__)

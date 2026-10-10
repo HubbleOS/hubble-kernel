@@ -19,6 +19,7 @@ VFS_Node *dev_vfs_create_device(VFS_FS *fs, const char *path);
 int dev_vfs_write_device(VFS_File *file, const void *buf, uint32_t size);
 uint64_t mmap_device(VFS_File *file, uint64_t offset, size_t size);
 int dev_vfs_read_device(VFS_File *file, void *buf, uint32_t size);
+Directory dev_vfs_list_devices(VFS_FS *fs, const char *path);
 
 /** @brief Initialise the device VFS instance. */
 bool dev_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba) {
@@ -29,6 +30,7 @@ bool dev_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba) {
   fs->write = dev_vfs_write_device;
   fs->read = dev_vfs_read_device;
   fs->fs = fs;
+  fs->readdir = dev_vfs_list_devices;
   return 1;
 }
 
@@ -46,7 +48,7 @@ VFS_device_reg *dev_vfs_find_device(VFS_FS *fs, const char *path) {
 /** @brief Read from a device file. */
 int dev_vfs_read_device(VFS_File *file, void *buf, uint32_t size) {
   VFS_device_reg *dev = (VFS_device_reg *)file->node->fs_node;
-  if (!dev->read)
+  if (!dev || !dev->read)
     return 0;
   int ret = (int)dev->read(0, size, buf);
   file->pos = 0;
@@ -56,13 +58,24 @@ int dev_vfs_read_device(VFS_File *file, void *buf, uint32_t size) {
 /** @brief Write to a device file. */
 int dev_vfs_write_device(VFS_File *file, const void *buf, uint32_t size) {
   VFS_device_reg *dev = (VFS_device_reg *)file->node->fs_node;
-  if (!dev->write)
+  if (!dev || !dev->write)
     return 0;
   return (int)dev->write(0, size, buf);
 }
 
 /** @brief Open a device file by path. */
 VFS_Node *dev_vfs_open_device(VFS_FS *fs, const char *path) {
+  /* The empty path is the mountpoint itself: the filesystem's root
+   * directory, which stat (ls probing /dev) has to be able to open. */
+  if (!*path) {
+    VFS_Node *root = kmalloc(sizeof(VFS_Node), GFP_KERNEL);
+    if (!root)
+      return NULL;
+    memset(root, 0, sizeof(VFS_Node));
+    root->fs = fs;
+    root->is_dir = true;
+    return root;
+  }
   VFS_device_reg *dev = dev_vfs_find_device(fs, path);
   if (dev) {
     if (dev->open)
@@ -112,11 +125,22 @@ void dev_vfs_register(const char *name, uint64_t (*mmap)(uint64_t, size_t),
   dev->next = dev_vfs_devices;
   dev_vfs_devices = dev;
 }
+Directory dev_vfs_list_devices(VFS_FS *fs, const char *path) {
+  Directory dir = {0};
+  VFS_device_reg *dev = dev_vfs_devices;
+  while (dev) {
+    dir.entries[dir.count].name = dev->name;
+    dir.entries[dir.count].is_dir = false;
+    dir.count++;
+    dev = dev->next;
+  }
+  return dir;
+}
 
 /** @brief MMAP a device file. */
 uint64_t mmap_device(VFS_File *file, uint64_t offset, size_t size) {
   VFS_device_reg *dev = (VFS_device_reg *)file->node->fs_node;
-  if (dev->mmap)
+  if (dev && dev->mmap)
     return dev->mmap(offset, size);
   return 0;
 }
