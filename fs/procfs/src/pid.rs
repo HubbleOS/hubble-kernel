@@ -28,6 +28,10 @@ pub static PID_FILES: &[PidFile] = &[
         name: c"comm",
         generate: comm,
     },
+    PidFile {
+        name: c"stat",
+        generate: stat,
+    }
 ];
 
 pub fn parse_pid(s: &[u8]) -> Option<u32> {
@@ -76,3 +80,13 @@ fn status(t: &TaskInfo, out: &mut String) {
 fn comm(t: &TaskInfo, out: &mut String) {
     let _ = writeln!(out, "{}", as_text(&t.name));
 }
+
+fn stat(t: &TaskInfo, out: &mut String) {
+    let _ = write!(
+        out,
+        "{} {} {} {}\n",
+        t.pid,
+        as_text(&t.name),
+        state_char(t.state),
+        t.ppid);
+    }

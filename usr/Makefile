@@ -42,6 +42,21 @@ BUSYBOX := $(KERNEL_PATH)/busy/busybox
 BUSYBOX_APPLETS := $(shell $(BUSYBOX) --list-full 2>/dev/null || \
 	$(BUSYBOX) --list 2>/dev/null | sed 's|^|bin/|')
 
+# Linux-ABI demo programs (usr/demos/*.c -> /bin/<name>), built static
+# against musl. Skipped, with a note, when the musl cross compiler is not
+# found: the image does not need them.
+MUSL_CC ?= $(firstword $(shell command -v x86_64-linux-musl-gcc 2>/dev/null) \
+	$(wildcard $(HOME)/opt/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc))
+DEMO_SRCS := $(wildcard demos/*.c)
+DEMOS := $(if $(MUSL_CC),$(patsubst demos/%.c,$(BUILD_DIR)/demos/%,$(DEMO_SRCS)))
+
+# /bin/desktop: libgui (lib/libgui) in its GUI_DEMO configuration, with
+# the HubbleOS platform layer from apps/desktop/platform. Also musl.
+LIBGUI_SRCS := $(shell find lib/libgui/src -name '*.c')
+DESKTOP_SRCS := $(shell find apps/desktop -name '*.c')
+DESKTOP_HDRS := $(shell find lib/libgui apps/desktop -name '*.h')
+DESKTOP := $(if $(MUSL_CC),$(BUILD_DIR)/demos/desktop)
+
 # ---------------------------------------------------------------------------
 # Targets
 # ---------------------------------------------------------------------------
@@ -58,10 +73,22 @@ $(BUILD_DIR)/init.elf: $(SRC) $(LDSCRIPT)
 		-o $@ $(SRC)
 	@echo "initramfs: built /init -> $@"
 
+$(BUILD_DIR)/demos/%: demos/%.c
+	@mkdir -p $(dir $@)
+	$(Q)$(MUSL_CC) -static -O2 -Wall -Wextra -o $@ $<
+	@echo "initramfs: built demo $* -> $@"
+
+$(BUILD_DIR)/demos/desktop: $(LIBGUI_SRCS) $(DESKTOP_SRCS) $(DESKTOP_HDRS)
+	@mkdir -p $(dir $@)
+	$(Q)$(MUSL_CC) -static -O2 -DGUI_DEMO \
+		-Iapps/desktop -Ilib/libgui/include -Ilib/libgui/src \
+		-o $@ $(DESKTOP_SRCS) $(LIBGUI_SRCS)
+	@echo "initramfs: built desktop -> $@"
+
 # Everything that ends up in the image. Depending on init.elf alone meant
 # rebuilt modules (or a new busybox) were never copied in once the image
 # existed - the kernel then booted with stale .ko files.
-INITRAMFS_INPUTS := $(BUILD_DIR)/init.elf \
+INITRAMFS_INPUTS := $(BUILD_DIR)/init.elf $(DEMOS) $(DESKTOP) \
 	$(wildcard $(KERNEL_PATH)/out/modules/*.ko) \
 	$(wildcard $(KERNEL_PATH)/busy/*) \
 	$(KERNEL_PATH)/scripts/initramfs.py \
@@ -84,6 +111,8 @@ $(INITRAMFS_IMG): $(INITRAMFS_INPUTS)
 		mkdir -p "$(ROOT_DIR)/$$(dirname "$$a")"; \
 		ln -sfn /busybox "$(ROOT_DIR)/$$a"; \
 	done
+	@[ -n "$(MUSL_CC)" ] || [ -z "$(DEMO_SRCS)" ] || echo "initramfs: note: x86_64-linux-musl-gcc not found; demos/ not built"
+	@for d in $(DEMOS) $(DESKTOP); do cp "$$d" $(ROOT_DIR)/bin/; done
 	@chmod +x $(ROOT_DIR)/init
 	@python3 $(KERNEL_PATH)/scripts/initramfs.py \
 		--root $(ROOT_DIR) \

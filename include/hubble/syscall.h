@@ -41,6 +41,7 @@
 #define SYS_clock_gettime 228
 #define SYS_openat 257
 #define SYS_getcwd 79
+#define SYS_chdir 80
 #define SYS_pipe 22
 #define SYS_dup 32
 #define SYS_dup2 33

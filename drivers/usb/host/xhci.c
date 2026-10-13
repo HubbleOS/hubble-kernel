@@ -507,9 +507,57 @@ static int xhci_interrupt_in(struct usb_device *udev,
   return 0;
 }
 
+#define EP_TYPE_BULK_OUT 0x2
+
+static int xhci_bulk_out(struct usb_device *udev,
+                         const struct usb_endpoint_descriptor *desc,
+                         const void *buf, uint16_t len) {
+  struct xhci_dev *dev = udev->hcd_priv;
+  struct xhci_hc *hc = dev->hc;
+  uint8_t num = desc->bEndpointAddress & USB_ENDPOINT_NUMBER_MASK;
+  uint8_t dci = num * 2;
+  uint16_t max_packet = desc->wMaxPacketSize & 0x7FF;
+
+  if (!num || dev->eps[dci] || !max_packet)
+    return -1;
+
+  struct xhci_ep *ep = xhci_ep_alloc(hc);
+  if (!ep)
+    return -1;
+  ep->buf = xhci_alloc_page(hc, &ep->buf_phys);
+  if (!ep->buf) {
+    pmm_free_page(ep->ring.phys);
+    kfree(ep);
+    return -1;
+  }
+  ep->len = len > VMM_PAGE_SIZE ? VMM_PAGE_SIZE : len;
+  memcpy(ep->buf, buf, ep->len);
+  dev->eps[dci] = ep;
+
+  xhci_in_ctx_reset(dev, (1u << 0) | (1u << dci));
+
+  /* Slot context: current state, with room for the new endpoint. */
+  uint32_t *slot = xhci_in_ctx(dev, 1);
+  memcpy(slot, xhci_out_ctx(dev, 0), hc->ctx_size);
+  if (SLOT_GET_ENTRIES(slot[0]) < dci)
+    slot[0] = (slot[0] & ~SLOT_ENTRIES_MASK) | SLOT_ENTRIES(dci);
+  slot[3] = 0; /* device address and slot state are output-only */
+
+  uint32_t burst =
+      udev->speed == USB_SPEED_HIGH ? (desc->wMaxPacketSize >> 11) & 0x3 : 0;
+  uint32_t esit = max_packet * (burst + 1);
+  uint32_t *ep_ctx = xhci_in_ctx(dev, 1 + dci);
+  ep_ctx[0] = EP_INTERVAL(xhci_ep_interval(udev->speed, desc->bInterval));
+  ep_ctx[1] = EP_CERR(3) | EP_TYPE(EP_TYPE_BULK_OUT) | EP_MAX_BURST(burst) |
+              EP_MAX_PACKET(max_packet);
+  xhci_set_ep_dequeue(ep_ctx, &ep->ring);
+  ep_ctx[4] = EP_AVG_TRB_LEN(max_packet) | EP_MAX_ESIT_LO(esit);
+}
+
 static const struct usb_hcd_ops xhci_ops = {
     .control = xhci_control,
     .interrupt_in = xhci_interrupt_in,
+    .bulk_out = xhci_bulk_out,
 };
 
 /* -- Device attach / detach ------------------------------- */

@@ -125,14 +125,42 @@ void dev_vfs_register(const char *name, uint64_t (*mmap)(uint64_t, size_t),
   dev->next = dev_vfs_devices;
   dev_vfs_devices = dev;
 }
+/* Names point into the device registrations, which are never freed, so
+ * only the array is owned by the listing. */
+static bool dev_vfs_free_entries(Directory *dir) {
+  if (!dir)
+    return false;
+  kfree(dir->entries);
+  dir->entries = NULL;
+  dir->count = 0;
+  return true;
+}
+
+/** @brief List the registered devices (the root is the only directory). */
 Directory dev_vfs_list_devices(VFS_FS *fs, const char *path) {
+  (void)fs;
   Directory dir = {0};
-  VFS_device_reg *dev = dev_vfs_devices;
-  while (dev) {
+  /* vfs_readdir passes "/" for the mount root (vfs_open passes ""). */
+  while (path && *path == '/')
+    path++;
+  if (path && *path)
+    return dir;
+
+  int count = 0;
+  for (VFS_device_reg *dev = dev_vfs_devices; dev; dev = dev->next)
+    count++;
+  if (!count)
+    return dir;
+  dir.entries = kmalloc(sizeof(Entry) * count, GFP_KERNEL);
+  if (!dir.entries)
+    return dir;
+  dir.free_entries = dev_vfs_free_entries;
+
+  for (VFS_device_reg *dev = dev_vfs_devices; dev; dev = dev->next) {
     dir.entries[dir.count].name = dev->name;
+    dir.entries[dir.count].cluster = 0;
     dir.entries[dir.count].is_dir = false;
     dir.count++;
-    dev = dev->next;
   }
   return dir;
 }

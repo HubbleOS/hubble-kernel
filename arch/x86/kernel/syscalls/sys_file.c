@@ -19,20 +19,46 @@
 #define AT_FDCWD (-100)
 
 const char *sys_abs_path(const char *path, char *buf, size_t size) {
-  if (!path)
+  if (!path || size < 2)
     return NULL;
-  size_t len = strlen(path);
-  bool relative = path[0] != '/';
-  if (len + (relative ? 1 : 0) + 1 > size)
-    return NULL;
-  if (relative)
-    buf[0] = '/';
-  memcpy(buf + (relative ? 1 : 0), path, len + 1);
+  task_t *task = get_current_task();
+  const char *cwd = task && task->fdtable.cwd[0] ? task->fdtable.cwd : "/";
+
+  /* buf is built as "/a/b" components; len 0 stands for "/". The cwd is
+   * walked first for a relative path, then the path itself. */
+  size_t len = 0;
+  for (int pass = path[0] == '/'; pass < 2; pass++) {
+    const char *p = pass == 0 ? cwd : path;
+    while (*p) {
+      while (*p == '/')
+        p++;
+      const char *name = p;
+      while (*p && *p != '/')
+        p++;
+      size_t n = (size_t)(p - name);
+
+      if (n == 0 || (n == 1 && name[0] == '.'))
+        continue;
+      if (n == 2 && name[0] == '.' && name[1] == '.') {
+        while (len > 0 && buf[--len] != '/')
+          ;
+        continue;
+      }
+      if (len + 1 + n + 1 > size)
+        return NULL;
+      buf[len++] = '/';
+      memcpy(buf + len, name, n);
+      len += n;
+    }
+  }
+  if (len == 0)
+    buf[len++] = '/';
+  buf[len] = '\0';
   return buf;
 }
 
 /* Open @p path just to learn whether it exists and what it is. */
-static long probe(const char *abs, bool *is_dir) {
+long probe(const char *abs, bool *is_dir) {
   VFS_File *f = vfs_open(abs, VFS_O_RDONLY);
   if (IS_ERR(f))
     return PTR_ERR(f);
@@ -63,7 +89,7 @@ long sys_access(const char *path, int mode) {
 }
 
 long sys_openat(int dirfd, const char *path, int flags, int mode) {
-  /* Only absolute paths or paths relative to the (fixed) cwd. */
+  /* Only absolute paths or paths relative to the cwd. */
   if (path && path[0] != '/' && dirfd != AT_FDCWD)
     return -ENOSYS;
   return sys_open(path, flags, mode);

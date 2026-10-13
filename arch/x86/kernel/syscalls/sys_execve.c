@@ -85,8 +85,10 @@ static void free_strvec(char **vec) {
 long sys_execve(registers_t *regs) {
   const char *path = (const char *)regs->rdi;
 
-  if (!path)
-    return -EINVAL;
+  char abs[SYS_PATH_MAX];
+  if (!sys_abs_path(path, abs, sizeof(abs)))
+    return path ? -ENAMETOOLONG : -EFAULT;
+  path = abs; /* "./prog" runs from the cwd */
 
   char **argv = copy_strvec_from_user((char *const *)regs->rsi);
   char **envp = copy_strvec_from_user((char *const *)regs->rdx);

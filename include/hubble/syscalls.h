@@ -46,6 +46,7 @@ long sys_getppid(void);
 long sys_gettid(void);
 long sys_geteuid(void);
 long sys_getcwd(char *buf, size_t size);
+long sys_chdir(const char *path);
 long sys_access(const char *path, int mode);
 long sys_openat(int dirfd, const char *path, int flags, int mode);
 long sys_ftruncate(int fd, long length);

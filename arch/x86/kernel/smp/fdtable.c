@@ -4,6 +4,7 @@
  */
 #include "fdtable.h"
 #include <hubble/errno.h>
+#include <hubble/string.h>
 
 #define CONSOLE_PATH "/dev/tty0"
 
@@ -51,6 +52,8 @@ void fd_copy_table(task_t *child, task_t *parent) {
     child->fdtable.fds[fd].file = from->file ? file_get(from->file) : NULL;
     child->fdtable.fds[fd].fd_flags = from->fd_flags;
   }
+  /* The working directory is inherited along with the descriptors. */
+  memcpy(child->fdtable.cwd, parent->fdtable.cwd, sizeof(child->fdtable.cwd));
 }
 
 void fd_close_on_exec(task_t *task) {

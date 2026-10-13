@@ -23,8 +23,12 @@ uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
 #define SYS_PATH_MAX 512
 
 /**
- * @brief Absolute form of a user path: relative paths are resolved
- *        against "/" (there is no per-process working directory yet).
+ * @brief Absolute, normalised form of a user path
+ *
+ * Relative paths are resolved against the calling task's cwd; "." and
+ * empty components are dropped and ".." removes the previous component
+ * (never above "/"). This is lexical, as the VFS has no "." / "..".
+ *
  * @return @p buf, or NULL if @p path is NULL or too long
  */
 const char *sys_abs_path(const char *path, char *buf, size_t size);

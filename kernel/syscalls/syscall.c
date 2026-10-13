@@ -62,6 +62,7 @@ static syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_rt_sigaction] = (syscall_fn_t)sys_rt_sigaction,
     [SYS_rt_sigprocmask] = (syscall_fn_t)sys_rt_sigprocmask,
     [SYS_getcwd] = (syscall_fn_t)sys_getcwd,
+    [SYS_chdir] = (syscall_fn_t)sys_chdir,
     [SYS_getuid] = (syscall_fn_t)sys_getuid,
     [SYS_getpid] = (syscall_fn_t)sys_getpid,
     [SYS_getppid] = (syscall_fn_t)sys_getppid,
@@ -92,7 +93,8 @@ uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
     printk(KERN_ERR "[SYSCALL] Invalid syscall: %d\n", num);
     return -ENOSYS;
   }
-  // printk(KERN_DEBUG "[SYSCALL] %d called with args: %llu, %llu, %llu, %llu, %llu, %llu\n",
+  // printk(KERN_DEBUG "[SYSCALL] %d called with args: %llu, %llu, %llu, %llu,
+  // %llu, %llu\n",
   //        num, a1, a2, a3, a4, a5, a6);
   return syscall_table[num](a1, a2, a3, a4, a5, a6);
 }

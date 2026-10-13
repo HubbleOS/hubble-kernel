@@ -142,6 +142,7 @@ typedef struct {
 
 typedef struct {
   fd_entry_t fds[MAX_FDS];
+  char cwd[256];
 } task_fdtable_t;
 
 // ---- Signal state ----

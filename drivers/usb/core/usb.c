@@ -48,6 +48,8 @@ static int usb_probe_interface(struct usb_device *dev,
     return usb_kbd_probe(dev, iface, ep);
   case USB_PROTOCOL_MOUSE:
     return usb_mouse_probe(dev, iface, ep);
+  case USB_CLASS_MASS_STORAGE:
+    return usb_storage_probe(dev, iface, ep);
   default:
     return -1;
   }

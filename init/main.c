@@ -160,6 +160,13 @@ void start_kernel(void) {
     g_platform.fb_width = lfb->width;
     g_platform.fb_height = lfb->height;
     g_platform.fb_pitch = lfb->pitch;
+    g_platform.fb_bpp = lfb->bpp;
+    g_platform.fb_red_shift = lfb->red_mask_shift;
+    g_platform.fb_red_size = lfb->red_mask_size;
+    g_platform.fb_green_shift = lfb->green_mask_shift;
+    g_platform.fb_green_size = lfb->green_mask_size;
+    g_platform.fb_blue_shift = lfb->blue_mask_shift;
+    g_platform.fb_blue_size = lfb->blue_mask_size;
 
     framebuffer_info_t fb;
     fb.base = lfb->address;
@@ -267,6 +274,7 @@ void kmain_thread(void) {
   module_load("/modules/tty.ko");
   module_load("/modules/usb.ko"); /* after input.ko: registers keyboards */
   module_load("/modules/procfs.ko");
+  module_load("/modules/video.ko");
 
   char *argv[] = {"/busybox", "sh", "-i", NULL};
   char *envp[] = {"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "HOME=/", "TERM=linux",

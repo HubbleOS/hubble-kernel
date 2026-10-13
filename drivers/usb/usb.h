@@ -39,6 +39,9 @@
 #define USB_SUBCLASS_BOOT 0x01
 #define USB_PROTOCOL_KEYBOARD 0x01
 #define USB_PROTOCOL_MOUSE 0x02
+#define USB_CLASS_MASS_STORAGE 0x08
+#define USB_SUBCLASS_SCSI 0x06
+#define USB_PROTOCOL_BULK_ONLY 0x50
 
 /* -- Device speeds (xHCI PORTSC numbering) --------------- */
 
@@ -130,6 +133,9 @@ struct usb_hcd_ops {
   int (*interrupt_in)(struct usb_device *dev,
                       const struct usb_endpoint_descriptor *ep,
                       usb_complete_t complete, void *ctx);
+  int (*bulk_out)(struct usb_device *dev,
+                  const struct usb_endpoint_descriptor *ep, const void *buf,
+                  uint16_t len);
 };
 
 /** @brief A class driver bound to one interface of a device */
@@ -179,3 +185,6 @@ int usb_kbd_probe(struct usb_device *dev,
 int usb_mouse_probe(struct usb_device *dev,
                     const struct usb_interface_descriptor *iface,
                     const struct usb_endpoint_descriptor *ep);
+int usb_storage_probe(struct usb_device *dev,
+                      const struct usb_interface_descriptor *iface,
+                      const struct usb_endpoint_descriptor *ep);
