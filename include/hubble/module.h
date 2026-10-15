@@ -63,3 +63,6 @@ int module_refresh_symbols(void);
 
 typedef struct module module_t;
 module_t *module_find(const char *name);
+
+/** Head of the loaded-module list and its length (walk it via ->next). */
+int module_export_module_list(module_t **out_list, size_t *out_count);

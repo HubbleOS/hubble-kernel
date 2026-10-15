@@ -618,6 +618,11 @@ void schedule(registers_t *regs) {
 
   if (new_task->mm.fs_base)
     wrmsr(0xC0000100, new_task->mm.fs_base);
+  /* Every task switches with GS at its baseline (user value in GS_BASE,
+   * per-cpu block in KERNEL_GS_BASE: see task_wait), so the user value
+   * is simply the new task's. Unconditional: 0 must replace the last
+   * task's value too. */
+  wrmsr(MSR_GS_BASE, new_task->mm.gs_base);
 
   task_state_load(new_task, regs);
 }
@@ -750,26 +755,17 @@ void scheduler_init(void) {
 }
 
 /* Caller holds the lock of the runqueue @p t is on. */
-static void task_fill_info(task_t *t, int cpu, task_info_t *info) {
-  info->pid = t->id.pid;
-  info->ppid = t->linkage.parent ? t->linkage.parent->id.pid : 0;
-  info->state = t->linkage.state;
-  info->cpu = cpu;
-  memcpy(info->name, t->id.name, sizeof(info->name));
-  info->name[sizeof(info->name) - 1] = '\0';
-}
-
 /**
- * @brief Copy up to @p max tasks into @p out
+ * @brief Copy up to @p max live task pids into @p out
  *
  * Every live task (ready, running, blocked or zombie) sits in some CPU's
- * runqueue, so walking them all lists every process. Each queue is copied
+ * runqueue, so walking them all lists every process. Each queue is read
  * under its lock; the result is consistent per CPU, not globally, which is
  * enough for ps.
  *
- * @return Number of tasks copied
+ * @return Number of pids copied
  */
-size_t task_snapshot(task_info_t *out, size_t max) {
+size_t task_snapshot(uint32_t *out, size_t max) {
   size_t n = 0;
   /* All MAX_CPUS slots: runqueues are indexed by APIC ID in places, which
    * can exceed the CPU count. Unused slots are zeroed (count 0). */
@@ -780,7 +776,7 @@ size_t task_snapshot(task_info_t *out, size_t max) {
     uint64_t flags = save_flags_cli();
     spinlock_acquire(&rq->lock);
     for (size_t i = 0; i < rq->count && n < max; i++)
-      task_fill_info(rq->queue[i], cpu, &out[n++]);
+      out[n++] = rq->queue[i]->id.pid;
     spinlock_release(&rq->lock);
     restore_flags(flags);
   }
@@ -788,20 +784,28 @@ size_t task_snapshot(task_info_t *out, size_t max) {
 }
 
 /**
- * @brief Copy the info of the task with @p pid into @p out
+ * @brief Copy the task with @p pid into @p out, its parent's pid into
+ *        @p ppid (0 without a parent)
  *
- * Same walk and locking as task_snapshot(), stopping at the match.
+ * Same walk and locking as task_snapshot(), stopping at the match. The
+ * lock keeps the task from being freed during the copy; a task running
+ * on another CPU can still change its own fields meanwhile, so single
+ * fields are current but the copy as a whole may be slightly torn.
  *
  * @return false if no such task exists (anymore)
  */
-bool task_get_info(uint32_t pid, task_info_t *out) {
+bool task_get(uint32_t pid, task_t *out, uint32_t *ppid) {
   for (int cpu = 0; cpu < MAX_CPUS; cpu++) {
     cpu_runqueue_t *rq = &runqueues[cpu];
     uint64_t flags = save_flags_cli();
     spinlock_acquire(&rq->lock);
     for (size_t i = 0; i < rq->count; i++) {
-      if (rq->queue[i]->id.pid == pid) {
-        task_fill_info(rq->queue[i], cpu, out);
+      task_t *t = rq->queue[i];
+      if (t->id.pid == pid) {
+        memcpy(out, t, sizeof(*out));
+        /* TODO: orphans keep a dangling parent pointer (no reparenting
+         * on exit yet), so this can read freed memory. */
+        *ppid = t->linkage.parent ? t->linkage.parent->id.pid : 0;
         spinlock_release(&rq->lock);
         restore_flags(flags);
         return true;

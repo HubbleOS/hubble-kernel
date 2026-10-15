@@ -14,6 +14,7 @@
 /* Forward-declared, not included: waitqueue.h includes scheduler.h, which
  * includes this header - a plain pointer only needs the incomplete type. */
 struct wait_queue;
+struct syscall_abi; /* syscalls/abi.h */
 
 /* -- Constants ---------------------------------------------------------- */
 
@@ -124,6 +125,7 @@ typedef struct {
                     * fs_base isn't an owned TLS allocation (no TLS, or a
                     * raw value set via arch_prctl) - lets fork() know
                     * whether/how much to duplicate rather than alias it */
+  uint64_t gs_base; /* user GS_BASE (arch_prctl ARCH_SET_GS), 0 if unset */
 } task_mm_t;
 
 // ---- Stacks state ----
@@ -173,4 +175,6 @@ typedef struct task {
   task_signals_t signals;
   task_linkage_t linkage;
   struct wait_queue *child_wait; /* woken by task_exit() for wait4() */
+  const struct syscall_abi *abi; /* set by exec, inherited by fork;
+                                 * NULL for kernel threads */
 } task_t;

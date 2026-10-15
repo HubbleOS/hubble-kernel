@@ -57,6 +57,7 @@ typedef struct {
   void *tls_init;
 
   uint64_t initial_brk;
+  uint8_t osabi; /* e_ident[EI_OSABI]: which OS the binary was built for */
 } elf_image_t;
 
 int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm,

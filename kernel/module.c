@@ -48,7 +48,8 @@ extern void waitqueue_wait_event(void);
 extern void _task_create_with_arg(void);
 extern void scheduler_add_task(void);
 extern void task_snapshot(void);
-extern void task_get_info(void);
+extern void task_get(void);
+extern void get_current_task(void);
 extern void task_prepare_wait(void);
 extern void task_wait(void);
 
@@ -150,7 +151,10 @@ static const module_export_t g_exports[] = {
     {"limine_exec_addr_req", (uint64_t)(uintptr_t)&limine_exec_addr_req},
     {"vfs_get_mounts", (uint64_t)(uintptr_t)vfs_get_mounts},
     {"task_snapshot", (uint64_t)(uintptr_t)task_snapshot},
-    {"task_get_info", (uint64_t)(uintptr_t)task_get_info}};
+    {"task_get", (uint64_t)(uintptr_t)task_get},
+    {"get_current_task", (uint64_t)(uintptr_t)get_current_task},
+    {"module_export_module_list",
+     (uint64_t)(uintptr_t)module_export_module_list}};
 
 #define EXPORT_COUNT (sizeof(g_exports) / sizeof(g_exports[0]))
 
@@ -318,6 +322,19 @@ static uint64_t module_resolve_symbol(const Elf64_Sym *sym,
     return 0;
 
   return sections[sym->st_shndx].base + sym->st_value;
+}
+
+int module_export_module_list(module_t **out_list, size_t *out_count) {
+  if (!out_list || !out_count)
+    return -EINVAL;
+
+  size_t count = 0;
+  for (module_t *cur = g_modules_list; cur; cur = cur->next)
+    count++;
+
+  *out_list = g_modules_list;
+  *out_count = count;
+  return 0;
 }
 
 /* -- Relocation ------------------------------------------------------------ */

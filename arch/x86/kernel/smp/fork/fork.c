@@ -109,11 +109,14 @@ long sys_fork(registers_t *regs) {
     child->mm.fs_base = parent->mm.fs_base;
   }
 
+  child->mm.gs_base = parent->mm.gs_base;
+
   /* The child's descriptors refer to the parent's open files (shared
    * offsets, as after dup()); each holds its own reference. */
   fd_copy_table(child, parent);
 
   memcpy(child->id.name, parent->id.name, sizeof(child->id.name));
+  child->abi = parent->abi;
   child->linkage.parent = parent;
   child->linkage.sibling = parent->linkage.children;
   parent->linkage.children = child;

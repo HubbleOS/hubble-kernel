@@ -71,7 +71,7 @@ enum Target {
     Root,
     File(&'static files::ProcFile),           // /proc/meminfo
     Pid,                                      // /proc/42 (the task exists)
-    PidFile(TaskInfo, &'static pid::PidFile), // /proc/42/status
+    PidFile(Box<pid::Proc>, &'static pid::PidFile), // /proc/42/status
 }
 
 fn lookup(path: &[u8]) -> Option<Target> {
@@ -82,7 +82,15 @@ fn lookup(path: &[u8]) -> Option<Target> {
     let first = parts.next()?;
     let rest = parts.next();
 
-    match (pid::parse_pid(first), rest) {
+    // /proc/self is the caller's own /proc/<pid>. Linux makes it a
+    // symlink; the VFS has none, so it is resolved right here instead.
+    let pid = if first == b"self" {
+        pid::current_pid()
+    } else {
+        pid::parse_pid(first)
+    };
+
+    match (pid, rest) {
         (None, None) => files::find(first).map(Target::File),
         (None, Some(_)) => None, // "meminfo/x"
         (Some(pid), None) => pid::task(pid).map(|_| Target::Pid),
@@ -218,9 +226,10 @@ unsafe extern "C" fn procfs_readdir(_fs: *mut VfsFs, path: *const c_char) -> Dir
             for f in files::FILES {
                 names.push((f.name.into(), false));
             }
-            for t in pid::snapshot() {
+            names.push((c"self".into(), true));
+            for pid in pid::snapshot() {
                 // A number never contains a NUL.
-                names.push((CString::new(format!("{}", t.pid)).unwrap(), true));
+                names.push((CString::new(format!("{}", pid)).unwrap(), true));
             }
         }
         Some(Target::Pid) => {

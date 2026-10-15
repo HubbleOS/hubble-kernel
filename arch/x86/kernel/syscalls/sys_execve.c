@@ -111,7 +111,11 @@ long sys_execve(registers_t *regs) {
   current->mm.heap_end = image->mm.heap_end;
   current->mm.fs_base = image->mm.fs_base;
   current->mm.tls_size = image->mm.tls_size;
+  current->mm.gs_base = 0;
+  /* Mid-syscall the user GS_BASE sits in KERNEL_GS_BASE until sysret. */
+  wrmsr(MSR_KERNEL_GS_BASE, 0);
   memcpy(current->id.name, image->id.name, sizeof(current->id.name));
+  current->abi = image->abi; /* the new program may speak another ABI */
 
   asm volatile("mov %0, %%cr3" ::"r"(current->mm.page_table) : "memory");
   if (current->mm.fs_base)

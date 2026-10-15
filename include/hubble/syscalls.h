@@ -41,6 +41,8 @@ long sys_fork(registers_t *regs);
 long sys_execve(registers_t *regs);
 long sys_wait4(int pid, int *status, int options, void *rusage);
 long sys_getuid(void);
+struct utsname;
+long sys_uname(struct utsname *buf);
 long sys_getpid(void);
 long sys_getppid(void);
 long sys_gettid(void);

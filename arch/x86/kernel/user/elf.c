@@ -230,6 +230,8 @@ int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm,
     return -1;
   }
 
+  entry_out->osabi = ehdr.e_ident[7]; /* EI_OSABI */
+
   printk(KERN_INFO "[ELF] Loading %s (entry=0x%llx, phnum=%u)\n", path,
          (unsigned long long)ehdr.e_entry, ehdr.e_phnum);
 

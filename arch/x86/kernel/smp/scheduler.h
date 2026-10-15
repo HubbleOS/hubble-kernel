@@ -173,34 +173,26 @@ void task_kill_by_task(task_t *task);
  */
 void task_kill_by_pid(uint32_t pid);
 
+/* task_t is mirrored in Rust (fs/procfs/src/kernel.rs): update both. */
+_Static_assert(sizeof(task_t) == 1808, "task_t is mirrored in fs/procfs");
+
 /**
- * @brief Copy of the public facts about one task, for /proc and the like.
+ * @brief Copy the pids of up to @p max live tasks into @p out
+ * @return Number of pids copied
+ */
+size_t task_snapshot(uint32_t *out, size_t max);
+
+/**
+ * @brief Copy the task with @p pid into @p out
  *
- * Callers get a copy rather than a task_t pointer: the task may exit
- * and be freed right after the snapshot, and task_t's layout is private
- * to the scheduler. Shared with Rust (fs/procfs), so keep it stable.
- */
-typedef struct {
-  uint32_t pid;
-  uint32_t ppid;  /* 0 when there is no parent */
-  uint32_t state; /* task_state_t */
-  uint32_t cpu;
-  char name[32]; /* NUL-terminated */
-} task_info_t;
-
-_Static_assert(sizeof(task_info_t) == 48, "task_info_t is shared with Rust");
-
-/**
- * @brief Copy up to @p max tasks into @p out
- * @return Number of tasks copied
- */
-size_t task_snapshot(task_info_t *out, size_t max);
-
-/**
- * @brief Copy the info of the task with @p pid into @p out
+ * A copy, not a pointer: the task may exit and be freed right after.
+ * Pointer fields in the copy (parent, vm_map, ...) still point at live
+ * kernel objects that can go away at any time, except ppid, which is
+ * resolved under the lock into @p ppid.
+ *
  * @return false if no such task exists (anymore)
  */
-bool task_get_info(uint32_t pid, task_info_t *out);
+bool task_get(uint32_t pid, task_t *out, uint32_t *ppid);
 
 #define task_kill(...)                                                         \
   _task_kill_select(__VA_ARGS__, task_kill_by_pid,                             \

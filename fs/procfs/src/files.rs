@@ -68,6 +68,11 @@ pub static FILES: &[ProcFile] = &[
         generate: tasks,
         write: None,
     },
+    ProcFile {
+        name: c"modules",
+        generate: modules,
+        write: None,
+    },
 ];
 
 pub fn find(name: &[u8]) -> Option<&'static ProcFile> {
@@ -76,15 +81,17 @@ pub fn find(name: &[u8]) -> Option<&'static ProcFile> {
 
 /// One line per task: pid ppid state cpu name.
 fn tasks(out: &mut String) {
-    for t in pid::snapshot() {
+    // A task that exits between the snapshot and its copy is skipped.
+    for p in pid::snapshot().into_iter().filter_map(pid::task) {
+        let t = &p.task;
         let _ = writeln!(
             out,
             "{} {} {} {} {}",
-            t.pid,
-            t.ppid,
-            pid::state_char(t.state),
-            t.cpu,
-            as_text(&t.name)
+            t.id.pid,
+            p.ppid,
+            pid::state_char(t.linkage.state),
+            t.sched.cpu,
+            as_text(&t.id.name)
         );
     }
 }
@@ -152,6 +159,21 @@ fn set_loglevel(data: &[u8]) -> bool {
             true
         }
         _ => false,
+    }
+}
+
+fn modules(out: &mut String) {
+    let mut list: *mut crate::kernel::Module = core::ptr::null_mut();
+    let mut count: usize = 0;
+    let ret = unsafe { crate::kernel::module_export_module_list(&mut list, &mut count) };
+    if ret != 0 {
+        let _ = writeln!(out, "Error retrieving module list: {}", ret);
+        return;
+    }
+    let modules = unsafe { core::slice::from_raw_parts(list, count) };
+    for module in modules {
+        let name = unsafe { as_text(&module.name) };
+        let _ = writeln!(out, "{}", name);
     }
 }
 

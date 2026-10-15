@@ -64,6 +64,7 @@ static syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_getcwd] = (syscall_fn_t)sys_getcwd,
     [SYS_chdir] = (syscall_fn_t)sys_chdir,
     [SYS_getuid] = (syscall_fn_t)sys_getuid,
+    [SYS_uname] = (syscall_fn_t)sys_uname,
     [SYS_getpid] = (syscall_fn_t)sys_getpid,
     [SYS_getppid] = (syscall_fn_t)sys_getppid,
     [SYS_gettid] = (syscall_fn_t)sys_gettid,

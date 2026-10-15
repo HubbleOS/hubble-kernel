@@ -1,22 +1,30 @@
 //! /proc/<pid>: one directory per task, holding PID_FILES.
 //!
 //! Task data is never kept: every open and readdir asks the scheduler
-//! again (task_get_info / task_snapshot copy it out under the runqueue
-//! locks), so a task that exited in between is simply not found (ENOENT).
+//! again (task_get / task_snapshot copy it out under the runqueue locks),
+//! so a task that exited in between is simply not found (ENOENT).
 
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::ffi::CStr;
 use core::fmt::Write;
-use core::mem::MaybeUninit;
 
 use crate::files::as_text;
-use crate::kernel::{TaskInfo, task_get_info, task_snapshot};
+use crate::kernel::*;
 
-/// A file inside /proc/<pid>/, generated from that task's info.
+/// A copy of one task, taken under its runqueue lock.
+pub struct Proc {
+    pub task: Task,
+    /// The parent's pid (0 without one), resolved by C under the lock:
+    /// task.linkage.parent may already be freed when Rust looks at it.
+    pub ppid: u32,
+}
+
+/// A file inside /proc/<pid>/, generated from that task's copy.
 pub struct PidFile {
     pub name: &'static CStr,
-    pub generate: fn(&TaskInfo, &mut String),
+    pub generate: fn(&Proc, &mut String),
 }
 
 pub static PID_FILES: &[PidFile] = &[
@@ -31,7 +39,7 @@ pub static PID_FILES: &[PidFile] = &[
     PidFile {
         name: c"stat",
         generate: stat,
-    }
+    },
 ];
 
 pub fn parse_pid(s: &[u8]) -> Option<u32> {
@@ -39,54 +47,70 @@ pub fn parse_pid(s: &[u8]) -> Option<u32> {
 }
 
 /// The task with this pid right now, or None if it does not exist (anymore).
-pub fn task(pid: u32) -> Option<TaskInfo> {
-    let mut info = MaybeUninit::<TaskInfo>::uninit();
-    if unsafe { task_get_info(pid, info.as_mut_ptr()) } {
-        // task_get_info filled it in when it returned true.
-        Some(unsafe { info.assume_init() })
-    } else {
-        None
+/// Boxed: a Task is 1.8 KB, too much to move around a 16 KB kernel stack.
+pub fn task(pid: u32) -> Option<Box<Proc>> {
+    let mut proc = Box::<Proc>::new_uninit();
+    let p = proc.as_mut_ptr();
+    let mut ppid = 0;
+    // C writes the task straight into the box: no 1.8 KB copy on the stack.
+    if !unsafe { task_get(pid, &raw mut (*p).task, &mut ppid) } {
+        return None;
+    }
+    unsafe {
+        (&raw mut (*p).ppid).write(ppid);
+        // Both fields are written now.
+        Some(proc.assume_init())
     }
 }
 
-/// Every task right now. On the heap: 1024 entries are 48 KB, three
-/// times a kernel stack.
-pub fn snapshot() -> Vec<TaskInfo> {
-    let mut tasks = Vec::with_capacity(1024);
-    let n = unsafe { task_snapshot(tasks.as_mut_ptr(), tasks.capacity()) };
+/// The pid of the task calling us: /proc/self.
+pub fn current_pid() -> Option<u32> {
+    // Our own task can't exit while it is running this code, so reading
+    // through the live pointer is safe, unlike for any other task.
+    let task = unsafe { get_current_task().as_ref() }?;
+    Some(task.id.pid)
+}
+
+/// The pids of every task right now.
+pub fn snapshot() -> Vec<u32> {
+    let mut pids = Vec::with_capacity(1024);
+    let n = unsafe { task_snapshot(pids.as_mut_ptr(), pids.capacity()) };
     // task_snapshot wrote the first n entries.
-    unsafe { tasks.set_len(n) };
-    tasks
+    unsafe { pids.set_len(n) };
+    pids
 }
 
 pub fn state_char(state: u32) -> char {
     match state {
-        0 | 1 => 'R', // READY, RUNNING
-        2 | 3 => 'S', // BLOCKED, SLEEPING
-        4 => 'Z',
-        5 => 'X',
-        6 => 'D',
+        TASK_READY | TASK_RUNNING => 'R',
+        TASK_BLOCKED | TASK_SLEEPING => 'S',
+        TASK_ZOMBIE => 'Z',
+        TASK_DEAD => 'X',
+        TASK_UNINTERRUPTIBLE => 'D',
         _ => '?',
     }
 }
 
-fn status(t: &TaskInfo, out: &mut String) {
-    let _ = writeln!(out, "Name:\t{}", as_text(&t.name));
-    let _ = writeln!(out, "State:\t{}", state_char(t.state));
-    let _ = writeln!(out, "Pid:\t{}", t.pid);
-    let _ = writeln!(out, "PPid:\t{}", t.ppid);
+fn status(p: &Proc, out: &mut String) {
+    let t = &p.task;
+    let _ = writeln!(out, "Name:\t{}", as_text(&t.id.name));
+    let _ = writeln!(out, "State:\t{}", state_char(t.linkage.state));
+    let _ = writeln!(out, "Pid:\t{}", t.id.pid);
+    let _ = writeln!(out, "PPid:\t{}", p.ppid);
 }
 
-fn comm(t: &TaskInfo, out: &mut String) {
-    let _ = writeln!(out, "{}", as_text(&t.name));
+fn comm(p: &Proc, out: &mut String) {
+    let _ = writeln!(out, "{}", as_text(&p.task.id.name));
 }
 
-fn stat(t: &TaskInfo, out: &mut String) {
-    let _ = write!(
+fn stat(p: &Proc, out: &mut String) {
+    let t = &p.task;
+    let _ = writeln!(
         out,
-        "{} {} {} {}\n",
-        t.pid,
-        as_text(&t.name),
-        state_char(t.state),
-        t.ppid);
-    }
+        "{} {} {} {}",
+        t.id.pid,
+        as_text(&t.id.name),
+        state_char(t.linkage.state),
+        p.ppid
+    );
+}

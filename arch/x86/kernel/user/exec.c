@@ -15,6 +15,10 @@
 #include <smp/scheduler.h>
 #include <smp/task.h>
 #include <user/elf.h>
+#include <user/exec.h>
+#include <fs/vfs/vfs.h>
+#include <mm/kmalloc.h>
+#include <syscalls/abi.h>
 
 #define AT_NULL 0
 #define AT_RANDOM 25
@@ -83,6 +87,51 @@ uint64_t build_user_stack(uint64_t stack_top, char *const argv[],
   return (uint64_t)usp;
 }
 
+/* Windows executables start with the DOS "MZ" header. */
+#define PE_LOADER "/bin/peload"
+
+static bool is_pe(const char *path) {
+  VFS_File *f = vfs_open(path, VFS_O_RDONLY);
+  if (IS_ERR(f))
+    return false;
+  char magic[2];
+  bool pe = vfs_read(f, magic, 2) == 2 && magic[0] == 'M' && magic[1] == 'Z';
+  vfs_close(f);
+  return pe;
+}
+
+/**
+ * @brief Run a Windows .exe under the user-space PE loader
+ *
+ * Like Linux's binfmt_misc: "prog.exe a b" becomes
+ * "/bin/peload /path/prog.exe a b". The task keeps the .exe's name.
+ */
+static task_t *execv_pe(const char *path, char *const argv[],
+                        char *const envp[]) {
+  int argc = 0;
+  if (argv)
+    while (argv[argc])
+      argc++;
+
+  char **pe_argv = kmalloc(sizeof(char *) * (argc + 3), GFP_KERNEL);
+  if (!pe_argv)
+    return NULL;
+  int n = 0;
+  pe_argv[n++] = PE_LOADER;
+  pe_argv[n++] = (char *)path;
+  for (int i = 1; i < argc; i++) /* argv[0] is replaced by the path */
+    pe_argv[n++] = argv[i];
+  pe_argv[n] = NULL;
+
+  task_t *task = execv(PE_LOADER, pe_argv, envp);
+  kfree(pe_argv);
+  if (task) {
+    const char *base = strrchr(path, '/');
+    strncpy(task->id.name, base ? base + 1 : path, sizeof(task->id.name) - 1);
+  }
+  return task;
+}
+
 /**
  * @brief Load an ELF binary and create a task for it
  *
@@ -90,6 +139,9 @@ uint64_t build_user_stack(uint64_t stack_top, char *const argv[],
  * @return Pointer to the new task, or NULL on failure
  */
 task_t *execv(const char *path, char *const argv[], char *const envp[]) {
+  if (is_pe(path))
+    return execv_pe(path, argv, envp);
+
   uint64_t *pml4 = vmm_create_user_pagemap();
   vm_map_t *vm_map = vm_map_create();
 
@@ -99,8 +151,16 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
     return NULL;
   }
 
+  const syscall_abi_t *abi = abi_for_elf(image->osabi);
+  if (!abi) {
+    printk(KERN_ERR "exec: %s is built for an unsupported OS (ELF OSABI %u)\n",
+           path, image->osabi);
+    return NULL;
+  }
+
   task_t *task = task_create((void *)image->entry, 200, 1);
   task->mm.vm_map = vm_map;
+  task->abi = abi;
 
   /* Like Linux's comm: the program's file name, so "/bin/ls" (a busybox
    * link) shows up as "ls" in ps. */

@@ -57,6 +57,14 @@ DESKTOP_SRCS := $(shell find apps/desktop -name '*.c')
 DESKTOP_HDRS := $(shell find lib/libgui apps/desktop -name '*.h')
 DESKTOP := $(if $(MUSL_CC),$(BUILD_DIR)/demos/desktop)
 
+# /bin/peload runs Windows .exe files (the kernel hands them to it);
+# usr/win/*.c are Windows test programs for it, built with mingw-w64
+# without a C runtime. Each is skipped when its compiler is missing.
+PELOAD := $(if $(MUSL_CC),$(BUILD_DIR)/demos/peload)
+MINGW_CC ?= $(shell command -v x86_64-w64-mingw32-gcc 2>/dev/null)
+WIN_SRCS := $(wildcard win/*.c)
+WIN_EXES := $(if $(MINGW_CC),$(patsubst win/%.c,$(BUILD_DIR)/win/%.exe,$(WIN_SRCS)))
+
 # ---------------------------------------------------------------------------
 # Targets
 # ---------------------------------------------------------------------------
@@ -75,7 +83,7 @@ $(BUILD_DIR)/init.elf: $(SRC) $(LDSCRIPT)
 
 $(BUILD_DIR)/demos/%: demos/%.c
 	@mkdir -p $(dir $@)
-	$(Q)$(MUSL_CC) -static -O2 -Wall -Wextra -o $@ $<
+	$(Q)$(MUSL_CC) -static -O2 -Wall -Wextra -o $@ $(filter %.c,$^)
 	@echo "initramfs: built demo $* -> $@"
 
 $(BUILD_DIR)/demos/desktop: $(LIBGUI_SRCS) $(DESKTOP_SRCS) $(DESKTOP_HDRS)
@@ -85,10 +93,20 @@ $(BUILD_DIR)/demos/desktop: $(LIBGUI_SRCS) $(DESKTOP_SRCS) $(DESKTOP_HDRS)
 		-o $@ $(DESKTOP_SRCS) $(LIBGUI_SRCS)
 	@echo "initramfs: built desktop -> $@"
 
+$(BUILD_DIR)/demos/peload: $(wildcard apps/peload/*.c apps/peload/*.h)
+	@mkdir -p $(dir $@)
+	$(Q)$(MUSL_CC) -static -O2 -Wall -Wextra -o $@ $(filter %.c,$^)
+	@echo "initramfs: built peload -> $@"
+
+$(BUILD_DIR)/win/%.exe: win/%.c
+	@mkdir -p $(dir $@)
+	$(Q)$(MINGW_CC) -O2 -Wall -Wextra -nostdlib -e start -o $@ $< -lkernel32
+	@echo "initramfs: built Windows program $*.exe -> $@"
+
 # Everything that ends up in the image. Depending on init.elf alone meant
 # rebuilt modules (or a new busybox) were never copied in once the image
 # existed - the kernel then booted with stale .ko files.
-INITRAMFS_INPUTS := $(BUILD_DIR)/init.elf $(DEMOS) $(DESKTOP) \
+INITRAMFS_INPUTS := $(BUILD_DIR)/init.elf $(DEMOS) $(DESKTOP) $(PELOAD) $(WIN_EXES) \
 	$(wildcard $(KERNEL_PATH)/out/modules/*.ko) \
 	$(wildcard $(KERNEL_PATH)/busy/*) \
 	$(KERNEL_PATH)/scripts/initramfs.py \
@@ -112,7 +130,7 @@ $(INITRAMFS_IMG): $(INITRAMFS_INPUTS)
 		ln -sfn /busybox "$(ROOT_DIR)/$$a"; \
 	done
 	@[ -n "$(MUSL_CC)" ] || [ -z "$(DEMO_SRCS)" ] || echo "initramfs: note: x86_64-linux-musl-gcc not found; demos/ not built"
-	@for d in $(DEMOS) $(DESKTOP); do cp "$$d" $(ROOT_DIR)/bin/; done
+	@for d in $(DEMOS) $(DESKTOP) $(PELOAD) $(WIN_EXES); do cp "$$d" $(ROOT_DIR)/bin/; done
 	@chmod +x $(ROOT_DIR)/init
 	@python3 $(KERNEL_PATH)/scripts/initramfs.py \
 		--root $(ROOT_DIR) \

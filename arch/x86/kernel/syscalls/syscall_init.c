@@ -19,8 +19,6 @@
 #define MSR_LSTAR 0xC0000082
 #define MSR_SFMASK 0xC0000084
 #define EFER_SCE (1 << 0)
-#define MSR_KERNEL_GS_BASE 0xC0000102
-#define MSR_GS_BASE 0xC0000101
 
 extern void syscall_entry(void);
 
