@@ -6,3 +6,5 @@
 
 long sys_getuid(void) { return 0; }
 long sys_geteuid(void) { return 0; }
+long sys_getgid(void) { return 0; }
+long sys_getegid(void) { return 0; }

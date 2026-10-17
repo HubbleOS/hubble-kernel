@@ -58,8 +58,9 @@ void waitqueue_sleep(wait_queue_t *wq) {
   task_wait(0);
 }
 
-bool waitqueue_wait_event(wait_queue_t *wq, bool (*cond)(void *), void *arg,
-                          uint64_t deadline_ns) {
+bool waitqueue_wait_any(wait_queue_t *const *wqs, size_t n,
+                        bool (*cond)(void *), void *arg,
+                        uint64_t deadline_ns) {
   task_t *current = get_current_task();
 
   while (!cond(arg)) {
@@ -67,20 +68,29 @@ bool waitqueue_wait_event(wait_queue_t *wq, bool (*cond)(void *), void *arg,
       return false;
 
     task_prepare_wait();
-    spinlock_acquire(&wq->lock);
-    waitqueue_add_locked(wq, current);
-    spinlock_release(&wq->lock);
-
-    if (cond(arg)) {
-      task_cancel_wait();
-      waitqueue_remove(wq, current);
-      return true;
+    for (size_t i = 0; i < n; i++) {
+      spinlock_acquire(&wqs[i]->lock);
+      waitqueue_add_locked(wqs[i], current);
+      spinlock_release(&wqs[i]->lock);
     }
 
-    task_wait(deadline_ns);
-    waitqueue_remove(wq, current);
+    bool ready = cond(arg);
+    if (ready)
+      task_cancel_wait();
+    else
+      task_wait(deadline_ns);
+    /* Woken through one queue: still registered on the others. */
+    for (size_t i = 0; i < n; i++)
+      waitqueue_remove(wqs[i], current);
+    if (ready)
+      return true;
   }
   return true;
+}
+
+bool waitqueue_wait_event(wait_queue_t *wq, bool (*cond)(void *), void *arg,
+                          uint64_t deadline_ns) {
+  return waitqueue_wait_any(&wq, 1, cond, arg, deadline_ns);
 }
 
 /**
@@ -97,6 +107,7 @@ void waitqueue_wake_all(wait_queue_t *wq) {
     if (t->linkage.state == TASK_BLOCKED) {
       t->sched.time_slice = t->sched.time_slice_max;
       t->linkage.state = TASK_READY;
+      scheduler_kick(t);
     }
   }
 

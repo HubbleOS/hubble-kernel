@@ -5,8 +5,11 @@
 #include <drivers/tty/tty.h>
 #include <hubble/errno.h>
 #include <hubble/string.h>
+#include <smp/scheduler.h>
+#include <smp/task.h>
 #include <smp/waitqueue.h>
 
+/* The console's tty, which the keyboard types into (set by tty_dev.c). */
 tty_t *tty_current = NULL;
 
 /* -- Read ring-buffer helpers ----------------------------- */
@@ -37,11 +40,9 @@ static char read_buf_pop(tty_t *tty) {
 /* -- Initialisation --------------------------------------- */
 
 void tty_init(tty_t *tty, const tty_console_ops_t *console) {
-  tty->line_len = 0;
-  tty->read_head = 0;
-  tty->read_tail = 0;
-  tty->eof_pending = false;
+  memset(tty, 0, sizeof(*tty));
   tty->console = console;
+  tty->winsize = (tty_winsize_t){.ws_row = 25, .ws_col = 80};
 
   /* What Linux gives a fresh console: cooked input with echo. */
   memset(&tty->termios, 0, sizeof(tty->termios));
@@ -58,16 +59,13 @@ void tty_init(tty_t *tty, const tty_console_ops_t *console) {
   tty->termios.c_cc[TTY_VMIN] = 1;
 
   waitqueue_init(&tty->read_wq);
-
-  if (!tty_current)
-    tty_current = tty;
 }
 
 /* -- Line discipline -------------------------------------- */
 
 static void console_put(tty_t *tty, char c) {
   if (tty->console && tty->console->putchar)
-    tty->console->putchar(c);
+    tty->console->putchar(tty, c);
 }
 
 /* Echo one input byte; control characters as ^X with ECHOCTL (so an
@@ -148,7 +146,7 @@ void tty_input_char(tty_t *tty, char c) {
     return;
   }
   if (c == '\f' && tty->console && tty->console->clear) {
-    tty->console->clear();
+    tty->console->clear(tty);
     return;
   }
 
@@ -173,7 +171,12 @@ void tty_input_string(tty_t *tty, const char *s) {
 /* -- Blocking read ---------------------------------------- */
 
 bool tty_readable(tty_t *tty) {
-  return !read_buf_empty(tty) || tty->eof_pending;
+  return !read_buf_empty(tty) || tty->eof_pending || tty->hung_up;
+}
+
+bool tty_input_room(tty_t *tty) {
+  /* Room for a whole line to be handed over, so it can't stall midway. */
+  return read_buf_len(tty) + TTY_LINE_BUF_SIZE < TTY_READ_BUF_SIZE - 1;
 }
 
 static bool tty_readable_cond(void *arg) { return tty_readable(arg); }
@@ -194,6 +197,8 @@ size_t tty_read(tty_t *tty, char *buf, size_t size) {
     tty->eof_pending = false;
     return 0;
   }
+  if (read_buf_empty(tty))
+    return 0; /* hung up */
 
   size_t n = 0;
   while (n < size && !read_buf_empty(tty)) {
@@ -203,17 +208,11 @@ size_t tty_read(tty_t *tty, char *buf, size_t size) {
     if (!canonical)
       n++;
   }
+  waitqueue_wake_all(&tty->read_wq); /* room for a waiting writer */
   return n;
 }
 
 /* -- ioctl ------------------------------------------------ */
-
-typedef struct {
-  uint16_t ws_row;
-  uint16_t ws_col;
-  uint16_t ws_xpixel;
-  uint16_t ws_ypixel;
-} tty_winsize_t;
 
 static void flush_input(tty_t *tty) {
   tty->read_tail = tty->read_head;
@@ -229,6 +228,24 @@ static void set_termios(tty_t *tty, const tty_termios_t *next) {
     flush_line(tty);
     waitqueue_wake_all(&tty->read_wq);
   }
+}
+
+long tty_set_ctty(tty_t *tty, bool steal) {
+  task_t *task = get_current_task();
+  if (task->sid != task->id.pid)
+    return -EPERM; /* only a session leader takes a terminal */
+  if (tty->session == task->sid)
+    return 0;
+  if (tty->session && !steal)
+    return -EPERM;
+  tty->session = task->sid;
+  tty->pgrp = task->pgid;
+  return 0;
+}
+
+/* The job-control ioctls only work on the caller's own terminal. */
+static bool is_ctty(tty_t *tty) {
+  return tty->session && tty->session == get_current_task()->sid;
 }
 
 long tty_ioctl(tty_t *tty, unsigned long request, void *arg) {
@@ -260,14 +277,52 @@ long tty_ioctl(tty_t *tty, unsigned long request, void *arg) {
   case TTY_TIOCGWINSZ: {
     if (!arg)
       return -EFAULT;
-    tty_winsize_t ws = {.ws_row = 25, .ws_col = 80};
+    tty_winsize_t ws = tty->winsize;
     if (tty->console && tty->console->get_size)
-      tty->console->get_size(&ws.ws_col, &ws.ws_row);
+      tty->console->get_size(tty, &ws.ws_col, &ws.ws_row);
     memcpy(arg, &ws, sizeof(ws));
     return 0;
   }
 
-  case TTY_TIOCSWINSZ: /* the console decides its own size */
+  case TTY_TIOCSWINSZ: /* a console with a size of its own ignores it */
+    if (!arg)
+      return -EFAULT;
+    memcpy(&tty->winsize, arg, sizeof(tty->winsize));
+    return 0;
+
+  case TTY_TIOCSCTTY: /* arg 1: take it from another session */
+    return tty_set_ctty(tty, (uintptr_t)arg == 1);
+
+  case TTY_TIOCNOTTY:
+    if (!is_ctty(tty))
+      return -ENOTTY;
+    tty->session = tty->pgrp = 0;
+    return 0;
+
+  case TTY_TIOCGPGRP:
+    if (!arg)
+      return -EFAULT;
+    if (!is_ctty(tty))
+      return -ENOTTY;
+    *(int *)arg = (int)tty->pgrp;
+    return 0;
+
+  case TTY_TIOCSPGRP:
+    if (!arg)
+      return -EFAULT;
+    if (!is_ctty(tty))
+      return -ENOTTY;
+    if (*(int *)arg <= 0)
+      return -EINVAL;
+    tty->pgrp = (uint32_t)*(int *)arg;
+    return 0;
+
+  case TTY_TIOCGSID:
+    if (!arg)
+      return -EFAULT;
+    if (!tty->session)
+      return -ENOTTY;
+    *(int *)arg = (int)tty->session;
     return 0;
 
   /* A graphical program takes the display (KD_GRAPHICS) so console
@@ -277,7 +332,7 @@ long tty_ioctl(tty_t *tty, unsigned long request, void *arg) {
     if (mode != TTY_KD_TEXT && mode != TTY_KD_GRAPHICS)
       return -EINVAL;
     if (tty->console && tty->console->set_output)
-      tty->console->set_output(mode == TTY_KD_TEXT);
+      tty->console->set_output(tty, mode == TTY_KD_TEXT);
     return 0;
   }
 
@@ -285,7 +340,7 @@ long tty_ioctl(tty_t *tty, unsigned long request, void *arg) {
     if (!arg)
       return -EFAULT;
     bool text = !tty->console || !tty->console->output_enabled ||
-                tty->console->output_enabled();
+                tty->console->output_enabled(tty);
     *(int *)arg = text ? TTY_KD_TEXT : TTY_KD_GRAPHICS;
     return 0;
   }
@@ -308,11 +363,11 @@ size_t tty_write(tty_t *tty, const char *buf, size_t size) {
     return -1;
 
   if (tty->console->write) {
-    tty->console->write(buf, size);
+    tty->console->write(tty, buf, size);
     return size;
   }
   for (size_t i = 0; i < size; i++)
-    tty->console->putchar(buf[i]);
+    tty->console->putchar(tty, buf[i]);
 
   return (size_t)size;
 }

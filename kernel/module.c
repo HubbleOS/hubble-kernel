@@ -52,6 +52,13 @@ extern void task_get(void);
 extern void get_current_task(void);
 extern void task_prepare_wait(void);
 extern void task_wait(void);
+extern void file_alloc(void);
+extern void stream_init(void);
+extern void stream_destroy(void);
+extern void stream_read(void);
+extern void stream_write(void);
+extern void stream_write_poll(void);
+extern void stream_close(void);
 
 /* Limine request blocks live in the kernel image; modules reach them
  * through higher_half.h inline helpers (virt_to_phys, ...). */
@@ -153,6 +160,14 @@ static const module_export_t g_exports[] = {
     {"task_snapshot", (uint64_t)(uintptr_t)task_snapshot},
     {"task_get", (uint64_t)(uintptr_t)task_get},
     {"get_current_task", (uint64_t)(uintptr_t)get_current_task},
+    {"file_alloc", (uint64_t)(uintptr_t)file_alloc},
+    {"stream_init", (uint64_t)(uintptr_t)stream_init},
+    {"stream_destroy", (uint64_t)(uintptr_t)stream_destroy},
+    {"stream_read", (uint64_t)(uintptr_t)stream_read},
+    {"stream_write", (uint64_t)(uintptr_t)stream_write},
+    {"stream_write_poll", (uint64_t)(uintptr_t)stream_write_poll},
+    {"stream_close", (uint64_t)(uintptr_t)stream_close},
+    {"dev_vfs_register_file", (uint64_t)(uintptr_t)dev_vfs_register_file},
     {"module_export_module_list",
      (uint64_t)(uintptr_t)module_export_module_list}};
 

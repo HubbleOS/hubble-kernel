@@ -20,6 +20,8 @@ _Begin_C_Header
     typedef struct VFS_Node {
   char name[256];
   bool is_dir;
+  bool has_perm; /* perm is the file's own; else stat shows a default */
+  uint16_t perm; /* permission bits (07777), when has_perm */
   uint32_t size;
   uint32_t mode;
   uint32_t pos;
@@ -59,6 +61,12 @@ typedef struct VFS_FS {
    * above stay stable (the Rust procfs mirrors this struct). */
   int (*truncate)(VFS_File *file, uint32_t size);
   bool (*rename)(struct VFS_FS *fs, const char *from, const char *to);
+  /* Set the permission bits of @p path. 0 or -errno. */
+  int (*chmod)(struct VFS_FS *fs, const char *path, uint32_t perm);
+  /* The target of the symlink @p path (not followed): its length, or
+   * -EINVAL if it is no symlink, -ENOENT. Not NUL-terminated. */
+  long (*readlink)(struct VFS_FS *fs, const char *path, char *buf,
+                   size_t size);
 } VFS_FS;
 
 typedef struct VFS_Mount {
@@ -71,7 +79,7 @@ typedef struct VFS_Mount {
  * sizes on its side). A change here must be made there too. */
 _Static_assert(sizeof(VFS_Node) == 288, "update fs/procfs/src/kernel.rs");
 _Static_assert(sizeof(VFS_File) == 24, "update fs/procfs/src/kernel.rs");
-_Static_assert(sizeof(VFS_FS) == 120, "update fs/procfs/src/kernel.rs");
+_Static_assert(sizeof(VFS_FS) == 136, "update fs/procfs/src/kernel.rs");
 
 /** @brief Mount a filesystem partition at the given mountpoint. */
 /**
@@ -96,6 +104,13 @@ int vfs_write(VFS_File *node, const void *buf, uint32_t size);
 
 /** @brief Create a directory. */
 bool vfs_mkdir(const char *path);
+
+/** @brief chmod: 0, -ENOENT, or -EPERM if the filesystem can't store it. */
+int vfs_chmod(const char *path, uint32_t perm);
+
+/** @brief readlink: the length of @p path's link target in @p buf, or
+ * -EINVAL (no symlink, or the filesystem has none) / -ENOENT. */
+long vfs_readlink(const char *path, char *buf, size_t size);
 
 /** @brief Unlink (delete) a file or directory. */
 bool vfs_unlink(const char *path);

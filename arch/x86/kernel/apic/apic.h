@@ -33,6 +33,9 @@ uint32_t lapic_get_id(void);
 void lapic_enable(void);
 void lapic_timer_init(uint32_t frequency_hz);
 void lapic_send_ipi(uint32_t dest, uint8_t vector);
+
+/* The LAPIC timer's vector: the scheduler tick. */
+#define LAPIC_TIMER_VECTOR 32
 void lapic_send_init_ipi(uint8_t dest_apic_id);
 void lapic_send_startup_ipi(uint8_t dest_apic_id, uint8_t vector);
 

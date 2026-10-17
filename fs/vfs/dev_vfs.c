@@ -21,6 +21,24 @@ uint64_t mmap_device(VFS_File *file, uint64_t offset, size_t size);
 int dev_vfs_read_device(VFS_File *file, void *buf, uint32_t size);
 Directory dev_vfs_list_devices(VFS_FS *fs, const char *path);
 
+/* -- /dev/null and /dev/zero ------------------------------ */
+
+static uint64_t null_read(uint64_t offset, size_t size, void *buf) {
+  (void)offset, (void)size, (void)buf;
+  return 0; /* always at end of file */
+}
+
+static uint64_t null_write(uint64_t offset, size_t size, const void *buf) {
+  (void)offset, (void)buf;
+  return size; /* everything goes, nowhere */
+}
+
+static uint64_t zero_read(uint64_t offset, size_t size, void *buf) {
+  (void)offset;
+  memset(buf, 0, size);
+  return size;
+}
+
 /** @brief Initialise the device VFS instance. */
 bool dev_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba) {
   printk(KERN_INFO "Initializing device fs\n");
@@ -31,6 +49,13 @@ bool dev_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba) {
   fs->read = dev_vfs_read_device;
   fs->fs = fs;
   fs->readdir = dev_vfs_list_devices;
+
+  static bool basic_devices;
+  if (!basic_devices) { /* once, however often /dev is mounted */
+    basic_devices = true;
+    dev_vfs_register("null", NULL, null_read, null_write);
+    dev_vfs_register("zero", NULL, zero_read, null_write);
+  }
   return 1;
 }
 
@@ -63,11 +88,25 @@ int dev_vfs_write_device(VFS_File *file, const void *buf, uint32_t size) {
   return (int)dev->write(0, size, buf);
 }
 
+/* Whether @p path names a directory: the root (""), or the first part of
+ * some device name ("pts" for "pts/0"). */
+static bool dev_vfs_is_dir(const char *path) {
+  if (!*path)
+    return true;
+  size_t len = strlen(path);
+  for (VFS_device_reg *dev = dev_vfs_devices; dev; dev = dev->next)
+    if (strncmp(dev->name, path, len) == 0 && dev->name[len] == '/')
+      return true;
+  return false;
+}
+
 /** @brief Open a device file by path. */
 VFS_Node *dev_vfs_open_device(VFS_FS *fs, const char *path) {
-  /* The empty path is the mountpoint itself: the filesystem's root
-   * directory, which stat (ls probing /dev) has to be able to open. */
-  if (!*path) {
+  while (*path == '/')
+    path++;
+  /* Directories: the mountpoint itself (stat, ls probing /dev) and the
+   * prefixes of device names, such as pts for the pty slaves. */
+  if (dev_vfs_is_dir(path)) {
     VFS_Node *root = kmalloc(sizeof(VFS_Node), GFP_KERNEL);
     if (!root)
       return NULL;
@@ -125,11 +164,31 @@ void dev_vfs_register(const char *name, uint64_t (*mmap)(uint64_t, size_t),
   dev->next = dev_vfs_devices;
   dev_vfs_devices = dev;
 }
-/* Names point into the device registrations, which are never freed, so
- * only the array is owned by the listing. */
+VFS_device_reg *dev_vfs_register_file(const char *name,
+                                      long (*open_file)(VFS_device_reg *dev,
+                                                        int flags,
+                                                        struct file **out),
+                                      void *priv) {
+  VFS_device_reg *dev = kzalloc(sizeof(VFS_device_reg));
+  if (!dev)
+    return NULL;
+  strncpy(dev->name, name, sizeof(dev->name) - 1);
+  dev->open_file = open_file;
+  dev->priv = priv;
+  /* Published last: lookups walk the list without a lock. */
+  dev->next = dev_vfs_devices;
+  __atomic_store_n(&dev_vfs_devices, dev, __ATOMIC_RELEASE);
+  return dev;
+}
+
+/* File names point into the device registrations, which are never
+ * freed; subdirectory names are the listing's own copies. */
 static bool dev_vfs_free_entries(Directory *dir) {
   if (!dir)
     return false;
+  for (int i = 0; i < dir->count; i++)
+    if (dir->entries[i].is_dir) /* subdirectory names are copies */
+      kfree(dir->entries[i].name);
   kfree(dir->entries);
   dir->entries = NULL;
   dir->count = 0;
@@ -143,7 +202,10 @@ Directory dev_vfs_list_devices(VFS_FS *fs, const char *path) {
   /* vfs_readdir passes "/" for the mount root (vfs_open passes ""). */
   while (path && *path == '/')
     path++;
-  if (path && *path)
+  if (!path)
+    path = "";
+  size_t plen = strlen(path);
+  if (plen && !dev_vfs_is_dir(path))
     return dir;
 
   int count = 0;
@@ -156,10 +218,40 @@ Directory dev_vfs_list_devices(VFS_FS *fs, const char *path) {
     return dir;
   dir.free_entries = dev_vfs_free_entries;
 
+  /* The names one level below @p path: "pts/0" shows as "0" in pts, and
+   * as the directory "pts" (once) at the root. Entries point into the
+   * names, which live as long as the registrations. */
   for (VFS_device_reg *dev = dev_vfs_devices; dev; dev = dev->next) {
-    dir.entries[dir.count].name = dev->name;
+    const char *name = dev->name;
+    if (plen) {
+      if (strncmp(name, path, plen) != 0 || name[plen] != '/')
+        continue;
+      name += plen + 1;
+    }
+    const char *slash = strchr(name, '/');
+    if (slash) {
+      /* A subdirectory: list it once, under the first name in it. Its
+       * entry text must end at the slash, which only a copy can do. */
+      size_t n = (size_t)(slash - name);
+      bool seen = false;
+      for (int i = 0; i < dir.count && !seen; i++)
+        seen = dir.entries[i].is_dir &&
+               strncmp(dir.entries[i].name, name, n) == 0 &&
+               dir.entries[i].name[n] == '\0';
+      if (seen)
+        continue;
+      char *copy = kmalloc(n + 1, GFP_KERNEL);
+      if (!copy)
+        continue;
+      memcpy(copy, name, n);
+      copy[n] = '\0';
+      dir.entries[dir.count].name = copy;
+      dir.entries[dir.count].is_dir = true;
+    } else {
+      dir.entries[dir.count].name = (char *)name;
+      dir.entries[dir.count].is_dir = false;
+    }
     dir.entries[dir.count].cluster = 0;
-    dir.entries[dir.count].is_dir = false;
     dir.count++;
   }
   return dir;

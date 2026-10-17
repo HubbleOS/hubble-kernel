@@ -19,17 +19,47 @@ extern void console_get_size(uint16_t *cols, uint16_t *rows);
 extern void console_set_output(bool enabled);
 extern bool console_output_enabled(void);
 
+/* There is one console: these ignore which tty asks. */
+
 /* Echo runs in the keyboard IRQ; going through the printk lock keeps it
  * from interleaving with output on another CPU mid escape sequence. */
-static void tty0_putchar(char c) { printk_console_write(&c, 1); }
+static void tty0_putchar(tty_t *tty, char c) {
+  (void)tty;
+  printk_console_write(&c, 1);
+}
+
+static void tty0_write(tty_t *tty, const char *buf, size_t len) {
+  (void)tty;
+  printk_console_write(buf, len);
+}
+
+static void tty0_clear(tty_t *tty) {
+  (void)tty;
+  console_clear();
+}
+
+static void tty0_get_size(tty_t *tty, uint16_t *cols, uint16_t *rows) {
+  (void)tty;
+  console_get_size(cols, rows);
+}
+
+static void tty0_set_output(tty_t *tty, bool enabled) {
+  (void)tty;
+  console_set_output(enabled);
+}
+
+static bool tty0_output_enabled(tty_t *tty) {
+  (void)tty;
+  return console_output_enabled();
+}
 
 static const tty_console_ops_t tty0_console_ops = {
     .putchar = tty0_putchar,
-    .write = printk_console_write,
-    .clear = console_clear,
-    .get_size = console_get_size,
-    .set_output = console_set_output,
-    .output_enabled = console_output_enabled,
+    .write = tty0_write,
+    .clear = tty0_clear,
+    .get_size = tty0_get_size,
+    .set_output = tty0_set_output,
+    .output_enabled = tty0_output_enabled,
 };
 
 /* -- VFS callbacks ---------------------------------------- */
@@ -56,6 +86,7 @@ static bool tty_vfs_readable(void) { return tty_readable(&tty0); }
 
 static int tty_dev_init(void) {
   tty_init(&tty0, &tty0_console_ops);
+  tty_current = &tty0; /* the keyboard types into the console */
   dev_vfs_register("tty0", NULL, tty_vfs_read, tty_vfs_write);
   dev_vfs_set_char_ops("tty0", NULL, tty_vfs_ioctl, tty_vfs_readable,
                        (struct wait_queue *)&tty0.read_wq);

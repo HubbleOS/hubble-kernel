@@ -117,9 +117,10 @@ long sys_fork(registers_t *regs) {
 
   memcpy(child->id.name, parent->id.name, sizeof(child->id.name));
   child->abi = parent->abi;
-  child->linkage.parent = parent;
-  child->linkage.sibling = parent->linkage.children;
-  parent->linkage.children = child;
+  child->pgid = parent->pgid;
+  child->sid = parent->sid;
+  child->umask = parent->umask;
+  task_link_child(parent, child);
 
   scheduler_add_task(child);
   return (long)child->id.pid;

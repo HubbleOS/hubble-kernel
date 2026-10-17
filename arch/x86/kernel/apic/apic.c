@@ -39,7 +39,6 @@
 #define LAPIC_TIMER_DCR 0x3E0
 
 #define LAPIC_TIMER_PERIODIC (1 << 17)
-#define LAPIC_TIMER_VECTOR 32
 
 /* -- I/O APIC Register Offsets --------------------------------- */
 

@@ -41,6 +41,7 @@ _Static_assert(sizeof(struct stat) == 144, "x86_64 struct stat is 144 bytes");
 #define S_IFCHR 0020000 // Character device
 #define S_IFDIR 0040000 // Directory
 #define S_IFREG 0100000 // Regular file
+#define S_IFLNK 0120000 // Symbolic link
 
 /* No permission model yet: everything is owned by root and allowed. */
 static void fill_stat(struct stat *st, uint32_t type, uint64_t size) {
@@ -59,6 +60,9 @@ static void fill_stat_file(struct stat *st, VFS_File *f) {
     fill_stat(st, S_IFCHR, 0);
   else
     fill_stat(st, f->node->is_dir ? S_IFDIR : S_IFREG, f->node->size);
+  /* The file's own permissions, where its filesystem keeps them. */
+  if (f->node->has_perm)
+    st->st_mode = (st->st_mode & ~07777u) | f->node->perm;
 }
 
 long sys_stat(const char *path, struct stat *st) {
@@ -77,23 +81,34 @@ long sys_stat(const char *path, struct stat *st) {
   return 0;
 }
 
-/**
- * @brief lstat: stat without following a final symlink.
- *
- * The VFS always follows symlinks and has no way to report a link
- * itself yet, so this describes the target, like stat. Correct for
- * everything except "is this a symlink" (ls -l shows no "->").
- */
-long sys_lstat(const char *path, struct stat *st) { return sys_stat(path, st); }
+/** @brief lstat: stat without following a final symlink. */
+long sys_lstat(const char *path, struct stat *st) {
+  char abs[SYS_PATH_MAX];
+  if (!sys_abs_path(path, abs, sizeof(abs)))
+    return path ? -ENAMETOOLONG : -EFAULT;
+  char target[SYS_PATH_MAX];
+  long len = vfs_readlink(abs, target, sizeof(target));
+  if (len < 0)
+    return sys_stat(path, st); /* not a link: the file itself */
+  fill_stat(st, S_IFLNK, (uint64_t)len);
+  st->st_mode = S_IFLNK | 0777;
+  return 0;
+}
 
 long sys_fstat(int fd, struct stat *st) {
   file_t *file = fd_file(get_current_task(), fd);
   if (!file)
     return -EBADF;
 
-  if (file->vfs)
+  if (file->vfs) {
     fill_stat_file(st, file->vfs);
-  else
+  } else if (file->ops->stat) {
+    uint32_t type;
+    uint64_t size;
+    file->ops->stat(file, &type, &size);
+    fill_stat(st, type, size);
+  } else {
     fill_stat(st, S_IFIFO, 0); /* a pipe end */
+  }
   return 0;
 }

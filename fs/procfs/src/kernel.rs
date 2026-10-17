@@ -9,6 +9,8 @@ use core::mem::{offset_of, size_of};
 pub struct VfsNode {
     pub name: [c_char; 256],
     pub is_dir: bool,
+    pub has_perm: bool,
+    pub perm: u16,
     pub size: u32,
     pub mode: u32,
     pub pos: u32,
@@ -141,6 +143,7 @@ pub struct TaskSched {
     pub last_scheduled: u64,
     pub wake_at_ns: u64,
     pub cpu: u8,
+    pub in_wait: bool,
 }
 
 #[repr(C)]
@@ -216,6 +219,9 @@ pub struct Task {
     pub linkage: TaskLinkage,
     pub child_wait: *mut WaitQueue,
     pub abi: *const SyscallAbi, // NULL for kernel threads
+    pub pgid: u32,
+    pub sid: u32,
+    pub umask: u32,
 }
 
 const _: () = {
@@ -234,7 +240,7 @@ const _: () = {
     assert!(offset_of!(TaskLinkage, spinlocks) == 10);
     assert!(offset_of!(TaskLinkage, next) == 16);
     assert!(offset_of!(TaskLinkage, sibling) == 48);
-    assert!(size_of::<Task>() == 1808);
+    assert!(size_of::<Task>() == 1824);
     assert!(offset_of!(Task, sched) == 40);
     assert!(offset_of!(Task, exec) == 96);
     assert!(offset_of!(Task, mm) == 336);
@@ -245,6 +251,7 @@ const _: () = {
     assert!(offset_of!(Task, linkage) == 1736);
     assert!(offset_of!(Task, child_wait) == 1792);
     assert!(offset_of!(Task, abi) == 1800);
+    assert!(offset_of!(Task, sid) == 1812);
 };
 
 type Unused = Option<unsafe extern "C" fn()>;
@@ -266,6 +273,8 @@ pub struct VfsFs {
     pub readdir: Option<unsafe extern "C" fn(*mut VfsFs, *const c_char) -> Directory>,
     pub truncate: Option<unsafe extern "C" fn(*mut VfsFile, u32) -> c_int>,
     pub rename: Unused,
+    pub chmod: Unused,
+    pub readlink: Unused,
 }
 
 // struct module {
@@ -345,7 +354,7 @@ const _: () = {
     assert!(offset_of!(Entry, is_dir) == 16);
     assert!(size_of::<Directory>() == 24);
     assert!(offset_of!(Directory, free_entries) == 16);
-    assert!(size_of::<VfsFs>() == 120);
+    assert!(size_of::<VfsFs>() == 136);
     assert!(offset_of!(VfsFs, fs) == 8);
     assert!(offset_of!(VfsFs, open) == 40);
     assert!(offset_of!(VfsFs, read) == 48);

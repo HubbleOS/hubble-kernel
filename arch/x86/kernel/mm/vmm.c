@@ -450,7 +450,8 @@ static uint64_t pte_flags_for(vm_area_t *vma) {
  * every VMA in @p parent_map, shares the same physical pages with the
  * parent: writable mappings are re-protected read-only with PTE_COW set on
  * *both* the parent's and the child's PTE (so a write from either side
- * faults and triggers vmm_resolve_cow()), device mappings are shared as-is.
+ * faults and triggers vmm_resolve_cow()), device and MAP_SHARED mappings
+ * are shared as-is.
  *
  * The parent's address space must be the currently active one (CR3) when
  * this is called, since its side of the walk goes through the recursive
@@ -483,6 +484,19 @@ uint64_t *vmm_fork_pagemap(vm_map_t *parent_map) {
       for (uint64_t off = 0; off < vma->size; off += PAGE_SIZE)
         vmm_map_page_into((uint64_t *)phys, vma->base + off,
                           vma->phys_base + off, base_flags | PTE_PCD | PTE_PWT);
+      continue;
+    }
+
+    if (vma->type == VMA_SHARED) {
+      /* Both sides keep writing the same pages: no COW, one more
+       * reference for the child's mapping. */
+      for (uint64_t off = 0; off < vma->size; off += PAGE_SIZE) {
+        uint64_t pa = vmm_get_phys(vma->base + off);
+        if (!pa)
+          continue;
+        pmm_inc_refcount(pa);
+        vmm_map_page_into((uint64_t *)phys, vma->base + off, pa, base_flags);
+      }
       continue;
     }
 

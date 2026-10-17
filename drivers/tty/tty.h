@@ -11,19 +11,22 @@
 /* -- Console output abstraction -------------------------- */
 
 /*
- * The TTY does not know about VGA or framebuffer details — it
- * calls into console_ops provided by the platform driver.
+ * The TTY does not know where its output goes - the framebuffer console,
+ * or a pty master - it calls into the ops of whatever drives it, which
+ * get the tty itself (tty->priv for their own state).
  */
+struct tty;
+
 typedef struct {
-  void (*putchar)(char c);
+  void (*putchar)(struct tty *tty, char c);
   /* A whole buffer at once (one lock round for the console). Optional. */
-  void (*write)(const char *buf, size_t len);
-  void (*clear)(void);
-  /* Text grid size, for TIOCGWINSZ. Optional (80x25 if NULL). */
-  void (*get_size)(uint16_t *cols, uint16_t *rows);
+  void (*write)(struct tty *tty, const char *buf, size_t len);
+  void (*clear)(struct tty *tty); /* Optional */
+  /* Text grid size, for TIOCGWINSZ. Optional: else what TIOCSWINSZ set. */
+  void (*get_size)(struct tty *tty, uint16_t *cols, uint16_t *rows);
   /* Display ownership, for KDSETMODE/KDGETMODE. Optional. */
-  void (*set_output)(bool enabled);
-  bool (*output_enabled)(void);
+  void (*set_output)(struct tty *tty, bool enabled);
+  bool (*output_enabled)(struct tty *tty);
 } tty_console_ops_t;
 
 /* -- termios (Linux x86_64 kernel ABI for TCGETS/TCSETS) -- */
@@ -73,6 +76,11 @@ typedef struct {
 #define TTY_TCFLSH 0x540B
 #define TTY_TIOCGWINSZ 0x5413
 #define TTY_TIOCSWINSZ 0x5414
+#define TTY_TIOCSCTTY 0x540E
+#define TTY_TIOCGPGRP 0x540F
+#define TTY_TIOCSPGRP 0x5410
+#define TTY_TIOCNOTTY 0x5422
+#define TTY_TIOCGSID 0x5429
 #define TTY_KDSETMODE 0x4B3A
 #define TTY_KDGETMODE 0x4B3B
 
@@ -89,6 +97,13 @@ typedef struct {
 /* -- TTY instance ----------------------------------------- */
 
 typedef struct {
+  uint16_t ws_row;
+  uint16_t ws_col;
+  uint16_t ws_xpixel;
+  uint16_t ws_ypixel;
+} tty_winsize_t;
+
+typedef struct tty {
   /* Canonical mode: the line being edited, not yet readable. */
   char line_buf[TTY_LINE_BUF_SIZE];
   size_t line_len;
@@ -102,7 +117,18 @@ typedef struct {
 
   tty_termios_t termios;
   const tty_console_ops_t *console;
+  void *priv; /* the console ops' own state (a pty) */
 
+  tty_winsize_t winsize; /* TIOCSWINSZ, when the console has no size */
+  /* The other side is gone (a pty's master closed): reads return 0. */
+  volatile bool hung_up;
+
+  /* Controlling terminal of session `session` (0: of none), whose
+   * foreground process group is `pgrp`. */
+  uint32_t session;
+  uint32_t pgrp;
+
+  /* Readers waiting for input, and writers waiting for room. */
   wait_queue_t read_wq;
 } tty_t;
 
@@ -133,6 +159,14 @@ size_t tty_read(tty_t *tty, char *buf, size_t size);
 
 /** @brief Whether a read() would return without blocking. */
 bool tty_readable(tty_t *tty);
+
+/** @brief Whether input fits (a pty master's writes wait until it does). */
+bool tty_input_room(tty_t *tty);
+
+/** @brief Make @p tty the controlling terminal of the caller's session,
+ * if it is a session leader and the tty is free (open without O_NOCTTY,
+ * or TIOCSCTTY; @p steal takes it from another session). */
+long tty_set_ctty(tty_t *tty, bool steal);
 
 /**
  * @brief termios / window-size ioctls

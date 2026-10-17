@@ -170,7 +170,7 @@ VFS_Node *pipe_vfs_open_pipe(VFS_FS *fs, const char *path) {
     return root;
   }
 
-  VFS_Node *node = kmalloc(sizeof(VFS_Node), GFP_KERNEL);
+  VFS_Node *node = kzalloc(sizeof(VFS_Node));
   PathParts parts = format_pipe_path(path);
   parts.count--;
   VFS_pipes_tree *pipe = pipe_vfs_find_pipe(path, &parts);
@@ -192,7 +192,7 @@ VFS_Node *pipe_vfs_open_pipe(VFS_FS *fs, const char *path) {
 /** @brief Create a new named pipe. */
 VFS_Node *pipe_vfs_create_pipe(VFS_FS *fs, const char *path) {
 
-  VFS_Node *node = kmalloc(sizeof(VFS_Node), GFP_KERNEL);
+  VFS_Node *node = kzalloc(sizeof(VFS_Node));
   PathParts parts = format_pipe_path(path);
   parts.count--;
   VFS_pipes_tree *pipe = pipe_vfs_find_pipe(path, &parts);

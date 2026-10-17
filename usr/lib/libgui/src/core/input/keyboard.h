@@ -1,9 +1,16 @@
+/**
+ * @file keyboard.h
+ * @brief Key events, and delivering them to the focused element
+ *
+ * The display server turns the keyboard device into input_event_t and
+ * sends them to the focused window's client (proto/protocol.h), whose
+ * libgui hands them to the element with keyboard focus.
+ */
 #pragma once
 
 #include <stdbool.h>
 #include <stdint.h>
 
-// #include <core/element/element.h>
 struct element;
 
 typedef enum {
@@ -45,12 +52,11 @@ typedef struct {
 } input_event_t;
 
 typedef struct {
-  // element_t *focused_el;
   struct element *focused_el;
 } local_keyboard_t;
 
 extern local_keyboard_t g_keyboard;
 
-bool keyboard_poll_input(input_event_t *input);
-void keyboard_update(void);
-void keyboard_queue_push(input_event_t ev);
+/** Give @p ev to the focused element (a text input takes focus when
+ * clicked). */
+void keyboard_dispatch(const input_event_t *ev);

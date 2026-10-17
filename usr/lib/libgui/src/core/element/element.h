@@ -6,11 +6,7 @@
 
 #include <utils/color/color.h>
 
-#ifdef GUI_DEMO
-#include "platform/keyboard.h"
-#else
-// #include <dev/keyboard.h>
-#endif
+#include <core/input/keyboard.h>
 
 #include "styles/style.h"
 

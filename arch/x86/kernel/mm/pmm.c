@@ -185,6 +185,10 @@ void pmm_free_pages(uint64_t phys_addr, size_t count) {
   if (phys_addr < g_pmm_heap_phys_start || phys_addr >= g_pmm_heap_phys_end)
     return;
 
+  /* The decrement-then-maybe-mark-free sequence must be atomic across
+   * cores, as in pmm_alloc_pages(). */
+  irqlock_acquire(&g_pmm_lock);
+
   uint64_t start_index = (phys_addr - g_pmm_heap_phys_start) / PAGE_SIZE;
 
   if (start_index + count > g_pmm_info.total_pages)

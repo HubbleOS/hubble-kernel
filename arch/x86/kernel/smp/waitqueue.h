@@ -47,6 +47,14 @@ bool waitqueue_wait_event(wait_queue_t *wq, bool (*cond)(void *), void *arg,
                           uint64_t deadline_ns);
 
 /**
+ * @brief waitqueue_wait_event() on several queues: a wakeup on any of
+ *        @p wqs re-checks @p cond. For poll(), which watches many files.
+ */
+bool waitqueue_wait_any(wait_queue_t *const *wqs, size_t n,
+                        bool (*cond)(void *), void *arg,
+                        uint64_t deadline_ns);
+
+/**
  * @brief Wake all tasks sleeping on a wait queue
  * @param wq Pointer to wait queue
  */

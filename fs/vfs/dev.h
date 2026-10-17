@@ -17,6 +17,7 @@ typedef struct {
 } VFS_device_file;
 
 struct wait_queue;
+struct file;
 
 /** @brief Registered device descriptor (linked list node). */
 typedef struct VFS_device_reg {
@@ -33,6 +34,13 @@ typedef struct VFS_device_reg {
   long (*ioctl)(unsigned long request, void *arg);
   bool (*readable)(void);
   struct wait_queue *read_wq;
+
+  /* A clone device: every open makes its own open file instead of
+   * sharing this registration's state (ptmx makes a new pty, pts/N opens
+   * that pty's slave). @p flags are the Linux open(2) flags. Returns 0
+   * with *out set, or -errno. priv is the driver's. */
+  long (*open_file)(struct VFS_device_reg *dev, int flags, struct file **out);
+  void *priv;
 
   struct VFS_device_reg *next;
 } VFS_device_reg;
@@ -59,6 +67,14 @@ VFS_device_reg *dev_vfs_find_device(VFS_FS *fs, const char *path);
 bool dev_vfs_set_char_ops(const char *name, void (*open)(void),
                           long (*ioctl)(unsigned long request, void *arg),
                           bool (*readable)(void), struct wait_queue *read_wq);
+
+/** @brief Register a clone device (see open_file); registrations, like
+ * all device registrations, are never freed. */
+VFS_device_reg *dev_vfs_register_file(const char *name,
+                                      long (*open_file)(VFS_device_reg *dev,
+                                                        int flags,
+                                                        struct file **out),
+                                      void *priv);
 
 /** @brief Register a new device with the VFS layer. */
 void dev_vfs_register(const char *name, uint64_t (*mmap)(uint64_t, size_t),

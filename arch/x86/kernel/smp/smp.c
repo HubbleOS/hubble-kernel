@@ -177,6 +177,31 @@ void enable_nxe(void) {
 /**
  * @brief AP kernel entry point called by trampoline in long mode
  */
+/* The BSP's page attribute table, as the bootloader left it: every CPU
+ * must use the same one (Intel SDM 11.12.4), or the same page-table bits
+ * mean a different memory type on each. */
+static uint64_t bsp_pat;
+
+/* Give this AP the BSP's memory types and write protection. Before: the
+ * AP ran with the power-on PAT, so every mapping using the entries the
+ * bootloader had changed got another type here (the framebuffer's
+ * write-combining among them), and with CR0.WP clear the kernel could
+ * write straight through read-only and copy-on-write user pages. */
+static void ap_match_bsp(void) {
+  uint64_t cr0;
+  asm volatile("mov %%cr0, %0" : "=r"(cr0));
+  cr0 |= 1ULL << 16; /* WP */
+  asm volatile("mov %0, %%cr0" ::"r"(cr0));
+
+  /* Changing the PAT: flush caches before, and the TLB after, so no
+   * line or translation keeps the old type (SDM 11.12.4). */
+  asm volatile("wbinvd" ::: "memory");
+  wrmsr(MSR_PAT, bsp_pat);
+  asm volatile("wbinvd" ::: "memory");
+  uint64_t cr3;
+  asm volatile("mov %%cr3, %0; mov %0, %%cr3" : "=r"(cr3)::"memory");
+}
+
 void ap_entry(void) {
   volatile struct ap_startup_data *data =
       (volatile struct ap_startup_data *)(AP_TRAMPOLINE_ADDR + 512);
@@ -186,6 +211,7 @@ void ap_entry(void) {
    * NXE the CPU treats bit 63 as a reserved bit → page fault with
    * error code 0x0008. */
   enable_nxe();
+  ap_match_bsp();
 
   ap_set_boot_stage(data, 4);
 
@@ -400,6 +426,7 @@ int smp_init(void) {
   printk(KERN_INFO "SMP Initialization");
 
   percpu_init_bsp();
+  bsp_pat = rdmsr(MSR_PAT);
 
   printk(KERN_INFO "Setting up AP trampoline at 0x%x\n", AP_TRAMPOLINE_ADDR);
 

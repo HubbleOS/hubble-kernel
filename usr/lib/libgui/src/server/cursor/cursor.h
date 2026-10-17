@@ -1,6 +1,6 @@
 #pragma once
 
-#include <core/compositor/compositor.h>
+#include <server/compositor/compositor.h>
 #include <core/object/object.h>
 
 typedef struct {

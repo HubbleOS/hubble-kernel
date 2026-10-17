@@ -33,10 +33,6 @@ uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
  */
 const char *sys_abs_path(const char *path, char *buf, size_t size);
 
-struct VFS_device_reg;
-/** @brief Character device behind @p fd (e.g. the console tty), or NULL. */
-struct VFS_device_reg *fd_get_device(int fd);
-
 typedef struct {
   uint64_t rsp0;
   uint64_t cpu_id;

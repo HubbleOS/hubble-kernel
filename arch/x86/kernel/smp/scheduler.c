@@ -17,6 +17,7 @@
 #include <msr.h>
 
 #include <gdt/gdt.h>
+#include <hubble/errno.h>
 #include <hubble/printk.h>
 #include <hubble/string.h>
 #include <interrupt/interrupt.h>
@@ -199,6 +200,7 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg,
   }
 
   task->signals.signal = 0;
+  task->umask = 022;
   printk(KERN_INFO "Task created\n");
   return task;
 }
@@ -349,6 +351,104 @@ void free_context(task_t *task) {
     slab_cache_free(fpu_cache, task->exec.context.fpu_state);
 }
 
+/* -- Task tree ---------------------------------------------------------- */
+
+/* Guards every task's parent, children and sibling links, and a child's
+ * step to TASK_DEAD: from then on its parent may free it (wait4), and a
+ * dying parent must leave no child pointing at it. An irqlock: task_exit
+ * also runs from the timer interrupt (TASK_ZOMBIE). */
+static irqlock_t tree_lock = IRQLOCK_INIT("task tree");
+
+void task_link_child(task_t *parent, task_t *child) {
+  irqlock_acquire(&tree_lock);
+  child->linkage.parent = parent;
+  child->linkage.sibling = parent->linkage.children;
+  parent->linkage.children = child;
+  irqlock_release(&tree_lock);
+}
+
+uint32_t task_ppid(task_t *task) {
+  irqlock_acquire(&tree_lock);
+  uint32_t ppid = task->linkage.parent ? task->linkage.parent->id.pid : 0;
+  irqlock_release(&tree_lock);
+  return ppid;
+}
+
+static void task_free(task_t *task) {
+  kfree(task->child_wait);
+  kfree(task);
+}
+
+/* An exited child of @p parent matching @p pid (-1: any), and the link
+ * pointing at it; *any says whether a matching child exists at all.
+ * Caller holds tree_lock. */
+static task_t *find_dead_child(task_t *parent, int pid, task_t ***link,
+                               bool *any) {
+  *any = false;
+  for (task_t **l = &parent->linkage.children; *l; l = &(*l)->linkage.sibling) {
+    task_t *child = *l;
+    if (pid > 0 && (int)child->id.pid != pid)
+      continue;
+    *any = true;
+    if (child->linkage.state == TASK_DEAD) {
+      *link = l;
+      return child;
+    }
+  }
+  return NULL;
+}
+
+bool task_child_waitable(task_t *parent, int pid) {
+  task_t **link;
+  bool any;
+  irqlock_acquire(&tree_lock);
+  bool ready = find_dead_child(parent, pid, &link, &any) || !any;
+  irqlock_release(&tree_lock);
+  return ready;
+}
+
+long task_reap_child(task_t *parent, int pid, int *exit_code) {
+  task_t **link;
+  bool any;
+  irqlock_acquire(&tree_lock);
+  task_t *reaped = find_dead_child(parent, pid, &link, &any);
+  if (reaped)
+    *link = reaped->linkage.sibling;
+  irqlock_release(&tree_lock);
+
+  if (!reaped)
+    return any ? 0 : -ECHILD;
+  *exit_code = reaped->linkage.exit_code;
+  long pid_reaped = reaped->id.pid;
+  task_free(reaped);
+  return pid_reaped;
+}
+
+long task_setpgid(task_t *caller, uint32_t pid, uint32_t pgid) {
+  long err = -ESRCH;
+  irqlock_acquire(&tree_lock);
+  task_t *target = NULL;
+  if (pid == 0 || pid == caller->id.pid) {
+    target = caller;
+  } else {
+    for (task_t *c = caller->linkage.children; c; c = c->linkage.sibling)
+      if (c->id.pid == pid && c->linkage.state != TASK_DEAD)
+        target = c;
+  }
+  if (target) {
+    if (!pgid)
+      pgid = target->id.pid;
+    if (target->sid != caller->sid || target->sid == target->id.pid)
+      err = -EPERM; /* another session's, or a session leader */
+    else {
+      target->pgid = pgid;
+      err = 0;
+    }
+  }
+  irqlock_release(&tree_lock);
+  return err;
+}
+
 /* -- Task lifecycle ----------------------------------------------------- */
 
 /**
@@ -371,11 +471,10 @@ void task_exit(int exit_code) {
    * the writer is gone. */
   fd_close_all(task);
 
+  /* Off the run queue for good: nothing may switch us out from here, and
+   * we never return to re-enable interrupts. */
+  asm volatile("cli");
   task->linkage.exit_code = exit_code;
-  task->linkage.state = TASK_DEAD;
-
-  if (task->linkage.parent)
-    waitqueue_wake_all(task->linkage.parent->child_wait);
 
   spinlock_acquire(&runqueues[cpu_id].lock);
 
@@ -394,7 +493,37 @@ void task_exit(int exit_code) {
   runqueues[cpu_id].count--;
   spinlock_release(&runqueues[cpu_id].lock);
   free_context(task);
+
+  /* Last step: once TASK_DEAD, the parent may free this task_t at any
+   * moment, so nothing below touches it. Children are orphaned first, and
+   * those that already exited are freed - nobody is left to reap them. */
+  task_t *unreaped = NULL;
+  irqlock_acquire(&tree_lock);
+  for (task_t *c = task->linkage.children, *next; c; c = next) {
+    next = c->linkage.sibling;
+    c->linkage.parent = NULL;
+    c->linkage.sibling = NULL;
+    if (c->linkage.state == TASK_DEAD) {
+      c->linkage.sibling = unreaped;
+      unreaped = c;
+    }
+  }
+  task->linkage.children = NULL;
+  task_t *parent = task->linkage.parent;
+  task->linkage.state = TASK_DEAD;
+  if (parent)
+    waitqueue_wake_all(parent->child_wait);
+  irqlock_release(&tree_lock);
+
+  for (task_t *c = unreaped, *next; c; c = next) {
+    next = c->linkage.sibling;
+    task_free(c);
+  }
   current_task[cpu_id] = NULL;
+  /* An orphan has no one to reap it: it goes now. We run on rsp0, a
+   * separate allocation, and touch nothing in the task_t from here. */
+  if (!parent)
+    task_free(task);
 
   /* GS_BASE is a single per-CPU MSR, not saved/restored per task. If we
    * got here mid-syscall (exit_group, the common case), syscall_entry's
@@ -451,6 +580,7 @@ void task_wait(uint64_t deadline_ns) {
 
   current->sched.wake_at_ns = deadline_ns;
   current->sched.time_slice = 0;
+  current->sched.in_wait = true;
 
   /* GS_BASE is a single per-CPU MSR, not saved/restored per task: while
    * we're blocked, some OTHER task's syscall can run on this CPU, and
@@ -475,6 +605,7 @@ void task_wait(uint64_t deadline_ns) {
   if (current->exec.in_syscall)
     asm volatile("swapgs");
 
+  current->sched.in_wait = false;
   current->sched.wake_at_ns = 0;
 }
 
@@ -580,6 +711,16 @@ task_t *get_current_task(void) {
 void schedule(registers_t *regs) {
   uint8_t cpu_id = this_cpu_id();
   task_t *old_task = get_current_task();
+
+  /* Between task_prepare_wait() and task_wait() a task is BLOCKED but
+   * still running. Switched out there, it would sleep before setting its
+   * deadline (or re-checking its condition), with nothing left to wake
+   * it: the xHCI thread stopped that way, and with it the USB keyboard.
+   * It sleeps by itself in task_wait() moments later. */
+  if (old_task && old_task->linkage.state == TASK_BLOCKED &&
+      !old_task->sched.in_wait)
+    return;
+
   task_t *new_task = get_next_task(cpu_id);
 
   if (!new_task || new_task == old_task)
@@ -663,6 +804,14 @@ void schedule_irq(registers_t *regs) {
  * the current task's slice expires.
  */
 void lapic_timer_handler(registers_t *regs) {
+  /* Acknowledge first: until EOI the LAPIC holds back every further timer
+   * interrupt on this CPU, and several paths below never come back here
+   * (task_exit) or return early. Interrupts stay off until iretq, so this
+   * can't nest. Without it, an AP whose timer started before the
+   * scheduler (smp_init runs first) stopped ticking for good, and only
+   * ran woken tasks when some other interrupt happened to reach it. */
+  lapic_eoi();
+
   if (!initialized) {
     return;
   }
@@ -709,8 +858,18 @@ void lapic_timer_handler(registers_t *regs) {
     }
     task_exit(-1);
   }
+}
 
-  lapic_eoi();
+void scheduler_kick(task_t *task) {
+  uint8_t cpu = task->sched.cpu;
+  if (cpu >= MAX_CPUS || cpu == this_cpu_id() || !cpu_data[cpu].online)
+    return;
+  /* A timer tick out of turn: an idle CPU's one-tick slice runs out and
+   * it picks the ready task; a busy one just loses a tick of its slice.
+   * Interrupts off: the xAPIC ICR is written in two halves. */
+  uint64_t flags = save_flags_cli();
+  lapic_send_ipi(cpu_data[cpu].apic_id, LAPIC_TIMER_VECTOR);
+  restore_flags(flags);
 }
 
 /* -- Idle task ---------------------------------------------------------- */
@@ -803,9 +962,7 @@ bool task_get(uint32_t pid, task_t *out, uint32_t *ppid) {
       task_t *t = rq->queue[i];
       if (t->id.pid == pid) {
         memcpy(out, t, sizeof(*out));
-        /* TODO: orphans keep a dangling parent pointer (no reparenting
-         * on exit yet), so this can read freed memory. */
-        *ppid = t->linkage.parent ? t->linkage.parent->id.pid : 0;
+        *ppid = task_ppid(t);
         spinlock_release(&rq->lock);
         restore_flags(flags);
         return true;

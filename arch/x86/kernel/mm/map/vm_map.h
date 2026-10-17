@@ -19,9 +19,11 @@
  * @brief Type of a virtual memory area
  */
 typedef enum {
-  VMA_ANONYMOUS,
+  VMA_ANONYMOUS, /* private: copy-on-write across fork */
   VMA_FILE,
-  VMA_DEVICE,
+  VMA_DEVICE, /* MMIO at phys_base: shared, not pmm-managed */
+  VMA_SHARED, /* MAP_SHARED pages (memfd, shared anonymous): every
+               * mapping, fork's included, holds a page reference */
 } vma_type_t;
 
 /* -- VMA Flags ------------------------------------------------------------- */

@@ -101,19 +101,13 @@ static void element_on_leave(element_t *el) {
   element_redraw(el);
 }
 
-#include <dev/keyboard/keyboard.h>
-
 static void element_on_down(element_t *el) {
   el->state = ELEMENT_PRESSED;
   if (el->style_set)
     element_apply_style(el, el->style_set->pressed);
 
-#ifdef GUI_DEMO
-
   if (el->type == UI_TEXTBOX)
     g_keyboard.focused_el = el;
-
-#endif
 
   element_redraw(el);
 }

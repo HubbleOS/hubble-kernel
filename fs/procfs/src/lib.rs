@@ -53,6 +53,8 @@ extern "C" fn procfs_init() -> c_int {
         readdir: Some(procfs_readdir),
         truncate: Some(procfs_truncate),
         rename: None,
+        chmod: None,
+        readlink: None,
     }));
 
     if unsafe { vfs_mount_fs(c"/proc".as_ptr(), fs) } {
@@ -139,6 +141,8 @@ unsafe extern "C" fn procfs_open(fs: *mut VfsFs, path: *const c_char) -> *mut Vf
     let mut node = Box::new(VfsNode {
         name: [0; 256],
         is_dir,
+        has_perm: true,
+        perm: if is_dir { 0o555 } else { 0o444 },
         size,
         mode: 0,
         pos: 0,

@@ -36,6 +36,22 @@ static struct wait_queue *vfs_file_wait_queue(file_t *file) {
   return dev ? dev->read_wq : NULL;
 }
 
+static long vfs_file_truncate(file_t *file, uint64_t length) {
+  if ((file->flags & FILE_O_ACCMODE) == FILE_O_RDONLY)
+    return -EINVAL; /* not open for writing */
+  if (length > UINT32_MAX)
+    return -EFBIG;
+  return vfs_truncate(file->vfs, (uint32_t)length);
+}
+
+/* Character devices answer through their driver's hook. */
+static long vfs_file_ioctl(file_t *file, unsigned long request, void *arg) {
+  VFS_device_reg *dev = file_device(file);
+  if (!dev || !dev->ioctl)
+    return -ENOTTY;
+  return dev->ioctl(request, arg);
+}
+
 static void vfs_file_release(file_t *file) { vfs_close(file->vfs); }
 
 static const file_ops_t vfs_file_ops = {
@@ -43,6 +59,8 @@ static const file_ops_t vfs_file_ops = {
     .write = vfs_file_write,
     .poll = vfs_file_poll,
     .wait_queue = vfs_file_wait_queue,
+    .ioctl = vfs_file_ioctl,
+    .truncate = vfs_file_truncate,
     .release = vfs_file_release,
 };
 
@@ -64,6 +82,26 @@ file_t *file_from_vfs(VFS_File *vfs, int flags) {
   if (file)
     file->vfs = vfs;
   return file;
+}
+
+/* Linux open flags kept in file_t.flags; the rest only matter at open. */
+#define FILE_O_KEPT (FILE_O_ACCMODE | FILE_O_APPEND | FILE_O_NONBLOCK)
+
+long file_open_vfs(VFS_File *vfs, int flags, file_t **out) {
+  VFS_device_reg *dev =
+      vfs->node && vfs->node->fs && vfs->node->fs->type == FS_DEV
+          ? (VFS_device_reg *)vfs->node->fs_node
+          : NULL;
+  if (dev && dev->open_file) {
+    vfs_close(vfs);
+    return dev->open_file(dev, flags, out);
+  }
+  *out = file_from_vfs(vfs, flags & FILE_O_KEPT);
+  if (!*out) {
+    vfs_close(vfs);
+    return -ENOMEM;
+  }
+  return 0;
 }
 
 void file_put(file_t *file) {

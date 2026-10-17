@@ -41,8 +41,50 @@ long sys_fork(registers_t *regs);
 long sys_execve(registers_t *regs);
 long sys_wait4(int pid, int *status, int options, void *rusage);
 long sys_getuid(void);
+long sys_geteuid(void);
+long sys_getgid(void);
+long sys_getegid(void);
+long sys_readlink(const char *path, char *buf, size_t size);
+long sys_chmod(const char *path, unsigned int mode);
+long sys_fchmod(int fd, unsigned int mode);
+long sys_umask(unsigned int mask);
+long sys_madvise(uint64_t addr, size_t length, int advice);
+long sys_flock(int fd, int op);
 struct utsname;
 long sys_uname(struct utsname *buf);
+long sys_setsid(void);
+long sys_setpgid(int pid, int pgid);
+long sys_getpgid(int pid);
+long sys_getpgrp(void);
+long sys_getsid(int pid);
+
+struct sockaddr_un;
+struct msghdr;
+long sys_socket(int domain, int type, int protocol);
+long sys_socketpair(int domain, int type, int protocol, int sv[2]);
+long sys_bind(int fd, const struct sockaddr_un *addr, uint32_t len);
+long sys_listen(int fd, int backlog);
+long sys_accept(int fd, struct sockaddr_un *addr, uint32_t *len);
+long sys_accept4(int fd, struct sockaddr_un *addr, uint32_t *len, int flags);
+long sys_connect(int fd, const struct sockaddr_un *addr, uint32_t len);
+long sys_shutdown(int fd, int how);
+long sys_sendto(int fd, const void *buf, size_t len, int flags,
+                const struct sockaddr_un *dest, uint32_t dest_len);
+long sys_recvfrom(int fd, void *buf, size_t len, int flags,
+                  struct sockaddr_un *src, uint32_t *src_len);
+long sys_sendmsg(int fd, const struct msghdr *msg, int flags);
+long sys_recvmsg(int fd, struct msghdr *msg, int flags);
+long sys_memfd_create(const char *name, unsigned int flags);
+long sys_getsockopt(int fd, int level, int name, void *val, uint32_t *len);
+long sys_setsockopt(int fd, int level, int name, const void *val,
+                    uint32_t len);
+long sys_prctl(int option, unsigned long arg2, unsigned long arg3,
+               unsigned long arg4, unsigned long arg5);
+struct rlimit64;
+long sys_prlimit64(int pid, int resource, const struct rlimit64 *new_limit,
+                   struct rlimit64 *old_limit);
+long sys_getrlimit(int resource, struct rlimit64 *limit);
+long sys_setrlimit(int resource, const struct rlimit64 *limit);
 long sys_getpid(void);
 long sys_getppid(void);
 long sys_gettid(void);

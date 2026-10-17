@@ -81,6 +81,27 @@ bool is_scheduler_initialized(void);
  */
 void task_exit(int exit_code);
 
+/** Make @p child a child of @p parent (fork). */
+void task_link_child(task_t *parent, task_t *child);
+
+/** setpgid(2): move @p pid (0: @p caller; else one of its children) to
+ * process group @p pgid (0: its own pid). */
+long task_setpgid(task_t *caller, uint32_t pid, uint32_t pgid);
+
+/** @p task's parent's pid, or 0 if it has none (or it exited). */
+uint32_t task_ppid(task_t *task);
+
+/**
+ * Reap an exited child of @p parent (@p pid, or any if -1): free it and
+ * return its pid with its exit code in @p exit_code. 0 if a matching
+ * child exists but hasn't exited yet, -ECHILD if there is none.
+ */
+long task_reap_child(task_t *parent, int pid, int *exit_code);
+
+/** Whether wait4 for @p pid would return now: a matching child exited,
+ * or there is no matching child. */
+bool task_child_waitable(task_t *parent, int pid);
+
 /* -- Task scheduling helpers -------------------------------------------- */
 
 /**
@@ -122,6 +143,14 @@ void task_wait(uint64_t deadline_ns);
  * switch away from it with a stale saved context.
  */
 void schedule_irq(registers_t *regs);
+
+/**
+ * @brief Make the CPU that runs @p task schedule now, not at its next tick.
+ *
+ * For a task just made ready from another CPU, which may be idle in hlt:
+ * without this the task waits up to a whole tick (10 ms) per wakeup.
+ */
+void scheduler_kick(task_t *task);
 
 /* -- Task creation ------------------------------------------------------ */
 
@@ -174,7 +203,7 @@ void task_kill_by_task(task_t *task);
 void task_kill_by_pid(uint32_t pid);
 
 /* task_t is mirrored in Rust (fs/procfs/src/kernel.rs): update both. */
-_Static_assert(sizeof(task_t) == 1808, "task_t is mirrored in fs/procfs");
+_Static_assert(sizeof(task_t) == 1824, "task_t is mirrored in fs/procfs");
 
 /**
  * @brief Copy the pids of up to @p max live tasks into @p out

@@ -211,8 +211,9 @@ VFS_File *vfs_open(const char *path, int flags) {
   f->pos = 0;
   f->path = (const char *)(f + 1);
 
+  /* O_TRUNC means nothing to a device (`> /dev/null`), as on Linux. */
   if ((flags & VFS_O_TRUNC) && (flags & VFS_O_WRONLY) && !node->is_dir &&
-      node->size) {
+      node->size && fs->type != FS_DEV) {
     int err = vfs_truncate(f, 0);
     if (err < 0) {
       vfs_close(f);
@@ -273,6 +274,26 @@ bool vfs_mkdir(const char *path) {
   if (!mnt || !mnt->fs->mkdir)
     return false;
   return mnt->fs->mkdir(mnt->fs, rel);
+}
+
+int vfs_chmod(const char *path, uint32_t perm) {
+  const char *rel;
+  VFS_Mount *mnt = vfs_resolve(path, &rel);
+  if (!mnt)
+    return -ENOENT;
+  if (!mnt->fs->chmod)
+    return -EPERM;
+  return mnt->fs->chmod(mnt->fs, rel, perm & 07777);
+}
+
+long vfs_readlink(const char *path, char *buf, size_t size) {
+  const char *rel;
+  VFS_Mount *mnt = vfs_resolve(path, &rel);
+  if (!mnt)
+    return -ENOENT;
+  if (!mnt->fs->readlink)
+    return -EINVAL;
+  return mnt->fs->readlink(mnt->fs, rel, buf, size);
 }
 
 /** @brief Read a directory listing. */

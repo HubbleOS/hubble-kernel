@@ -1,6 +1,6 @@
-#include <core/compositor/compositor.h>
+#include <server/compositor/compositor.h>
 #include <core/object/object.h>
-#include <core/screen/screen.h>
+#include <server/screen/screen.h>
 #include <stdlib.h>
 #include <string.h>
 

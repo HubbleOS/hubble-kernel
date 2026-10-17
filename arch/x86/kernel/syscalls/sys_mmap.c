@@ -25,6 +25,8 @@
 #define PROT_READ 0x1
 #define PROT_WRITE 0x2
 #define PROT_EXEC 0x4
+#define MAP_SHARED 0x01
+#define MAP_PRIVATE 0x02
 #define MAP_ANONYMOUS 0x20
 #define MAP_FAILED ((void *)-1)
 #define MAP_FIXED 0x10
@@ -34,12 +36,67 @@
 #define PF_W 0x2
 #define PF_R 0x4
 
+static void unmap_pages(uint64_t vaddr, size_t size) {
+  for (uint64_t off = 0; off < size; off += PAGE_SIZE) {
+    uint64_t phys = vmm_get_phys(vaddr + off);
+    if (phys) {
+      vmm_unmap_page(vaddr + off);
+      pmm_free_page(phys);
+    }
+  }
+}
+
+/* Map [offset, offset + size) of a file that owns its pages. */
+static long mmap_file_pages(task_t *task, file_t *file, uint64_t vaddr,
+                            size_t size, uint64_t offset, uint64_t pte_flags,
+                            uint32_t vm_flags, bool shared) {
+  if (offset % PAGE_SIZE)
+    return -EINVAL;
+  if (shared && (pte_flags & PTE_WRITE) &&
+      (file->flags & FILE_O_ACCMODE) == FILE_O_RDONLY)
+    return -EACCES;
+
+  /* Private: read-only until the first write copies the page. */
+  if (!shared && (pte_flags & PTE_WRITE))
+    pte_flags = (pte_flags & ~PTE_WRITE) | PTE_COW;
+
+  for (uint64_t off = 0; off < size; off += PAGE_SIZE) {
+    uint64_t phys = file->ops->get_page(file, offset + off);
+    if (!phys) { /* past the end of the file */
+      unmap_pages(vaddr, off);
+      return -ENXIO;
+    }
+    if (vmm_map_page(vaddr + off, phys, pte_flags) < 0) {
+      pmm_free_page(phys);
+      unmap_pages(vaddr, off);
+      return -ENOMEM;
+    }
+    /* vmm_map_page() maps every page writable; copy-on-write needs the
+     * page read-only with PTE_COW, exactly as asked. */
+    vmm_set_flags(vaddr + off, pte_flags);
+  }
+
+  vm_area_t *vma = kmalloc(sizeof(vm_area_t), GFP_ZERO);
+  if (!vma) {
+    unmap_pages(vaddr, size);
+    return -ENOMEM;
+  }
+  vma->base = vaddr;
+  vma->size = size;
+  vma->flags = vm_flags;
+  vma->type = shared ? VMA_SHARED : VMA_ANONYMOUS;
+  vm_insert_area(task->mm.vm_map, vma);
+  return (long)vaddr;
+}
+
 /**
  * @brief Map files or devices into memory.
  *
  * Creates a virtual memory mapping in the current task's address space.
- * Anonymous mappings allocate zero-filled physical pages; file-backed
- * mappings use the device's mmap callback to obtain physical memory.
+ * Anonymous mappings allocate zero-filled physical pages (MAP_SHARED ones
+ * stay shared with fork children). Files that own their memory (memfd)
+ * map their pages: shared, or copy-on-write for MAP_PRIVATE. Device
+ * files map what their driver's mmap callback returns.
  *
  * @param addr   Desired virtual address (hint, or fixed if MAP_FIXED).
  * @param length Size of the mapping in bytes.
@@ -106,7 +163,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
     vma->base = vaddr;
     vma->size = size;
     vma->flags = vm_flags;
-    vma->type = VMA_ANONYMOUS;
+    vma->type = (flags & MAP_SHARED) ? VMA_SHARED : VMA_ANONYMOUS;
     vm_insert_area(current->mm.vm_map, vma);
     return (long)vaddr;
   }
@@ -117,6 +174,9 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
   file_t *open_file = fd_file(current, fd);
   if (!open_file)
     return -EBADF;
+  if (open_file->ops->get_page)
+    return mmap_file_pages(current, open_file, vaddr, size, offset, pte_flags,
+                           vm_flags, flags & MAP_SHARED);
   VFS_File *file = open_file->vfs;
   if (!file)
     return -ENODEV; /* a pipe */
@@ -147,7 +207,9 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
     vm_insert_area(current->mm.vm_map, vma);
     return (long)vaddr;
   }
+  return -ENODEV; /* a file that can't be mapped */
 }
+
 long sys_munmap(uint64_t addr, size_t length) {
   if (length == 0) {
     printk(KERN_ERR "munmap: length is zero\n");
@@ -209,5 +271,42 @@ long sys_munmap(uint64_t addr, size_t length) {
     vm_insert_area(current->mm.vm_map, tail);
   }
 
+  return 0;
+}
+
+#define MADV_DONTNEED 4
+
+/**
+ * @brief madvise: hints about how memory will be used.
+ *
+ * Only MADV_DONTNEED changes what a program sees: the range reads as
+ * zeros afterwards (musl's allocator relies on it for freed memory).
+ * The pages stay mapped and are cleared in place; through write
+ * protection a shared copy-on-write page gets its own copy first, so
+ * no other process sees the change. Every other advice is accepted and
+ * ignored, which Linux allows for hints.
+ */
+long sys_madvise(uint64_t addr, size_t length, int advice) {
+  if (addr % PAGE_SIZE)
+    return -EINVAL;
+  if (advice != MADV_DONTNEED || !length)
+    return 0;
+
+  task_t *current = get_current_task();
+  uint64_t end = addr + PAGE_ALIGN_UP(length);
+  if (end < addr || end > 0x0000800000000000ULL)
+    return -EINVAL;
+  for (uint64_t va = addr; va < end; va += PAGE_SIZE) {
+    vm_area_t *vma = current->mm.vm_map ? vm_find_area(current->mm.vm_map, va)
+                                        : NULL;
+    if (!vma)
+      return -ENOMEM; /* Linux: part of the range isn't mapped */
+    /* Shared and device memory keeps its contents (Linux discards the
+     * mapping, and the data is still there when it comes back). */
+    if (vma->type != VMA_ANONYMOUS || !(vma->flags & VM_WRITE))
+      continue;
+    if (vmm_get_phys(va))
+      memset((void *)va, 0, PAGE_SIZE);
+  }
   return 0;
 }

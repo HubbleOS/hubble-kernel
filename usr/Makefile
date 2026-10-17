@@ -50,12 +50,19 @@ MUSL_CC ?= $(firstword $(shell command -v x86_64-linux-musl-gcc 2>/dev/null) \
 DEMO_SRCS := $(wildcard demos/*.c)
 DEMOS := $(if $(MUSL_CC),$(patsubst demos/%.c,$(BUILD_DIR)/demos/%,$(DEMO_SRCS)))
 
-# /bin/desktop: libgui (lib/libgui) in its GUI_DEMO configuration, with
-# the HubbleOS platform layer from apps/desktop/platform. Also musl.
-LIBGUI_SRCS := $(shell find lib/libgui/src -name '*.c')
-DESKTOP_SRCS := $(shell find apps/desktop -name '*.c')
-DESKTOP_HDRS := $(shell find lib/libgui apps/desktop -name '*.h')
+# libgui (lib/libgui): the shared core, plus a server half for
+# /bin/desktop (the display server) and a client half for applications
+# (GUI_APPS, each apps/<name>/*.c). Also musl.
+LIBGUI_DIR := lib/libgui/src
+LIBGUI_COMMON := $(shell find $(LIBGUI_DIR)/core $(LIBGUI_DIR)/ui $(LIBGUI_DIR)/utils -name '*.c')
+LIBGUI_SERVER := $(shell find $(LIBGUI_DIR)/server -name '*.c')
+LIBGUI_CLIENT := $(shell find $(LIBGUI_DIR)/client -name '*.c')
+LIBGUI_HDRS := $(shell find lib/libgui -name '*.h')
+LIBGUI_CFLAGS := -static -O2 -Ilib/libgui/include -I$(LIBGUI_DIR)
+
 DESKTOP := $(if $(MUSL_CC),$(BUILD_DIR)/demos/desktop)
+GUI_APPS := panel
+GUI_APP_BINS := $(if $(MUSL_CC),$(patsubst %,$(BUILD_DIR)/demos/%,$(GUI_APPS)))
 
 # /bin/peload runs Windows .exe files (the kernel hands them to it);
 # usr/win/*.c are Windows test programs for it, built with mingw-w64
@@ -86,12 +93,17 @@ $(BUILD_DIR)/demos/%: demos/%.c
 	$(Q)$(MUSL_CC) -static -O2 -Wall -Wextra -o $@ $(filter %.c,$^)
 	@echo "initramfs: built demo $* -> $@"
 
-$(BUILD_DIR)/demos/desktop: $(LIBGUI_SRCS) $(DESKTOP_SRCS) $(DESKTOP_HDRS)
+$(BUILD_DIR)/demos/desktop: $(wildcard apps/desktop/*.c) $(LIBGUI_COMMON) $(LIBGUI_SERVER) $(LIBGUI_HDRS)
 	@mkdir -p $(dir $@)
-	$(Q)$(MUSL_CC) -static -O2 -DGUI_DEMO \
-		-Iapps/desktop -Ilib/libgui/include -Ilib/libgui/src \
-		-o $@ $(DESKTOP_SRCS) $(LIBGUI_SRCS)
+	$(Q)$(MUSL_CC) $(LIBGUI_CFLAGS) -o $@ $(filter %.c,$^)
 	@echo "initramfs: built desktop -> $@"
+
+# GUI applications: one per apps/<name>, with libgui's client half.
+.SECONDEXPANSION:
+$(GUI_APP_BINS): $(BUILD_DIR)/demos/%: $$(wildcard apps/%/*.c) $(LIBGUI_COMMON) $(LIBGUI_CLIENT) $(LIBGUI_HDRS)
+	@mkdir -p $(dir $@)
+	$(Q)$(MUSL_CC) $(LIBGUI_CFLAGS) -o $@ $(filter %.c,$^)
+	@echo "initramfs: built GUI app $* -> $@"
 
 $(BUILD_DIR)/demos/peload: $(wildcard apps/peload/*.c apps/peload/*.h)
 	@mkdir -p $(dir $@)
@@ -106,7 +118,7 @@ $(BUILD_DIR)/win/%.exe: win/%.c
 # Everything that ends up in the image. Depending on init.elf alone meant
 # rebuilt modules (or a new busybox) were never copied in once the image
 # existed - the kernel then booted with stale .ko files.
-INITRAMFS_INPUTS := $(BUILD_DIR)/init.elf $(DEMOS) $(DESKTOP) $(PELOAD) $(WIN_EXES) \
+INITRAMFS_INPUTS := $(BUILD_DIR)/init.elf $(DEMOS) $(DESKTOP) $(GUI_APP_BINS) $(PELOAD) $(WIN_EXES) \
 	$(wildcard $(KERNEL_PATH)/out/modules/*.ko) \
 	$(wildcard $(KERNEL_PATH)/busy/*) \
 	$(KERNEL_PATH)/scripts/initramfs.py \
@@ -124,13 +136,15 @@ $(INITRAMFS_IMG): $(INITRAMFS_INPUTS)
 	@# Mountpoints: kernel/init/fs.c and modules mount over these.
 	@mkdir -p $(ROOT_DIR)/bin $(ROOT_DIR)/proc $(ROOT_DIR)/dev \
 		$(ROOT_DIR)/ext2 $(ROOT_DIR)/pipe
+	@# /tmp: programs expect it (tmux puts its server socket there).
+	@mkdir -p -m 1777 $(ROOT_DIR)/tmp
 	@[ -n "$(BUSYBOX_APPLETS)" ] || echo "initramfs: warning: could not list busybox applets (no --list-full/--list, or not runnable on this host); no applet links created"
 	@for a in $(BUSYBOX_APPLETS); do \
 		mkdir -p "$(ROOT_DIR)/$$(dirname "$$a")"; \
 		ln -sfn /busybox "$(ROOT_DIR)/$$a"; \
 	done
 	@[ -n "$(MUSL_CC)" ] || [ -z "$(DEMO_SRCS)" ] || echo "initramfs: note: x86_64-linux-musl-gcc not found; demos/ not built"
-	@for d in $(DEMOS) $(DESKTOP) $(PELOAD) $(WIN_EXES); do cp "$$d" $(ROOT_DIR)/bin/; done
+	@for d in $(DEMOS) $(DESKTOP) $(GUI_APP_BINS) $(PELOAD) $(WIN_EXES); do cp "$$d" $(ROOT_DIR)/bin/; done
 	@chmod +x $(ROOT_DIR)/init
 	@python3 $(KERNEL_PATH)/scripts/initramfs.py \
 		--root $(ROOT_DIR) \

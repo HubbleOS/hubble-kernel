@@ -445,6 +445,9 @@ static int initramfs_truncate(VFS_File *file, uint32_t size);
 static bool initramfs_unlink(VFS_FS *fs, const char *path);
 static bool initramfs_mkdir(VFS_FS *fs, const char *path);
 static bool initramfs_rename(VFS_FS *fs, const char *from, const char *to);
+static int initramfs_chmod(VFS_FS *fs, const char *path, uint32_t perm);
+static long initramfs_readlink(VFS_FS *fs, const char *path, char *buf,
+                               size_t size);
 
 /**
  * @brief Initialize the initramfs VFS filesystem
@@ -462,6 +465,8 @@ void initramfs_init_vfs(VFS_FS *fs) {
   fs->create_file = initramfs_create_file;
   fs->truncate = initramfs_truncate;
   fs->rename = initramfs_rename;
+  fs->chmod = initramfs_chmod;
+  fs->readlink = initramfs_readlink;
   fs->mmap = NULL;
 }
 
@@ -519,6 +524,8 @@ static VFS_Node *make_vfs_node(VFS_FS *fs, initramfs_node_t *node) {
   vfs_node->is_dir = node_is_dir(node);
   vfs_node->size = node->size;
   vfs_node->mode = get_vfs_mode(node);
+  vfs_node->has_perm = true;
+  vfs_node->perm = node->mode & 07777;
   vfs_node->pos = 0;
   vfs_node->fs_node = node;
   vfs_node->fs = fs;
@@ -772,4 +779,35 @@ int initramfs_init(void *data, uint64_t size) {
 
   printk(KERN_OK "[initramfs] mounted as /\n");
   return 0;
+}
+
+static int initramfs_chmod(VFS_FS *fs, const char *path, uint32_t perm) {
+  (void)fs;
+  spinlock_acquire(&g_lock);
+  initramfs_node_t *node = lookup(g_root, path, 0);
+  if (node)
+    node->mode = (node->mode & S_IFMT_) | (perm & 07777);
+  spinlock_release(&g_lock);
+  return node ? 0 : -ENOENT;
+}
+
+/* The final component is not followed: readlink asks about the link. */
+static long initramfs_readlink(VFS_FS *fs, const char *path, char *buf,
+                               size_t size) {
+  (void)fs;
+  char name[MAX_NAME_LEN];
+  long ret;
+  spinlock_acquire(&g_lock);
+  initramfs_node_t *parent = lookup_parent(path, name);
+  initramfs_node_t *node = parent ? find_child(parent, name) : NULL;
+  if (!node) {
+    ret = -ENOENT;
+  } else if (!node_is_symlink(node)) {
+    ret = -EINVAL;
+  } else {
+    ret = node->size < size ? node->size : size;
+    memcpy(buf, node->data, (size_t)ret);
+  }
+  spinlock_release(&g_lock);
+  return ret;
 }

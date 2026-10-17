@@ -63,17 +63,26 @@ static bool poll_scan(void *arg) {
   return ctx->ready > 0;
 }
 
-/* The one wait queue a poll can sleep on: the first watched file's
- * (a tty's input queue, a pipe). */
-static wait_queue_t *poll_wait_queue(poll_ctx_t *ctx) {
+/* The wait queues of every watched file (a tty's input queue, a pipe,
+ * a socket), each once. Returns how many. */
+static size_t poll_wait_queues(poll_ctx_t *ctx, wait_queue_t **wqs) {
+  size_t n = 0;
   for (unsigned long i = 0; i < ctx->nfds; i++) {
     if (ctx->fds[i].fd < 0 || !(ctx->fds[i].events & (POLLIN | POLLOUT)))
       continue;
     file_t *file = fd_file(get_current_task(), ctx->fds[i].fd);
-    if (file && file->ops->wait_queue && file->ops->wait_queue(file))
-      return (wait_queue_t *)file->ops->wait_queue(file);
+    wait_queue_t *wq = file && file->ops->wait_queue
+                           ? (wait_queue_t *)file->ops->wait_queue(file)
+                           : NULL;
+    if (!wq)
+      continue;
+    size_t j = 0;
+    while (j < n && wqs[j] != wq)
+      j++;
+    if (j == n)
+      wqs[n++] = wq;
   }
-  return NULL;
+  return n;
 }
 
 /**
@@ -94,9 +103,10 @@ long sys_poll(struct pollfd *fds, unsigned long nfds, int timeout_ms) {
   uint64_t deadline =
       timeout_ms > 0 ? hpet_get_time_ns() + timeout_ms * NS_PER_MS : 0;
 
-  wait_queue_t *wq = poll_wait_queue(&ctx);
-  if (wq) {
-    waitqueue_wait_event(wq, poll_scan, &ctx, deadline);
+  wait_queue_t *wqs[MAX_FDS];
+  size_t nwqs = poll_wait_queues(&ctx, wqs);
+  if (nwqs) {
+    waitqueue_wait_any(wqs, nwqs, poll_scan, &ctx, deadline);
     return ctx.ready;
   }
 

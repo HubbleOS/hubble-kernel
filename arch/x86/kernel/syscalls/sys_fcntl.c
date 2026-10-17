@@ -25,25 +25,22 @@
 /* What F_SETFL may change; the access mode is fixed at open. */
 #define SETFL_MASK (FILE_O_APPEND | FILE_O_NONBLOCK)
 
-VFS_device_reg *fd_get_device(int fd) {
-  file_t *file = fd_file(get_current_task(), fd);
-  return file ? file_device(file) : NULL;
-}
-
 /**
- * @brief ioctl: forwarded to the device behind the fd.
+ * @brief ioctl: forwarded to the open file (a device's driver, a pty).
  *
- * Anything that is not a device with an ioctl hook answers -ENOTTY,
- * which is also how isatty() tells a terminal from a file.
+ * Anything without an ioctl hook answers -ENOTTY, which is also how
+ * isatty() tells a terminal from a file.
  */
 long sys_ioctl(int fd, unsigned long request, void *arg) {
-  if (!fd_file(get_current_task(), fd))
+  file_t *file = fd_file(get_current_task(), fd);
+  if (!file)
     return -EBADF;
-
-  VFS_device_reg *dev = fd_get_device(fd);
-  if (!dev || !dev->ioctl)
+  if (!file->ops->ioctl)
     return -ENOTTY;
-  return dev->ioctl(request, arg);
+  /* The request is a 32-bit int (Linux: unsigned int cmd). musl's
+   * ioctl() sign-extends it, so 0x80045430 (TIOCGPTN) arrives as
+   * 0xffffffff80045430: only the low half is the request. */
+  return file->ops->ioctl(file, (uint32_t)request, arg);
 }
 
 /**

@@ -82,12 +82,10 @@ long sys_open(const char *path, int flags, int mode) {
     return -ENOTDIR;
   }
 
-  file_t *f =
-      file_from_vfs(file, flags & (L_O_ACCMODE | L_O_APPEND | L_O_NONBLOCK));
-  if (!f) {
-    vfs_close(file);
-    return -ENOMEM;
-  }
+  file_t *f;
+  long err = file_open_vfs(file, flags, &f);
+  if (err)
+    return err;
 
   int fd = fd_install(current, f, 0, (flags & L_O_CLOEXEC) ? FD_CLOEXEC : 0);
   if (fd < 0)

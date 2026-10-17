@@ -1,5 +1,5 @@
 #include "compositor.h"
-#include "../screen/screen.h"
+#include <server/screen/screen.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,10 +12,16 @@ void compositor_init() {
   compositor.dirty_count = 0;
 }
 
+/* An object's own damage hook: object coordinates to screen. */
+static void object_on_screen_damage(object_t *obj, int x, int y, int w,
+                                    int h) {
+  compositor_add_damage(obj->layer, obj->x + x, obj->y + y, w, h);
+}
+
 void compositor_add_damage(int layer, int x, int y, int w, int h) {
   (void)layer;
 
-  if (compositor.dirty_count >= MAX_DIRTY || w <= 0 || h <= 0)
+  if (w <= 0 || h <= 0)
     return;
 
   if (x < 0) {
@@ -33,7 +39,16 @@ void compositor_add_damage(int layer, int x, int y, int w, int h) {
   if (w <= 0 || h <= 0)
     return;
 
-  compositor.dirty[compositor.dirty_count++] = (rect_t){x, y, w, h};
+  rect_t r = {x, y, w, h};
+  if (compositor.dirty_count == MAX_DIRTY)
+    merge_dirty_rects(compositor.dirty, &compositor.dirty_count);
+  if (compositor.dirty_count == MAX_DIRTY) {
+    /* Still full: grow the last rectangle rather than lose this one. */
+    rect_t *last = &compositor.dirty[MAX_DIRTY - 1];
+    *last = rect_union(*last, r);
+    return;
+  }
+  compositor.dirty[compositor.dirty_count++] = r;
 }
 
 void compositor_remove(object_t *obj, int layer) {
@@ -136,6 +151,7 @@ void compositor_add(object_t *obj, int layer) {
     return;
 
   obj->layer = layer;
+  obj->on_damage = object_on_screen_damage;
   l->objects[l->count++] = obj;
 
   compositor_add_damage(layer, obj->x, obj->y, obj->width, obj->height);
@@ -154,56 +170,4 @@ void compositor_move_object(object_t *obj, int new_x, int new_y) {
 
   obj->x = new_x;
   obj->y = new_y;
-}
-
-void compositor_change_size_object(object_t *obj, int new_w, int new_h) {
-  rect_t old_rect = {obj->x, obj->y, obj->width, obj->height};
-  rect_t new_rect = {obj->x, obj->y, new_w, new_h};
-  rect_t rect = rect_union(old_rect, new_rect);
-
-  compositor_add_damage(obj->layer, rect.x, rect.y, rect.w, rect.h);
-
-  uint32_t *new_buf = malloc(new_w * new_h * sizeof(uint32_t));
-  if (!new_buf)
-    return;
-  memset(new_buf, obj->bg_color, new_w * new_h * sizeof(uint32_t));
-
-  int copy_w = obj->width < new_w ? obj->width : new_w;
-  int copy_h = obj->height < new_h ? obj->height : new_h;
-
-  for (int y = 0; y < copy_h; y++)
-    memcpy(new_buf + y * new_w, obj->buffer + y * obj->width,
-           copy_w * sizeof(uint32_t));
-
-  free(obj->buffer);
-  obj->buffer = new_buf;
-  obj->width = new_w;
-  obj->height = new_h;
-
-  object_redraw_elements(obj);
-}
-
-void object_maximize(object_t *obj, int screen_w, int screen_h) {
-  if (!obj || obj->maximized)
-    return;
-
-  obj->prev_x = obj->x;
-  obj->prev_y = obj->y;
-  obj->prev_w = obj->width;
-  obj->prev_h = obj->height;
-
-  compositor_move_object(obj, 0, 0);
-  compositor_change_size_object(obj, screen_w, screen_h);
-
-  obj->maximized = true;
-}
-
-void object_restore(object_t *obj) {
-  if (!obj || !obj->maximized)
-    return;
-
-  compositor_move_object(obj, obj->prev_x, obj->prev_y);
-  compositor_change_size_object(obj, obj->prev_w, obj->prev_h);
-
-  obj->maximized = false;
 }

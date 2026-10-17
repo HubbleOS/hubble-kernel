@@ -26,7 +26,6 @@ static void input_key_special(element_t *el, int action) {
   if (!el->text)
     return;
 
-#ifdef GUI_DEMO
   if (action == KEY_ACTION_BACKSPACE) {
     size_t len = strlen(el->text);
     if (len == 0)
@@ -35,7 +34,6 @@ static void input_key_special(element_t *el, int action) {
     el->text[len - 1] = 0;
     element_redraw(el);
   }
-#endif
 }
 
 input_t *input_create(int x, int y, int w, int h, const char *text) {

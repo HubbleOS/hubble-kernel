@@ -96,14 +96,14 @@ long sys_openat(int dirfd, const char *path, int flags, int mode) {
 }
 
 long sys_ftruncate(int fd, long length) {
-  if (length < 0 || length > (long)UINT32_MAX)
+  if (length < 0)
     return -EINVAL;
   file_t *file = fd_file(get_current_task(), fd);
   if (!file)
     return -EBADF;
-  if (!file->vfs || !(file->vfs->flags & VFS_O_WRONLY))
-    return -EINVAL; /* a pipe, or not open for writing */
-  return vfs_truncate(file->vfs, (uint32_t)length);
+  if (!file->ops->truncate)
+    return -EINVAL; /* e.g. a pipe */
+  return file->ops->truncate(file, (uint64_t)length);
 }
 
 long sys_truncate(const char *path, long length) {
@@ -145,12 +145,51 @@ long sys_rmdir(const char *path) {
 }
 
 long sys_mkdir(const char *path, int mode) {
-  (void)mode;
   ABS_OR_FAIL(abs, path);
   if (probe(abs, NULL) == 0)
     return -EEXIST;
   /* Missing parent, or a filesystem without mkdir. */
-  return vfs_mkdir(abs) ? 0 : -ENOENT;
+  if (!vfs_mkdir(abs))
+    return -ENOENT;
+  /* Filesystems without modes keep their default. */
+  vfs_chmod(abs, (uint32_t)mode & ~get_current_task()->umask);
+  return 0;
+}
+
+long sys_chmod(const char *path, unsigned int mode) {
+  ABS_OR_FAIL(abs, path);
+  return vfs_chmod(abs, mode);
+}
+
+long sys_fchmod(int fd, unsigned int mode) {
+  file_t *file = fd_file(get_current_task(), fd);
+  if (!file)
+    return -EBADF;
+  if (!file->vfs || !file->vfs->path)
+    return -EINVAL; /* a pipe, socket or pty: no mode to set */
+  return vfs_chmod(file->vfs->path, mode);
+}
+
+long sys_umask(unsigned int mask) {
+  task_t *task = get_current_task();
+  uint32_t old = task->umask;
+  task->umask = mask & 0777;
+  return old;
+}
+
+long sys_readlink(const char *path, char *buf, size_t size) {
+  if (!buf || !size)
+    return -EINVAL;
+  ABS_OR_FAIL(abs, path);
+  return vfs_readlink(abs, buf, size);
+}
+
+/* Advisory whole-file locks. Accepted but not enforced: no lock is ever
+ * held against anyone. Enough for a single user (tmux locks its socket
+ * while the server starts), not for programs that race on a lock. */
+long sys_flock(int fd, int op) {
+  (void)op;
+  return fd_file(get_current_task(), fd) ? 0 : -EBADF;
 }
 
 long sys_rename(const char *from, const char *to) {

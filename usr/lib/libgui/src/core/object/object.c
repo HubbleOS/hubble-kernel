@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../compositor/compositor.h"
-
 #define MAX_ELEMENTS 1024
 
 static inline bool element_is_fully_dirty(element_t *el) {
@@ -38,38 +36,55 @@ void element_mark_dirty_rect(element_t *el, int x, int y, int w, int h) {
   el->dirty_rect = (dirty_rect_t){x1, y1, x2 - x1, y2 - y1, true};
 }
 
-object_t *object_create(int x, int y, int w, int h, color_t bg_color) {
-  object_t *obj = malloc(sizeof(object_t));
-  if (!obj) {
+object_t *object_create_on(int x, int y, int w, int h, color_t bg_color,
+                           uint32_t *buffer) {
+  object_t *obj = calloc(1, sizeof(object_t));
+  if (!obj)
     return NULL;
-  }
 
   obj->x = x;
   obj->y = y;
   obj->width = w;
   obj->height = h;
   obj->bg_color = bg_color;
+  obj->buffer = buffer;
 
   obj->elements = malloc(MAX_ELEMENTS * sizeof(element_t *));
-  obj->element_count = 0;
-  obj->element_capacity = MAX_ELEMENTS;
-
-  obj->buffer = malloc(w * h * sizeof(uint32_t));
-  if (!obj->buffer) {
+  if (!obj->elements) {
     free(obj);
     return NULL;
   }
+  obj->element_count = 0;
+  obj->element_capacity = MAX_ELEMENTS;
+  return obj;
+}
 
-  for (size_t i = 0; i < (size_t)(w * h); i++)
-    obj->buffer[i] = bg_color;
+object_t *object_create(int x, int y, int w, int h, color_t bg_color) {
+  uint32_t *buffer = malloc((size_t)w * h * sizeof(uint32_t));
+  if (!buffer)
+    return NULL;
+  for (size_t i = 0; i < (size_t)w * h; i++)
+    buffer[i] = bg_color;
 
+  object_t *obj = object_create_on(x, y, w, h, bg_color, buffer);
+  if (!obj) {
+    free(buffer);
+    return NULL;
+  }
+  obj->owns_buffer = true;
   return obj;
 }
 
 void object_destroy(object_t *obj) {
-  free(obj->buffer);
+  if (obj->owns_buffer)
+    free(obj->buffer);
   free(obj->elements);
   free(obj);
+}
+
+void object_damage(object_t *obj, int x, int y, int w, int h) {
+  if (obj->on_damage && w > 0 && h > 0)
+    obj->on_damage(obj, x, y, w, h);
 }
 
 void object_flush(object_t *obj) {
@@ -179,7 +194,7 @@ void object_flush(object_t *obj) {
       }
     }
 
-    compositor_add_damage(obj->layer, obj->x + abs_x, obj->y + abs_y, dw, dh);
+    object_damage(obj, abs_x, abs_y, dw, dh);
   }
 }
 
@@ -258,7 +273,7 @@ void object_move_element(object_t *obj, element_t *el, int new_x, int new_y) {
     }
   }
 
-  compositor_add_damage(obj->layer, obj->x + ox, obj->y + oy, ow, oh);
+  object_damage(obj, ox, oy, ow, oh);
 
   el->x = new_x;
   el->y = new_y;

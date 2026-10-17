@@ -61,12 +61,14 @@ static VFS_Node *ext2_vfs_open(VFS_FS *fs, const char *path) {
   file->fs = e_fs;
   memcpy(&file->inode, &inode_buf, sizeof(Ext2Inode));
 
-  VFS_Node *node = kmalloc(sizeof(VFS_Node), GFP_KERNEL);
+  VFS_Node *node = kzalloc(sizeof(VFS_Node));
   if (!node) {
     kfree(file);
     return NULL;
   }
   node->fs = fs;
+  node->has_perm = true;
+  node->perm = inode_buf.mode & 07777;
   /* mode & 0x10 (the old FAT attribute constant) is the group-write
    * permission bit, not the directory type. */
   node->is_dir = ext2_is_dir(inode_buf.mode);

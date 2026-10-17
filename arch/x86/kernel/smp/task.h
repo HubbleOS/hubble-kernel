@@ -95,6 +95,7 @@ typedef struct {
   uint64_t last_scheduled;
   uint64_t wake_at_ns; /* blocked with a timeout: wake at this HPET time */
   uint8_t cpu;
+  bool in_wait; /* inside task_wait(): may be switched out while BLOCKED */
 } task_sched_t;
 
 // ---- Exec state ----
@@ -177,4 +178,7 @@ typedef struct task {
   struct wait_queue *child_wait; /* woken by task_exit() for wait4() */
   const struct syscall_abi *abi; /* set by exec, inherited by fork;
                                  * NULL for kernel threads */
+  uint32_t pgid; /* process group (job control); inherited by fork */
+  uint32_t sid;  /* session: its leader's pid; inherited by fork */
+  uint32_t umask; /* permission bits new files don't get; inherited */
 } task_t;
