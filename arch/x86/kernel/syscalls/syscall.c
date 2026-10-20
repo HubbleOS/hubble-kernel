@@ -13,7 +13,9 @@
 /* Linux x86_64: number in RAX, arguments in RDI RSI RDX R10 R8 R9,
  * -errno back in RAX. fork and execve need the whole trap frame. */
 static uint64_t linux_dispatch(registers_t *regs) {
-  if (regs->rax == SYS_fork)
+  /* vfork may be a plain fork: the child gets its own copy, which is all
+   * vfork promises less of. */
+  if (regs->rax == SYS_fork || regs->rax == SYS_vfork)
     return sys_fork(regs);
   if (regs->rax == SYS_execve)
     return sys_execve(regs);

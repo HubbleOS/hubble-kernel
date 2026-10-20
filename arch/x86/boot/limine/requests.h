@@ -35,3 +35,6 @@ extern volatile struct limine_executable_address_request limine_exec_addr_req;
 /* Bootloader info */
 extern volatile struct limine_bootloader_info_request
     limine_bootloader_info_req;
+
+/* Kernel command line (limine.conf "cmdline:") */
+extern volatile struct limine_executable_cmdline_request limine_cmdline_req;

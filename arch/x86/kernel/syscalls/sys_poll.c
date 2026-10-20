@@ -29,7 +29,6 @@ struct pollfd {
 #define POLLNVAL 0x020
 
 #define NS_PER_MS 1000000ULL
-#define NS_PER_SEC 1000000000ULL
 
 typedef struct {
   struct pollfd *fds;
@@ -120,11 +119,6 @@ long sys_poll(struct pollfd *fds, unsigned long nfds, int timeout_ms) {
   }
   return 0;
 }
-
-struct kernel_timespec {
-  int64_t tv_sec;
-  int64_t tv_nsec;
-};
 
 long sys_nanosleep(const struct kernel_timespec *req,
                    struct kernel_timespec *rem) {

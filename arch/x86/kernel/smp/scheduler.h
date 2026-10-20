@@ -101,6 +101,8 @@ long task_reap_child(task_t *parent, int pid, int *exit_code);
 /** Whether wait4 for @p pid would return now: a matching child exited,
  * or there is no matching child. */
 bool task_child_waitable(task_t *parent, int pid);
+/** True if @p parent has a child that exited and is not reaped yet. */
+bool task_child_exited(task_t *parent);
 
 /* -- Task scheduling helpers -------------------------------------------- */
 

@@ -9,11 +9,6 @@
 #include <hubble/errno.h>
 #include <hubble/syscalls.h>
 
-struct kernel_timespec {
-  int64_t tv_sec;
-  int64_t tv_nsec;
-};
-
 struct kernel_timeval {
   int64_t tv_sec;
   int64_t tv_usec;

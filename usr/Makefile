@@ -32,6 +32,10 @@ LDFLAGS := -nostdlib -static -nostartfiles
 SRC      := init.c
 LDSCRIPT := link.ld
 
+# Everything in busy/ is copied to the image root. It is optional: without
+# busybox the image gets no applets and boots the minimal /init instead.
+BUSY_FILES := $(wildcard $(KERNEL_PATH)/busy/*)
+
 # Busybox applets, linked as /<dir>/<name> -> /busybox. Busybox picks the
 # applet from argv[0], so a symlink is all an applet needs. The list comes
 # from the binary itself (--list-full gives bin/ls, sbin/init, ...), so it
@@ -120,32 +124,39 @@ $(BUILD_DIR)/win/%.exe: win/%.c
 # existed - the kernel then booted with stale .ko files.
 INITRAMFS_INPUTS := $(BUILD_DIR)/init.elf $(DEMOS) $(DESKTOP) $(GUI_APP_BINS) $(PELOAD) $(WIN_EXES) \
 	$(wildcard $(KERNEL_PATH)/out/modules/*.ko) \
-	$(wildcard $(KERNEL_PATH)/busy/*) \
-	$(KERNEL_PATH)/scripts/initramfs.py \
+	$(BUSY_FILES) \
+	$(KERNEL_PATH)/scripts/initramfs.py inittab \
 	$(lastword $(MAKEFILE_LIST))
 
 # Create rootfs layout and generate initramfs image. The rootfs is rebuilt
 # from scratch so files removed from the inputs do not linger.
+#
+# The kernel runs init= from its command line, or else the first of /init,
+# /sbin/init, /etc/init, /bin/init, /bin/sh. With busybox that is
+# /sbin/init (busybox init) reading /etc/inittab; without it, the minimal
+# /init built from init.c.
 $(INITRAMFS_IMG): $(INITRAMFS_INPUTS)
 	@rm -rf $(ROOT_DIR)
-	@mkdir -p $(ROOT_DIR)
-	@cp $(BUILD_DIR)/init.elf $(ROOT_DIR)/init
 	@mkdir -p $(ROOT_DIR)/modules
 	@cp -r $(KERNEL_PATH)/out/modules/* $(ROOT_DIR)/modules/
-	@cp -r $(KERNEL_PATH)/busy/* $(ROOT_DIR)/
+	@$(if $(BUSY_FILES),cp -r $(BUSY_FILES) $(ROOT_DIR)/)
+	@[ -e $(ROOT_DIR)/busybox ] || cp $(BUILD_DIR)/init.elf $(ROOT_DIR)/init
 	@# Mountpoints: kernel/init/fs.c and modules mount over these.
 	@mkdir -p $(ROOT_DIR)/bin $(ROOT_DIR)/proc $(ROOT_DIR)/dev \
 		$(ROOT_DIR)/ext2 $(ROOT_DIR)/pipe
 	@# /tmp: programs expect it (tmux puts its server socket there).
 	@mkdir -p -m 1777 $(ROOT_DIR)/tmp
-	@[ -n "$(BUSYBOX_APPLETS)" ] || echo "initramfs: warning: could not list busybox applets (no --list-full/--list, or not runnable on this host); no applet links created"
+	@mkdir -p $(ROOT_DIR)/etc
+	@cp inittab $(ROOT_DIR)/etc/inittab
+	@[ -e $(BUSYBOX) ] || echo "initramfs: note: no busy/busybox; the image boots the minimal /init"
+	@[ -n "$(BUSYBOX_APPLETS)" ] || [ ! -e $(BUSYBOX) ] || echo "initramfs: warning: could not list busybox applets (no --list-full/--list, or not runnable on this host); no applet links created"
 	@for a in $(BUSYBOX_APPLETS); do \
 		mkdir -p "$(ROOT_DIR)/$$(dirname "$$a")"; \
 		ln -sfn /busybox "$(ROOT_DIR)/$$a"; \
 	done
 	@[ -n "$(MUSL_CC)" ] || [ -z "$(DEMO_SRCS)" ] || echo "initramfs: note: x86_64-linux-musl-gcc not found; demos/ not built"
 	@for d in $(DEMOS) $(DESKTOP) $(GUI_APP_BINS) $(PELOAD) $(WIN_EXES); do cp "$$d" $(ROOT_DIR)/bin/; done
-	@chmod +x $(ROOT_DIR)/init
+	@[ ! -e $(ROOT_DIR)/init ] || chmod +x $(ROOT_DIR)/init
 	@python3 $(KERNEL_PATH)/scripts/initramfs.py \
 		--root $(ROOT_DIR) \
 		--output $@

@@ -3,7 +3,9 @@
 # build-minimal-iso.sh — Build a minimal bootable ISO for kernel development.
 #
 # Usage:
-#   ./scripts/qemu/build-minimal-iso.sh [KERNEL_ELF] [OUTPUT_ISO]
+#   ./scripts/qemu/build-minimal-iso.sh [KERNEL_ELF] [OUTPUT_ISO] [INITRAMFS]
+#
+# Set CMDLINE for a kernel command line, e.g. CMDLINE="init=/sbin/init".
 #
 # This creates a minimal ISO with the kernel, initramfs, and Limine bootloader,
 # suitable for direct QEMU execution without the full hubble-os environment.
@@ -60,8 +62,13 @@ else
     echo "  Run 'make initramfs' to generate it."
 fi
 
-# Copy Limine config
+# Copy Limine config. CMDLINE (e.g. CMDLINE="init=/sbin/init") becomes
+# the kernel command line.
 cp "$CONFIG_DIR/limine.conf" "$ISO_TREE/boot/limine/limine.conf"
+if [ -n "${CMDLINE:-}" ]; then
+    echo "    cmdline: $CMDLINE" >> "$ISO_TREE/boot/limine/limine.conf"
+    echo "Kernel cmdline: $CMDLINE"
+fi
 
 # Copy Limine bootloader files
 cp "$LIMINE_DATADIR/BOOTX64.EFI"         "$ISO_TREE/EFI/BOOT/BOOTX64.EFI"

@@ -91,3 +91,13 @@ __attribute__((
         .id = LIMINE_BOOTLOADER_INFO_REQUEST_ID,
         .revision = 0,
 };
+
+/* -- Kernel command line ---------------------------------------------- */
+
+__attribute__((
+    used,
+    section(".limine_requests"))) volatile struct limine_executable_cmdline_request
+    limine_cmdline_req = {
+        .id = LIMINE_EXECUTABLE_CMDLINE_REQUEST_ID,
+        .revision = 0,
+};

@@ -61,6 +61,7 @@ static syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_readv] = (syscall_fn_t)sys_readv,
     [SYS_rt_sigaction] = (syscall_fn_t)sys_rt_sigaction,
     [SYS_rt_sigprocmask] = (syscall_fn_t)sys_rt_sigprocmask,
+    [SYS_rt_sigtimedwait] = (syscall_fn_t)sys_rt_sigtimedwait,
     [SYS_getcwd] = (syscall_fn_t)sys_getcwd,
     [SYS_chdir] = (syscall_fn_t)sys_chdir,
     [SYS_getuid] = (syscall_fn_t)sys_getuid,

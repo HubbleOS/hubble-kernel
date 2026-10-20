@@ -17,6 +17,7 @@
 #include <hubble/module.h>
 #include <hubble/platform.h>
 #include <hubble/printk.h>
+#include <hubble/string.h>
 
 #include <acpi/acpi.h>
 #include <apic/apic.h>
@@ -246,6 +247,90 @@ void start_kernel(void) {
     hlt();
 }
 
+/* -- Starting init ------------------------------------------------------ */
+
+#define INIT_PATH_MAX 128
+
+/* Tried in order when the command line names no init, as in Linux. */
+static const char *const default_inits[] = {
+    "/init", "/sbin/init", "/etc/init", "/bin/init", "/bin/sh", NULL,
+};
+
+/**
+ * @brief Copy the value of "@p key=" on the kernel command line to @p buf
+ * @return false if the command line has no such option
+ */
+static bool cmdline_get(const char *key, char *buf, size_t size) {
+  if (!limine_cmdline_req.response || !limine_cmdline_req.response->cmdline)
+    return false;
+
+  size_t keylen = strlen(key);
+  for (const char *p = limine_cmdline_req.response->cmdline; *p;) {
+    while (*p == ' ')
+      p++;
+    const char *end = p;
+    while (*end && *end != ' ')
+      end++;
+
+    if ((size_t)(end - p) > keylen && !strncmp(p, key, keylen) &&
+        p[keylen] == '=') {
+      size_t n = end - p - keylen - 1;
+      if (n >= size)
+        n = size - 1;
+      memcpy(buf, p + keylen + 1, n);
+      buf[n] = '\0';
+      return true;
+    }
+    p = end;
+  }
+  return false;
+}
+
+/**
+ * @brief Start @p path as pid 1 on the console
+ * @return false if it is not there or will not load
+ */
+static bool try_init(const char *path) {
+  VFS_File *f = vfs_open(path, VFS_O_RDONLY);
+  if (IS_ERR(f) || !f)
+    return false;
+  vfs_close(f);
+
+  char *argv[] = {(char *)path, NULL};
+  char *envp[] = {"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "HOME=/", "TERM=linux",
+                  NULL};
+  task_t *init = execv(path, argv, envp);
+  if (!init)
+    return false;
+
+  init->id.pid = 1;
+  if (fd_open_console(init) < 0)
+    printk(KERN_ERR "init: cannot open the console for %s\n", path);
+  scheduler_add_task(init);
+  printk(KERN_INFO "init: running %s\n", path);
+  return true;
+}
+
+/**
+ * @brief Start the first user process: "init=" from the command line, or
+ *        the first of default_inits that exists
+ */
+static void start_init(void) {
+  char path[INIT_PATH_MAX];
+  if (cmdline_get("init", path, sizeof(path))) {
+    if (try_init(path))
+      return;
+    printk(KERN_ERR "init: cannot run init=%s, trying the defaults\n", path);
+  }
+
+  for (int i = 0; default_inits[i]; i++)
+    if (try_init(default_inits[i]))
+      return;
+
+  printk(KERN_EMERG "init: no init found; put one in the initramfs or pass "
+                    "init=<path> on the kernel command line\n");
+}
+
 /**
  * @brief Main kernel thread running after scheduler start.
  *
@@ -276,17 +361,7 @@ void kmain_thread(void) {
   module_load("/modules/procfs.ko");
   module_load("/modules/video.ko");
 
-  char *argv[] = {"/busybox", "sh", "-i", NULL};
-  char *envp[] = {"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "HOME=/", "TERM=linux",
-                  NULL};
-  task_t *task1 = execv("/busybox", argv, envp);
-  if (task1 != NULL) {
-    if (fd_open_console(task1) < 0)
-      printk(KERN_ERR "init: cannot open /dev/tty0 for the shell\n");
-    scheduler_add_task(task1);
-  } else {
-    printk(KERN_ERR "init: cannot exec /busybox: %d\n", task1 == NULL ? -1 : 0);
-  }
+  start_init();
 
   printk(KERN_INFO "kmain thread done\n");
 

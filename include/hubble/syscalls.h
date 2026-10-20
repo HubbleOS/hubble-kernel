@@ -40,6 +40,10 @@ typedef struct registers registers_t;
 long sys_fork(registers_t *regs);
 long sys_execve(registers_t *regs);
 long sys_wait4(int pid, int *status, int options, void *rusage);
+struct kernel_timespec;
+long sys_rt_sigtimedwait(const uint64_t *set, void *info,
+                         const struct kernel_timespec *timeout,
+                         size_t sigsetsize);
 long sys_getuid(void);
 long sys_geteuid(void);
 long sys_getgid(void);
@@ -105,7 +109,11 @@ long sys_ioctl(int fd, unsigned long request, void *arg);
 long sys_fcntl(int fd, int cmd, long arg);
 struct pollfd;
 long sys_poll(struct pollfd *fds, unsigned long nfds, int timeout_ms);
-struct kernel_timespec;
+#define NS_PER_SEC 1000000000ULL
+struct kernel_timespec {
+  int64_t tv_sec;
+  int64_t tv_nsec;
+};
 long sys_nanosleep(const struct kernel_timespec *req,
                    struct kernel_timespec *rem);
 long sys_clock_gettime(int clock_id, void *ts);

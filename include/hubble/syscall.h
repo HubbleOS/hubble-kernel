@@ -18,12 +18,14 @@
 #define SYS_brk 12
 #define SYS_rt_sigaction 13
 #define SYS_rt_sigprocmask 14
+#define SYS_rt_sigtimedwait 128
 #define SYS_ioctl 16
 #define SYS_readv 19
 #define SYS_writev 20
 #define SYS_access 21
 #define SYS_nanosleep 35
 #define SYS_fork 57
+#define SYS_vfork 58
 #define SYS_execve 59
 #define SYS_exit 60
 #define SYS_wait4 61

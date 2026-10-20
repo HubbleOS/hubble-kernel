@@ -103,14 +103,23 @@ fn comm(p: &Proc, out: &mut String) {
     let _ = writeln!(out, "{}", as_text(&p.task.id.name));
 }
 
+/// Linux's layout, which ps and top parse: "pid (comm) state ppid pgrp
+/// session" and then fields 7..=52 (tty_nr, ..., exit_code). The ones we
+/// do not track are 0, except num_threads (field 20), which is 1.
 fn stat(p: &Proc, out: &mut String) {
     let t = &p.task;
-    let _ = writeln!(
+    let _ = write!(
         out,
-        "{} {} {} {}",
+        "{} ({}) {} {} {} {}",
         t.id.pid,
         as_text(&t.id.name),
         state_char(t.linkage.state),
-        p.ppid
+        p.ppid,
+        t.pgid,
+        t.sid
     );
+    for field in 7..=52 {
+        let _ = write!(out, " {}", if field == 20 { 1 } else { 0 });
+    }
+    out.push('\n');
 }

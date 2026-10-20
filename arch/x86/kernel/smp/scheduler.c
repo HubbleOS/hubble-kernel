@@ -111,7 +111,9 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg,
   waitqueue_init(task->child_wait);
 
   printk(KERN_INFO "Assigning PID\n");
-  static uint32_t next_pid = 1;
+  /* Like Linux: pid 1 is init's (kmain_thread gives it out), idle tasks
+   * are pid 0, everything else counts up from 2. */
+  static uint32_t next_pid = 2;
   task->id.pid = __atomic_fetch_add(&next_pid, 1, __ATOMIC_SEQ_CST);
 
   printk(KERN_INFO "Setting state\n");
@@ -405,6 +407,15 @@ bool task_child_waitable(task_t *parent, int pid) {
   bool ready = find_dead_child(parent, pid, &link, &any) || !any;
   irqlock_release(&tree_lock);
   return ready;
+}
+
+bool task_child_exited(task_t *parent) {
+  task_t **link;
+  bool any;
+  irqlock_acquire(&tree_lock);
+  bool exited = find_dead_child(parent, -1, &link, &any) != NULL;
+  irqlock_release(&tree_lock);
+  return exited;
 }
 
 long task_reap_child(task_t *parent, int pid, int *exit_code) {
@@ -896,6 +907,7 @@ void scheduler_init(void) {
     runqueues[i].count = 0;
     runqueues[i].next_index = 0;
     task_t *idle = task_create(idle_task, 255, 0);
+    idle->id.pid = 0;
     idle->sched.time_slice_max = 1;
     idle->sched.time_slice = 1;
     runqueues[i].idle_task = idle;
