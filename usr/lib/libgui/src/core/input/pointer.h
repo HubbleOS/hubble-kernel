@@ -4,8 +4,8 @@
  *
  * The display server decides which window the pointer is over and sends
  * its position in that window's coordinates; this turns those positions
- * into element events (enter/leave, down/up, click) and element drags.
- * Pressing the window's background asks for the whole window to move,
+ * into element events (enter/leave, down/up, click) and drags of
+ * draggable elements. Pressing the window's background (or a label) asks for the whole window to move,
  * which only the server can do.
  */
 #pragma once

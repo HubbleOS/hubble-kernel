@@ -57,6 +57,7 @@ typedef struct element {
 
   bool is_active;
   bool on_focus;
+  bool draggable; /* the pointer can pick it up and move it in the window */
 
   // styles
   element_style_t active_style;

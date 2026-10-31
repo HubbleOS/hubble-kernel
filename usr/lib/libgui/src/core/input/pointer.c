@@ -45,12 +45,13 @@ bool pointer_update(pointer_t *p, object_t *obj, int x, int y, bool left) {
       hover->on_mouse_down(hover);
       p->pressed_el = hover;
     }
-    /* Buttons are clicked; anything else is picked up and dragged. */
-    if (hover && hover->type != UI_BUTTON) {
+    /* Draggable elements are picked up; a label is part of the window's
+     * background, which moves the window. */
+    if (hover && hover->draggable) {
       p->drag_el = hover;
       p->drag_offset_x = x - hover->x;
       p->drag_offset_y = y - hover->y;
-    } else if (!hover) {
+    } else if (!hover || hover->type == UI_LABEL) {
       move_window = true;
     }
   }
