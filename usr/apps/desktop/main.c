@@ -7,7 +7,8 @@
  * the screen, /dev/input/events for pointer and keys.
  *
  * It starts /bin/panel, the kernel log and controls, and ends with it
- * (its Quit button) or on Esc, giving the screen back to the console.
+ * (its Quit button) or on Ctrl+Alt+Backspace, giving the screen back to
+ * the console.
  */
 #include <fcntl.h>
 #include <linux/fb.h>
@@ -72,8 +73,15 @@ static void handle_key(input_state_t *in, int code, int value) {
 
   input_event_t ev = {.shift = in->shift, .ctrl = in->ctrl, .alt = in->alt};
   switch (code) {
-  case KEY_ESC: quit = true; return;
-  case KEY_BACKSPACE: ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_BACKSPACE; break;
+  case KEY_ESC: ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_ESC; break;
+  case KEY_BACKSPACE:
+    /* Ctrl+Alt+Backspace ends the session; Esc belongs to applications
+     * (the terminal, vi). */
+    if (in->ctrl && in->alt) {
+      quit = true;
+      return;
+    }
+    ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_BACKSPACE; break;
   case KEY_ENTER: ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_ENTER; break;
   case KEY_TAB: ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_TAB; break;
   case KEY_UP: ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_UP; break;
@@ -81,6 +89,11 @@ static void handle_key(input_state_t *in, int code, int value) {
   case KEY_LEFT: ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_LEFT; break;
   case KEY_RIGHT: ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_RIGHT; break;
   case KEY_DELETE: ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_DELETE; break;
+  case KEY_HOME: ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_HOME; break;
+  case KEY_END: ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_END; break;
+  case KEY_INSERT: ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_INSERT; break;
+  case KEY_PAGEUP: ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_PAGE_UP; break;
+  case KEY_PAGEDOWN: ev.type = KEY_TYPE_SPECIAL; ev.action = KEY_ACTION_PAGE_DOWN; break;
   default:
     if (code < 0 || code >= (int)(sizeof(keymap) / sizeof(keymap[0])) ||
         !keymap[code][0])
@@ -173,12 +186,15 @@ int main(void) {
     return 1;
   }
 
-  /* Keys reach the tty as well as us: don't echo them over the picture. */
+  /* Keys reach the tty as well as us: don't echo them over the picture,
+   * and don't let Ctrl+C / Ctrl+Z (meant for a terminal window) signal
+   * the desktop itself, or Ctrl+S stop the console. */
   struct termios saved, quiet;
   bool have_tty = tcgetattr(0, &saved) == 0;
   if (have_tty) {
     quiet = saved;
-    quiet.c_lflag &= ~(ECHO | ICANON);
+    quiet.c_lflag &= ~(ECHO | ICANON | ISIG);
+    quiet.c_iflag &= ~IXON;
     tcsetattr(0, TCSANOW, &quiet);
   }
   ioctl(0, KDSETMODE, KD_GRAPHICS);

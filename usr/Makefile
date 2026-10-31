@@ -65,7 +65,7 @@ LIBGUI_HDRS := $(shell find lib/libgui -name '*.h')
 LIBGUI_CFLAGS := -static -O2 -Ilib/libgui/include -I$(LIBGUI_DIR)
 
 DESKTOP := $(if $(MUSL_CC),$(BUILD_DIR)/demos/desktop)
-GUI_APPS := panel
+GUI_APPS := panel term
 GUI_APP_BINS := $(if $(MUSL_CC),$(patsubst %,$(BUILD_DIR)/demos/%,$(GUI_APPS)))
 
 # /bin/peload runs Windows .exe files (the kernel hands them to it);

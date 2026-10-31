@@ -214,7 +214,10 @@ static void handle(const struct gui_msg *msg) {
       pointer_leave(&pointer);
     break;
   case GUI_KEY:
-    keyboard_dispatch(&msg->key);
+    if (win->on_key)
+      win->on_key(win, &msg->key);
+    else
+      keyboard_dispatch(&msg->key);
     break;
   }
 }

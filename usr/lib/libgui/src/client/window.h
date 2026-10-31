@@ -29,6 +29,10 @@ typedef struct window {
   bool damaged;
   int dmg_x, dmg_y, dmg_w, dmg_h;
 
+  /* Takes the window's keys itself, with their modifiers, instead of
+   * libgui giving them to the focused element. NULL: the element. */
+  void (*on_key)(struct window *win, const input_event_t *ev);
+
   struct window *next;
 } window_t;
 

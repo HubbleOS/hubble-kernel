@@ -2,14 +2,18 @@
  * panel - the kernel log and a few controls, as a libgui application.
  *
  * Its windows are shown by the display server (/bin/desktop, which
- * starts it); Quit ends the panel, and with it the desktop session.
+ * starts it); Terminal opens a /bin/term window, Quit ends the panel,
+ * and with it the desktop session.
  */
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <libgui.h>
+
+#define TERM_APP "/bin/term"
 
 #define LOG_COLS 70 /* characters per log line (8 px each) */
 #define LOG_ROWS 24
@@ -102,17 +106,30 @@ static void build_log_window(void) {
 
 static void on_quit(void) { gui_quit(); }
 
+/* A new terminal window (/bin/term), and any that ended reaped. */
+static void on_terminal(void) {
+  while (waitpid(-1, NULL, WNOHANG) > 0)
+    ;
+  if (fork() == 0) {
+    execl(TERM_APP, TERM_APP, (char *)NULL);
+    perror(TERM_APP);
+    _exit(127);
+  }
+}
+
 static void build_controls_window(void) {
   int x = gui_screen_width() - 300, y = 60;
-  window_t *win = window_create(x, y, 260, 190);
+  window_t *win = window_create(x, y, 260, 235);
   window_addElement(win, label_create(10, 10, 240, 20, "HubbleOS desktop"));
   window_addElement(win, input_create(10, 45, 240, 28, "type here"));
-  window_addElement(win, button_create(10, 90, 240, 32, "Refresh log"));
-  window_addElement(win, button_create(10, 135, 240, 32, "Quit"));
+  window_addElement(win, button_create(10, 90, 240, 32, "Terminal"));
+  window_addElement(win, button_create(10, 135, 240, 32, "Refresh log"));
+  window_addElement(win, button_create(10, 180, 240, 32, "Quit"));
   /* libgui click handlers take no arguments, so tell them apart here. */
   element_t **els = win->surface->elements;
-  els[2]->on_click = log_refresh;
-  els[3]->on_click = on_quit;
+  els[2]->on_click = on_terminal;
+  els[3]->on_click = log_refresh;
+  els[4]->on_click = on_quit;
 }
 
 int main(void) {
