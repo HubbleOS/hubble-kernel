@@ -63,6 +63,8 @@ LIBGUI_SERVER := $(shell find $(LIBGUI_DIR)/server -name '*.c')
 LIBGUI_CLIENT := $(shell find $(LIBGUI_DIR)/client -name '*.c')
 LIBGUI_HDRS := $(shell find lib/libgui -name '*.h')
 LIBGUI_CFLAGS := -static -O2 -Ilib/libgui/include -I$(LIBGUI_DIR)
+# libgui's TrueType fonts (ui/text/font.h), installed in /usr/share/fonts.
+FONTS := $(wildcard fonts/*.ttf) fonts/LICENSE.DejaVu
 
 DESKTOP := $(if $(MUSL_CC),$(BUILD_DIR)/demos/desktop)
 GUI_APPS := panel term
@@ -124,7 +126,7 @@ $(BUILD_DIR)/win/%.exe: win/%.c
 # existed - the kernel then booted with stale .ko files.
 INITRAMFS_INPUTS := $(BUILD_DIR)/init.elf $(DEMOS) $(DESKTOP) $(GUI_APP_BINS) $(PELOAD) $(WIN_EXES) \
 	$(wildcard $(KERNEL_PATH)/out/modules/*.ko) \
-	$(BUSY_FILES) \
+	$(BUSY_FILES) $(FONTS) \
 	$(KERNEL_PATH)/scripts/initramfs.py inittab \
 	$(lastword $(MAKEFILE_LIST))
 
@@ -148,6 +150,8 @@ $(INITRAMFS_IMG): $(INITRAMFS_INPUTS)
 	@mkdir -p -m 1777 $(ROOT_DIR)/tmp
 	@mkdir -p $(ROOT_DIR)/etc
 	@cp inittab $(ROOT_DIR)/etc/inittab
+	@mkdir -p $(ROOT_DIR)/usr/share/fonts
+	@cp $(FONTS) $(ROOT_DIR)/usr/share/fonts/
 	@[ -e $(BUSYBOX) ] || echo "initramfs: note: no busy/busybox; the image boots the minimal /init"
 	@[ -n "$(BUSYBOX_APPLETS)" ] || [ ! -e $(BUSYBOX) ] || echo "initramfs: warning: could not list busybox applets (no --list-full/--list, or not runnable on this host); no applet links created"
 	@for a in $(BUSYBOX_APPLETS); do \

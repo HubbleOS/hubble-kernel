@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <ui/text/fonts/font.h>
+#include <ui/text/font.h>
 
 #include "styles/border_radius.h"
 
@@ -55,28 +55,18 @@ void element_draw(element_t *el) {
   if (!el->text)
     return;
 
-  size_t len = strlen(el->text);
-  int gx = (el->width - (int)(len * 8)) / 2;
-  int gy = (el->height - 8) / 2;
+  font_t *f = element_font(el);
+  int tx = el->text_align == TEXT_ALIGN_LEFT
+               ? 4
+               : (el->width - font_text_width(f, el->text)) / 2;
+  int baseline = (el->height - font_line_height(f)) / 2 + font_ascent(f);
+  font_draw(f, el->buffer, el->width, el->height, tx, baseline, el->text,
+            el->text_color);
+}
 
-  for (size_t i = 0; i < len; i++) {
-    uint8_t *glyph = (uint8_t *)get_glyph(el->text[i]);
-    if (!glyph)
-      glyph = (uint8_t *)get_glyph('?');
-
-    for (int row = 0; row < 8; row++) {
-      uint8_t line = glyph[row];
-      for (int col = 0; col < 8; col++) {
-        if (!(line & (0x80 >> col)))
-          continue;
-        int px = gx + (int)i * 8 + col;
-        int py = gy + row;
-        if (px < 0 || py < 0 || px >= el->width || py >= el->height)
-          continue;
-        el->buffer[py * el->width + px] = el->text_color;
-      }
-    }
-  }
+font_t *element_font(const element_t *el) {
+  return font_get(el->font_mono ? FONT_MONO : FONT_SANS,
+                  el->font_size ? el->font_size : FONT_SIZE_DEFAULT);
 }
 
 void element_redraw(element_t *el) {

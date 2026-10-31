@@ -26,9 +26,9 @@
 #define BTN_Y 6
 #define BTN_H 28
 
-#define LOG_COLS 80 /* characters per log line (8 px each) */
-#define LOG_ROWS 30
-#define LOG_LINE_H 12
+#define LOG_COLS 100 /* characters per log line */
+#define LOG_ROWS 32
+#define LOG_FONT 12 /* px, FONT_MONO */
 #define LOG_BG rgb(16, 18, 24)
 #define LOG_FG rgb(190, 198, 210)
 #define LOG_REFRESH 2 /* seconds between rereads while it is open */
@@ -60,9 +60,7 @@ static element_t *bar_button(window_t *bar, int x, int w, const char *text,
 static window_t *log_win;
 static label_t *log_lines[LOG_ROWS];
 
-/* Copy one log line, dropping ANSI colour sequences, padded with spaces
- * to LOG_COLS: labels centre their text, so full-width lines read as
- * left-aligned. */
+/* Copy one log line, dropping ANSI colour sequences, cut at LOG_COLS. */
 static void log_line_text(char *dst, const char *src, size_t len) {
   size_t n = 0;
   for (size_t i = 0; i < len && n < LOG_COLS; i++) {
@@ -75,8 +73,7 @@ static void log_line_text(char *dst, const char *src, size_t len) {
     if (src[i] >= ' ' && src[i] < 127)
       dst[n++] = src[i];
   }
-  memset(dst + n, ' ', LOG_COLS - n);
-  dst[LOG_COLS] = '\0';
+  dst[n] = '\0';
 }
 
 /* Show the last LOG_ROWS lines of /proc/kmsg. */
@@ -143,7 +140,9 @@ static void log_toggle(void) {
     log_close(log_win);
     return;
   }
-  int w = LOG_COLS * 8 + 16, h = LOG_ROWS * LOG_LINE_H + 16;
+  font_t *f = font_get(FONT_MONO, LOG_FONT);
+  int line_h = font_line_height(f), line_w = LOG_COLS * font_advance(f, 'M');
+  int w = line_w + 16, h = LOG_ROWS * line_h + 16;
   log_win = window_create(48, 56, w, h);
   if (!log_win)
     return;
@@ -153,9 +152,11 @@ static void log_toggle(void) {
   for (int i = 0; i < w * h; i++)
     log_win->surface->buffer[i] = LOG_BG;
   for (int i = 0; i < LOG_ROWS; i++) {
-    log_lines[i] = label_create(8, 8 + i * LOG_LINE_H, LOG_COLS * 8,
-                                LOG_LINE_H, "");
+    log_lines[i] = label_create(4, 8 + i * line_h, line_w + 8, line_h, "");
     style(log_lines[i], LOG_BG, LOG_BG, LOG_BG, LOG_FG, 0);
+    log_lines[i]->font_mono = true;
+    log_lines[i]->font_size = LOG_FONT;
+    log_lines[i]->text_align = TEXT_ALIGN_LEFT;
     window_addElement(log_win, log_lines[i]);
   }
   log_refresh();

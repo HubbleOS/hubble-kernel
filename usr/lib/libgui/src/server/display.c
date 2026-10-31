@@ -28,7 +28,7 @@
 #include <server/background/background.h>
 #include <server/compositor/compositor.h>
 #include <server/cursor/cursor.h>
-#include <ui/text/fonts/font.h>
+#include <ui/text/font.h>
 
 #define MAX_CLIENTS 16
 #define MAX_SURFACES 64
@@ -65,6 +65,7 @@ typedef struct {
 #define SHADOW_DY 3
 #define CORNER 7       /* radius of the title bar's top corners */
 #define CLOSE_R 7      /* close button */
+#define TITLE_FONT 13  /* px */
 #define FRAME_L (BORDER + SHADOW)
 #define FRAME_T (TITLE_H + BORDER + SHADOW)
 
@@ -112,6 +113,19 @@ static color_t mix(color_t a, color_t b, int t, int range) {
   int g = (int)get_green(a) + ((int)get_green(b) - (int)get_green(a)) * t / range;
   int bl = (int)get_blue(a) + ((int)get_blue(b) - (int)get_blue(a)) * t / range;
   return rgb(r, g, bl);
+}
+
+/* @p text, shortened to "..." at the end until it fits in @p width
+ * pixels, into @p out (strlen(text) + 4 bytes). */
+static void fit_text(font_t *f, const char *text, int width, char *out) {
+  size_t len = strlen(text);
+  memcpy(out, text, len + 1);
+  while (len && font_text_width(f, out) > width) {
+    do /* back over one UTF-8 character */
+      len--;
+    while (len && (text[len] & 0xC0) == 0x80);
+    memcpy(out + len, "...", 4);
+  }
 }
 
 static void frame_draw(surface_t *s) {
@@ -173,17 +187,13 @@ static void frame_draw(surface_t *s) {
     }
   }
 
-  /* The title, cut short before the close button. */
-  int tx = x0 + BORDER + 12, ty = CLOSE_CY - 4;
-  for (int i = 0; s->title[i] && tx + 8 <= cx - CLOSE_R - 8; i++, tx += 8) {
-    uint8_t *glyph = get_glyph(s->title[i]);
-    if (!glyph)
-      continue;
-    for (int row = 0; row < 8; row++)
-      for (int col = 0; col < 8; col++)
-        if (glyph[row] & (0x80 >> col))
-          f->buffer[(ty + row) * f->width + tx + col] = text;
-  }
+  /* The title, cut off before the close button. */
+  font_t *font = font_get(FONT_SANS, TITLE_FONT);
+  int baseline = CLOSE_CY - font_line_height(font) / 2 + font_ascent(font);
+  int tx = x0 + BORDER + 12;
+  char shown[GUI_TITLE_MAX + 3];
+  fit_text(font, s->title, cx - CLOSE_R - 8 - tx, shown);
+  font_draw(font, f->buffer, f->width, f->height, tx, baseline, shown, text);
 
   object_damage(f, 0, 0, f->width, f->height);
 }
@@ -299,6 +309,18 @@ static void surface_free(surface_t *s) {
     moving = NULL;
 }
 
+/* The bottom of the screen above the panels along its bottom edge. */
+static int work_bottom(void) {
+  int bottom = fb_height;
+  for (int i = 0; i < MAX_SURFACES; i++) {
+    object_t *o = surfaces[i].obj;
+    if (o && surfaces[i].flags & GUI_WINDOW_PANEL &&
+        o->y + o->height == fb_height && o->y < bottom)
+      bottom = o->y;
+  }
+  return bottom;
+}
+
 /* -- Clients ---------------------------------------------------------- */
 
 static void client_drop(int c) {
@@ -387,6 +409,10 @@ static bool create_window(int c, const struct gui_msg *m) {
       int top = flags ? 0 : TITLE_H + BORDER;
       int x = m->x < -m->w + 1 ? -m->w + 1 : m->x > fb_width - 1 ? fb_width - 1 : m->x;
       int y = m->y < top ? top : m->y > fb_height - 1 ? fb_height - 1 : m->y;
+      /* A window opens above the taskbar, as far as it fits. */
+      if (!flags && y + m->h > work_bottom() - BORDER)
+        y = work_bottom() - BORDER - m->h > top ? work_bottom() - BORDER - m->h
+                                                : top;
       object_t *obj = object_create_on(x, y, m->w, m->h, 0, pixels);
       object_t *frame =
           flags ? NULL

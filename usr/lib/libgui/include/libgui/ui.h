@@ -4,4 +4,5 @@
 #include <ui/canvas/canvas.h>
 #include <ui/input/input.h>
 #include <ui/label/label.h>
+#include <ui/text/font.h>
 #include <ui/text/text.h>

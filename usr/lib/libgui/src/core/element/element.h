@@ -24,6 +24,11 @@ typedef enum {
   UI_EVENT_MOUSE_UP,
 } ui_event_t;
 
+typedef enum {
+  TEXT_ALIGN_CENTER, /* the default */
+  TEXT_ALIGN_LEFT,
+} text_align_t;
+
 typedef struct element element_t;
 
 typedef void (*element_draw_fn)(element_t *el);
@@ -65,6 +70,9 @@ typedef struct element {
 
   // data:
   char *text;
+  int font_size;       /* pixels; 0: FONT_SIZE_DEFAULT */
+  bool font_mono;      /* FONT_MONO instead of FONT_SANS */
+  text_align_t text_align;
 
   // state and type:
   element_type_t type;
@@ -94,4 +102,7 @@ void element_destroy(element_t *el);
 void element_set_text(element_t *el, const char *text);
 
 void element_draw(element_t *el);
+
+/** The font @p el's text is drawn in (font_size, font_mono). */
+struct font *element_font(const element_t *el);
 void element_redraw(element_t *el);

@@ -8,7 +8,7 @@
  * into the window go to the shell. The window closes when the shell exits.
  *
  * The panel's "Terminal" button starts one; so does running /bin/term
- * while /bin/desktop is up.
+ * while /bin/desktop is up. `term -s PX` sets the font size (pixels).
  */
 #define _XOPEN_SOURCE 600 /* posix_openpt */
 #include <errno.h>
@@ -25,14 +25,13 @@
 #include <unistd.h>
 
 #include <libgui.h>
-#include <ui/text/fonts/font.h>
+#include <ui/text/font.h>
 
 #define SHELL "/bin/sh"
 
 #define COLS 80
 #define ROWS 24
-#define CELL_W 8
-#define CELL_H 12 /* the 8x8 font, with 2 px above and below */
+#define FONT_PX 15 /* default font size */
 #define PAD 4     /* around the text */
 
 #define DEFAULT_FG 7
@@ -600,6 +599,9 @@ static void feed(unsigned char c) {
 
 static window_t *win;
 static int win_w, win_h;
+static font_t *font;
+static int cell_w, cell_h; /* the font's advance and line height */
+
 static uint32_t palette(uint32_t c) {
   static const uint32_t base[16] = {
       0x1E1E1E, 0xCD3131, 0x0DBC79, 0xE5E510, 0x2472C8, 0xBC3FBC,
@@ -633,25 +635,21 @@ static void draw_cell(int cx, int cy, const cell_t *cell, bool cursor) {
   }
 
   uint32_t *buf = win->surface->buffer;
-  int px = PAD + cx * CELL_W, py = PAD + cy * CELL_H;
-  for (int r = 0; r < CELL_H; r++)
-    for (int col = 0; col < CELL_W; col++)
+  int px = PAD + cx * cell_w, py = PAD + cy * cell_h;
+  for (int r = 0; r < cell_h; r++)
+    for (int col = 0; col < cell_w; col++)
       buf[(py + r) * win_w + px + col] = bgc;
 
-  const uint8_t *glyph = get_glyph(cell->ch);
-  if (glyph && cell->ch != ' ') {
-    for (int r = 0; r < 8; r++) {
-      uint8_t line = glyph[r];
-      if (cell->attr & ATTR_BOLD)
-        line |= line >> 1;
-      for (int col = 0; col < 8; col++)
-        if (line & (0x80 >> col))
-          buf[(py + 2 + r) * win_w + px + col] = fgc;
-    }
+  if (cell->ch != ' ') {
+    int base = py + font_ascent(font);
+    font_draw_char(font, buf, win_w, win_h, px, base, (uint8_t)cell->ch, fgc);
+    if (cell->attr & ATTR_BOLD) /* no bold face: smear one pixel right */
+      font_draw_char(font, buf, win_w, win_h, px + 1, base,
+                     (uint8_t)cell->ch, fgc);
   }
   if (cell->attr & ATTR_UNDERLINE)
-    for (int col = 0; col < CELL_W; col++)
-      buf[(py + CELL_H - 1) * win_w + px + col] = fgc;
+    for (int col = 0; col < cell_w; col++)
+      buf[(py + cell_h - 1) * win_w + px + col] = fgc;
 }
 
 /* Draw the rows that changed and tell the server. */
@@ -676,8 +674,8 @@ static void render(void) {
   cursor_drawn_y = show ? grid->y : -1;
 
   if (first >= 0)
-    object_damage(win->surface, 0, PAD + first * CELL_H, win_w,
-                  (last - first + 1) * CELL_H);
+    object_damage(win->surface, 0, PAD + first * cell_h, win_w,
+                  (last - first + 1) * cell_h);
 }
 
 /* -- Keys ------------------------------------------------------------------ */
@@ -771,14 +769,25 @@ static void on_close(window_t *w) {
   closed = true;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+  int px = FONT_PX;
+  if (argc == 3 && strcmp(argv[1], "-s") == 0)
+    px = atoi(argv[2]);
+  else if (argc != 1) {
+    fprintf(stderr, "usage: term [-s font-pixels]\n");
+    return 2;
+  }
+  font = font_get(FONT_MONO, px);
+  cell_w = font_advance(font, 'M');
+  cell_h = font_line_height(font);
+
   if (gui_connect() < 0) {
     perror("term: no display server (is /bin/desktop running?)");
     return 1;
   }
 
-  win_w = COLS * CELL_W + 2 * PAD;
-  win_h = ROWS * CELL_H + 2 * PAD;
+  win_w = COLS * cell_w + 2 * PAD;
+  win_h = ROWS * cell_h + 2 * PAD;
   /* Each new terminal a little further down and right. */
   int off = (getpid() % 8) * 24;
   win = window_create(60 + off, 60 + off, win_w, win_h);

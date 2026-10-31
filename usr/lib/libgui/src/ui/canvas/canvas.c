@@ -1,5 +1,5 @@
 #include "canvas.h"
-#include "../text/text.h"
+#include "../text/font.h"
 #include <stdlib.h>
 #include <string.h>
 #include <utils/color/color.h>
@@ -109,19 +109,9 @@ void canvas_draw_text(canvas_t *c, int x, int y, const char *text,
   if (!c || !text)
     return;
 
-  text_t *txt = element_create_text(0, 0, text);
-  if (!txt)
-    return;
-
-  for (int row = 0; row < txt->height; row++) {
-    for (int col = 0; col < txt->width; col++) {
-      uint32_t px = txt->buffer[row * txt->width + col];
-      if (px == rgb(255, 255, 255))
-        canvas_set_pixel(c, x + col, y + row, color);
-    }
-  }
-
-  free(txt->buffer);
-  free(txt->text);
-  free(txt);
+  /* @p y is the top of the text. */
+  font_t *f = font_get(FONT_SANS, FONT_SIZE_DEFAULT);
+  font_draw(f, c->buffer, c->width, c->height, x, y + font_ascent(f), text,
+            color);
+  element_mark_dirty(c);
 }

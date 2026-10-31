@@ -1,60 +1,36 @@
 #include "text.h"
-#include "fonts/font.h"
+#include "font.h"
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <utils/color/color.h>
 
-#define FONT_SIZE 8
-
-static void draw_pixel_array(uint8_t *glyph, element_t *el, int x, int y,
-                             color_t font_color) {
-  for (int row = 0; row < FONT_SIZE; ++row) {
-    uint8_t line = glyph[row];
-    for (int col = 0; col < FONT_SIZE; ++col) {
-      if (line & (0x80 >> col)) {
-        int px = x + col;
-        int py = y + row;
-        if (px < el->width && py < el->height)
-          ((uint32_t *)el->buffer)[py * el->width + px] = font_color;
-      }
-    }
-  }
-}
-
 static void draw_text_in_element(element_t *el) {
   if (!el || !el->text || !el->buffer)
     return;
 
-  color_t bg = rgb(50, 50, 50);
-  color_t fg = rgb(255, 255, 255);
-
-  // color_t bg = el->style ? el->style->background_color : el->bg_color;
-  // color_t fg = el->text_color;
-
   for (int i = 0; i < el->width * el->height; i++)
-    el->buffer[i] = bg;
+    el->buffer[i] = 0; /* transparent: the text over what is below */
 
-  for (int i = 0; el->text[i]; ++i) {
-    uint8_t *glyph = (uint8_t *)get_glyph(el->text[i]);
-    if (!glyph)
-      glyph = (uint8_t *)get_glyph('!');
-    draw_pixel_array(glyph, el, i * FONT_SIZE, 0, fg);
-  }
+  font_t *f = element_font(el);
+  font_draw(f, el->buffer, el->width, el->height, 0, font_ascent(f), el->text,
+            el->text_color);
 }
 
+/* A label exactly the size of @p text, in the default font. */
 text_t *element_create_text(int x, int y, const char *text) {
   if (!text)
     return NULL;
 
-  size_t len = strlen(text);
-
-  text_t *el = element_create(x, y, len * FONT_SIZE, FONT_SIZE);
+  font_t *f = font_get(FONT_SANS, FONT_SIZE_DEFAULT);
+  int w = font_text_width(f, text);
+  text_t *el = element_create(x, y, w > 0 ? w : 1, font_line_height(f));
   if (!el)
     return NULL;
 
   el->type = UI_LABEL;
   el->draw = draw_text_in_element;
+  el->text_color = rgb(255, 255, 255);
 
   el->text = strdup(text);
   if (!el->text) {
@@ -64,7 +40,6 @@ text_t *element_create_text(int x, int y, const char *text) {
 
   el->dirty_rect = (dirty_rect_t){0, 0, el->width, el->height, true};
 
-  // temp
   draw_text_in_element(el);
 
   return el;
