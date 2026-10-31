@@ -193,7 +193,12 @@ int vmm_map_page(uint64_t va, uint64_t pa, uint64_t flags) {
   if (flags & VMM_MAP_NO_CACHE)
     pte_flags |= PTE_PCD | PTE_PWT;
 
-  if ((flags & VMM_MAP_GLOBAL) && !is_mmio(pa))
+  /* Never for user pages: a global TLB entry survives the CR3 switch, so
+   * the next process on that CPU used the previous one's page at the same
+   * address. (VMM_MAP_GLOBAL is the PTE_WRITE bit, so every writable user
+   * mapping asked for it; APs run with CR4.PGE.) */
+  if ((flags & VMM_MAP_GLOBAL) && !(flags & (PTE_USER | VMM_MAP_USER)) &&
+      !is_mmio(pa))
     pte_flags |= PTE_GLOBAL;
 
   if (flags & VMM_MAP_USER)

@@ -86,17 +86,23 @@ protected_mode_32:
     ; the far return.
     lgdt    [0x8000 + (ap_temp_gdt_desc - ap_trampoline_start)]
 
-    ; 4. LME
+    ; 4. LME, and NXE as Limine sets it on the BSP: without it the NX
+    ; bit of a non-executable user page is a reserved bit on this CPU, and
+    ; every access to the page faults.
     mov     ecx, 0xC0000080
     rdmsr
-    or      eax, (1 << 8)
+    or      eax, (1 << 8) | (1 << 11)
     wrmsr
 
     ; 5. PG - EFER.LMA becomes 1 the instant this is set (LME is already
     ; on), so from here on LGDT/LIDT would read a 10-byte descriptor
     ; regardless of CS.L - moot now, we don't lgdt again after this.
+    ; WP too, as Limine sets it on the BSP: without it the kernel's own
+    ; writes ignore read-only PTEs, so a syscall writing into a
+    ; copy-on-write page (read(), madvise) wrote straight into the page
+    ; still shared with the other process after fork.
     mov     eax, cr0
-    or      eax, (1 << 31)
+    or      eax, (1 << 31) | (1 << 16)
     and     eax, ~((1 << 29) | (1 << 30))  ; Clear NW and CD
     mov     cr0, eax
 
