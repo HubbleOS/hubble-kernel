@@ -385,6 +385,57 @@ static bool take_fd(client_t *cl, int *fd) {
 
 /* -- Requests --------------------------------------------------------- */
 
+/* Map a client's @p w x @p h buffer, @p fd, or MAP_FAILED if the size
+ * is out of range or the memory too small. */
+static void *map_buffer(int fd, int w, int h) {
+  struct stat st;
+  size_t len = (size_t)w * h * sizeof(uint32_t);
+  if (w <= 0 || h <= 0 || w > GUI_MAX_SIZE || h > GUI_MAX_SIZE ||
+      fstat(fd, &st) != 0 || (uint64_t)st.st_size < len)
+    return MAP_FAILED;
+  /* Read-only: the server never writes a client's pixels. */
+  return mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
+}
+
+/* GUI_RESIZE: show the window from its new buffer, at the same place. */
+static bool resize_window(int c, surface_t *s, const struct gui_msg *m) {
+  int fd;
+  if (!take_fd(&clients[c], &fd))
+    return false;
+  void *pixels = map_buffer(fd, m->w, m->h);
+  close(fd);
+  if (pixels == MAP_FAILED)
+    return false;
+
+  object_t *o = s->obj;
+  uint32_t *frame_pixels = NULL;
+  if (s->frame &&
+      !(frame_pixels = malloc((size_t)(m->w + 2 * FRAME_L) *
+                              (m->h + TITLE_H + 2 * (BORDER + SHADOW)) *
+                              sizeof(uint32_t)))) {
+    munmap(pixels, (size_t)m->w * m->h * sizeof(uint32_t));
+    return true; /* out of memory here: keep the old size */
+  }
+
+  /* Repaint what it covered, then show it at the new size. */
+  object_t *f = s->frame ? s->frame : o;
+  compositor_add_damage(f->layer, f->x, f->y, f->width, f->height);
+  munmap(o->buffer, s->map_len);
+  o->buffer = pixels;
+  o->width = m->w;
+  o->height = m->h;
+  s->map_len = (size_t)m->w * m->h * sizeof(uint32_t);
+  if (s->frame) {
+    free(f->buffer);
+    f->buffer = frame_pixels;
+    f->width = m->w + 2 * FRAME_L;
+    f->height = m->h + TITLE_H + 2 * (BORDER + SHADOW);
+    frame_draw(s);
+  }
+  object_damage(o, 0, 0, o->width, o->height);
+  return true;
+}
+
 static bool create_window(int c, const struct gui_msg *m) {
   client_t *cl = &clients[c];
   int fd;
@@ -392,46 +443,41 @@ static bool create_window(int c, const struct gui_msg *m) {
     return false;
   bool ok = false;
   size_t len = (size_t)m->w * m->h * sizeof(uint32_t);
-  struct stat st;
   surface_t *s = NULL;
   for (int i = 0; i < MAX_SURFACES && !s; i++)
     if (!surfaces[i].obj)
       s = &surfaces[i];
 
-  if (s && m->w > 0 && m->h > 0 && m->w <= GUI_MAX_SIZE &&
-      m->h <= GUI_MAX_SIZE && !find_surface(c, m->window) &&
-      fstat(fd, &st) == 0 && (uint64_t)st.st_size >= len) {
-    /* Read-only: the server never writes a client's pixels. */
-    void *pixels = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
-    if (pixels != MAP_FAILED) {
-      uint32_t flags = m->flags & GUI_WINDOW_PANEL;
-      /* Keep at least a corner of it, and its title bar, on screen. */
-      int top = flags ? 0 : TITLE_H + BORDER;
-      int x = m->x < -m->w + 1 ? -m->w + 1 : m->x > fb_width - 1 ? fb_width - 1 : m->x;
-      int y = m->y < top ? top : m->y > fb_height - 1 ? fb_height - 1 : m->y;
-      /* A window opens above the taskbar, as far as it fits. */
-      if (!flags && y + m->h > work_bottom() - BORDER)
-        y = work_bottom() - BORDER - m->h > top ? work_bottom() - BORDER - m->h
-                                                : top;
-      object_t *obj = object_create_on(x, y, m->w, m->h, 0, pixels);
-      object_t *frame =
-          flags ? NULL
-                : object_create(x - FRAME_L, y - FRAME_T, m->w + 2 * FRAME_L,
-                                m->h + TITLE_H + 2 * (BORDER + SHADOW), 0);
-      if (obj && (flags || frame)) {
-        *s = (surface_t){.obj = obj, .frame = frame, .client = c,
-                         .id = m->window, .flags = flags, .map_len = len};
-        if (frame)
-          compositor_add(frame, LAYER_WINDOWS);
-        compositor_add(obj, surface_layer(s));
-        if (frame)
-          set_focus(s); /* draws its frame, and the old focus's */
-        ok = true;
-      } else {
-        if (obj)
-          object_destroy(obj);
-        munmap(pixels, len);
-      }
+  void *pixels;
+  if (s && !find_surface(c, m->window) &&
+      (pixels = map_buffer(fd, m->w, m->h)) != MAP_FAILED) {
+    uint32_t flags = m->flags & GUI_WINDOW_PANEL;
+    /* Keep at least a corner of it, and its title bar, on screen. */
+    int top = flags ? 0 : TITLE_H + BORDER;
+    int x = m->x < -m->w + 1 ? -m->w + 1 : m->x > fb_width - 1 ? fb_width - 1 : m->x;
+    int y = m->y < top ? top : m->y > fb_height - 1 ? fb_height - 1 : m->y;
+    /* A window opens above the taskbar, as far as it fits. */
+    if (!flags && y + m->h > work_bottom() - BORDER)
+      y = work_bottom() - BORDER - m->h > top ? work_bottom() - BORDER - m->h
+                                              : top;
+    object_t *obj = object_create_on(x, y, m->w, m->h, 0, pixels);
+    object_t *frame =
+        flags ? NULL
+              : object_create(x - FRAME_L, y - FRAME_T, m->w + 2 * FRAME_L,
+                              m->h + TITLE_H + 2 * (BORDER + SHADOW), 0);
+    if (obj && (flags || frame)) {
+      *s = (surface_t){.obj = obj, .frame = frame, .client = c,
+                       .id = m->window, .flags = flags, .map_len = len};
+      if (frame)
+        compositor_add(frame, LAYER_WINDOWS);
+      compositor_add(obj, surface_layer(s));
+      if (frame)
+        set_focus(s); /* draws its frame, and the old focus's */
+      ok = true;
+    } else {
+      if (obj)
+        object_destroy(obj);
+      munmap(pixels, len);
     }
   }
   close(fd); /* the mapping keeps the memory */
@@ -456,9 +502,19 @@ static bool handle_msg(int c, const struct gui_msg *m) {
     return create_window(c, m);
 
   surface_t *s = find_surface(c, m->window);
-  if (!s)
+  if (!s) {
+    /* Raced with its own destroy: fine, once the descriptor a resize
+     * brought is used up (the next GUI_CREATE's would be wrong). */
+    int fd;
+    if (m->type == GUI_RESIZE) {
+      if (!take_fd(&clients[c], &fd))
+        return false;
+      close(fd);
+    }
     return m->type == GUI_DAMAGE || m->type == GUI_MOVE ||
-           m->type == GUI_DESTROY; /* raced with its own destroy: fine */
+           m->type == GUI_DESTROY || m->type == GUI_TITLE ||
+           m->type == GUI_RESIZE;
+  }
 
   switch (m->type) {
   case GUI_DAMAGE:
@@ -475,6 +531,8 @@ static bool handle_msg(int c, const struct gui_msg *m) {
   case GUI_DESTROY:
     surface_free(s);
     return true;
+  case GUI_RESIZE:
+    return resize_window(c, s, m);
   case GUI_TITLE:
     memcpy(s->title, m->title, sizeof(s->title));
     s->title[sizeof(s->title) - 1] = '\0';

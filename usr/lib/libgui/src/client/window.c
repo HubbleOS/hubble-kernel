@@ -129,6 +129,22 @@ static window_t *find_window(uint32_t id) {
   return NULL;
 }
 
+/* A window buffer of @p size bytes, which the server will map too, and
+ * its memfd in @p fd (-1 if none). MAP_FAILED if it can't be made. */
+static void *new_buffer(size_t size, int *fd) {
+  *fd = memfd_create("libgui-window", MFD_CLOEXEC);
+  if (*fd < 0)
+    return MAP_FAILED;
+  void *pixels = MAP_FAILED;
+  if (ftruncate(*fd, size) == 0)
+    pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *fd, 0);
+  if (pixels == MAP_FAILED) {
+    close(*fd);
+    *fd = -1;
+  }
+  return pixels;
+}
+
 window_t *window_create(int x, int y, int w, int h) {
   return window_create_flags(x, y, w, h, 0);
 }
@@ -142,11 +158,8 @@ window_t *window_create_flags(int x, int y, int w, int h, uint32_t flags) {
     return NULL;
   win->size = (size_t)w * h * sizeof(uint32_t);
 
-  /* The buffer the server will map too. */
-  int fd = memfd_create("libgui-window", MFD_CLOEXEC);
-  void *pixels = MAP_FAILED;
-  if (fd >= 0 && ftruncate(fd, win->size) == 0)
-    pixels = mmap(NULL, win->size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  int fd;
+  void *pixels = new_buffer(win->size, &fd);
   if (pixels != MAP_FAILED)
     win->surface = object_create_on(x, y, w, h, rgb(255, 255, 255), pixels);
   if (!win->surface) {
@@ -174,6 +187,35 @@ window_t *window_create_flags(int x, int y, int w, int h, uint32_t flags) {
 
   object_damage(win->surface, 0, 0, w, h);
   return win;
+}
+
+int window_resize(window_t *win, int w, int h) {
+  if (!win || w <= 0 || h <= 0 || w > GUI_MAX_SIZE || h > GUI_MAX_SIZE)
+    return -1;
+  size_t size = (size_t)w * h * sizeof(uint32_t);
+  int fd;
+  uint32_t *pixels = new_buffer(size, &fd);
+  if (pixels == MAP_FAILED)
+    return -1;
+  for (size_t i = 0; i < (size_t)w * h; i++)
+    pixels[i] = win->surface->bg_color;
+
+  /* Changes not yet reported were to the old buffer. */
+  win->damaged = false;
+  struct gui_msg msg = {.type = GUI_RESIZE, .window = win->id, .w = w, .h = h};
+  send_msg(&msg, fd);
+  close(fd);
+
+  object_t *o = win->surface;
+  munmap(o->buffer, win->size);
+  o->buffer = pixels;
+  o->width = w;
+  o->height = h;
+  win->size = size;
+  /* Its elements are drawn into the new buffer. */
+  for (int i = 0; i < o->element_count; i++)
+    element_redraw(o->elements[i]);
+  return 0;
 }
 
 void window_destroy(window_t *win) {

@@ -8,7 +8,8 @@
  * into the window go to the shell. The window closes when the shell exits.
  *
  * The panel's "Terminal" button starts one; so does running /bin/term
- * while /bin/desktop is up. `term -s PX` sets the font size (pixels).
+ * while /bin/desktop is up. `term -s PX` sets the font size (pixels);
+ * Ctrl+= (or Ctrl++) and Ctrl+- zoom, Ctrl+0 goes back to it.
  */
 #define _XOPEN_SOURCE 600 /* posix_openpt */
 #include <errno.h>
@@ -32,6 +33,8 @@
 #define COLS 80
 #define ROWS 24
 #define FONT_PX 15 /* default font size */
+#define MIN_PX 8
+#define MAX_PX 48
 #define PAD 4     /* around the text */
 
 #define DEFAULT_FG 7
@@ -600,7 +603,44 @@ static void feed(unsigned char c) {
 static window_t *win;
 static int win_w, win_h;
 static font_t *font;
+static int font_px, start_px;
 static int cell_w, cell_h; /* the font's advance and line height */
+
+/* Use the font at @p px: the cells and the window follow its size. */
+static void set_font(int px) {
+  font_px = px;
+  font = font_get(FONT_MONO, px);
+  cell_w = font_advance(font, 'M');
+  cell_h = font_line_height(font);
+  win_w = COLS * cell_w + 2 * PAD;
+  win_h = ROWS * cell_h + 2 * PAD;
+}
+
+/* Ctrl+= / Ctrl+-: the next size up (@p step 1) or down (-1) whose cells
+ * differ from these; Ctrl+0 (@p step 0): the size it started with. */
+static void zoom(int step) {
+  int px = step ? font_px : start_px;
+  if (step) {
+    font_t *f;
+    do {
+      px += step;
+      f = font_get(FONT_MONO, px);
+    } while (px > MIN_PX && px < MAX_PX && font_advance(f, 'M') == cell_w &&
+             font_line_height(f) == cell_h);
+  }
+  if (px < MIN_PX || px > MAX_PX || px == font_px)
+    return;
+
+  int old = font_px;
+  set_font(px);
+  if (window_resize(win, win_w, win_h) < 0) {
+    set_font(old);
+    return;
+  }
+  /* Rows and columns stay: only the picture is redrawn, bigger. */
+  mark_all();
+  cursor_drawn_y = -1;
+}
 
 static uint32_t palette(uint32_t c) {
   static const uint32_t base[16] = {
@@ -688,6 +728,10 @@ static void on_key(window_t *w, const input_event_t *ev) {
   if (ev->type == KEY_TYPE_CHAR) {
     char c = ev->character;
     int n = 0;
+    if (ev->ctrl && !ev->alt && (c == '=' || c == '+' || c == '-' || c == '0')) {
+      zoom(c == '0' ? 0 : c == '-' ? -1 : 1);
+      return;
+    }
     if (ev->alt)
       buf[n++] = '\033';
     if (ev->ctrl) {
@@ -777,17 +821,15 @@ int main(int argc, char **argv) {
     fprintf(stderr, "usage: term [-s font-pixels]\n");
     return 2;
   }
-  font = font_get(FONT_MONO, px);
-  cell_w = font_advance(font, 'M');
-  cell_h = font_line_height(font);
+  px = px < MIN_PX ? MIN_PX : px > MAX_PX ? MAX_PX : px;
+  start_px = px;
+  set_font(px);
 
   if (gui_connect() < 0) {
     perror("term: no display server (is /bin/desktop running?)");
     return 1;
   }
 
-  win_w = COLS * cell_w + 2 * PAD;
-  win_h = ROWS * cell_h + 2 * PAD;
   /* Each new terminal a little further down and right. */
   int off = (getpid() % 8) * 24;
   win = window_create(60 + off, 60 + off, win_w, win_h);
@@ -797,6 +839,7 @@ int main(int argc, char **argv) {
   }
   win->on_key = on_key;
   win->on_close = on_close;
+  win->surface->bg_color = palette(DEFAULT_BG); /* fills a resized window */
   window_set_title(win, "Terminal");
   uint32_t *buf = win->surface->buffer;
   for (int i = 0; i < win_w * win_h; i++)

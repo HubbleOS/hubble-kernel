@@ -72,6 +72,11 @@ window_t *window_create(int x, int y, int w, int h);
 window_t *window_create_flags(int x, int y, int w, int h, uint32_t flags);
 void window_destroy(window_t *win);
 
+/** Make the window @p w by @p h, at the same place. Its buffer is new,
+ * filled with the background: the caller draws it again (elements are
+ * redrawn). Returns 0, or -1 if it keeps its old size. */
+int window_resize(window_t *win, int w, int h);
+
 /** Show @p title in the window's title bar. */
 void window_set_title(window_t *win, const char *title);
 

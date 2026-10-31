@@ -32,6 +32,8 @@ enum gui_msg_type {
                    * move the window with the pointer until it is up */
   GUI_DESTROY,    /* close the window */
   GUI_TITLE,      /* the window's title bar shows title */
+  GUI_RESIZE,     /* the window is now w * h; its new buffer's fd comes
+                   * along (the old one is no longer used) */
 
   /* Server to client. */
   GUI_SCREEN = 64,  /* first message: the screen is w * h (window 0) */
