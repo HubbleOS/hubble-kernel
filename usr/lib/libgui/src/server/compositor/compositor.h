@@ -8,10 +8,11 @@
 
 #define LAYER_BG 0
 #define LAYER_WINDOWS 1
-#define LAYER_CURSOR 2
-#define LAYER_EFFECTS 3
+#define LAYER_PANELS 2 /* taskbars: above every window */
+#define LAYER_CURSOR 3
+#define LAYER_EFFECTS 4
 
-#define MAX_LAYERS 4
+#define MAX_LAYERS 5
 
 typedef struct {
   object_t *objects[MAX_OBJECTS];

@@ -4,10 +4,10 @@
 #include <core/object/object.h>
 
 typedef struct {
-  object_t *surface; // cursor object
+  object_t *surface; // cursor object; its top left corner is the hot spot
 } cursor_t;
 
-cursor_t *cursor_create(int w, int h, uint32_t color_outer,
-                        uint32_t color_inner);
+/** The arrow pointer. */
+cursor_t *cursor_create(void);
 void cursor_destroy(cursor_t *c);
 void cursor_move(cursor_t *c, int x, int y);

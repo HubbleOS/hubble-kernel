@@ -130,6 +130,10 @@ static window_t *find_window(uint32_t id) {
 }
 
 window_t *window_create(int x, int y, int w, int h) {
+  return window_create_flags(x, y, w, h, 0);
+}
+
+window_t *window_create_flags(int x, int y, int w, int h, uint32_t flags) {
   if (sock < 0 || w <= 0 || h <= 0 || w > GUI_MAX_SIZE || h > GUI_MAX_SIZE)
     return NULL;
 
@@ -163,7 +167,8 @@ window_t *window_create(int x, int y, int w, int h) {
   windows = win;
 
   struct gui_msg msg = {
-      .type = GUI_CREATE, .window = win->id, .x = x, .y = y, .w = w, .h = h};
+      .type = GUI_CREATE, .window = win->id, .x = x, .y = y, .w = w, .h = h,
+      .flags = flags};
   send_msg(&msg, fd);
   close(fd); /* the mapping keeps the memory; the server has its own fd */
 
@@ -187,6 +192,14 @@ void window_destroy(window_t *win) {
   munmap(win->surface->buffer, win->size);
   object_destroy(win->surface);
   free(win);
+}
+
+void window_set_title(window_t *win, const char *title) {
+  if (!win || !title)
+    return;
+  struct gui_msg msg = {.type = GUI_TITLE, .window = win->id};
+  strncpy(msg.title, title, sizeof(msg.title) - 1);
+  send_msg(&msg, -1);
 }
 
 int window_addElement(window_t *win, element_t *el) {
@@ -218,6 +231,12 @@ static void handle(const struct gui_msg *msg) {
       win->on_key(win, &msg->key);
     else
       keyboard_dispatch(&msg->key);
+    break;
+  case GUI_CLOSE:
+    if (win->on_close)
+      win->on_close(win);
+    else
+      gui_quit();
     break;
   }
 }

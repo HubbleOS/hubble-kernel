@@ -33,6 +33,10 @@ typedef struct window {
    * libgui giving them to the focused element. NULL: the element. */
   void (*on_key)(struct window *win, const input_event_t *ev);
 
+  /* Its title bar's close button was clicked; the callback may destroy
+   * the window. NULL: gui_quit(). */
+  void (*on_close)(struct window *win);
+
   struct window *next;
 } window_t;
 
@@ -60,8 +64,15 @@ int gui_run(void);
 /** Make gui_run() return once the current event is handled. */
 void gui_quit(void);
 
-/** A new window at @p x, @p y on screen; NULL if it can't be created. */
+/** A new window at @p x, @p y on screen; NULL if it can't be created.
+ * The server puts a title bar above it. */
 window_t *window_create(int x, int y, int w, int h);
+
+/** The same, with GUI_WINDOW_* flags (GUI_WINDOW_PANEL: a taskbar). */
+window_t *window_create_flags(int x, int y, int w, int h, uint32_t flags);
 void window_destroy(window_t *win);
+
+/** Show @p title in the window's title bar. */
+void window_set_title(window_t *win, const char *title);
 
 int window_addElement(window_t *win, element_t *el);

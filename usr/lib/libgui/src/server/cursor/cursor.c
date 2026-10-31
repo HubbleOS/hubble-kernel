@@ -3,41 +3,50 @@
 #include <stdlib.h>
 #include <string.h>
 
-cursor_t *cursor_create(int w, int h, uint32_t color_outer,
-                        uint32_t color_inner) {
+/* B: outline, W: fill, anything else: transparent. */
+static const char *const arrow[] = {
+    "B           ",
+    "BB          ",
+    "BWB         ",
+    "BWWB        ",
+    "BWWWB       ",
+    "BWWWWB      ",
+    "BWWWWWB     ",
+    "BWWWWWWB    ",
+    "BWWWWWWWB   ",
+    "BWWWWWWWWB  ",
+    "BWWWWWWWWWB ",
+    "BWWWWWWBBBBB",
+    "BWWWBWWB    ",
+    "BWWB BWWB   ",
+    "BWB  BWWB   ",
+    "BB    BWWB  ",
+    "B     BWWB  ",
+    "       BWWB ",
+    "        BB  ",
+};
+
+#define ARROW_W 12
+#define ARROW_H ((int)(sizeof(arrow) / sizeof(arrow[0])))
+
+cursor_t *cursor_create(void) {
   cursor_t *c = malloc(sizeof(cursor_t));
   if (!c)
     return NULL;
 
-  c->surface = object_create(0, 0, w, h, color_outer);
+  c->surface = object_create(0, 0, ARROW_W, ARROW_H, 0);
   if (!c->surface) {
     free(c);
     return NULL;
   }
 
-  int iw = w / 2, ih = h / 2;
+  for (int y = 0; y < ARROW_H; y++)
+    for (int x = 0; x < ARROW_W; x++) {
+      char p = arrow[y][x];
+      c->surface->buffer[y * ARROW_W + x] =
+          p == 'B' ? rgb(0, 0, 0) : p == 'W' ? rgb(255, 255, 255) : 0;
+    }
 
-  // element_t *dot = element_create(0, 0, 0, 0);
-  element_t *dot = element_create(iw - 2, ih - 2, 4, 4);
-  if (!dot) {
-    object_destroy(c->surface);
-    free(c);
-    return NULL;
-  }
-
-  dot->type = UI_RECT;
-  dot->bg_color = color_inner;
-
-  dot->on_mouse_enter = NULL;
-  dot->on_mouse_leave = NULL;
-  dot->on_mouse_down = NULL;
-  dot->on_mouse_up = NULL;
-
-  dot->buffer = malloc(4 * 4 * sizeof(uint32_t));
-  for (int i = 0; i < 4 * 4; i++)
-    dot->buffer[i] = color_inner;
-
-  object_add_element(c->surface, dot);
   compositor_add(c->surface, LAYER_CURSOR);
   return c;
 }
@@ -45,12 +54,6 @@ cursor_t *cursor_create(int w, int h, uint32_t color_outer,
 void cursor_destroy(cursor_t *c) {
   if (!c)
     return;
-
-  for (int i = 0; i < c->surface->element_count; i++) {
-    free(c->surface->elements[i]->buffer);
-    free(c->surface->elements[i]);
-  }
-  free(c->surface->elements);
 
   compositor_remove(c->surface, LAYER_CURSOR);
   object_destroy(c->surface);

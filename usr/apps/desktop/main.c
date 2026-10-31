@@ -6,8 +6,8 @@
  * pixels as memfds. This file is the platform under it: /dev/fb0 for
  * the screen, /dev/input/events for pointer and keys.
  *
- * It starts /bin/panel, the kernel log and controls, and ends with it
- * (its Quit button) or on Ctrl+Alt+Backspace, giving the screen back to
+ * It starts /bin/panel, the taskbar, and ends with it
+ * (its Log out button) or on Ctrl+Alt+Backspace, giving the screen back to
  * the console.
  */
 #include <fcntl.h>

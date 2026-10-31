@@ -6,6 +6,11 @@
  * checked before use, their buffers are mapped read-only, and a client
  * that stops reading its events is disconnected instead of blocking the
  * desktop.
+ *
+ * The server draws each ordinary window's frame: a shadow, a title bar
+ * with the client's title and a close button, in an object of its own
+ * just below the window's. Panels (GUI_WINDOW_PANEL) get no frame and
+ * stay on top of the windows.
  */
 #include "display.h"
 
@@ -23,6 +28,7 @@
 #include <server/background/background.h>
 #include <server/compositor/compositor.h>
 #include <server/cursor/cursor.h>
+#include <ui/text/fonts/font.h>
 
 #define MAX_CLIENTS 16
 #define MAX_SURFACES 64
@@ -43,10 +49,26 @@ typedef struct {
 
 typedef struct {
   object_t *obj; /* NULL: free slot. Its buffer is the client's memory */
+  object_t *frame; /* title bar, border and shadow; NULL for a panel */
   int client;
   uint32_t id;
+  uint32_t flags; /* GUI_WINDOW_* */
   size_t map_len;
+  char title[GUI_TITLE_MAX];
 } surface_t;
+
+/* Frame geometry: the border goes round the title bar and the window,
+ * the shadow round all of it, a little lower. */
+#define TITLE_H 26
+#define BORDER 1
+#define SHADOW 10
+#define SHADOW_DY 3
+#define CORNER 7       /* radius of the title bar's top corners */
+#define CLOSE_R 7      /* close button */
+#define FRAME_L (BORDER + SHADOW)
+#define FRAME_T (TITLE_H + BORDER + SHADOW)
+
+enum part { PART_NONE, PART_CONTENT, PART_TITLE, PART_CLOSE };
 
 static client_t clients[MAX_CLIENTS];
 static surface_t surfaces[MAX_SURFACES];
@@ -58,16 +80,160 @@ static bool pointer_left;
 static surface_t *focus;  /* gets the keys */
 static surface_t *hover;  /* last told about the pointer */
 static surface_t *grab;   /* the button went down here: events stay here */
-static surface_t *moving; /* follows the pointer (GUI_MOVE) */
+static surface_t *moving; /* follows the pointer (GUI_MOVE, title bar) */
 static int move_dx, move_dy;
+static surface_t *closing; /* its close button is held down */
+static bool chrome_press;  /* the button went down outside any window's
+                            * content: no window gets the pointer */
 
 /* -- Surfaces --------------------------------------------------------- */
 
 static surface_t *surface_of(object_t *obj) {
   for (int i = 0; i < MAX_SURFACES; i++)
-    if (surfaces[i].obj == obj)
+    if (surfaces[i].obj &&
+        (surfaces[i].obj == obj || surfaces[i].frame == obj))
       return &surfaces[i];
   return NULL;
+}
+
+static int surface_layer(const surface_t *s) {
+  return s->flags & GUI_WINDOW_PANEL ? LAYER_PANELS : LAYER_WINDOWS;
+}
+
+/* -- Frames ----------------------------------------------------------- */
+
+/* Close button centre, in frame coordinates. */
+static int close_cx(const object_t *f) { return f->width - FRAME_L - 16; }
+#define CLOSE_CY (SHADOW + BORDER + TITLE_H / 2)
+
+/* @p t / @p range of the way from @p a to @p b. */
+static color_t mix(color_t a, color_t b, int t, int range) {
+  int r = (int)get_red(a) + ((int)get_red(b) - (int)get_red(a)) * t / range;
+  int g = (int)get_green(a) + ((int)get_green(b) - (int)get_green(a)) * t / range;
+  int bl = (int)get_blue(a) + ((int)get_blue(b) - (int)get_blue(a)) * t / range;
+  return rgb(r, g, bl);
+}
+
+static void frame_draw(surface_t *s) {
+  object_t *f = s->frame;
+  if (!f)
+    return;
+  bool active = s == focus;
+  color_t top = active ? rgb(62, 68, 88) : rgb(72, 76, 86);
+  color_t bottom = active ? rgb(44, 49, 64) : rgb(60, 64, 74);
+  color_t border = rgb(22, 24, 32);
+  color_t text = active ? rgb(236, 239, 246) : rgb(160, 165, 175);
+  color_t button = active ? rgb(232, 84, 72) : rgb(112, 116, 126);
+
+  /* The framed rectangle, and the shadow's (lower). */
+  int x0 = SHADOW, y0 = SHADOW, x1 = f->width - SHADOW, y1 = f->height - SHADOW;
+  int title_y1 = y0 + BORDER + TITLE_H;
+  int cx = close_cx(f);
+
+  for (int y = 0; y < f->height; y++) {
+    for (int x = 0; x < f->width; x++) {
+      color_t c = 0;
+
+      /* Shadow: fades out over SHADOW pixels. */
+      int dx = x < x0 ? x0 - x : x >= x1 ? x - x1 + 1 : 0;
+      int sy0 = y0 + SHADOW_DY, sy1 = y1 + SHADOW_DY;
+      int dy = y < sy0 ? sy0 - y : y >= sy1 ? y - sy1 + 1 : 0;
+      int d2 = dx * dx + dy * dy;
+      if (d2 < SHADOW * SHADOW) {
+        int t = SHADOW * SHADOW - d2; /* 0 .. SHADOW^2 */
+        int a = 90 * t / (SHADOW * SHADOW) * t / (SHADOW * SHADOW);
+        c = make_color(a, 0, 0, 0);
+      }
+
+      bool inside = x >= x0 && x < x1 && y >= y0 && y < y1;
+      if (inside && y < y0 + CORNER) { /* round the top corners */
+        int ccx = x < x0 + CORNER ? x0 + CORNER : x >= x1 - CORNER ? x1 - CORNER - 1 : x;
+        int ex = x - ccx, ey = y - (y0 + CORNER);
+        if (ex * ex + ey * ey > CORNER * CORNER)
+          inside = false;
+      }
+      if (inside) {
+        if (x < x0 + BORDER || x >= x1 - BORDER || y < y0 + BORDER ||
+            y >= y1 - BORDER)
+          c = border;
+        else if (y < title_y1)
+          c = mix(top, bottom, y - y0, TITLE_H);
+        else
+          c = 0; /* the window itself */
+
+        /* Close button: a disc with a cross. */
+        int bx = x - cx, by = y - CLOSE_CY;
+        if (bx * bx + by * by <= CLOSE_R * CLOSE_R) {
+          c = button;
+          if ((bx == by || bx == -by) && bx >= -3 && bx <= 3)
+            c = rgb(255, 255, 255);
+        }
+      }
+      f->buffer[y * f->width + x] = c;
+    }
+  }
+
+  /* The title, cut short before the close button. */
+  int tx = x0 + BORDER + 12, ty = CLOSE_CY - 4;
+  for (int i = 0; s->title[i] && tx + 8 <= cx - CLOSE_R - 8; i++, tx += 8) {
+    uint8_t *glyph = get_glyph(s->title[i]);
+    if (!glyph)
+      continue;
+    for (int row = 0; row < 8; row++)
+      for (int col = 0; col < 8; col++)
+        if (glyph[row] & (0x80 >> col))
+          f->buffer[(ty + row) * f->width + tx + col] = text;
+  }
+
+  object_damage(f, 0, 0, f->width, f->height);
+}
+
+/* Which part of the frame (screen) @p x, @p y is in. */
+static enum part frame_part(surface_t *s, int x, int y) {
+  object_t *f = s->frame;
+  int fx = x - f->x, fy = y - f->y;
+  if (fx < SHADOW || fx >= f->width - SHADOW || fy < SHADOW ||
+      fy >= f->height - SHADOW)
+    return PART_NONE; /* the shadow is not part of the window */
+  int bx = fx - close_cx(f), by = fy - CLOSE_CY;
+  if (bx >= -CLOSE_R - 2 && bx <= CLOSE_R + 2 && by >= -CLOSE_R - 2 &&
+      by <= CLOSE_R + 2)
+    return PART_CLOSE;
+  return PART_TITLE; /* the border drags the window too */
+}
+
+static void set_focus(surface_t *s) {
+  surface_t *old = focus;
+  focus = s;
+  if (old == s)
+    return;
+  if (old)
+    frame_draw(old);
+  if (s)
+    frame_draw(s);
+}
+
+static void surface_raise(surface_t *s) {
+  if (s->frame)
+    compositor_bring_to_front(s->frame, surface_layer(s));
+  compositor_bring_to_front(s->obj, surface_layer(s));
+}
+
+/* Put the window's own pixels at @p x, @p y; its title bar stays on
+ * screen. Panels stay where they are. */
+static void surface_move(surface_t *s, int x, int y) {
+  if (s->flags & GUI_WINDOW_PANEL)
+    return;
+  if (y < TITLE_H + BORDER)
+    y = TITLE_H + BORDER;
+  if (y > fb_height - 8)
+    y = fb_height - 8;
+  if (x < -s->obj->width + 40)
+    x = -s->obj->width + 40;
+  if (x > fb_width - 40)
+    x = fb_width - 40;
+  compositor_move_object(s->frame, x - FRAME_L, y - FRAME_T);
+  compositor_move_object(s->obj, x, y);
 }
 
 static surface_t *find_surface(int client, uint32_t id) {
@@ -78,25 +244,53 @@ static surface_t *find_surface(int client, uint32_t id) {
   return NULL;
 }
 
-/* Topmost window at (x, y). */
-static surface_t *surface_at(int x, int y) {
+/* Topmost window at (x, y), and which part of it. */
+static surface_t *surface_at(int x, int y, enum part *part) {
+  static const int layers[] = {LAYER_PANELS, LAYER_WINDOWS};
+  for (int k = 0; k < 2; k++) {
+    layer_t *l = &compositor.layers[layers[k]];
+    for (int i = l->count - 1; i >= 0; i--) {
+      object_t *o = l->objects[i];
+      if (x < o->x || x >= o->x + o->width || y < o->y ||
+          y >= o->y + o->height)
+        continue;
+      surface_t *s = surface_of(o);
+      if (!s)
+        continue;
+      *part = o == s->obj ? PART_CONTENT : frame_part(s, x, y);
+      if (*part != PART_NONE)
+        return s;
+    }
+  }
+  *part = PART_NONE;
+  return NULL;
+}
+
+/* The topmost framed window, to take the focus when the focused goes. */
+static surface_t *top_window(void) {
   layer_t *l = &compositor.layers[LAYER_WINDOWS];
   for (int i = l->count - 1; i >= 0; i--) {
-    object_t *o = l->objects[i];
-    if (x >= o->x && x < o->x + o->width && y >= o->y &&
-        y < o->y + o->height)
-      return surface_of(o);
+    surface_t *s = surface_of(l->objects[i]);
+    if (s && s->frame)
+      return s;
   }
   return NULL;
 }
 
 static void surface_free(surface_t *s) {
-  compositor_remove(s->obj, LAYER_WINDOWS); /* repaints what it covered */
+  compositor_remove(s->obj, surface_layer(s)); /* repaints what it covered */
   munmap(s->obj->buffer, s->map_len);
   object_destroy(s->obj);
+  if (s->frame) {
+    compositor_remove(s->frame, surface_layer(s));
+    object_destroy(s->frame);
+    s->frame = NULL;
+  }
   s->obj = NULL;
+  if (closing == s)
+    closing = NULL;
   if (focus == s)
-    focus = NULL;
+    set_focus(top_window());
   if (hover == s)
     hover = NULL;
   if (grab == s)
@@ -188,16 +382,28 @@ static bool create_window(int c, const struct gui_msg *m) {
     /* Read-only: the server never writes a client's pixels. */
     void *pixels = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
     if (pixels != MAP_FAILED) {
-      /* Keep at least a corner of it on screen. */
+      uint32_t flags = m->flags & GUI_WINDOW_PANEL;
+      /* Keep at least a corner of it, and its title bar, on screen. */
+      int top = flags ? 0 : TITLE_H + BORDER;
       int x = m->x < -m->w + 1 ? -m->w + 1 : m->x > fb_width - 1 ? fb_width - 1 : m->x;
-      int y = m->y < 0 ? 0 : m->y > fb_height - 1 ? fb_height - 1 : m->y;
+      int y = m->y < top ? top : m->y > fb_height - 1 ? fb_height - 1 : m->y;
       object_t *obj = object_create_on(x, y, m->w, m->h, 0, pixels);
-      if (obj) {
-        *s = (surface_t){obj, c, m->window, len};
-        compositor_add(obj, LAYER_WINDOWS);
-        focus = s;
+      object_t *frame =
+          flags ? NULL
+                : object_create(x - FRAME_L, y - FRAME_T, m->w + 2 * FRAME_L,
+                                m->h + TITLE_H + 2 * (BORDER + SHADOW), 0);
+      if (obj && (flags || frame)) {
+        *s = (surface_t){.obj = obj, .frame = frame, .client = c,
+                         .id = m->window, .flags = flags, .map_len = len};
+        if (frame)
+          compositor_add(frame, LAYER_WINDOWS);
+        compositor_add(obj, surface_layer(s));
+        if (frame)
+          set_focus(s); /* draws its frame, and the old focus's */
         ok = true;
       } else {
+        if (obj)
+          object_destroy(obj);
         munmap(pixels, len);
       }
     }
@@ -234,7 +440,7 @@ static bool handle_msg(int c, const struct gui_msg *m) {
     return true;
   case GUI_MOVE:
     /* Only for the press that is still going on in this window. */
-    if (pointer_left && grab == s) {
+    if (pointer_left && grab == s && !(s->flags & GUI_WINDOW_PANEL)) {
       moving = s;
       move_dx = pointer_x - s->obj->x;
       move_dy = pointer_y - s->obj->y;
@@ -242,6 +448,11 @@ static bool handle_msg(int c, const struct gui_msg *m) {
     return true;
   case GUI_DESTROY:
     surface_free(s);
+    return true;
+  case GUI_TITLE:
+    memcpy(s->title, m->title, sizeof(s->title));
+    s->title[sizeof(s->title) - 1] = '\0';
+    frame_draw(s);
     return true;
   default:
     return false;
@@ -322,8 +533,8 @@ int display_init(framebuffer_info_t *fb) {
 
   screen_init(fb);
   compositor_init();
-  background_create(rgb(20, 20, 20));
-  cursor = cursor_create(16, 16, rgb(0, 0, 0), rgb(255, 255, 255));
+  background_create(rgb(46, 78, 120), rgb(14, 22, 38));
+  cursor = cursor_create();
 
   listen_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
   if (listen_fd < 0)
@@ -381,23 +592,44 @@ void display_pointer(int x, int y, bool left) {
 
   if (moving) {
     if (left)
-      compositor_move_object(moving->obj, x - move_dx, y - move_dy);
+      surface_move(moving, x - move_dx, y - move_dy);
     else
       moving = NULL;
   }
 
-  surface_t *under = surface_at(x, y);
+  enum part part;
+  surface_t *under = surface_at(x, y, &part);
   if (press) {
-    grab = under;
+    grab = NULL;
+    chrome_press = part != PART_CONTENT;
     if (under) {
-      focus = under;
-      compositor_bring_to_front(under->obj, LAYER_WINDOWS);
+      if (!(under->flags & GUI_WINDOW_PANEL))
+        set_focus(under);
+      surface_raise(under);
+      if (part == PART_CONTENT) {
+        grab = under;
+      } else if (part == PART_CLOSE) {
+        closing = under;
+      } else {
+        moving = under;
+        move_dx = x - under->obj->x;
+        move_dy = y - under->obj->y;
+      }
     }
+  }
+  if (release && closing) {
+    if (closing == under && part == PART_CLOSE)
+      client_send(closing, (struct gui_msg){.type = GUI_CLOSE});
+    closing = NULL;
   }
 
   /* While the button is down, the window it went down in keeps getting
-   * the pointer, so it sees the release. */
-  surface_t *target = grab ? grab : under;
+   * the pointer, so it sees the release; one pressed on a title bar or
+   * the desktop keeps it from every window. */
+  surface_t *target = grab                         ? grab
+                      : chrome_press && left       ? NULL
+                      : part == PART_CONTENT       ? under
+                                                   : NULL;
   if (hover != target) {
     if (hover)
       client_send(hover, (struct gui_msg){.type = GUI_LEAVE});
@@ -409,8 +641,10 @@ void display_pointer(int x, int y, bool left) {
                                          .y = y - target->obj->y,
                                          .buttons = left ? GUI_BUTTON_LEFT
                                                          : 0});
-  if (release)
+  if (release) {
     grab = NULL;
+    chrome_press = false;
+  }
   reap();
 }
 

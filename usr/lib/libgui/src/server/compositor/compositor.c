@@ -59,7 +59,9 @@ void compositor_remove(object_t *obj, int layer) {
   for (int i = 0; i < l->count; i++) {
     if (l->objects[i] == obj) {
       compositor_add_damage(layer, obj->x, obj->y, obj->width, obj->height);
-      l->objects[i] = l->objects[l->count - 1];
+      /* Shift, not swap with the last: the order is the stacking. */
+      memmove(&l->objects[i], &l->objects[i + 1],
+              (l->count - i - 1) * sizeof(l->objects[0]));
       l->count--;
       return;
     }

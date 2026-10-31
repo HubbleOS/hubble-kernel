@@ -764,6 +764,13 @@ static pid_t start_shell(void) {
   _exit(127);
 }
 
+static bool closed; /* the title bar's close button */
+
+static void on_close(window_t *w) {
+  (void)w;
+  closed = true;
+}
+
 int main(void) {
   if (gui_connect() < 0) {
     perror("term: no display server (is /bin/desktop running?)");
@@ -780,6 +787,8 @@ int main(void) {
     return 1;
   }
   win->on_key = on_key;
+  win->on_close = on_close;
+  window_set_title(win, "Terminal");
   uint32_t *buf = win->surface->buffer;
   for (int i = 0; i < win_w * win_h; i++)
     buf[i] = palette(DEFAULT_BG);
@@ -799,6 +808,8 @@ int main(void) {
       break;
     if (fds[0].revents && gui_dispatch() < 0)
       break; /* the desktop is gone */
+    if (closed)
+      break;
     if (fds[1].revents & POLLIN) {
       unsigned char data[4096];
       ssize_t n = read(master, data, sizeof(data));
