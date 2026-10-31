@@ -5,6 +5,8 @@
 
 #include <smp/scheduler.h>
 #include <hpet/hpet.h>
+#include <hubble/errno.h>
+#include <hubble/signal.h>
 #include <smp/spinlock.h>
 
 #include "waitqueue.h"
@@ -58,14 +60,16 @@ void waitqueue_sleep(wait_queue_t *wq) {
   task_wait(0);
 }
 
-bool waitqueue_wait_any(wait_queue_t *const *wqs, size_t n,
+long waitqueue_wait_any(wait_queue_t *const *wqs, size_t n,
                         bool (*cond)(void *), void *arg,
                         uint64_t deadline_ns) {
   task_t *current = get_current_task();
 
   while (!cond(arg)) {
+    if (signal_pending())
+      return -ERESTARTSYS;
     if (deadline_ns && hpet_get_time_ns() >= deadline_ns)
-      return false;
+      return -ETIMEDOUT;
 
     task_prepare_wait();
     for (size_t i = 0; i < n; i++) {
@@ -74,7 +78,9 @@ bool waitqueue_wait_any(wait_queue_t *const *wqs, size_t n,
       spinlock_release(&wqs[i]->lock);
     }
 
-    bool ready = cond(arg);
+    /* Blocked first, then checked: a wakeup or signal after the check
+     * finds us blocked and wakes us. */
+    bool ready = cond(arg) || signal_pending();
     if (ready)
       task_cancel_wait();
     else
@@ -82,13 +88,11 @@ bool waitqueue_wait_any(wait_queue_t *const *wqs, size_t n,
     /* Woken through one queue: still registered on the others. */
     for (size_t i = 0; i < n; i++)
       waitqueue_remove(wqs[i], current);
-    if (ready)
-      return true;
   }
-  return true;
+  return 0;
 }
 
-bool waitqueue_wait_event(wait_queue_t *wq, bool (*cond)(void *), void *arg,
+long waitqueue_wait_event(wait_queue_t *wq, bool (*cond)(void *), void *arg,
                           uint64_t deadline_ns) {
   return waitqueue_wait_any(&wq, 1, cond, arg, deadline_ns);
 }

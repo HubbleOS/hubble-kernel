@@ -41,16 +41,20 @@ void waitqueue_sleep(wait_queue_t *wq);
  * re-checked, so a wakeup between check and sleep is not lost. It is
  * always removed from @p wq again before returning.
  *
- * @return true if the condition holds, false on timeout
+ * A signal for the waiting task ends the wait too: a blocking syscall
+ * then returns the -ERESTARTSYS it gets, and the signal code on the way
+ * out turns it into a restart or -EINTR.
+ *
+ * @return 0 if the condition holds, -ETIMEDOUT, or -ERESTARTSYS
  */
-bool waitqueue_wait_event(wait_queue_t *wq, bool (*cond)(void *), void *arg,
+long waitqueue_wait_event(wait_queue_t *wq, bool (*cond)(void *), void *arg,
                           uint64_t deadline_ns);
 
 /**
  * @brief waitqueue_wait_event() on several queues: a wakeup on any of
  *        @p wqs re-checks @p cond. For poll(), which watches many files.
  */
-bool waitqueue_wait_any(wait_queue_t *const *wqs, size_t n,
+long waitqueue_wait_any(wait_queue_t *const *wqs, size_t n,
                         bool (*cond)(void *), void *arg,
                         uint64_t deadline_ns);
 

@@ -22,6 +22,10 @@ extern irq_handler
 extern syscall_handler_wrapper
 extern need_resched
 extern schedule_irq
+extern signal_return
+
+; Offset of cs in registers_t: 15 GPRs, int_no, err_code, rip.
+REGS_CS equ 18 * 8
 
 ; -- ISR Macros -------------------------------------------------
 
@@ -93,7 +97,8 @@ IRQ 15, 47                      ; Secondary ATA
 ; -- System Call (INT 0x80 = 128) ------------------------------
 isr128:
     push    qword 0             ; Dummy error code
-    push    qword 128           ; Interrupt number
+    push    rax                 ; "Interrupt number": the syscall number, as
+                                ; syscall_entry does (restarts need it)
     jmp     syscall_common_stub
 
 ; -- Double Fault Entry (vector 8, IST1) ------------------------
@@ -218,10 +223,11 @@ df_entry:
     ; mov     fs, ax 
     %endif
 
-    ; Align stack to 16 bytes for ABI
+    ; Align stack to 16 bytes for ABI: rsp % 16 == 0 at each call (the
+    ; callee then sees rsp + 8 aligned and may keep 16-aligned locals,
+    ; e.g. a buffer for fxsave)
     mov     rbp, rsp
     and     rsp, ~0xF
-    sub     rsp, 8
 
     ; Call C handler
     mov     rdi, rbp
@@ -236,6 +242,16 @@ df_entry:
     call    schedule_irq
 %%restore:
     %endif
+
+    ; Back to user mode (possibly another task's, after a switch): its
+    ; pending signals are handled first - a handler to run, a fault's
+    ; SIGSEGV, a Ctrl-C for a program that never makes a syscall.
+    test    qword [rbp + REGS_CS], 3
+    jz      %%kernel
+    mov     rdi, rbp
+    xor     esi, esi            ; not a syscall return
+    call    signal_return
+%%kernel:
 
     ; Restore original stack
     mov     rsp, rbp

@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include <hubble/printk.h>
+#include <hubble/signal.h>
 #include <hubble/syscall.h>
 #include <hubble/syscalls.h>
 #include <syscalls/abi.h>
@@ -11,8 +12,11 @@
 #include <smp/task.h>
 
 /* Linux x86_64: number in RAX, arguments in RDI RSI RDX R10 R8 R9,
- * -errno back in RAX. fork and execve need the whole trap frame. */
+ * -errno back in RAX. fork, execve and rt_sigreturn need the whole trap
+ * frame. */
 static uint64_t linux_dispatch(registers_t *regs) {
+  if (regs->rax == SYS_rt_sigreturn)
+    return sys_rt_sigreturn(regs);
   /* vfork may be a plain fork: the child gets its own copy, which is all
    * vfork promises less of. */
   if (regs->rax == SYS_fork || regs->rax == SYS_vfork)
@@ -52,6 +56,13 @@ uint64_t syscall_handler_wrapper(registers_t *regs) {
     regs->rax = -ENOSYS;
   }
 
+  /* Before user space sees the result: a signal that arrived meanwhile
+   * (or interrupted a blocking call) is handled now. */
+  signal_return(regs, true);
+
   task->exec.in_syscall = false;
-  return regs->rax;
+  /* sysret returns to rcx with rflags from r11. Whenever the frame says
+   * otherwise (a restored signal context, a restarted syscall, a new
+   * program), the entry code returns with iretq. */
+  return regs->rcx != regs->rip || regs->r11 != regs->rflags;
 }

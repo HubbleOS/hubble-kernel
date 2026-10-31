@@ -81,6 +81,16 @@ bool is_scheduler_initialized(void);
  */
 void task_exit(int exit_code);
 
+/** task_exit() with a whole wait4 status: (code << 8) for an exit, or
+ * the signal that killed the task. */
+void task_exit_status(int status) __attribute__((noreturn));
+
+/**
+ * Tell @p child's parent about it: wake its wait4 and send it SIGCHLD
+ * with @p code (CLD_*) and @p status (exit code or signal).
+ */
+void task_notify_parent(task_t *child, int code, int status);
+
 /** Make @p child a child of @p parent (fork). */
 void task_link_child(task_t *parent, task_t *child);
 
@@ -92,17 +102,17 @@ long task_setpgid(task_t *caller, uint32_t pid, uint32_t pgid);
 uint32_t task_ppid(task_t *task);
 
 /**
- * Reap an exited child of @p parent (@p pid, or any if -1): free it and
- * return its pid with its exit code in @p exit_code. 0 if a matching
- * child exists but hasn't exited yet, -ECHILD if there is none.
+ * wait4 without the waiting: for a child of @p parent matching @p pid
+ * (> 0: that pid, -1: any, 0: the caller's process group, < -1: group
+ * -pid) with news, store its wait status in @p status and return its
+ * pid. News is an exit (the child is then freed), or with WUNTRACED /
+ * WCONTINUED in @p options a stop or continue. 0 if matching children
+ * exist but have no news, -ECHILD if there are none.
  */
-long task_reap_child(task_t *parent, int pid, int *exit_code);
+long task_wait_child(task_t *parent, int pid, int options, int *status);
 
-/** Whether wait4 for @p pid would return now: a matching child exited,
- * or there is no matching child. */
-bool task_child_waitable(task_t *parent, int pid);
-/** True if @p parent has a child that exited and is not reaped yet. */
-bool task_child_exited(task_t *parent);
+/** Whether task_wait_child() would return non-zero now. */
+bool task_child_waitable(task_t *parent, int pid, int options);
 
 /* -- Task scheduling helpers -------------------------------------------- */
 
@@ -205,13 +215,21 @@ void task_kill_by_task(task_t *task);
 void task_kill_by_pid(uint32_t pid);
 
 /* task_t is mirrored in Rust (fs/procfs/src/kernel.rs): update both. */
-_Static_assert(sizeof(task_t) == 1824, "task_t is mirrored in fs/procfs");
+_Static_assert(sizeof(task_t) == 5520, "task_t is mirrored in fs/procfs");
 
 /**
  * @brief Copy the pids of up to @p max live tasks into @p out
  * @return Number of pids copied
  */
 size_t task_snapshot(uint32_t *out, size_t max);
+
+/**
+ * @brief Call @p fn for every live task
+ *
+ * Runs with that task's run queue locked and interrupts off: @p fn must
+ * not sleep or take a run queue lock. The task can't be freed meanwhile.
+ */
+void task_foreach(void (*fn)(task_t *task, void *arg), void *arg);
 
 /**
  * @brief Copy the task with @p pid into @p out

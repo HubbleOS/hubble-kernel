@@ -24,6 +24,7 @@
 #include <fs/vfs/file.h>
 #include <fs/vfs/stream.h>
 #include <hubble/errno.h>
+#include <hubble/signal.h>
 #include <hubble/module.h>
 #include <hubble/printk.h>
 #include <hubble/string.h>
@@ -129,7 +130,9 @@ static long master_read(file_t *file, void *buf, size_t len) {
   if (!master_readable(pty)) {
     if (nonblock(file))
       return -EAGAIN;
-    waitqueue_wait_event(&pty->tty.read_wq, master_readable, pty, 0);
+    long err = waitqueue_wait_event(&pty->tty.read_wq, master_readable, pty, 0);
+    if (err)
+      return err;
   }
   if (!pty->out.count)
     return -EIO; /* every slave closed: the shell is gone */
@@ -147,7 +150,10 @@ static long master_write(file_t *file, const void *buf, size_t len) {
     if (!tty_input_room(&pty->tty)) {
       if (nonblock(file))
         return done ? (long)done : -EAGAIN;
-      waitqueue_wait_event(&pty->tty.read_wq, master_room, &pty->tty, 0);
+      long err =
+          waitqueue_wait_event(&pty->tty.read_wq, master_room, &pty->tty, 0);
+      if (err)
+        return done ? (long)done : err;
     }
     tty_input_char(&pty->tty, p[done++]);
   }
@@ -207,11 +213,16 @@ static void master_release(file_t *file) {
   pty->master_open = false;
   /* Hang up the slave: reads see end of file, writes fail. */
   pty->tty.hung_up = true;
+  uint32_t pgrp = pty->tty.pgrp;
   stream_close(&pty->out, true);
   waitqueue_wake_all(&pty->tty.read_wq);
   pty_t *dead = pty_unused(pty);
   spinlock_release(&ptys_lock);
   pty_free(dead);
+  /* Its foreground group (the shell in a closed tmux pane) gets SIGHUP,
+   * and SIGCONT in case it is stopped, as on Linux. */
+  signal_send_pgrp(pgrp, SIGHUP);
+  signal_send_pgrp(pgrp, SIGCONT);
 }
 
 static const file_ops_t master_ops = {
@@ -232,7 +243,7 @@ static long slave_read(file_t *file, void *buf, size_t len) {
     return 0;
   if (!tty_readable(&pty->tty) && nonblock(file))
     return -EAGAIN;
-  return (long)tty_read(&pty->tty, buf, len);
+  return tty_read(&pty->tty, buf, len);
 }
 
 static long slave_write(file_t *file, const void *buf, size_t len) {

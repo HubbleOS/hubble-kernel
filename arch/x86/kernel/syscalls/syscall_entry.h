@@ -15,6 +15,11 @@ typedef struct registers registers_t;
 _Begin_C_Header;
 
 void syscall_init(void);
+/**
+ * The C side of syscall_entry: run the syscall in @p regs, put its result
+ * in rax and handle pending signals.
+ * @return Nonzero if the frame has to be returned to with iretq
+ */
 uint64_t syscall_handler_wrapper(registers_t *regs);
 
 uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,

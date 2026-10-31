@@ -66,8 +66,7 @@ static const tty_console_ops_t tty0_console_ops = {
 
 static uint64_t tty_vfs_read(uint64_t offset, size_t size, void *buf) {
   (void)offset;
-  size_t n = tty_read(&tty0, (char *)buf, size);
-  return n < 0 ? 0 : (uint64_t)n;
+  return (uint64_t)tty_read(&tty0, (char *)buf, size); /* or -errno */
 }
 
 static uint64_t tty_vfs_write(uint64_t offset, size_t size, const void *buf) {

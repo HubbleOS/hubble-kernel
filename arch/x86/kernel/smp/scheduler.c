@@ -201,7 +201,6 @@ task_t *_task_create_with_arg(void (*entry_point)(void *), void *entry_arg,
     asm volatile("fxsave %0" : "=m"(*(char *)task->exec.context.fpu_state));
   }
 
-  task->signals.signal = 0;
   task->umask = 022;
   printk(KERN_INFO "Task created\n");
   return task;
@@ -381,18 +380,31 @@ static void task_free(task_t *task) {
   kfree(task);
 }
 
-/* An exited child of @p parent matching @p pid (-1: any), and the link
- * pointing at it; *any says whether a matching child exists at all.
+/* Whether wait4(@p pid) by @p parent is about @p child. */
+static bool wait_matches(task_t *parent, task_t *child, int pid) {
+  if (pid > 0)
+    return (int)child->id.pid == pid;
+  if (pid == -1)
+    return true;
+  if (pid == 0)
+    return child->pgid == parent->pgid;
+  return (int)child->pgid == -pid;
+}
+
+/* A child of @p parent matching @p pid with news for wait4 (it exited,
+ * or it stopped or continued and @p options asks about that), and the
+ * link pointing at it; *any says whether a matching child exists at all.
  * Caller holds tree_lock. */
-static task_t *find_dead_child(task_t *parent, int pid, task_t ***link,
-                               bool *any) {
+static task_t *find_waitable_child(task_t *parent, int pid, int options,
+                                   task_t ***link, bool *any) {
   *any = false;
   for (task_t **l = &parent->linkage.children; *l; l = &(*l)->linkage.sibling) {
     task_t *child = *l;
-    if (pid > 0 && (int)child->id.pid != pid)
+    if (!wait_matches(parent, child, pid))
       continue;
     *any = true;
-    if (child->linkage.state == TASK_DEAD) {
+    if (child->linkage.state == TASK_DEAD ||
+        sig_report(&child->signals, options, false)) {
       *link = l;
       return child;
     }
@@ -400,39 +412,53 @@ static task_t *find_dead_child(task_t *parent, int pid, task_t ***link,
   return NULL;
 }
 
-bool task_child_waitable(task_t *parent, int pid) {
+bool task_child_waitable(task_t *parent, int pid, int options) {
   task_t **link;
   bool any;
   irqlock_acquire(&tree_lock);
-  bool ready = find_dead_child(parent, pid, &link, &any) || !any;
+  bool ready = find_waitable_child(parent, pid, options, &link, &any) || !any;
   irqlock_release(&tree_lock);
   return ready;
 }
 
-bool task_child_exited(task_t *parent) {
+long task_wait_child(task_t *parent, int pid, int options, int *status) {
   task_t **link;
   bool any;
   irqlock_acquire(&tree_lock);
-  bool exited = find_dead_child(parent, -1, &link, &any) != NULL;
+  task_t *child = find_waitable_child(parent, pid, options, &link, &any);
+  if (!child) {
+    irqlock_release(&tree_lock);
+    return any ? 0 : -ECHILD;
+  }
+
+  long child_pid = child->id.pid;
+  if (child->linkage.state != TASK_DEAD) {
+    /* Stopped or continued: it stays. */
+    *status = sig_report(&child->signals, options, true);
+    irqlock_release(&tree_lock);
+    return child_pid;
+  }
+
+  *link = child->linkage.sibling;
   irqlock_release(&tree_lock);
-  return exited;
+  *status = child->linkage.exit_code;
+  task_free(child);
+  return child_pid;
 }
 
-long task_reap_child(task_t *parent, int pid, int *exit_code) {
-  task_t **link;
-  bool any;
+void task_notify_parent(task_t *child, int code, int status) {
   irqlock_acquire(&tree_lock);
-  task_t *reaped = find_dead_child(parent, pid, &link, &any);
-  if (reaped)
-    *link = reaped->linkage.sibling;
+  task_t *parent = child->linkage.parent;
+  if (parent) {
+    waitqueue_wake_all(parent->child_wait);
+    bool stop_news = code == CLD_STOPPED || code == CLD_CONTINUED;
+    if (!stop_news || !sig_nocldstop(&parent->signals)) {
+      struct sig_info info = {
+          .code = code, .pid = (int32_t)child->id.pid, .status = status};
+      signal_send(parent, SIGCHLD, &info);
+    }
+  }
   irqlock_release(&tree_lock);
-
-  if (!reaped)
-    return any ? 0 : -ECHILD;
-  *exit_code = reaped->linkage.exit_code;
-  long pid_reaped = reaped->id.pid;
-  task_free(reaped);
-  return pid_reaped;
 }
 
 long task_setpgid(task_t *caller, uint32_t pid, uint32_t pgid) {
@@ -466,13 +492,16 @@ long task_setpgid(task_t *caller, uint32_t pid, uint32_t pgid) {
  * @brief Mark the current task as exited and trigger reschedule
  * @param exit_code Exit status code
  */
-void task_exit(int exit_code) {
+void task_exit(int exit_code) { task_exit_status((exit_code & 0xff) << 8); }
+
+void task_exit_status(int status) {
   uint8_t cpu_id = this_cpu_id();
   task_t *task = get_current_task();
 
-  printk(KERN_DEBUG "exited with code: %d\n", exit_code);
+  printk(KERN_DEBUG "exited with status: %#x\n", status);
   if (!task)
-    return;
+    while (1)
+      hlt();
 
   /* Captured now, used after free_context() below - see the comment
    * further down at the matching swapgs. */
@@ -485,7 +514,7 @@ void task_exit(int exit_code) {
   /* Off the run queue for good: nothing may switch us out from here, and
    * we never return to re-enable interrupts. */
   asm volatile("cli");
-  task->linkage.exit_code = exit_code;
+  task->linkage.exit_code = status;
 
   spinlock_acquire(&runqueues[cpu_id].lock);
 
@@ -522,8 +551,16 @@ void task_exit(int exit_code) {
   task->linkage.children = NULL;
   task_t *parent = task->linkage.parent;
   task->linkage.state = TASK_DEAD;
-  if (parent)
+  if (parent) {
     waitqueue_wake_all(parent->child_wait);
+    bool killed = status & 0x7f;
+    struct sig_info info = {
+        .code = killed ? CLD_KILLED : CLD_EXITED,
+        .pid = (int32_t)task->id.pid,
+        .status = killed ? status & 0x7f : (status >> 8) & 0xff,
+    };
+    signal_send(parent, SIGCHLD, &info);
+  }
   irqlock_release(&tree_lock);
 
   for (task_t *c = unreaped, *next; c; c = next) {
@@ -965,6 +1002,18 @@ size_t task_snapshot(uint32_t *out, size_t max) {
  *
  * @return false if no such task exists (anymore)
  */
+void task_foreach(void (*fn)(task_t *task, void *arg), void *arg) {
+  for (int cpu = 0; cpu < MAX_CPUS; cpu++) {
+    cpu_runqueue_t *rq = &runqueues[cpu];
+    uint64_t flags = save_flags_cli();
+    spinlock_acquire(&rq->lock);
+    for (size_t i = 0; i < rq->count; i++)
+      fn(rq->queue[i], arg);
+    spinlock_release(&rq->lock);
+    restore_flags(flags);
+  }
+}
+
 bool task_get(uint32_t pid, task_t *out, uint32_t *ppid) {
   for (int cpu = 0; cpu < MAX_CPUS; cpu++) {
     cpu_runqueue_t *rq = &runqueues[cpu];

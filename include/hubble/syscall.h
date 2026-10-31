@@ -18,7 +18,15 @@
 #define SYS_brk 12
 #define SYS_rt_sigaction 13
 #define SYS_rt_sigprocmask 14
+#define SYS_rt_sigreturn 15
+#define SYS_pause 34
+#define SYS_kill 62
+#define SYS_rt_sigpending 127
 #define SYS_rt_sigtimedwait 128
+#define SYS_rt_sigsuspend 130
+#define SYS_tkill 200
+#define SYS_restart_syscall 219
+#define SYS_tgkill 234
 #define SYS_ioctl 16
 #define SYS_readv 19
 #define SYS_writev 20

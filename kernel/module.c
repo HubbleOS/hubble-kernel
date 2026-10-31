@@ -59,6 +59,7 @@ extern void stream_read(void);
 extern void stream_write(void);
 extern void stream_write_poll(void);
 extern void stream_close(void);
+extern void signal_send_pgrp(void);
 
 /* Limine request blocks live in the kernel image; modules reach them
  * through higher_half.h inline helpers (virt_to_phys, ...). */
@@ -167,6 +168,7 @@ static const module_export_t g_exports[] = {
     {"stream_write", (uint64_t)(uintptr_t)stream_write},
     {"stream_write_poll", (uint64_t)(uintptr_t)stream_write_poll},
     {"stream_close", (uint64_t)(uintptr_t)stream_close},
+    {"signal_send_pgrp", (uint64_t)(uintptr_t)signal_send_pgrp},
     {"dev_vfs_register_file", (uint64_t)(uintptr_t)dev_vfs_register_file},
     {"module_export_module_list",
      (uint64_t)(uintptr_t)module_export_module_list}};

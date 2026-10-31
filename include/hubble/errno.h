@@ -115,6 +115,7 @@
 #define ESHUTDOWN 108       /* Cannot send after shutdown            */
 #define ETOOMANYREFS 109    /* Too many references                   */
 #define ETIMEDOUT 110       /* Connection timed out                  */
+
 #define ECONNREFUSED 111    /* Connection refused                    */
 #define EHOSTDOWN 112       /* Host is down                          */
 #define EHOSTUNREACH 113    /* No route to host                      */
@@ -138,3 +139,10 @@
 #define ENOTRECOVERABLE 131 /* State not recoverable                 */
 #define ERFKILL 132         /* Operation blocked by RF-kill          */
 #define EHWPOISON 133       /* Memory page has hardware error        */
+
+/* Kernel-internal, never returned to user space: interrupted by a signal.
+ * ERESTARTSYS: restarted, or -EINTR if a handler without SA_RESTART runs.
+ * ERESTART_RESTARTBLOCK: -EINTR if any handler runs, else continued through
+ * restart_syscall (a sleep goes on to its first deadline). */
+#define ERESTARTSYS 512
+#define ERESTART_RESTARTBLOCK 516

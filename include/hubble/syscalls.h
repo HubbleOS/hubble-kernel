@@ -40,10 +40,24 @@ typedef struct registers registers_t;
 long sys_fork(registers_t *regs);
 long sys_execve(registers_t *regs);
 long sys_wait4(int pid, int *status, int options, void *rusage);
+
+/* Signals. The rt_sig* ones and pause are Rust (rust/src/signal.rs). */
 struct kernel_timespec;
+struct registers;
+long sys_rt_sigaction(int sig, const void *act, void *oldact,
+                      size_t sigsetsize);
+long sys_rt_sigprocmask(int how, const void *set, void *oldset,
+                        size_t sigsetsize);
+long sys_rt_sigpending(uint64_t *set, size_t sigsetsize);
+long sys_rt_sigsuspend(const uint64_t *set, size_t sigsetsize);
 long sys_rt_sigtimedwait(const uint64_t *set, void *info,
                          const struct kernel_timespec *timeout,
                          size_t sigsetsize);
+long sys_rt_sigreturn(struct registers *regs);
+long sys_pause(void);
+long sys_kill(int pid, int sig);
+long sys_tkill(int tid, int sig);
+long sys_tgkill(int tgid, int tid, int sig);
 long sys_getuid(void);
 long sys_geteuid(void);
 long sys_getgid(void);
@@ -114,6 +128,7 @@ struct kernel_timespec {
   int64_t tv_sec;
   int64_t tv_nsec;
 };
+long sys_restart_syscall(void);
 long sys_nanosleep(const struct kernel_timespec *req,
                    struct kernel_timespec *rem);
 long sys_clock_gettime(int clock_id, void *ts);

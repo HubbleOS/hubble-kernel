@@ -47,12 +47,12 @@ pub fn parse_pid(s: &[u8]) -> Option<u32> {
 }
 
 /// The task with this pid right now, or None if it does not exist (anymore).
-/// Boxed: a Task is 1.8 KB, too much to move around a 16 KB kernel stack.
+/// Boxed: a Task is 5.5 KB, too much to move around a 16 KB kernel stack.
 pub fn task(pid: u32) -> Option<Box<Proc>> {
     let mut proc = Box::<Proc>::new_uninit();
     let p = proc.as_mut_ptr();
     let mut ppid = 0;
-    // C writes the task straight into the box: no 1.8 KB copy on the stack.
+    // C writes the task straight into the box: no 5.5 KB copy on the stack.
     if !unsafe { task_get(pid, &raw mut (*p).task, &mut ppid) } {
         return None;
     }

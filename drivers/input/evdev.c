@@ -170,7 +170,9 @@ static uint64_t evdev_read(uint64_t offset, size_t size, void *buf) {
   if (!want)
     return 0;
 
-  waitqueue_wait_event(&read_wq, evdev_readable_cond, NULL, 0);
+  long err = waitqueue_wait_event(&read_wq, evdev_readable_cond, NULL, 0);
+  if (err)
+    return (uint64_t)err;
 
   /* Copy out in chunks: the user buffer may fault, which must not
    * happen with the queue lock (and interrupts) held. */

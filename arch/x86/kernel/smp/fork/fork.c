@@ -54,18 +54,13 @@ long sys_fork(registers_t *regs) {
   child->exec.context.rdx = regs->rdx;
   child->exec.context.rax = 0; /* fork() returns 0 in the child */
 
-  /* `syscall` loads the return RIP into RCX and RFLAGS into R11 - both are
-   * saved as plain GPRs by syscall_entry.asm, so they're sitting right
-   * here in the trap frame. */
-  child->exec.context.rip = regs->rcx;
-  child->exec.context.rflags = regs->r11;
-
-  /* The user RSP at syscall time isn't in the trap frame at all (SYSCALL
-   * doesn't save it) - it's stashed in the same per-CPU slot schedule()
-   * reads to preempt a task mid-syscall. */
-  uint64_t user_rsp;
-  asm volatile("mov %%gs:8, %0" : "=r"(user_rsp));
-  child->exec.context.rsp = user_rsp;
+  /* syscall_entry.asm builds a whole frame: where the syscall returns
+   * to, with which flags and stack. */
+  child->exec.context.rip = regs->rip;
+  child->exec.context.rflags = regs->rflags;
+  child->exec.context.rsp = regs->rsp;
+  child->exec.context.rcx = regs->rcx;
+  child->exec.context.r11 = regs->r11;
 
   child->exec.context.cs = 0x23;
   child->exec.context.ss = 0x1b;
@@ -120,6 +115,7 @@ long sys_fork(registers_t *regs) {
   child->pgid = parent->pgid;
   child->sid = parent->sid;
   child->umask = parent->umask;
+  sig_fork(&child->signals, &parent->signals);
   task_link_child(parent, child);
 
   scheduler_add_task(child);

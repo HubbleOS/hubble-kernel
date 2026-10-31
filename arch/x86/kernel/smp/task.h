@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include <fs/vfs/vfs.h>
+#include <hubble/signal.h>
 #include <mm/map/vm_map.h>
 
 /* Forward-declared, not included: waitqueue.h includes scheduler.h, which
@@ -34,19 +35,6 @@ typedef enum {
   TASK_DEAD,
   TASK_UNINTERRUPTIBLE
 } task_state_t;
-
-/* -- Signal state enumeration ------------------------------------------ */
-
-/**
- * @brief Signal handling states
- */
-typedef enum {
-  SIG_BLOCKED,
-  SIG_UNBLOCKED,
-  SIG_DIED,
-  SIG_KILLED,
-  SIG_IGNORED
-} signals_t;
 
 /* -- File descriptor entry --------------------------------------------- */
 
@@ -148,16 +136,10 @@ typedef struct {
   char cwd[256];
 } task_fdtable_t;
 
-// ---- Signal state ----
-typedef struct {
-  uint16_t signal;
-  void *signal_handlers;
-} task_signals_t;
-
 // ---- Linkage state ----
 typedef struct {
   task_state_t state;
-  int exit_code;
+  int exit_code; /* the wait4 status: exit code << 8, or the signal */
   uint16_t lock;
   uint8_t spinlocks;
 
@@ -173,7 +155,7 @@ typedef struct task {
   task_stacks_t stacks;
   task_entry_t entry;
   task_fdtable_t fdtable;
-  task_signals_t signals;
+  task_signals_t signals; /* Rust's SigState: see hubble/signal.h */
   task_linkage_t linkage;
   struct wait_queue *child_wait; /* woken by task_exit() for wait4() */
   const struct syscall_abi *abi; /* set by exec, inherited by fork;

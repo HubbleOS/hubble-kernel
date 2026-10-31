@@ -257,7 +257,9 @@ long unix_accept(file_t *file, file_t **conn) {
 
     if (err != -EAGAIN || nonblock(file))
       return err;
-    waitqueue_wait_event(&s->wq, has_pending, s, 0);
+    long wait = waitqueue_wait_event(&s->wq, has_pending, s, 0);
+    if (wait)
+      return wait;
   }
 }
 

@@ -130,8 +130,10 @@ long sys_execve(registers_t *regs) {
 
   kfree(image);
 
-  regs->rcx = new_rip;
-  asm volatile("mov %0, %%gs:8" ::"r"(new_rsp) : "memory");
+  regs->rip = new_rip;
+  regs->rsp = new_rsp;
+  /* Handlers were addresses in the old program. */
+  sig_exec(&current->signals);
 
   return 0;
 }

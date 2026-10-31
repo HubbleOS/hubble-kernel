@@ -67,6 +67,7 @@ typedef struct {
 #define TTY_VEOF 4
 #define TTY_VTIME 5
 #define TTY_VMIN 6
+#define TTY_VSUSP 10
 
 /* ioctl requests */
 #define TTY_TCGETS 0x5401
@@ -83,6 +84,7 @@ typedef struct {
 #define TTY_TIOCGSID 0x5429
 #define TTY_KDSETMODE 0x4B3A
 #define TTY_KDGETMODE 0x4B3B
+#define TTY_VT_OPENQRY 0x5600
 
 /* KDSETMODE modes: who draws on the display */
 #define TTY_KD_TEXT 0x00
@@ -153,9 +155,10 @@ void tty_input_string(tty_t *tty, const char *s);
 
 /**
  * @brief Blocking read: one line (canonical) or the bytes available (raw)
- * @return Bytes read; 0 at end of input (VEOF on an empty line)
+ * @return Bytes read; 0 at end of input (VEOF on an empty line), or
+ *         -ERESTARTSYS when a signal interrupts the wait
  */
-size_t tty_read(tty_t *tty, char *buf, size_t size);
+long tty_read(tty_t *tty, char *buf, size_t size);
 
 /** @brief Whether a read() would return without blocking. */
 bool tty_readable(tty_t *tty);

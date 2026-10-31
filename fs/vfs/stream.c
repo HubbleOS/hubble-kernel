@@ -2,6 +2,7 @@
  * @file stream.c
  * @brief One-way byte streams for pipes and stream sockets (see stream.h)
  */
+#include <hubble/signal.h>
 #include "stream.h"
 #include "file.h"
 #include <hubble/errno.h>
@@ -60,8 +61,7 @@ long stream_wait_readable(stream_t *s, bool nonblock) {
     return 0;
   if (nonblock)
     return -EAGAIN;
-  waitqueue_wait_event(s->wq, stream_can_read, s, 0);
-  return 0;
+  return waitqueue_wait_event(s->wq, stream_can_read, s, 0);
 }
 
 long stream_read(stream_t *s, void *buf, size_t len, bool nonblock) {
@@ -110,10 +110,15 @@ long stream_write(stream_t *s, const void *buf, size_t len, bool nonblock) {
     if (!stream_can_write(s)) {
       if (nonblock)
         return done ? (long)done : -EAGAIN;
-      waitqueue_wait_event(s->wq, stream_can_write, s, 0);
+      long err = waitqueue_wait_event(s->wq, stream_can_write, s, 0);
+      if (err)
+        return done ? (long)done : err;
     }
-    if (!s->reader_open)
+    if (!s->reader_open) {
+      if (!done) /* nobody will ever read it: as on Linux, SIGPIPE */
+        signal_send(get_current_task(), SIGPIPE, NULL);
       return done ? (long)done : -EPIPE;
+    }
 
     uint8_t chunk[STREAM_CHUNK];
     size_t n = len - done < sizeof(chunk) ? len - done : sizeof(chunk);

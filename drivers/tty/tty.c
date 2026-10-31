@@ -4,6 +4,7 @@
  */
 #include <drivers/tty/tty.h>
 #include <hubble/errno.h>
+#include <hubble/signal.h>
 #include <hubble/string.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
@@ -56,12 +57,15 @@ void tty_init(tty_t *tty, const tty_console_ops_t *console) {
   tty->termios.c_cc[TTY_VERASE] = 0x7F; /* DEL, what Backspace sends */
   tty->termios.c_cc[TTY_VKILL] = 0x15;  /* ^U */
   tty->termios.c_cc[TTY_VEOF] = 0x04;   /* ^D */
+  tty->termios.c_cc[TTY_VSUSP] = 0x1A;  /* ^Z */
   tty->termios.c_cc[TTY_VMIN] = 1;
 
   waitqueue_init(&tty->read_wq);
 }
 
 /* -- Line discipline -------------------------------------- */
+
+static void flush_input(tty_t *tty);
 
 static void console_put(tty_t *tty, char c) {
   if (tty->console && tty->console->putchar)
@@ -118,6 +122,26 @@ void tty_input_char(tty_t *tty, char c) {
       c = '\n';
   } else if (c == '\n' && (t->c_iflag & TTY_INLCR)) {
     c = '\r';
+  }
+
+  /* ISIG: ^C, ^\ and ^Z signal the foreground process group instead of
+   * being read. What was typed but not read yet goes, as on Linux. */
+  if (t->c_lflag & TTY_ISIG) {
+    int sig = 0;
+    if (c == (char)t->c_cc[TTY_VINTR] && t->c_cc[TTY_VINTR])
+      sig = SIGINT;
+    else if (c == (char)t->c_cc[TTY_VQUIT] && t->c_cc[TTY_VQUIT])
+      sig = SIGQUIT;
+    else if (c == (char)t->c_cc[TTY_VSUSP] && t->c_cc[TTY_VSUSP])
+      sig = SIGTSTP;
+    if (sig) {
+      flush_input(tty);
+      echo_char(tty, c);
+      if (t->c_lflag & TTY_ECHO)
+        console_put(tty, '\n');
+      signal_send_pgrp(tty->pgrp, sig);
+      return;
+    }
   }
 
   /* Raw (non-canonical): every byte is readable at once. */
@@ -181,7 +205,7 @@ bool tty_input_room(tty_t *tty) {
 
 static bool tty_readable_cond(void *arg) { return tty_readable(arg); }
 
-size_t tty_read(tty_t *tty, char *buf, size_t size) {
+long tty_read(tty_t *tty, char *buf, size_t size) {
   if (!tty || !buf || size == 0)
     return -1;
 
@@ -191,7 +215,9 @@ size_t tty_read(tty_t *tty, char *buf, size_t size) {
   if (!canonical && tty->termios.c_cc[TTY_VMIN] == 0 && !tty_readable(tty))
     return 0;
 
-  waitqueue_wait_event(&tty->read_wq, tty_readable_cond, tty, 0);
+  long err = waitqueue_wait_event(&tty->read_wq, tty_readable_cond, tty, 0);
+  if (err)
+    return err;
 
   if (read_buf_empty(tty) && tty->eof_pending) {
     tty->eof_pending = false;
@@ -209,7 +235,7 @@ size_t tty_read(tty_t *tty, char *buf, size_t size) {
       n++;
   }
   waitqueue_wake_all(&tty->read_wq); /* room for a waiting writer */
-  return n;
+  return (long)n;
 }
 
 /* -- ioctl ------------------------------------------------ */
@@ -284,11 +310,18 @@ long tty_ioctl(tty_t *tty, unsigned long request, void *arg) {
     return 0;
   }
 
-  case TTY_TIOCSWINSZ: /* a console with a size of its own ignores it */
+  case TTY_TIOCSWINSZ: { /* a console with a size of its own ignores it */
     if (!arg)
       return -EFAULT;
-    memcpy(&tty->winsize, arg, sizeof(tty->winsize));
+    tty_winsize_t ws;
+    memcpy(&ws, arg, sizeof(ws));
+    bool changed = ws.ws_row != tty->winsize.ws_row ||
+                   ws.ws_col != tty->winsize.ws_col;
+    tty->winsize = ws;
+    if (changed) /* full-screen programs redraw for the new size */
+      signal_send_pgrp(tty->pgrp, SIGWINCH);
     return 0;
+  }
 
   case TTY_TIOCSCTTY: /* arg 1: take it from another session */
     return tty_set_ctty(tty, (uintptr_t)arg == 1);
@@ -344,6 +377,17 @@ long tty_ioctl(tty_t *tty, unsigned long request, void *arg) {
     *(int *)arg = text ? TTY_KD_TEXT : TTY_KD_GRAPHICS;
     return 0;
   }
+
+  /* First free virtual terminal. Only the console is one, and there are
+   * no others: -1. Answering at all tells programs (busybox init) this
+   * is a Linux VT, so they keep TERM=linux. */
+  case TTY_VT_OPENQRY:
+    if (!tty->console)
+      return -ENOTTY;
+    if (!arg)
+      return -EFAULT;
+    *(int *)arg = -1;
+    return 0;
 
   case TTY_FIONREAD:
     if (!arg)

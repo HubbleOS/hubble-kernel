@@ -4,6 +4,7 @@
 
 #include <hpet/hpet.h>
 #include <hubble/errno.h>
+#include <hubble/signal.h>
 #include <hubble/syscalls.h>
 
 #include <fs/vfs/dev.h>
@@ -84,6 +85,19 @@ static size_t poll_wait_queues(poll_ctx_t *ctx, wait_queue_t **wqs) {
   return n;
 }
 
+/* Sleep until @p deadline (HPET ns); true if a signal cut it short. */
+static bool sleep_until(uint64_t deadline) {
+  while (hpet_get_time_ns() < deadline) {
+    task_prepare_wait();
+    if (signal_pending()) {
+      task_cancel_wait();
+      return true;
+    }
+    task_wait(deadline);
+  }
+  return false;
+}
+
 /**
  * @brief poll: wait until an fd is ready or @p timeout_ms passes.
  * @param timeout_ms <0 waits forever, 0 checks once, >0 is a timeout
@@ -105,19 +119,16 @@ long sys_poll(struct pollfd *fds, unsigned long nfds, int timeout_ms) {
   wait_queue_t *wqs[MAX_FDS];
   size_t nwqs = poll_wait_queues(&ctx, wqs);
   if (nwqs) {
-    waitqueue_wait_any(wqs, nwqs, poll_scan, &ctx, deadline);
-    return ctx.ready;
+    long err = waitqueue_wait_any(wqs, nwqs, poll_scan, &ctx, deadline);
+    /* Like Linux: poll is not restarted, a signal ends it with EINTR. */
+    return err == -ERESTARTSYS ? -EINTR : ctx.ready;
   }
 
   /* Nothing to wake us early (every watched fd is always-ready or
    * unwatchable): it is a plain sleep, forever only if asked to. */
   if (!deadline)
     return -EINVAL;
-  while (hpet_get_time_ns() < deadline) {
-    task_prepare_wait();
-    task_wait(deadline);
-  }
-  return 0;
+  return sleep_until(deadline) ? -EINTR : 0;
 }
 
 long sys_nanosleep(const struct kernel_timespec *req,
@@ -130,11 +141,26 @@ long sys_nanosleep(const struct kernel_timespec *req,
 
   uint64_t deadline =
       hpet_get_time_ns() + (uint64_t)req->tv_sec * NS_PER_SEC + req->tv_nsec;
-  while (hpet_get_time_ns() < deadline) {
-    task_prepare_wait();
-    task_wait(deadline);
+  if (!sleep_until(deadline))
+    return 0;
+
+  /* Interrupted. A handler that runs sees EINTR and rem; a stop (Ctrl-Z,
+   * then fg) continues the sleep through restart_syscall. */
+  if (rem) {
+    uint64_t now = hpet_get_time_ns();
+    uint64_t left = now < deadline ? deadline - now : 0;
+    rem->tv_sec = (int64_t)(left / NS_PER_SEC);
+    rem->tv_nsec = (int64_t)(left % NS_PER_SEC);
   }
-  if (rem)
-    rem->tv_sec = rem->tv_nsec = 0;
-  return 0;
+  sig_set_restart(&get_current_task()->signals, deadline);
+  return -ERESTART_RESTARTBLOCK;
+}
+
+/* restart_syscall: a nanosleep that a signal without a handler cut short
+ * goes on to its deadline. */
+long sys_restart_syscall(void) {
+  uint64_t deadline = sig_restart(&get_current_task()->signals);
+  if (!deadline || !sleep_until(deadline))
+    return 0;
+  return -ERESTART_RESTARTBLOCK;
 }

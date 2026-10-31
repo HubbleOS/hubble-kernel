@@ -187,10 +187,11 @@ pub struct TaskFdTable {
     pub cwd: [u8; 256],
 }
 
+/// task_signals_t: room for the kernel's signal state (Rust's SigState in
+/// rust/src/signal.rs). Opaque here.
 #[repr(C)]
 pub struct TaskSignals {
-    pub signal: u16,
-    pub signal_handlers: *mut c_void,
+    pub opaque: [u64; 464],
 }
 
 #[repr(C)]
@@ -240,7 +241,7 @@ const _: () = {
     assert!(offset_of!(TaskLinkage, spinlocks) == 10);
     assert!(offset_of!(TaskLinkage, next) == 16);
     assert!(offset_of!(TaskLinkage, sibling) == 48);
-    assert!(size_of::<Task>() == 1824);
+    assert!(size_of::<Task>() == 5520);
     assert!(offset_of!(Task, sched) == 40);
     assert!(offset_of!(Task, exec) == 96);
     assert!(offset_of!(Task, mm) == 336);
@@ -248,10 +249,10 @@ const _: () = {
     assert!(offset_of!(Task, entry) == 424);
     assert!(offset_of!(Task, fdtable) == 440);
     assert!(offset_of!(Task, signals) == 1720);
-    assert!(offset_of!(Task, linkage) == 1736);
-    assert!(offset_of!(Task, child_wait) == 1792);
-    assert!(offset_of!(Task, abi) == 1800);
-    assert!(offset_of!(Task, sid) == 1812);
+    assert!(offset_of!(Task, linkage) == 5432);
+    assert!(offset_of!(Task, child_wait) == 5488);
+    assert!(offset_of!(Task, abi) == 5496);
+    assert!(offset_of!(Task, sid) == 5508);
 };
 
 type Unused = Option<unsafe extern "C" fn()>;

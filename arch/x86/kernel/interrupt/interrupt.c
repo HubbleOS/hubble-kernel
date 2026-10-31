@@ -18,6 +18,7 @@
  * especially Double Faults — before they escalate into a Triple Fault.
  */
 
+#include <hubble/signal.h>
 #include "interrupt.h"
 #include <asm.h>
 #include <hubble/printk.h>
@@ -234,6 +235,22 @@ void isr_handler(registers_t *regs) {
     asm volatile("mov %%cr2, %0" : "=r"(fault_addr));
     if (fault_addr < 0x0000800000000000ULL && vmm_resolve_cow(fault_addr))
       return;
+  }
+
+  /* A user program's fault is the program's problem: it gets a signal
+   * (SIGSEGV, SIGILL, ...), delivered by the stub on the way back - its
+   * handler runs, or it dies. The kernel goes on. */
+  task_t *task = get_current_task();
+  if ((regs->cs & 3) == 3 && task && task->abi) {
+    uint64_t cr2;
+    asm volatile("mov %%cr2, %0" : "=r"(cr2));
+    printk(KERN_WARNING "%s[%u]: %s at 0x%lx ip 0x%lx sp 0x%lx error %lx\n",
+           task->id.name, task->id.pid,
+           regs->int_no < 22 ? exception_messages[regs->int_no] : "trap",
+           regs->int_no == 14 ? cr2 : regs->rip, regs->rip, regs->rsp,
+           regs->err_code);
+    signal_fault(regs);
+    return;
   }
 
   printk(KERN_ERR "\n\tEXCEPTION OCCURRED\n");

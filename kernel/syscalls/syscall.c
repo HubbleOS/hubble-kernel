@@ -16,19 +16,11 @@
 
 typedef long (*syscall_fn_t)(long, long, long, long, long, long);
 
+/* The return value is the caller's tid: musl keeps it for raise() and
+ * pthread_kill(). clear_child_tid isn't kept (no threads yet). */
 long sys_set_tid_address(int *tidptr) {
-  // task_t *current_task = get_current_task();
-  //   current_task->clear_child_tid = tidptr; // optional
-  return 1;
-}
-
-long sys_rt_sigaction(int sig, const void *act, void *oldact,
-                      size_t sigsetsize) {
-  return 0; // прийняли, ігноруємо
-}
-long sys_rt_sigprocmask(int how, const void *set, void *oldset,
-                        size_t sigsetsize) {
-  return 0;
+  (void)tidptr;
+  return sys_gettid();
 }
 
 long sys_exit_group(int status) { return exit_stub(status); }
@@ -62,6 +54,13 @@ static syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_rt_sigaction] = (syscall_fn_t)sys_rt_sigaction,
     [SYS_rt_sigprocmask] = (syscall_fn_t)sys_rt_sigprocmask,
     [SYS_rt_sigtimedwait] = (syscall_fn_t)sys_rt_sigtimedwait,
+    [SYS_rt_sigpending] = (syscall_fn_t)sys_rt_sigpending,
+    [SYS_rt_sigsuspend] = (syscall_fn_t)sys_rt_sigsuspend,
+    [SYS_pause] = (syscall_fn_t)sys_pause,
+    [SYS_kill] = (syscall_fn_t)sys_kill,
+    [SYS_tkill] = (syscall_fn_t)sys_tkill,
+    [SYS_tgkill] = (syscall_fn_t)sys_tgkill,
+    [SYS_restart_syscall] = (syscall_fn_t)sys_restart_syscall,
     [SYS_getcwd] = (syscall_fn_t)sys_getcwd,
     [SYS_chdir] = (syscall_fn_t)sys_chdir,
     [SYS_getuid] = (syscall_fn_t)sys_getuid,
