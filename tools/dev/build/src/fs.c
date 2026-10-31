@@ -42,14 +42,17 @@ int mkdir_p(const char *path)
 }
 
 /**
- * @brief Returns the last modification time of a file
+ * @brief Returns the last modification time of a file, in nanoseconds
+ *
+ * Whole seconds aren't enough: a source saved in the same second as its
+ * object was compiled would look up to date and never be rebuilt.
  */
-time_t get_mtime(const char *path)
+long long get_mtime(const char *path)
 {
 	struct stat st;
 	if (stat(path, &st) == 0)
 	{
-		return st.st_mtime;
+		return (long long)st.st_mtim.tv_sec * 1000000000LL + st.st_mtim.tv_nsec;
 	}
 	return 0;
 }
@@ -59,7 +62,7 @@ time_t get_mtime(const char *path)
  */
 int needs_rebuild(const char *src, const char *obj)
 {
-	time_t obj_time = get_mtime(obj);
+	long long obj_time = get_mtime(obj);
 
 	if (obj_time == 0)
 		return 1; // object file does not exist

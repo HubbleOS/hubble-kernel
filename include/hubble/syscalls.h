@@ -16,6 +16,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
 long sys_write(int fd, const char *buf, size_t count);
 long sys_open(const char *path, int flags, int mode);
 long sys_lseek(int fd, uint64_t offset, int whence);
+long sys_sendfile(int out_fd, int in_fd, int64_t *offset, size_t count);
 long sys_close(int fd);
 long sys_dup(int oldfd);
 long sys_dup2(int oldfd, int newfd);

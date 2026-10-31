@@ -11,6 +11,7 @@
 
 #include <hubble/errno.h>
 #include <hubble/signal.h>
+#include <hubble/string.h>
 
 #include <smp/scheduler.h>
 #include <smp/task.h>
@@ -26,7 +27,7 @@
  * @param options WNOHANG to return 0 instead of blocking; WUNTRACED and
  *                WCONTINUED to also report children that stopped or
  *                continued
- * @param rusage  Unused - resource usage accounting isn't implemented
+ * @param rusage  Zeroed if given: resource usage isn't accounted
  * @return The child's pid, 0 (WNOHANG, nothing ready), or a negative
  *         errno
  */
@@ -42,8 +43,13 @@ static bool child_ready(void *arg) {
   return task_child_waitable(ctx->parent, ctx->pid, ctx->options);
 }
 
+/* struct rusage: two timevals and 14 longs. */
+#define RUSAGE_SIZE 144
+
 long sys_wait4(int pid, int *status, int options, void *rusage) {
-  (void)rusage;
+  /* Left as it was, callers read garbage (busybox time: "13h user"). */
+  if (rusage)
+    memset(rusage, 0, RUSAGE_SIZE);
 
   task_t *parent = get_current_task();
   struct wait_ctx ctx = {parent, pid, options};

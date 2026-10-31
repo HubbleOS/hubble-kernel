@@ -5,6 +5,7 @@
 #include <mm/kmalloc.h>
 #include <msr.h>
 
+#include <fs/vfs/vfs.h>
 #include <smp/fdtable.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
@@ -89,6 +90,15 @@ long sys_execve(registers_t *regs) {
   if (!sys_abs_path(path, abs, sizeof(abs)))
     return path ? -ENAMETOOLONG : -EFAULT;
   path = abs; /* "./prog" runs from the cwd */
+
+  /* A missing file is ENOENT, not ENOEXEC: execvp() and shells walk PATH
+   * on ENOENT, but stop at ENOEXEC (or try the file as a script). */
+  VFS_File *f = vfs_open(path, VFS_O_RDONLY);
+  if (!f)
+    return -ENOENT;
+  if (IS_ERR(f))
+    return PTR_ERR(f);
+  vfs_close(f);
 
   char **argv = copy_strvec_from_user((char *const *)regs->rsi);
   char **envp = copy_strvec_from_user((char *const *)regs->rdx);

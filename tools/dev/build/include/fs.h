@@ -37,9 +37,9 @@ int mkdir_p(const char *path);
 /**
  * @brief Gets the last modification time of a file
  * @param path File path
- * @return Last modification time (time_t) or 0 if file does not exist
+ * @return Last modification time in nanoseconds, or 0 if file does not exist
  */
-time_t get_mtime(const char *path);
+long long get_mtime(const char *path);
 
 /**
  * @brief Checks if the target needs to be rebuilt

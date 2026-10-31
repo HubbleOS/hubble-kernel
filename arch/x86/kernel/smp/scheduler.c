@@ -284,6 +284,13 @@ static void task_state_load(task_t *task, registers_t *regs) {
   regs->rflags = task->exec.context.rflags;
   regs->cs = (uint16_t)task->exec.context.cs;
   regs->ss = (uint16_t)task->exec.context.ss;
+
+  /* The FPU/SSE registers save_context() saved: without this, a task
+   * resumes with the last task's. The kernel itself never touches them
+   * (-mno-sse, soft-float Rust), so they stay as loaded until iretq. */
+  if (task->exec.context.fpu_state)
+    asm volatile("fxrstor (%0)" ::"r"(task->exec.context.fpu_state)
+                 : "memory");
 }
 
 /**

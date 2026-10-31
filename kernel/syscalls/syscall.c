@@ -57,6 +57,7 @@ static syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_rt_sigpending] = (syscall_fn_t)sys_rt_sigpending,
     [SYS_rt_sigsuspend] = (syscall_fn_t)sys_rt_sigsuspend,
     [SYS_pause] = (syscall_fn_t)sys_pause,
+    [SYS_sendfile] = (syscall_fn_t)sys_sendfile,
     [SYS_kill] = (syscall_fn_t)sys_kill,
     [SYS_tkill] = (syscall_fn_t)sys_tkill,
     [SYS_tgkill] = (syscall_fn_t)sys_tgkill,

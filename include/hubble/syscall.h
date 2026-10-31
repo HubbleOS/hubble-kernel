@@ -20,6 +20,7 @@
 #define SYS_rt_sigprocmask 14
 #define SYS_rt_sigreturn 15
 #define SYS_pause 34
+#define SYS_sendfile 40
 #define SYS_kill 62
 #define SYS_rt_sigpending 127
 #define SYS_rt_sigtimedwait 128
