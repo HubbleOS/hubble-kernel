@@ -112,3 +112,17 @@ long sys_fstat(int fd, struct stat *st) {
   }
   return 0;
 }
+
+#define AT_SYMLINK_NOFOLLOW 0x100
+#define AT_EMPTY_PATH 0x1000
+
+/** fstatat: stat, lstat, or with AT_EMPTY_PATH and "" fstat of @p dirfd. */
+long sys_newfstatat(int dirfd, const char *path, struct stat *st, int flags) {
+  if (flags & AT_EMPTY_PATH && path && !path[0])
+    return sys_fstat(dirfd, st);
+  /* As openat: only absolute paths or paths relative to the cwd. */
+  if (path && path[0] != '/' && dirfd != AT_FDCWD)
+    return -ENOSYS;
+  return flags & AT_SYMLINK_NOFOLLOW ? sys_lstat(path, st)
+                                     : sys_stat(path, st);
+}

@@ -1,5 +1,5 @@
 /*
- * Syscalls: clock_gettime and gettimeofday.
+ * Syscalls: clock_gettime, gettimeofday and time.
  *
  * Time comes from the HPET counter, so it is time since boot: there is no
  * RTC read yet, and CLOCK_REALTIME therefore starts at the 1970 epoch.
@@ -57,4 +57,14 @@ long sys_gettimeofday(void *tv, void *tz) {
   out->tv_sec = ns / 1000000000ULL;
   out->tv_usec = (ns % 1000000000ULL) / 1000;
   return 0;
+}
+
+/** time(2): whole seconds, also stored in *@p tloc when given. */
+long sys_time(int64_t *tloc) {
+  if (!hpet_is_initialized())
+    return -ENOSYS;
+  int64_t sec = hpet_get_time_ns() / 1000000000ULL;
+  if (tloc)
+    *tloc = sec;
+  return sec;
 }

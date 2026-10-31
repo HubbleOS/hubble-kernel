@@ -136,11 +136,8 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
   if (prot & PROT_EXEC)
     vm_flags |= VM_EXEC;
 
-  uint64_t pte_flags = PTE_PRESENT | PTE_USER;
-  if (prot & PROT_WRITE)
-    pte_flags |= PTE_WRITE;
-  if (!(prot & PROT_EXEC))
-    pte_flags |= PTE_NX;
+  /* The same flags fork() and mprotect() derive from the VMA. */
+  uint64_t pte_flags = vmm_pte_flags(&(vm_area_t){.flags = vm_flags});
 
   if (flags & MAP_ANONYMOUS) {
     for (uint64_t off = 0; off < size; off += PAGE_SIZE) {
@@ -154,6 +151,7 @@ long sys_mmap(uint64_t addr, size_t length, int prot, int flags, int fd,
         pmm_free_page(phys);
         return -1;
       }
+      vmm_set_flags(vaddr + off, pte_flags); /* read-only, NX: as asked */
     }
 
     vm_area_t *vma = kmalloc(sizeof(vm_area_t), GFP_ZERO);
@@ -255,20 +253,11 @@ long sys_munmap(uint64_t addr, size_t length) {
     vma->size = addr - vma->base;
   } else {
     /* Case 4: hole in the middle -> split into two VMAs. */
-    vm_area_t *tail = kmalloc(sizeof(vm_area_t), GFP_ZERO);
-    if (!tail) {
+    if (!vm_split_area(current->mm.vm_map, vma, end)) {
       printk(KERN_ERR "munmap: out of memory splitting vma\n");
       return -1;
     }
-    tail->base = end;
-    tail->size = vma_end - end;
-    tail->flags = vma->flags;
-    tail->type = vma->type;
-    tail->phys_base = vma->phys_base; /* only meaningful for VMA_DEVICE */
-
     vma->size = addr - vma->base;
-
-    vm_insert_area(current->mm.vm_map, tail);
   }
 
   return 0;

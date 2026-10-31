@@ -16,8 +16,6 @@
 
 #include "syscall_entry.h"
 
-#define AT_FDCWD (-100)
-
 const char *sys_abs_path(const char *path, char *buf, size_t size) {
   if (!path || size < 2)
     return NULL;
@@ -182,6 +180,13 @@ long sys_readlink(const char *path, char *buf, size_t size) {
     return -EINVAL;
   ABS_OR_FAIL(abs, path);
   return vfs_readlink(abs, buf, size);
+}
+
+long sys_readlinkat(int dirfd, const char *path, char *buf, size_t size) {
+  /* As openat: only absolute paths or paths relative to the cwd. */
+  if (path && path[0] != '/' && dirfd != AT_FDCWD)
+    return -ENOSYS;
+  return sys_readlink(path, buf, size);
 }
 
 /* Advisory whole-file locks. Accepted but not enforced: no lock is ever

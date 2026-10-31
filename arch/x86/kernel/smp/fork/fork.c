@@ -1,5 +1,6 @@
 /*
- * Syscall: fork() - create a copy-on-write clone of the calling process.
+ * Syscalls: fork() and clone() - create a copy-on-write clone of the
+ * calling process.
  *
  * The child gets its own task, its own copy of the parent's VMA
  * bookkeeping list, and a page table that shares every physical page with
@@ -24,14 +25,24 @@
 #include <smp/scheduler.h>
 #include <smp/task.h>
 
+#define USER_END 0x0000800000000000ULL
+
+static bool user_int_ptr(const int *p) {
+  return p && (uint64_t)p < USER_END - sizeof(int);
+}
+
 /**
- * @brief Handle the fork() syscall
+ * @brief Create the child process
  *
  * @param regs Raw register frame captured at the `syscall` instruction
+ * @param newsp The child's stack pointer, or 0 for the parent's
+ * @param parent_tid Gets the child's pid in both processes, or NULL
+ * @param child_tid Gets the child's pid in the child only, or NULL
  * @return Child PID to the parent (the child itself resumes with 0 in RAX,
  *         set directly in its cloned context rather than returned here)
  */
-long sys_fork(registers_t *regs) {
+static long fork_task(registers_t *regs, uint64_t newsp, int *parent_tid,
+                      int *child_tid) {
   task_t *parent = get_current_task();
 
   task_t *child = task_create(NULL, parent->sched.priority, true);
@@ -58,7 +69,7 @@ long sys_fork(registers_t *regs) {
    * to, with which flags and stack. */
   child->exec.context.rip = regs->rip;
   child->exec.context.rflags = regs->rflags;
-  child->exec.context.rsp = regs->rsp;
+  child->exec.context.rsp = newsp ? newsp : regs->rsp;
   child->exec.context.rcx = regs->rcx;
   child->exec.context.r11 = regs->r11;
 
@@ -76,7 +87,18 @@ long sys_fork(registers_t *regs) {
    * parent, write-protecting both sides' PTEs where the mapping was
    * writable, and give the child its own independent VMA list mirroring
    * it. */
+  /* Written before the address space is copied: parent_tid lands in
+   * both, and child_tid, put back right after, only in the child's copy. */
+  int pid = (int)child->id.pid, saved_child_tid = 0;
+  if (parent_tid)
+    *parent_tid = pid;
+  if (child_tid) {
+    saved_child_tid = *child_tid;
+    *child_tid = pid;
+  }
   child->mm.page_table = vmm_fork_pagemap(parent->mm.vm_map);
+  if (child_tid)
+    *child_tid = saved_child_tid;
   child->mm.vm_map = vm_map_clone(parent->mm.vm_map);
   if (!child->mm.page_table || !child->mm.vm_map) {
     printk(KERN_ERR "fork: failed to clone address space\n");
@@ -120,4 +142,39 @@ long sys_fork(registers_t *regs) {
 
   scheduler_add_task(child);
   return (long)child->id.pid;
+}
+
+long sys_fork(registers_t *regs) { return fork_task(regs, 0, NULL, NULL); }
+
+#define CLONE_VM 0x00000100
+#define CLONE_SIGHAND 0x00000800
+#define CLONE_VFORK 0x00004000
+#define CLONE_THREAD 0x00010000
+#define CLONE_SETTLS 0x00080000
+#define CLONE_PARENT_SETTID 0x00100000
+#define CLONE_CHILD_SETTID 0x01000000
+
+/**
+ * @brief clone(flags, newsp, parent_tid, child_tid, tls): a new process
+ *
+ * glibc's fork() is clone(SIGCHLD | CLONE_CHILD_SETTID | ...). Threads
+ * (a shared address space that stays shared) are not supported yet.
+ * CLONE_VM | CLONE_VFORK - posix_spawn(), system() - gets a copy instead
+ * of the shared memory: the child only execs or exits, so all that is
+ * lost is it reporting a failed exec through that memory. Other sharing
+ * flags (CLONE_FILES, CLONE_FS) get copies too. CLONE_CHILD_CLEARTID only
+ * matters for threads, and is ignored.
+ */
+long sys_clone(registers_t *regs) {
+  uint64_t flags = regs->rdi;
+  if (flags & (CLONE_THREAD | CLONE_SIGHAND | CLONE_SETTLS) ||
+      (flags & CLONE_VM && !(flags & CLONE_VFORK)))
+    return -ENOSYS;
+
+  int *parent_tid = flags & CLONE_PARENT_SETTID ? (int *)regs->rdx : NULL;
+  int *child_tid = flags & CLONE_CHILD_SETTID ? (int *)regs->r10 : NULL;
+  if ((parent_tid && !user_int_ptr(parent_tid)) ||
+      (child_tid && !user_int_ptr(child_tid)))
+    return -EFAULT;
+  return fork_task(regs, regs->rsi, parent_tid, child_tid);
 }

@@ -12,7 +12,7 @@
 #include <smp/task.h>
 
 /* Linux x86_64: number in RAX, arguments in RDI RSI RDX R10 R8 R9,
- * -errno back in RAX. fork, execve and rt_sigreturn need the whole trap
+ * -errno back in RAX. fork, clone, execve and rt_sigreturn need the whole trap
  * frame. */
 static uint64_t linux_dispatch(registers_t *regs) {
   if (regs->rax == SYS_rt_sigreturn)
@@ -21,6 +21,8 @@ static uint64_t linux_dispatch(registers_t *regs) {
    * vfork promises less of. */
   if (regs->rax == SYS_fork || regs->rax == SYS_vfork)
     return sys_fork(regs);
+  if (regs->rax == SYS_clone)
+    return sys_clone(regs);
   if (regs->rax == SYS_execve)
     return sys_execve(regs);
   return syscall_handler(regs->rax, regs->rdi, regs->rsi, regs->rdx,

@@ -29,3 +29,26 @@ long sys_read(int fd, char *buffer, size_t len) {
     return -EFAULT;
   return file->ops->read(file, buffer, len);
 }
+
+#define SEEK_SET 0
+#define SEEK_CUR 1
+
+/**
+ * @brief pread64: read at @p offset, leaving the file position as it was
+ *
+ * Seeks there and back, so - unlike Linux - not atomic against another
+ * user of the same open file. Pipes and sockets fail with -ESPIPE.
+ */
+long sys_pread64(int fd, char *buffer, size_t len, int64_t offset) {
+  if (offset < 0)
+    return -EINVAL;
+  long saved = sys_lseek(fd, 0, SEEK_CUR);
+  if (saved < 0)
+    return saved;
+  long r = sys_lseek(fd, (uint64_t)offset, SEEK_SET);
+  if (r < 0)
+    return r;
+  long n = sys_read(fd, buffer, len);
+  sys_lseek(fd, (uint64_t)saved, SEEK_SET);
+  return n;
+}

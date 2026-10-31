@@ -23,12 +23,43 @@ long sys_set_tid_address(int *tidptr) {
   return sys_gettid();
 }
 
+/* Robust futexes matter once threads can die holding a lock: there are
+ * no threads yet, so there is nothing to keep. glibc registers one at
+ * startup. */
+long sys_set_robust_list(void *head, size_t len) {
+  (void)head, (void)len;
+  return 0;
+}
+
+/* clone3: not supported; glibc falls back to clone. */
+long sys_clone3(void *args, size_t size) {
+  (void)args, (void)size;
+  return -ENOSYS;
+}
+
+/* Restartable sequences: not supported, which glibc checks for. */
+long sys_rseq(void *rseq, uint32_t len, int flags, uint32_t sig) {
+  (void)rseq, (void)len, (void)flags, (void)sig;
+  return -ENOSYS;
+}
+
 long sys_exit_group(int status) { return exit_stub(status); }
 static syscall_fn_t syscall_table[SYSCALL_COUNT] = {
     [SYS_write] = (syscall_fn_t)sys_write,
     [SYS_read] = (syscall_fn_t)sys_read,
     [SYS_mmap] = (syscall_fn_t)sys_mmap,
     [SYS_munmap] = (syscall_fn_t)sys_munmap,
+    [SYS_mprotect] = (syscall_fn_t)sys_mprotect,
+    [SYS_pread64] = (syscall_fn_t)sys_pread64,
+    [SYS_pwrite64] = (syscall_fn_t)sys_pwrite64,
+    [SYS_newfstatat] = (syscall_fn_t)sys_newfstatat,
+    [SYS_readlinkat] = (syscall_fn_t)sys_readlinkat,
+    [SYS_set_robust_list] = (syscall_fn_t)sys_set_robust_list,
+    [SYS_getrandom] = (syscall_fn_t)sys_getrandom,
+    [SYS_rseq] = (syscall_fn_t)sys_rseq,
+    [SYS_clone3] = (syscall_fn_t)sys_clone3,
+    [SYS_futex] = (syscall_fn_t)sys_futex,
+    [SYS_time] = (syscall_fn_t)sys_time,
     [SYS_open] = (syscall_fn_t)sys_open,
     [SYS_stat] = (syscall_fn_t)sys_stat,
     [SYS_lstat] = (syscall_fn_t)sys_lstat,
@@ -125,7 +156,7 @@ static syscall_fn_t syscall_table[SYSCALL_COUNT] = {
 uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
                          uint64_t a4, uint64_t a5, uint64_t a6) {
   if (num >= SYSCALL_COUNT || !syscall_table[num]) {
-    printk(KERN_ERR "[SYSCALL] Invalid syscall: %d\n", num);
+    printk(KERN_ERR "[SYSCALL] Invalid syscall: %d (%lx, %lx, %lx, %lx)\n", num, a1, a2, a3, a4);
     return -ENOSYS;
   }
   // printk(KERN_DEBUG "[SYSCALL] %d called with args: %llu, %llu, %llu, %llu,

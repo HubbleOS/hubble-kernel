@@ -246,6 +246,15 @@ int vmm_unmap_page_from(uint64_t *pml4_phys, uint64_t va);
 uint64_t *vmm_fork_pagemap(vm_map_t *parent_map);
 
 /**
+ * @brief The PTE flags a VMA's protection asks for
+ *
+ * Present, plus user unless the VMA allows no access at all (PROT_NONE),
+ * write for VM_WRITE, NX without VM_EXEC. Copy-on-write and caching bits
+ * are up to the caller.
+ */
+uint64_t vmm_pte_flags(const vm_area_t *vma);
+
+/**
  * @brief Resolve a copy-on-write page fault
  *
  * @param va Faulting virtual address (CR2)

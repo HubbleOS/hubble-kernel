@@ -14,11 +14,14 @@
 #define SYS_poll 7
 #define SYS_lseek 8
 #define SYS_mmap 9
+#define SYS_mprotect 10
 #define SYS_munmap 11
 #define SYS_brk 12
 #define SYS_rt_sigaction 13
 #define SYS_rt_sigprocmask 14
 #define SYS_rt_sigreturn 15
+#define SYS_pread64 17
+#define SYS_pwrite64 18
 #define SYS_pause 34
 #define SYS_sendfile 40
 #define SYS_kill 62
@@ -26,6 +29,8 @@
 #define SYS_rt_sigtimedwait 128
 #define SYS_rt_sigsuspend 130
 #define SYS_tkill 200
+#define SYS_time 201
+#define SYS_futex 202
 #define SYS_restart_syscall 219
 #define SYS_tgkill 234
 #define SYS_ioctl 16
@@ -33,6 +38,7 @@
 #define SYS_writev 20
 #define SYS_access 21
 #define SYS_nanosleep 35
+#define SYS_clone 56
 #define SYS_fork 57
 #define SYS_vfork 58
 #define SYS_execve 59
@@ -77,6 +83,12 @@
 #define SYS_getdents64 217
 #define SYS_clock_gettime 228
 #define SYS_openat 257
+#define SYS_newfstatat 262
+#define SYS_readlinkat 267
+#define SYS_set_robust_list 273
+#define SYS_getrandom 318
+#define SYS_rseq 334
+#define SYS_clone3 435
 #define SYS_getcwd 79
 #define SYS_chdir 80
 #define SYS_pipe 22

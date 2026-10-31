@@ -233,7 +233,13 @@ void isr_handler(registers_t *regs) {
   if (regs->int_no == 14 && (regs->err_code & 0x3) == 0x3) {
     uint64_t fault_addr;
     asm volatile("mov %%cr2, %0" : "=r"(fault_addr));
-    if (fault_addr < 0x0000800000000000ULL && vmm_resolve_cow(fault_addr))
+    /* Only where writing is allowed: mprotect() can make a copy-on-write
+     * page read-only, and the copy would make it writable again. */
+    task_t *t = get_current_task();
+    vm_area_t *vma = t && t->mm.vm_map ? vm_find_area(t->mm.vm_map, fault_addr)
+                                       : NULL;
+    if (fault_addr < 0x0000800000000000ULL &&
+        (!vma || vma->flags & VM_WRITE) && vmm_resolve_cow(fault_addr))
       return;
   }
 

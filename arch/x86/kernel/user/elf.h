@@ -57,6 +57,8 @@ typedef struct {
   void *tls_init;
 
   uint64_t initial_brk;
+  uint64_t phdr;  /* the program headers' address once loaded (AT_PHDR), or 0 */
+  uint16_t phnum; /* how many (AT_PHNUM) */
   uint8_t osabi; /* e_ident[EI_OSABI]: which OS the binary was built for */
 } elf_image_t;
 

@@ -27,6 +27,7 @@
 #define PAGE_SIZE 4096
 
 #define PT_LOAD 0x1
+#define PT_PHDR 0x6
 #define PT_TLS 0x7
 #define PF_X 0x1
 #define PF_W 0x2
@@ -259,6 +260,15 @@ int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm,
   uint64_t max_vaddr_end = 0;
   for (uint16_t i = 0; i < ehdr.e_phnum; ++i) {
     Elf64_Phdr *p = &phdrs[i];
+    /* Where the headers are in memory: given by PT_PHDR, or found in the
+     * segment that loads the start of the file. */
+    if (p->p_type == PT_PHDR)
+      entry_out->phdr = p->p_vaddr;
+    else if (p->p_type == PT_LOAD && !entry_out->phdr &&
+             ehdr.e_phoff >= p->p_offset &&
+             ehdr.e_phoff + ph_size <= p->p_offset + p->p_filesz)
+      entry_out->phdr = p->p_vaddr + (ehdr.e_phoff - p->p_offset);
+
     if (p->p_type == PT_LOAD) {
       printk(KERN_INFO "[ELF] HERE loading PHDR[%u]: vaddr=0x%llx "
                        "filesz=0x%llx memsz=0x%llx flags=0x%x\n",
@@ -321,6 +331,7 @@ int elf_load(const char *path, elf_image_t *entry_out, uint64_t *pm,
   vfs_close(f);
 
   entry_out->entry = ehdr.e_entry;
+  entry_out->phnum = ehdr.e_phnum;
   entry_out->initial_brk = PAGE_ALIGN_UP(max_vaddr_end);
   printk(KERN_OK "[ELF] Load complete, entry=0x%llx\n",
          (unsigned long long)entry_out->entry);

@@ -433,14 +433,12 @@ uint64_t *vmm_create_user_pagemap(void) {
   return (uint64_t *)new_phys;
 }
 
-/**
- * @brief Translate a VMA's protection flags into PTE flags
- *
- * @param vma VMA to translate
- * @return PTE_* flags (always PRESENT | USER)
- */
-static uint64_t pte_flags_for(vm_area_t *vma) {
-  uint64_t flags = PTE_PRESENT | PTE_USER;
+uint64_t vmm_pte_flags(const vm_area_t *vma) {
+  uint64_t flags = PTE_PRESENT;
+  /* PROT_NONE: still mapped (the kernel keeps track of the page), but
+   * not for user mode - x86 has no "present but no access" bit. */
+  if (vma->flags & (VM_READ | VM_WRITE | VM_EXEC))
+    flags |= PTE_USER;
   if (vma->flags & VM_WRITE)
     flags |= PTE_WRITE;
   if (!(vma->flags & VM_EXEC))
@@ -482,7 +480,7 @@ uint64_t *vmm_fork_pagemap(vm_map_t *parent_map) {
   new_pml4[RECURSIVE_PML4_INDEX] = pte_make(phys, PTE_PRESENT | PTE_WRITE);
 
   for (vm_area_t *vma = parent_map->areas; vma; vma = vma->next) {
-    uint64_t base_flags = pte_flags_for(vma);
+    uint64_t base_flags = vmm_pte_flags(vma);
 
     if (vma->type == VMA_DEVICE) {
       /* MMIO: shared physical memory, not pmm-managed, no COW. */

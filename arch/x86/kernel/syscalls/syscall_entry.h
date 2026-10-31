@@ -27,6 +27,8 @@ uint64_t syscall_handler(uint64_t num, uint64_t a1, uint64_t a2, uint64_t a3,
 
 #define SYS_PATH_MAX 512
 
+#define AT_FDCWD (-100) /* *at() syscalls: relative to the cwd */
+
 /**
  * @brief Absolute, normalised form of a user path
  *

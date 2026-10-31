@@ -82,6 +82,24 @@ vm_area_t *vm_find_area(vm_map_t *map, uint64_t addr) {
   return NULL;
 }
 
+/* -- VMA Splitting --------------------------------------------------------- */
+
+vm_area_t *vm_split_area(vm_map_t *map, vm_area_t *vma, uint64_t addr) {
+  vm_area_t *tail = kmalloc(sizeof(vm_area_t), GFP_ZERO);
+  if (!tail)
+    return NULL;
+  tail->base = addr;
+  tail->size = vma->base + vma->size - addr;
+  tail->flags = vma->flags;
+  tail->type = vma->type;
+  /* A device VMA maps linearly: the tail starts further into it. */
+  tail->phys_base =
+      vma->type == VMA_DEVICE ? vma->phys_base + (addr - vma->base) : 0;
+  vma->size = addr - vma->base;
+  vm_insert_area(map, tail);
+  return tail;
+}
+
 /* -- Free Range Search ----------------------------------------------------- */
 
 /**

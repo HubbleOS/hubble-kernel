@@ -1,5 +1,6 @@
 #include <hubble/errno.h>
 #include <hubble/syscalls.h>
+#include <mm/kmalloc.h>
 #include <msr.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
@@ -20,6 +21,14 @@ long arch_prctl(long a1, long a2, long a3, long a4, long a5, long a6) {
   case ARCH_SET_FS:
     if ((uint64_t)a2 >= USER_ADDR_END)
       return -EPERM;
+    /* The program has its own thread pointer now (libc start-up does
+     * this): the TLS block exec made for it is no longer used, and fork
+     * must leave %fs alone - the memory behind it is the program's,
+     * copied with the rest. */
+    if (current_task->mm.tls_size) {
+      kfree((void *)current_task->mm.fs_base);
+      current_task->mm.tls_size = 0;
+    }
     current_task->mm.fs_base = a2;
     wrmsr(MSR_FS_BASE, (uint64_t)a2);
     return 0;

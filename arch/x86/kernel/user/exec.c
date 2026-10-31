@@ -9,6 +9,7 @@
 
 #include <asm.h>
 #include <hubble/printk.h>
+#include <hubble/random.h>
 #include <hubble/string.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
@@ -20,11 +21,29 @@
 #include <mm/kmalloc.h>
 #include <syscalls/abi.h>
 
+/* Auxiliary vector entries (elf.h): what the C library learns about
+ * itself and the system at startup. */
 #define AT_NULL 0
+#define AT_PHDR 3
+#define AT_PHENT 4
+#define AT_PHNUM 5
+#define AT_PAGESZ 6
+#define AT_BASE 7
+#define AT_FLAGS 8
+#define AT_ENTRY 9
+#define AT_UID 11
+#define AT_EUID 12
+#define AT_GID 13
+#define AT_EGID 14
+#define AT_CLKTCK 17
+#define AT_SECURE 23
 #define AT_RANDOM 25
+#define AT_EXECFN 31
 
+/* argc, argv, envp and the auxiliary vector, as the x86_64 ABI lays them
+ * out from the initial rsp up; the strings and AT_RANDOM's bytes above. */
 uint64_t build_user_stack(uint64_t stack_top, char *const argv[],
-                          char *const envp[]) {
+                          char *const envp[], const elf_image_t *image) {
   int argc = 0;
   if (argv)
     while (argv[argc])
@@ -60,16 +79,41 @@ uint64_t build_user_stack(uint64_t stack_top, char *const argv[],
 
   sp = (uint8_t *)((uintptr_t)sp & ~0xFULL);
   sp -= 16;
-  uint8_t *random_bytes = sp;
-  for (int i = 0; i < 16; i++)
-    random_bytes[i] = (uint8_t)(i * 0x9E + 0x37);
+  uint8_t *random_bytes = sp; /* the C library's stack canary and seeds */
+  get_random_bytes(random_bytes, 16);
 
+  uint64_t auxv[][2] = {
+      {AT_PHDR, image->phdr},
+      {AT_PHENT, sizeof(Elf64_Phdr)},
+      {AT_PHNUM, image->phnum},
+      {AT_PAGESZ, PAGE_SIZE},
+      {AT_BASE, 0}, /* no interpreter */
+      {AT_FLAGS, 0},
+      {AT_ENTRY, image->entry},
+      {AT_UID, 0},
+      {AT_EUID, 0},
+      {AT_GID, 0},
+      {AT_EGID, 0},
+      {AT_CLKTCK, 100},
+      {AT_SECURE, 0},
+      {AT_RANDOM, (uint64_t)random_bytes},
+      {AT_EXECFN, argc ? argv_ptrs[0] : 0},
+      {AT_NULL, 0},
+  };
+  int nauxv = sizeof(auxv) / sizeof(auxv[0]);
+  if (!image->phdr) /* where the headers are is unknown: leave them out */
+    auxv[0][0] = auxv[1][0] = auxv[2][0] = AT_FLAGS;
+
+  /* rsp must be 16-byte aligned at entry: pad so that argc, the pointer
+   * arrays and the auxv end up there. */
   uint64_t *usp = (uint64_t *)((uintptr_t)sp & ~0xFULL);
+  if ((1 + argc + 1 + envc + 1 + nauxv * 2) % 2)
+    *--usp = 0;
 
-  *--usp = 0;                      // AT_NULL value
-  *--usp = AT_NULL;                // AT_NULL type
-  *--usp = (uint64_t)random_bytes; // AT_RANDOM value
-  *--usp = AT_RANDOM;              // AT_RANDOM type
+  for (int i = nauxv - 1; i >= 0; i--) {
+    *--usp = auxv[i][1];
+    *--usp = auxv[i][0];
+  }
 
   *--usp = 0;
   for (int i = envc - 1; i >= 0; i--)
@@ -211,7 +255,7 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
 
   uint64_t new_sp =
       build_user_stack(task->exec.context.rsp, argv ? argv : default_argv,
-                       envp ? envp : default_envp);
+                       envp ? envp : default_envp, image);
 
   task->exec.context.rsp = new_sp;
 

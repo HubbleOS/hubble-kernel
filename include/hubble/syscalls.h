@@ -33,12 +33,20 @@ long sys_lstat(const char *path, struct stat *st);
 long sys_fstat(int fd, struct stat *st);
 long sys_writev(int fd, struct iovec *iov, int iovcnt);
 long sys_readv(int fd, struct iovec *iov, int iovcnt);
-long sys_mprotect(void *addr, size_t len, int prot);
 long arch_prctl(long a1, long a2, long a3, long a4, long a5, long a6);
 long sys_munmap(uint64_t addr, size_t length);
+long sys_mprotect(uint64_t addr, size_t len, int prot);
+long sys_pread64(int fd, char *buf, size_t count, int64_t offset);
+long sys_pwrite64(int fd, const char *buf, size_t count, int64_t offset);
+long sys_newfstatat(int dirfd, const char *path, struct stat *st, int flags);
+long sys_readlinkat(int dirfd, const char *path, char *buf, size_t size);
+long sys_set_robust_list(void *head, size_t len);
+long sys_rseq(void *rseq, uint32_t len, int flags, uint32_t sig);
+long sys_getrandom(void *buf, size_t len, unsigned int flags);
 
 typedef struct registers registers_t;
 long sys_fork(registers_t *regs);
+long sys_clone(registers_t *regs);
 long sys_execve(registers_t *regs);
 long sys_wait4(int pid, int *status, int options, void *rusage);
 
@@ -134,4 +142,9 @@ long sys_nanosleep(const struct kernel_timespec *req,
                    struct kernel_timespec *rem);
 long sys_clock_gettime(int clock_id, void *ts);
 long sys_gettimeofday(void *tv, void *tz);
+long sys_time(int64_t *tloc);
+long sys_futex(uint32_t *uaddr, int op, uint32_t val,
+               const struct kernel_timespec *timeout, uint32_t *uaddr2,
+               uint32_t val3);
+long sys_clone3(void *args, size_t size);
 long exit_stub(long a1);

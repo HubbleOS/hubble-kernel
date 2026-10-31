@@ -140,6 +140,11 @@ long sys_execve(registers_t *regs) {
 
   kfree(image);
 
+  /* The new program starts with clean registers, as on Linux: the ABI
+   * gives %rdx at entry a meaning (a function for libc to register with
+   * atexit, 0 for none), and glibc called whatever the old program left
+   * there when it exited. */
+  memset(regs, 0, offsetof(registers_t, int_no));
   regs->rip = new_rip;
   regs->rsp = new_rsp;
   /* Handlers were addresses in the old program. */

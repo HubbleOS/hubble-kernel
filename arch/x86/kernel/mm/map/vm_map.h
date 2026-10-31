@@ -97,6 +97,19 @@ void vm_remove_area(vm_map_t *map, vm_area_t *vma);
 vm_area_t *vm_find_area(vm_map_t *map, uint64_t addr);
 
 /**
+ * @brief Split a VMA in two at a page boundary
+ *
+ * @p vma keeps [base, addr); a new VMA with the same type and flags gets
+ * [addr, end) and is inserted after it.
+ *
+ * @param map Map holding @p vma
+ * @param vma VMA to split
+ * @param addr Page-aligned address strictly inside @p vma
+ * @return The new upper part, or NULL if out of memory
+ */
+vm_area_t *vm_split_area(vm_map_t *map, vm_area_t *vma, uint64_t addr);
+
+/**
  * @brief Find a free address range of the given size
  *
  * @param map Map to search
