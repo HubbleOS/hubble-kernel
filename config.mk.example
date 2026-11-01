@@ -1,0 +1,81 @@
+# HubbleOS build configuration
+#
+# Copy this file to config.mk (or run `make config`, which does it for you)
+# and change what you need. config.mk is not committed, so your paths stay
+# yours. Anything here can also be given on the command line for one build:
+#
+#   make run QEMU_ACCEL=tcg CONFIG_GUI=n
+#
+# `make config` prints the settings in effect and which tools were found.
+#
+# Options marked y/n/auto:
+#   y     build it; stop with an error when its compiler or files are missing
+#   n     never build it
+#   auto  build it when its compiler or files are found (the default)
+
+# ---------------------------------------------------------------------------
+# Kernel
+# ---------------------------------------------------------------------------
+
+# Cross toolchain prefix. A bare prefix is looked up in PATH; give a full
+# path when the toolchain is somewhere else.
+# CROSS := x86_64-elf-
+# CROSS := $(HOME)/opt/cross/bin/x86_64-elf-
+
+# 1: -O3, no debug info. 0: -Og with debug info (the default).
+# RELEASE := 0
+
+# Parallel compile jobs (default: number of CPUs).
+# JOBS := 8
+
+# ---------------------------------------------------------------------------
+# Userland (the initramfs, `make usr`)
+# ---------------------------------------------------------------------------
+
+# Static musl compiler for the demos and the GUI. Found in PATH or in
+# ~/opt/x86_64-linux-musl-cross by default; get one from https://musl.cc
+# MUSL_CC := $(HOME)/opt/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc
+
+# mingw-w64 compiler for the Windows test programs (usr/win).
+# MINGW_CC := x86_64-w64-mingw32-gcc
+
+# Busybox: everything in BUSYBOX_DIR goes to the image root, and the image
+# boots busybox init. Without it, the minimal /init from usr/init.c runs.
+# CONFIG_BUSYBOX := auto
+# BUSYBOX_DIR := $(ROOT_DIR)/busy
+
+# Linux-ABI demo programs (usr/demos) and /bin/peload. Needs MUSL_CC.
+# CONFIG_DEMOS := auto
+
+# The desktop (/bin/desktop) and its GUI apps (usr/apps/<name>). Needs MUSL_CC.
+# CONFIG_GUI := auto
+# GUI_APPS := panel term
+
+# Windows test programs (usr/win/*.exe), run by peload. Needs MINGW_CC.
+# CONFIG_WIN := auto
+
+# Test disk out/disk.img (`make disk`, also built by `make usr`): GPT with a
+# FAT32 partition and an ext2 one, which the kernel mounts at /ext2. The
+# files in usr/disk/ go on both. Needs mke2fs, mkfs.fat and mcopy; no root.
+# CONFIG_DISK := auto
+# DISK_FAT_MB := 64
+# DISK_EXT2_MB := 64
+
+# ---------------------------------------------------------------------------
+# QEMU (`make run`, `make debug`, `make release`)
+# ---------------------------------------------------------------------------
+
+# kvm (Linux), hvf (macOS), tcg (software, works everywhere, slow), or auto:
+# kvm when /dev/kvm is usable, hvf on macOS, else tcg.
+# QEMU_ACCEL := auto
+# QEMU_MEM := 800M
+# QEMU_SMP := 2
+
+# Disk image attached as the IDE primary master (empty: none).
+# QEMU_DISK := $(ROOT_DIR)/out/disk.img
+
+# Extra QEMU arguments, e.g. a window instead of serial-only:
+# QEMU_ARGS := -display gtk
+
+# Kernel command line, e.g. CMDLINE := init=/bin/sh
+# CMDLINE :=

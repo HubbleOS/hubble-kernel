@@ -9,6 +9,15 @@
 #   --debug     Enable GDB debug mode (adds -s -S flags)
 #   --iso PATH  Use specific ISO (default: out/kernel-dev.iso)
 #
+# Environment (set by `make run` from config.mk, see config.mk.example):
+#   QEMU_ACCEL  kvm, hvf, tcg or auto (default: kvm if /dev/kvm is usable,
+#               hvf on macOS, else tcg)
+#   QEMU_MEM    memory (default 800M)
+#   QEMU_SMP    CPUs (default 2)
+#   QEMU_ARGS   extra arguments, split on spaces
+#   QEMU_DISK   disk image for the IDE primary master, if it exists
+#               (default: out/disk.img, from `make disk`)
+#
 
 set -euo pipefail
 
@@ -50,24 +59,51 @@ if ! command -v qemu-system-x86_64 &> /dev/null; then
     exit 1
 fi
 
+ACCEL="${QEMU_ACCEL:-auto}"
+if [ "$ACCEL" = auto ]; then
+    if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+        ACCEL=kvm
+    elif [ "$(uname -s)" = Darwin ]; then
+        ACCEL=hvf
+    else
+        ACCEL=tcg
+    fi
+fi
+case "$ACCEL" in
+    kvm|hvf) ACCEL_ARGS=(-accel "$ACCEL" -cpu host) ;;
+    tcg)     ACCEL_ARGS=(-accel tcg,thread=multi -cpu max) ;;
+    *)
+        echo "ERROR: QEMU_ACCEL must be kvm, hvf, tcg or auto, not '$ACCEL'"
+        exit 1
+        ;;
+esac
+
+read -ra EXTRA_ARGS <<< "${QEMU_ARGS:-}"
+
+DISK_ARGS=()
+DISK="${QEMU_DISK-$ROOT_DIR/out/disk.img}"
+if [ -n "$DISK" ] && [ -f "$DISK" ]; then
+    DISK_ARGS=(-drive "file=$DISK,format=raw,if=ide,index=0")
+fi
+
 # Build QEMU command
 QEMU_CMD=(
     qemu-system-x86_64
-    -enable-kvm
+    "${ACCEL_ARGS[@]}"
     -M pc
-    # -cpu Haswell
-    -cpu host
-    -m 800M
+    -m "${QEMU_MEM:-800M}"
     # -d int,cpu_reset
     # -D /tmp/qemu.log
-    -smp 2
-    # -accel tcg,thread=on
+    -smp "${QEMU_SMP:-2}"
     -cdrom "$ISO_PATH"
+    -boot d
+    ${DISK_ARGS[@]+"${DISK_ARGS[@]}"}
     -serial stdio
     -debugcon file:/tmp/debugcon.log
     -no-reboot
     -no-shutdown
     -device qemu-xhci,id=xhci -device usb-kbd,bus=xhci.0
+    ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
 )
 
 if [ "$DEBUG" = true ]; then

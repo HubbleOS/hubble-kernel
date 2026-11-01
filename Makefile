@@ -10,6 +10,11 @@ export Q
 ROOT_DIR := $(abspath .)
 export ROOT_DIR
 
+# Local settings (toolchain paths, optional userland parts, QEMU): copy
+# config.mk.example to config.mk, or run `make config`. Command-line
+# variables still win over it.
+-include $(ROOT_DIR)/config.mk
+
 ARCH ?= x86
 OUT_DIR ?= $(abspath out)
 ARCH_DIR := $(abspath arch/$(ARCH))
@@ -62,7 +67,7 @@ JOBS ?= $(shell sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
 # ---------------------------------------------------------------------------
 
 ifeq ($(ARCH),x86)
-	CROSS    = x86_64-elf-
+	CROSS   ?= x86_64-elf-
 	CC       = $(CROSS)gcc
 	AS       = $(CROSS)as
 	LD       = $(CROSS)ld
@@ -73,7 +78,7 @@ ifeq ($(ARCH),x86)
 endif
 
 ifeq ($(ARCH),arm64)
-	CROSS    = aarch64-elf-
+	CROSS   ?= aarch64-elf-
 	CC       = $(CROSS)gcc
 	AS       = $(CROSS)as
 	LD       = $(CROSS)ld
@@ -83,7 +88,7 @@ ifeq ($(ARCH),arm64)
 	ASMFLAGS := -g -march=armv8-a
 endif
 
-export LD CC AS AR OBJCOPY ASM CFLAGS ASMFLAGS
+export LD CC AS AR OBJCOPY ASM CFLAGS ASMFLAGS CROSS
 export ARCH OUT_DIR BUILD_DIR ARCH_DIR TOOLS_DIR BUILD_TOOL
 
 # ---------------------------------------------------------------------------
@@ -343,6 +348,10 @@ PHONY += usr
 usr:
 	@$(MAKE) -C usr KERNEL_PATH=$(ROOT_DIR) OUT_DIR=$(OUT_DIR)
 
+PHONY += disk
+disk:
+	@$(MAKE) -C usr KERNEL_PATH=$(ROOT_DIR) OUT_DIR=$(OUT_DIR) disk
+
 # ---------------------------------------------------------------------------
 # Targets
 # ---------------------------------------------------------------------------
@@ -434,6 +443,16 @@ release-build:
 # Run kernel in QEMU (requires Limine)
 # ---------------------------------------------------------------------------
 
+# Read by scripts/qemu/run-qemu.sh and build-minimal-iso.sh.
+QEMU_ACCEL ?= auto
+QEMU_MEM   ?= 800M
+QEMU_SMP   ?= 2
+QEMU_ARGS  ?=
+CMDLINE    ?=
+# The test disk from `make usr` / `make disk`, attached when it exists.
+QEMU_DISK  ?= $(if $(filter n,$(CONFIG_DISK)),,$(OUT_DIR)/disk.img)
+export QEMU_ACCEL QEMU_MEM QEMU_SMP QEMU_ARGS QEMU_DISK CMDLINE
+
 PHONY += run
 run: build usr
 	@bash $(ROOT_DIR)/scripts/qemu/build-minimal-iso.sh $(KERNEL_ELF) $(OUT_DIR)/kernel-dev.iso
@@ -481,19 +500,42 @@ mkvars:
 	@echo "__obj_y_dirs = $(__obj_y_dirs)"
 	@echo "subdirs      = $(subdirs)"
 
+# ---------------------------------------------------------------------------
+# Configuration: create config.mk from the example, show what is in effect
+# ---------------------------------------------------------------------------
+
+tool = $(if $(shell command -v $(1) 2>/dev/null),$(shell command -v $(1)),NOT FOUND ($(1)))
+
+PHONY += config
+config:
+	@[ -e $(ROOT_DIR)/config.mk ] || { cp $(ROOT_DIR)/config.mk.example $(ROOT_DIR)/config.mk; \
+		echo "Created config.mk from config.mk.example; edit it to change the settings below."; echo; }
+	@echo "Kernel:"
+	@printf '  %-15s %s\n' ARCH "$(ARCH)" BUILD "$(BUILD_TYPE) (RELEASE=$(RELEASE))" JOBS "$(JOBS)"
+	@printf '  %-15s %s\n' CC "$(call tool,$(CC))" LD "$(call tool,$(LD))" ASM "$(call tool,$(ASM))"
+	@printf '  %-15s %s\n' cargo "$(call tool,cargo)" limine "$(call tool,limine)"
+	@echo
+	@$(MAKE) --no-print-directory -C usr KERNEL_PATH=$(ROOT_DIR) OUT_DIR=$(OUT_DIR) config
+	@echo
+	@echo "QEMU (make run):"
+	@printf '  %-15s %s\n' qemu "$(call tool,qemu-system-x86_64)" QEMU_ACCEL "$(QEMU_ACCEL)" \
+		QEMU_MEM "$(QEMU_MEM)" QEMU_SMP "$(QEMU_SMP)" QEMU_DISK "$(QEMU_DISK)" QEMU_ARGS "$(QEMU_ARGS)" CMDLINE "$(CMDLINE)"
+
 PHONY += help
 help:
 	@echo "Usage: make [TARGET] [ARCH=<arch>]"
 	@echo ""
 	@echo "Targets:"
 	@echo "  build        Build kernel ELF"
-	@echo "  usr          Build minimal test userland"
+	@echo "  usr          Build minimal test userland (and the test disk)"
+	@echo "  disk         Build the test disk out/disk.img (FAT32 + ext2)"
 	@echo "  run          Build kernel + userland and run in QEMU"
 	@echo "  debug        Build debug kernel + userland and run in QEMU"
 	@echo "  release      Build release kernel + userland and run in QEMU"
 	@echo "  gdb          Connect GDB to running QEMU debug session"
 	@echo "  clean        Remove build artifacts"
 	@echo "  rebuild      Clean and rebuild"
+	@echo "  config       Create config.mk and show the settings and tools in use"
 	@echo ""
 	@echo "Architectures: ${SUPPORTED_ARCHES}"
 
