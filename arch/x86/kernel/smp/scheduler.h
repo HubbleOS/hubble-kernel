@@ -160,7 +160,7 @@ void schedule_irq(registers_t *regs);
  * @brief Make the CPU that runs @p task schedule now, not at its next tick.
  *
  * For a task just made ready from another CPU, which may be idle in hlt:
- * without this the task waits up to a whole tick (10 ms) per wakeup.
+ * without this the task waits up to a whole tick (10 ms at 100 Hz) per wakeup.
  */
 void scheduler_kick(task_t *task);
 

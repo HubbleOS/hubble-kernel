@@ -88,6 +88,55 @@ void do_initcalls(void) {
 extern void rust_init(void);
 extern int rust_sum(int a, int b);
 
+/* -- Kernel command line ------------------------------------------------ */
+
+/**
+ * @brief Find "@p key=value" or a bare "@p key" on the kernel command line
+ *        and copy the value ("" for a bare key) to @p buf
+ * @return false if the command line has no such option
+ */
+static bool cmdline_get(const char *key, char *buf, size_t size) {
+  if (!limine_cmdline_req.response || !limine_cmdline_req.response->cmdline)
+    return false;
+
+  size_t keylen = strlen(key);
+  for (const char *p = limine_cmdline_req.response->cmdline; *p;) {
+    while (*p == ' ')
+      p++;
+    const char *end = p;
+    while (*end && *end != ' ')
+      end++;
+
+    size_t len = end - p;
+    if (len >= keylen && !strncmp(p, key, keylen) &&
+        (len == keylen || p[keylen] == '=')) {
+      const char *val = len > keylen ? p + keylen + 1 : end;
+      size_t n = end - val;
+      if (n >= size)
+        n = size - 1;
+      memcpy(buf, val, n);
+      buf[n] = '\0';
+      return true;
+    }
+    p = end;
+  }
+  return false;
+}
+
+/**
+ * @brief Command-line options that change the boot itself:
+ *   quiet       only errors and warnings on screen (loglevel=5)
+ *   loglevel=N  screen log level, 0-8 (CONFIG_LOGLEVEL by default)
+ */
+static void cmdline_early(void) {
+  char val[8];
+  if (cmdline_get("quiet", val, sizeof(val)))
+    printk_set_console_level(CONSOLE_LOGLEVEL_QUIET);
+  if (cmdline_get("loglevel", val, sizeof(val)) && val[0] >= '0' &&
+      val[0] <= '8' && !val[1])
+    printk_set_console_level(val[0] - '0');
+}
+
 /**
  * @brief Architecture-independent kernel entry point.
  *
@@ -183,6 +232,7 @@ void start_kernel(void) {
     printk(KERN_WARNING "[boot] no framebuffer provided\n");
     printk_init(NULL);
   }
+  cmdline_early();
 
   /* -- Limine: RSDP --------------------------------------------------- */
   /* Limine returns HHDM virtual address; acpi_init expects physical. */
@@ -247,6 +297,43 @@ void start_kernel(void) {
     hlt();
 }
 
+/* -- Boot modules --------------------------------------------------------- */
+
+#ifndef CONFIG_BOOT_MODULES
+#define CONFIG_BOOT_MODULES "input tty usb procfs video"
+#endif
+
+/**
+ * @brief Load /modules/<name>.ko for each name in "modules=" on the command
+ *        line (comma-separated), or else in CONFIG_BOOT_MODULES (BOOT_MODULES
+ *        in config.mk). Order matters: usb registers keyboards with input.
+ */
+static void load_boot_modules(void) {
+  char list[256] = CONFIG_BOOT_MODULES;
+  cmdline_get("modules", list, sizeof(list));
+
+  for (char *p = list; *p;) {
+    while (*p == ' ' || *p == ',')
+      p++;
+    char *end = p;
+    while (*end && *end != ' ' && *end != ',')
+      end++;
+    if (end == p)
+      break;
+    char path[64];
+    size_t n = end - p;
+    if (n > sizeof(path) - sizeof("/modules/.ko"))
+      n = sizeof(path) - sizeof("/modules/.ko");
+    memcpy(path, "/modules/", 9);
+    memcpy(path + 9, p, n);
+    memcpy(path + 9 + n, ".ko", 4);
+    int err = module_load(path);
+    if (err < 0)
+      printk(KERN_ERR "module: cannot load %s (%d)\n", path, err);
+    p = end;
+  }
+}
+
 /* -- Starting init ------------------------------------------------------ */
 
 #define INIT_PATH_MAX 128
@@ -255,36 +342,6 @@ void start_kernel(void) {
 static const char *const default_inits[] = {
     "/init", "/sbin/init", "/etc/init", "/bin/init", "/bin/sh", NULL,
 };
-
-/**
- * @brief Copy the value of "@p key=" on the kernel command line to @p buf
- * @return false if the command line has no such option
- */
-static bool cmdline_get(const char *key, char *buf, size_t size) {
-  if (!limine_cmdline_req.response || !limine_cmdline_req.response->cmdline)
-    return false;
-
-  size_t keylen = strlen(key);
-  for (const char *p = limine_cmdline_req.response->cmdline; *p;) {
-    while (*p == ' ')
-      p++;
-    const char *end = p;
-    while (*end && *end != ' ')
-      end++;
-
-    if ((size_t)(end - p) > keylen && !strncmp(p, key, keylen) &&
-        p[keylen] == '=') {
-      size_t n = end - p - keylen - 1;
-      if (n >= size)
-        n = size - 1;
-      memcpy(buf, p + keylen + 1, n);
-      buf[n] = '\0';
-      return true;
-    }
-    p = end;
-  }
-  return false;
-}
 
 /**
  * @brief Start @p path as pid 1 on the console
@@ -317,7 +374,7 @@ static bool try_init(const char *path) {
  */
 static void start_init(void) {
   char path[INIT_PATH_MAX];
-  if (cmdline_get("init", path, sizeof(path))) {
+  if (cmdline_get("init", path, sizeof(path)) && path[0]) {
     if (try_init(path))
       return;
     printk(KERN_ERR "init: cannot run init=%s, trying the defaults\n", path);
@@ -355,11 +412,7 @@ void kmain_thread(void) {
     while (1)
       hlt();
   }
-  module_load("/modules/input.ko");
-  module_load("/modules/tty.ko");
-  module_load("/modules/usb.ko"); /* after input.ko: registers keyboards */
-  module_load("/modules/procfs.ko");
-  module_load("/modules/video.ko");
+  load_boot_modules();
 
   start_init();
 

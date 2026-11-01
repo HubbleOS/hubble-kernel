@@ -202,7 +202,7 @@ task_t *execv(const char *path, char *const argv[], char *const envp[]) {
     return NULL;
   }
 
-  /* Priority only sets the slice: BASE_SLICE + priority ticks at 100 Hz.
+  /* Priority only sets the slice: BASE_SLICE (50 ms) + priority ticks.
    * 200 gave every user process (and, through fork, its children) a 2 s
    * slice, so a CPU-bound program held its CPU for 2 s at a time. */
   task_t *task = task_create((void *)image->entry, 0, 1);

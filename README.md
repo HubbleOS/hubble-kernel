@@ -20,9 +20,12 @@ make config   # creates config.mk and shows which tools were found
 make run      # builds the kernel and the initramfs, boots it in QEMU
 ```
 
-`config.mk` holds your local settings and is not committed: where your toolchains live,
-which optional userland parts to build (each `y`, `n` or `auto`), and the QEMU accelerator,
-memory and CPU count. `config.mk.example` documents every option. Any option can also be
+`make menuconfig` edits it in menus, like the Linux kernel's (it needs
+[gum](https://github.com/charmbracelet/gum)). `config.mk` holds your local settings and is not committed: where your toolchains live,
+the optimization level and debug info, boot log levels, the timer frequency, which modules
+to build and load at boot, the kernel command line and init, which optional userland parts
+to build (each `y`, `n` or `auto`), and how QEMU runs (accelerator, memory, CPUs, display,
+serial, `-d` log, no-reboot/no-shutdown). Changing a kernel option rebuilds what it affects. `config.mk.example` documents every option. Any option can also be
 given for one build on the command line, e.g. `make run QEMU_ACCEL=tcg CONFIG_GUI=n`.
 
 `make usr` (and so `make run`) also builds `out/disk.img`, a test disk with a FAT32 and an

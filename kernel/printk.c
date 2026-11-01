@@ -36,7 +36,8 @@ static bool log_wrapped;
  */
 
 static void (*output_fn)(char c);
-static void (*color_output_fn)(char c, color_t color, bool screen);
+static void (*color_output_fn)(char c, color_t color, bool screen,
+                                bool serial);
 static void (*console_write)(const char *buf, size_t len, void *data);
 static void *console_user_data;
 
@@ -65,7 +66,8 @@ void printk_set_early_output() {
 /**
  * @brief Set the color-aware single-character output function.
  */
-void printk_set_color_output(void (*fn)(char c, color_t color, bool screen)) {
+void printk_set_color_output(void (*fn)(char c, color_t color, bool screen,
+                                         bool serial)) {
   color_output_fn = fn;
 }
 
@@ -167,8 +169,9 @@ static void log_buffer_append(const char *buf, size_t len) {
 
 /* -- Console log level -----------------------------------------------------
  *
- * Every message goes to the log buffer and the serial port; only those
- * more important than the console log level also reach the screen. As on
+ * Every message goes to the log buffer; those more important than the
+ * console log level also reach the screen, and those more important than
+ * the serial log level (CONFIG_LOGLEVEL_SERIAL) the serial port. As on
  * Linux, a message shows when its level < console_loglevel, so 8 shows
  * everything. KERN_OK ranks with KERN_INFO. A message without a level
  * continues the current line's level, or counts as a warning on a line
@@ -179,6 +182,7 @@ static void log_buffer_append(const char *buf, size_t len) {
 static int console_loglevel = CONSOLE_LOGLEVEL_BOOT;
 static int message_loglevel = DEFAULT_MESSAGE_LOGLEVEL;
 static bool message_on_screen = true;
+static bool message_on_serial = true;
 
 void printk_set_console_level(int level) {
   if (level < 0)
@@ -197,8 +201,9 @@ static void output_plain_string(const char *str, size_t len, color_t color) {
     if (message_on_screen)
       console_write(str, len, console_user_data);
   } else if (color_output_fn) {
-    for (size_t i = 0; i < len; i++)
-      color_output_fn(str[i], color, message_on_screen);
+    if (message_on_screen || message_on_serial)
+      for (size_t i = 0; i < len; i++)
+        color_output_fn(str[i], color, message_on_screen, message_on_serial);
   } else if (output_fn) {
     for (size_t i = 0; i < len; i++)
       output_fn(str[i]);
@@ -514,6 +519,7 @@ void vprintk(const char *fmt, va_list args) {
   else if (printk_at_line_start)
     message_loglevel = DEFAULT_MESSAGE_LOGLEVEL;
   message_on_screen = message_loglevel < console_loglevel;
+  message_on_serial = message_loglevel < CONFIG_LOGLEVEL_SERIAL;
 
   while (*fmt == '\n' || *fmt == '\r') {
     char c = *fmt++;
@@ -726,7 +732,7 @@ void printk_console_write(const char *buf, size_t len) {
     console_write(buf, len, console_user_data);
   } else if (color_output_fn) {
     for (size_t i = 0; i < len; i++)
-      color_output_fn(buf[i], COLOR_WHITE, true);
+      color_output_fn(buf[i], COLOR_WHITE, true, true);
   } else if (output_fn) {
     for (size_t i = 0; i < len; i++)
       output_fn(buf[i]);

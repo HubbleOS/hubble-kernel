@@ -286,7 +286,7 @@ void ap_entry(void) {
   asm volatile("mfence" ::: "memory");
 
   sti();
-  lapic_timer_init(100);
+  lapic_timer_init(CONFIG_TIMER_HZ);
 
   // ap_ready = true;
   while (1) {

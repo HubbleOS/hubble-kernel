@@ -14,6 +14,10 @@
 #include <higher_half.h>
 #include <hpet/hpet.h>
 #include <hubble/module.h>
+
+#ifndef CONFIG_USB_XHCI
+#define CONFIG_USB_XHCI 1
+#endif
 #include <hubble/printk.h>
 #include <hubble/string.h>
 #include <mm/kmalloc.h>
@@ -952,7 +956,11 @@ static struct pci_driver xhci_driver = {
     .probe = xhci_probe,
 };
 
-static int xhci_module_init(void) { return pci_register_driver(&xhci_driver); }
+static int xhci_module_init(void) {
+  if (!CONFIG_USB_XHCI) /* config.mk: CONFIG_USB_XHCI */
+    return 0;
+  return pci_register_driver(&xhci_driver);
+}
 
 module_init(xhci_module_init);
 MODULE_NAME("usb");

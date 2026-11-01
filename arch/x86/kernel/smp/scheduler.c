@@ -34,7 +34,8 @@
 
 #define CANARY 0xDEADBEEFCAFEBABEULL
 #define MAX_PRIO 255
-#define BASE_SLICE 5
+/* 50 ms in ticks (5 at 100 Hz); priority adds ticks on top. */
+#define BASE_SLICE (CONFIG_TIMER_HZ >= 20 ? CONFIG_TIMER_HZ / 20 : 1)
 #define USER_STACK_SIZE 0x10000
 
 /* -- Static data -------------------------------------------------------- */

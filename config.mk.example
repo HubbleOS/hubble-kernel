@@ -22,11 +22,65 @@
 # CROSS := x86_64-elf-
 # CROSS := $(HOME)/opt/cross/bin/x86_64-elf-
 
-# 1: -O3, no debug info. 0: -Og with debug info (the default).
+# 1: release build (out/release): -O3, no debug info. 0: -Og with debug
+# info (the default). OPT_LEVEL and DEBUG_INFO override either.
 # RELEASE := 0
+
+# Optimization level, -O<level>: g, 0, 1, 2, 3 or s (default: g, or 3
+# with RELEASE=1).
+# OPT_LEVEL := 2
+
+# Debug info (-g) for GDB: y or n (default: y, or n with RELEASE=1).
+# DEBUG_INFO := y
+
+# Log levels at boot, 0-8: a message shows when its level is below this.
+# 0 emerg, 1 alert, 2 crit, 3 err, 4 warning, 5 notice, 6 info, 7 debug;
+# 8 shows everything. CONFIG_LOGLEVEL is the screen's (also "loglevel=N"
+# or "quiet" on the kernel command line, /proc/loglevel at run time);
+# CONFIG_LOGLEVEL_SERIAL the serial port's.
+# CONFIG_LOGLEVEL := 8
+# CONFIG_LOGLEVEL_SERIAL := 8
+
+# Scheduler tick in Hz (time slices are 50 ms whatever it is).
+# CONFIG_TIMER_HZ := 100
+
 
 # Parallel compile jobs (default: number of CPUs).
 # JOBS := 8
+
+# ---------------------------------------------------------------------------
+# Modules (out/modules/*.ko, in the initramfs and on the test disk)
+# ---------------------------------------------------------------------------
+# As in Linux, each is y (built and loaded at boot), m (built, not loaded)
+# or n (not built). Boot loads them in the order below; "modules=a,b" on
+# the kernel command line replaces that list for one boot.
+# MOD_<NAME>_CFLAGS adds compiler flags for that module only (C modules).
+
+# input.ko: PS/2 keyboard and mouse, evdev, PC speaker.
+# CONFIG_MOD_INPUT := y
+# CONFIG_INPUT_KEYBOARD := y
+# CONFIG_INPUT_MOUSE := y
+# MOD_INPUT_CFLAGS := -DDEBUG
+
+# tty.ko: the console tty and ptys.
+# CONFIG_MOD_TTY := y
+# MOD_TTY_CFLAGS :=
+
+# usb.ko: USB keyboards and mice; needs input.
+# CONFIG_MOD_USB := y
+# CONFIG_USB_XHCI := y
+# MOD_USB_CFLAGS :=
+
+# procfs.ko (Rust): /proc.
+# CONFIG_MOD_PROCFS := y
+
+# video.ko: /dev/fb0, for the desktop.
+# CONFIG_MOD_VIDEO := y
+# MOD_VIDEO_CFLAGS :=
+
+# net.ko: e1000 network card.
+# CONFIG_MOD_NET := m
+# MOD_NET_CFLAGS :=
 
 # ---------------------------------------------------------------------------
 # Userland (the initramfs, `make usr`)
@@ -74,8 +128,26 @@
 # Disk image attached as the IDE primary master (empty: none).
 # QEMU_DISK := $(ROOT_DIR)/out/disk.img
 
-# Extra QEMU arguments, e.g. a window instead of serial-only:
-# QEMU_ARGS := -display gtk
+# Display: gtk, sdl, cocoa, none, ... (default: QEMU's own choice).
+# QEMU_DISPLAY := gtk
 
-# Kernel command line, e.g. CMDLINE := init=/bin/sh
-# CMDLINE :=
+# Where the serial port (the kernel log) goes: stdio, none, file:PATH, ...
+# QEMU_SERIAL := stdio
+
+# QEMU's -d log, e.g. int,cpu_reset or guest_errors (none: off), and the
+# file it goes to. It slows QEMU down; `make debug` leaves it off.
+# QEMU_LOG := int
+# QEMU_LOG_FILE := /tmp/qemu-kernel.log
+
+# y: stop on a triple fault instead of rebooting, and keep QEMU open after
+# a shutdown, so the last screen can be read. n: reboot / exit.
+# QEMU_NO_REBOOT := y
+# QEMU_NO_SHUTDOWN := y
+
+# Extra QEMU arguments, e.g. QEMU_ARGS := -device rtl8139
+# QEMU_ARGS :=
+
+# Kernel command line. Options: init=PATH, loglevel=N, quiet,
+# modules=a,b. INIT is a shortcut for init=.
+# CMDLINE := loglevel=5
+# INIT := /bin/sh

@@ -42,7 +42,8 @@ void printk_set_output(void (*fn)(char c));
 /**
  * @brief Set the colour-aware single-character output function.
  */
-void printk_set_color_output(void (*fn)(char c, color_t color, bool screen));
+void printk_set_color_output(void (*fn)(char c, color_t color, bool screen,
+                                         bool serial));
 
 /**
  * @brief Set which messages reach the screen: those with a level below
@@ -50,9 +51,18 @@ void printk_set_color_output(void (*fn)(char c, color_t color, bool screen));
  */
 void printk_set_console_level(int level);
 
-/* Everything is on screen while booting, where a hang leaves nothing
- * else to look at; init/main.c drops to QUIET when the shell starts. */
-#define CONSOLE_LOGLEVEL_BOOT 8
+/* The levels to start with: CONFIG_LOGLEVEL (the screen) and
+ * CONFIG_LOGLEVEL_SERIAL come from config.mk through the generated
+ * kconfig.h; 8 shows everything, which helps when a boot hangs.
+ * "loglevel=N" and "quiet" (QUIET) on the kernel command line, and
+ * /proc/loglevel later, change the screen's. */
+#ifndef CONFIG_LOGLEVEL
+#define CONFIG_LOGLEVEL 8
+#endif
+#ifndef CONFIG_LOGLEVEL_SERIAL
+#define CONFIG_LOGLEVEL_SERIAL 8
+#endif
+#define CONSOLE_LOGLEVEL_BOOT CONFIG_LOGLEVEL
 #define CONSOLE_LOGLEVEL_QUIET 5 /* errors and warnings */
 int printk_get_console_level(void);
 

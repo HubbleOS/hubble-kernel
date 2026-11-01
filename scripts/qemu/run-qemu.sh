@@ -17,6 +17,13 @@
 #   QEMU_ARGS   extra arguments, split on spaces
 #   QEMU_DISK   disk image for the IDE primary master, if it exists
 #               (default: out/disk.img, from `make disk`)
+#   QEMU_DISPLAY  -display backend, e.g. gtk, sdl, none (default: QEMU's)
+#   QEMU_SERIAL   -serial target (default stdio; none, file:PATH, ...)
+#   QEMU_LOG      -d items, e.g. int,cpu_reset (default int; none or empty: off)
+#   QEMU_LOG_FILE where -d writes (default /tmp/qemu-kernel.log)
+#   QEMU_NO_REBOOT, QEMU_NO_SHUTDOWN
+#               y (default): stop on a triple fault / keep the window
+#               after a shutdown, so the last screen stays readable
 #
 
 set -euo pipefail
@@ -86,22 +93,29 @@ if [ -n "$DISK" ] && [ -f "$DISK" ]; then
     DISK_ARGS=(-drive "file=$DISK,format=raw,if=ide,index=0")
 fi
 
+OPT_ARGS=()
+[ -n "${QEMU_DISPLAY:-}" ] && OPT_ARGS+=(-display "$QEMU_DISPLAY")
+[ "${QEMU_NO_REBOOT:-y}" = y ] && OPT_ARGS+=(-no-reboot)
+[ "${QEMU_NO_SHUTDOWN:-y}" = y ] && OPT_ARGS+=(-no-shutdown)
+# The -d log slows QEMU down a lot; not while debugging with GDB.
+LOG="${QEMU_LOG-int}"
+if [ -n "$LOG" ] && [ "$LOG" != none ] && [ "$DEBUG" = false ]; then
+    OPT_ARGS+=(-d "$LOG" -D "${QEMU_LOG_FILE:-/tmp/qemu-kernel.log}")
+fi
+
 # Build QEMU command
 QEMU_CMD=(
     qemu-system-x86_64
     "${ACCEL_ARGS[@]}"
     -M pc
     -m "${QEMU_MEM:-800M}"
-    # -d int,cpu_reset
-    # -D /tmp/qemu.log
     -smp "${QEMU_SMP:-2}"
     -cdrom "$ISO_PATH"
     -boot d
     ${DISK_ARGS[@]+"${DISK_ARGS[@]}"}
-    -serial stdio
+    -serial "${QEMU_SERIAL:-stdio}"
     -debugcon file:/tmp/debugcon.log
-    -no-reboot
-    -no-shutdown
+    ${OPT_ARGS[@]+"${OPT_ARGS[@]}"}
     -device qemu-xhci,id=xhci -device usb-kbd,bus=xhci.0
     ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
 )
@@ -112,7 +126,6 @@ if [ "$DEBUG" = true ]; then
     echo "GDB stub listening on port 1234"
     echo "CPU paused - connect GDB and run 'continue'"
 else
-    QEMU_CMD+=(-d int -D /tmp/qemu-kernel.log)
     echo "=== Hubble Kernel QEMU ==="
 fi
 

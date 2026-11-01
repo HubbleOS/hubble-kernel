@@ -6,6 +6,10 @@
 #include "ps2.h"
 #include <hubble/input.h>
 #include <hubble/module.h>
+
+#ifndef CONFIG_INPUT_MOUSE
+#define CONFIG_INPUT_MOUSE 1
+#endif
 #include <hubble/printk.h>
 #include <interrupt/interrupt.h>
 #include <io.h>
@@ -110,6 +114,8 @@ static bool mouse_init_hw(void) {
 /* -- Initcall --------------------------------------------- */
 
 static int mouse_initcall(void) {
+  if (!CONFIG_INPUT_MOUSE) /* config.mk: CONFIG_INPUT_MOUSE */
+    return 0;
   if (!ps2_init())
     return 0;
 

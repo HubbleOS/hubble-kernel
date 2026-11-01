@@ -778,7 +778,7 @@ void apic_start_ap(uint8_t apic_id, uint32_t trampoline_addr) {
  * @brief Convenience: full BSP init and timer start
  *
  * Calls apic_init(), enables the LAPIC, unmasks keyboard-
- * related IRQs, starts the LAPIC timer at 100 Hz, and
+ * related IRQs, starts the LAPIC timer at CONFIG_TIMER_HZ, and
  * installs the timer handler.
  */
 void apic_init_bsp(void) {
@@ -787,6 +787,6 @@ void apic_init_bsp(void) {
   ioapic_unmask_irq(1);
   ioapic_unmask_irq(2);
   ioapic_unmask_irq(12);
-  lapic_timer_init(100);
+  lapic_timer_init(CONFIG_TIMER_HZ);
   irq_install_handler(0, lapic_timer_handler);
 }

@@ -62,10 +62,11 @@ else
     echo "  Run 'make initramfs' to generate it."
 fi
 
-# Copy Limine config. CMDLINE (e.g. CMDLINE="init=/sbin/init") becomes
-# the kernel command line.
+# Copy Limine config. CMDLINE (e.g. CMDLINE="loglevel=5") becomes the
+# kernel command line; INIT=/path adds init=/path to it.
 cp "$CONFIG_DIR/limine.conf" "$ISO_TREE/boot/limine/limine.conf"
-if [ -n "${CMDLINE:-}" ]; then
+CMDLINE="${CMDLINE:-}${INIT:+${CMDLINE:+ }init=$INIT}"
+if [ -n "$CMDLINE" ]; then
     echo "    cmdline: $CMDLINE" >> "$ISO_TREE/boot/limine/limine.conf"
     echo "Kernel cmdline: $CMDLINE"
 fi

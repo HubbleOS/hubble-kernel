@@ -10,6 +10,10 @@
 #include <drivers/tty/keymap.h>
 #include <hubble/input.h>
 #include <hubble/module.h>
+
+#ifndef CONFIG_INPUT_KEYBOARD
+#define CONFIG_INPUT_KEYBOARD 1
+#endif
 #include <hubble/printk.h>
 #include <hubble/string.h>
 #include <io.h>
@@ -111,6 +115,8 @@ static void keyboard_init_hw(void) {
 /* -- Initcall --------------------------------------------- */
 
 static int keyboard_initcall(void) {
+  if (!CONFIG_INPUT_KEYBOARD) /* config.mk: CONFIG_INPUT_KEYBOARD */
+    return 0;
   if (!ps2_init())
     return 0;
   keyboard_init_hw();
