@@ -6,6 +6,24 @@ HubbleOS has a Virtual File System layer in `fs/vfs/` with adapters for FAT32, e
 
 An NVMe implementation is present in `fs/nvme/`, but the visible code is currently commented out and is not wired into the active filesystem initialization path.
 
+## Disk filesystem drivers
+
+FAT32 and ext2 have the same API, so their VFS glue files (`fat32_vfs.c`, `ext2_vfs.c`) are the same file with the names swapped. Each driver `X` has a header `fs/X/X.h` with:
+
+| Function | What it does |
+|----------|--------------|
+| `X_mount(fs, dev, first_lba)` / `X_unmount(fs)` | Attach to the partition at `first_lba` on a `VFS_Device`, release it |
+| `X_read_block` / `X_write_block` | One allocation unit: an ext2 block, a FAT32 cluster |
+| `X_alloc_block(fs, hint)` / `X_free_block` | Take or give back a unit |
+| `X_lookup(fs, path, &node)` | Path (relative to the filesystem's root) to the driver's node type |
+| `X_readdir(fs, &dir)` | A directory's entries |
+| `X_read` / `X_write(fs, &node, pos, buf, size)` | Data at a byte position |
+| `X_create(fs, path, is_dir, &node)` / `X_remove(fs, path)` | Add or delete a path (FAT32 so far) |
+
+They return 0 or a negative errno (`X_read` and `X_write` return the byte count instead), and read sectors through `vfs_dev_read()` / `vfs_dev_write()` (`fs/vfs/vfs_standart_struct.h`). All filesystems, initramfs included, split paths with `vfs_path_next()` and `vfs_path_last()` from `fs/vfs/path.h`.
+
+The test disk from `make disk` (`scripts/mkdisk.py`) has a FAT32 partition, mounted at `/fat`, and an ext2 one, mounted at `/ext2` (`kernel/init/fs.c`).
+
 ## Pages
 
 - [VFS](vfs.mdx)

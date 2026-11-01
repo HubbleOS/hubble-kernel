@@ -47,12 +47,37 @@ typedef enum {
   FS_PROC
 } FileSystemType;
 
-/** @brief Abstract block device descriptor. */
+/** @brief Abstract block device descriptor: 512-byte sectors, read and
+ * write return 0 or a negative value. */
 typedef struct {
   void *device;
   int (*read)(void *device, uint32_t lba, void *buffer);
   int (*write)(void *device, uint32_t lba, const void *buffer);
 } VFS_Device;
+
+#define VFS_SECTOR_SIZE 512
+
+/** @brief Read @p count sectors from @p lba. 0, or -1 if one failed. */
+static inline int vfs_dev_read(const VFS_Device *dev, uint32_t lba,
+                               uint32_t count, void *buf) {
+  for (uint32_t i = 0; i < count; i++)
+    if (dev->read(dev->device, lba + i,
+                  (uint8_t *)buf + i * VFS_SECTOR_SIZE) != 0)
+      return -1;
+  return 0;
+}
+
+/** @brief Write @p count sectors at @p lba. 0, or -1 if one failed. */
+static inline int vfs_dev_write(const VFS_Device *dev, uint32_t lba,
+                                uint32_t count, const void *buf) {
+  if (!dev->write)
+    return -1;
+  for (uint32_t i = 0; i < count; i++)
+    if (dev->write(dev->device, lba + i,
+                   (const uint8_t *)buf + i * VFS_SECTOR_SIZE) != 0)
+      return -1;
+  return 0;
+}
 
 #define ERR_PTR(x) ((void *)(intptr_t)(x))
 #define PTR_ERR(p) ((int)(intptr_t)(p))

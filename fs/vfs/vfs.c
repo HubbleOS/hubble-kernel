@@ -6,6 +6,8 @@
 #include "vfs.h"
 #include "vfs_standart_struct.h"
 
+#include <fs/ext2/ext2.h>
+#include <fs/fat32/fat32.h>
 #include <fs/gpt/gpt.h>
 #include <hubble/errno.h>
 #include <hubble/printk.h>
@@ -44,12 +46,10 @@ bool vfs_mount(const char *mountpoint, gpt_partition_t *partition,
   switch (type) {
   case FS_FAT32:
     printk(KERN_INFO "VFS: init fat32 vfs\n");
-    extern void fat32_init_vfs(VFS_FS * fs);
     fat32_init_vfs(fs);
     break;
   case FS_EXT2:
     printk(KERN_INFO "VFS: init ext2 vfs\n");
-    extern void ext2_init_vfs(VFS_FS * fs);
     ext2_init_vfs(fs);
     break;
   case FS_DEV:
@@ -86,6 +86,7 @@ bool vfs_mount(const char *mountpoint, gpt_partition_t *partition,
     }
     if (!fs->mount(fs, partition->device, partition->first_lba)) {
       printk(KERN_ERR "VFS: failed to mount %d at %s\n", type, mountpoint);
+      kfree(fs);
       return false;
     }
   }
@@ -352,12 +353,13 @@ int vfs_lseek(VFS_File *file, int offset, int whence) {
   return (int)file->pos;
 }
 
-/** @brief Close an open file and free allocated resources. */
+/** @brief Close an open file: the filesystem releases its node, and
+ * the VFS_File from vfs_open is freed here. */
 int vfs_close(VFS_File *file) {
-  if (!file || !file->node || !file->node->fs || !file->node->fs->close)
+  if (!file)
     return -EIO;
-
-  file->node->fs->close(file);
-
+  if (file->node && file->node->fs && file->node->fs->close)
+    file->node->fs->close(file);
+  kfree(file);
   return 0;
 }

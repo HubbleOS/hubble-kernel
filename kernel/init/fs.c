@@ -44,9 +44,12 @@ void init_filesystems(void) {
     }
   }
 
-  printk(KERN_DEBUG "Mounting FAT32 at LBA %d...\n", partitions[0].first_lba);
-  // vfs_mount("/", &partitions[0], FS_FAT32);
-  vfs_mount("/ext2", &partitions[1], FS_EXT2);
+  /* The test disk's layout (scripts/mkdisk.py, `make disk`): partition
+   * 1 FAT32, partition 2 ext2. */
+  if (gpt_result >= 1)
+    vfs_mount("/fat", &partitions[0], FS_FAT32);
+  if (gpt_result >= 2)
+    vfs_mount("/ext2", &partitions[1], FS_EXT2);
   vfs_mount("/dev", NULL, FS_DEV);
   vfs_mount("/pipe", NULL, FS_PIPE);
   printk(KERN_INFO "Filesystem mounted\n");

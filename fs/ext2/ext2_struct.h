@@ -1,10 +1,11 @@
 /* -- EXT2 on-disk and in-memory data structures -------------------
  * Defines the EXT2 superblock, block group descriptor, inode,
- * directory entry, filesystem context, and path parsing helpers.
+ * directory entry, and the mounted filesystem's state.
  * ------------------------------------------------------------------ */
 
 #pragma once
 
+#include <fs/vfs/vfs_standart_struct.h>
 #include <stdbool.h>
 
 #include <stdint.h>
@@ -165,35 +166,24 @@ typedef struct {
   char name[];
 } __attribute__((packed)) Ext2DirEntry;
 
-/** @brief In-memory EXT2 filesystem context. */
+/** @brief A mounted EXT2 filesystem. */
 typedef struct {
-  void *device;
-  int (*read_sector)(void *device, uint32_t lba, void *buffer);
-  int (*write_sector)(void *device, uint32_t lba, const void *buffer);
-
-  uint32_t first_lba;
+  VFS_Device dev;
+  uint32_t first_lba; /* the partition's first sector */
 
   uint32_t block_size;
   uint32_t inode_size;
+  uint32_t groups_count;
 
   Ext2Superblock sb;
-
   Ext2GroupDesc *groups;
-  Ext2Inode *inodes;
 } EXT2_FS;
 
-#define MAX_PARTS 16
-
-/** @brief EXT2 path component. */
+/** @brief A file or directory: its inode and the inode's number. */
 typedef struct {
-  char *name;
-} PathPart_ext;
-
-/** @brief Parsed EXT2 path. */
-typedef struct {
-  int count;
-  PathPart_ext parts[MAX_PARTS];
-} PathParts_ext;
+  uint32_t ino;
+  Ext2Inode inode;
+} EXT2_Node;
 
 /* -- Inode mode / dirent type --------------------------------------- */
 

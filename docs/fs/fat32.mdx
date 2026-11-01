@@ -2,27 +2,25 @@
 title: FAT32
 ---
 
-FAT32 support is split between the native filesystem code in `fs/fat32/` and the VFS adapter in `fs/vfs/fat32_vfs.c`.
+FAT32 lives in `fs/fat32/`, laid out like ext2:
 
-## VFS Adapter
+| File | What it holds |
+|------|---------------|
+| `fat32_struct.h` | The BPB and directory entry on disk, `FAT32_FS` (a mounted filesystem) and `FAT32_Node` (a file or directory) |
+| `fat32.h` | The driver API, the same shape as every disk filesystem's (see the [overview](overview.mdx)) |
+| `fat32.c` | The driver |
+| `fat32_vfs.c` | The VFS glue, `fat32_init_vfs()` |
 
-The FAT32 adapter:
+The driver's "blocks" are clusters. The whole FAT is read into memory at mount, and `fat32_sync()` writes back only the FAT sectors that changed, to every FAT copy. A `FAT32_Node` remembers where its directory entry is, so a write can update the file size in place. The root directory has no entry of its own (`is_root`).
 
-- Allocates a `FAT32_FS` during mount and calls `fat32_mount()`.
-- Converts a `FAT32_File` into a `VFS_Node` in `fat32_open_wrapper()`.
-- Maps FAT32 directory attributes to VFS mode bits such as `MODE_DIR`, `MODE_FILE`, `MODE_READ`, and `MODE_WRITE`.
-- Forwards reads, writes, file creation, directory creation, directory listing, unlink, and close to the FAT32 implementation.
+## Supported
 
-## Lower-Level API
+- Lookup, readdir, read, and write (files grow cluster by cluster, holes are zeroed).
+- Creating files and directories (a directory gets `.` and `..`), and removing files and empty directories. A full directory grows by one cluster.
 
-`fs/fat32/fat.h` exposes helpers for:
+## Limitations
 
-- mounting from a block device,
-- opening files,
-- reading and writing file contents,
-- creating and deleting files,
-- creating and deleting directories,
-- listing directories,
-- updating FAT entries.
-
-FAT32 is currently the most complete real filesystem adapter in the tree.
+- Only 8.3 short names are read and written: names are matched without regard to case and listed in upper case. Long names (LFN entries) are skipped.
+- No truncate or rename yet, so `>` on an existing non-empty file fails with `EROFS`.
+- 512-byte sectors only.
+- No timestamps, and no owners or permissions (`stat` shows defaults).

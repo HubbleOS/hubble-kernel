@@ -18,6 +18,7 @@
 #include <hubble/string.h>
 #include <mm/kmalloc.h>
 
+#include <fs/vfs/path.h>
 #include <fs/vfs/vfs.h>
 #include <smp/spinlock.h>
 
@@ -35,7 +36,7 @@
 
 /* -- In-memory filesystem tree ----------------------------------------- */
 
-#define MAX_NAME_LEN 256
+#define MAX_NAME_LEN VFS_NAME_MAX
 #define MAX_SYMLINK_DEPTH 8
 
 #define S_IFMT_ 0170000
@@ -144,24 +145,6 @@ static initramfs_node_t *find_child(initramfs_node_t *parent,
   return NULL;
 }
 
-/**
- * @brief Copy the next '/'-separated component of *p into out
- * @return Component length, 0 at end of path, -1 if it is too long
- */
-static int next_component(const char **p, char out[MAX_NAME_LEN]) {
-  while (**p == '/')
-    (*p)++;
-  const char *start = *p;
-  while (**p != '\0' && **p != '/')
-    (*p)++;
-
-  size_t len = *p - start;
-  if (len >= MAX_NAME_LEN)
-    return -1;
-  memcpy(out, start, len);
-  out[len] = '\0';
-  return (int)len;
-}
 
 /**
  * @brief Find or create the node for an archive path
@@ -175,7 +158,7 @@ static initramfs_node_t *create_path(const char *path) {
   char comp[MAX_NAME_LEN];
   int len;
 
-  while ((len = next_component(&path, comp)) > 0) {
+  while ((len = vfs_path_next(&path, comp)) > 0) {
     if (strcmp(comp, ".") == 0)
       continue;
     if (strcmp(comp, "..") == 0) {
@@ -211,7 +194,7 @@ static initramfs_node_t *lookup(initramfs_node_t *start, const char *path,
   char comp[MAX_NAME_LEN];
   int len;
 
-  while ((len = next_component(&path, comp)) > 0) {
+  while ((len = vfs_path_next(&path, comp)) > 0) {
     if (strcmp(comp, ".") == 0)
       continue;
     if (strcmp(comp, "..") == 0) {
@@ -258,17 +241,8 @@ static initramfs_node_t *lookup(initramfs_node_t *start, const char *path,
  */
 static initramfs_node_t *lookup_parent(const char *path,
                                        char name[MAX_NAME_LEN]) {
-  size_t len = strlen(path);
-  while (len > 0 && path[len - 1] == '/')
-    len--;
-  size_t start = len;
-  while (start > 0 && path[start - 1] != '/')
-    start--;
-  if (len == start || len - start >= MAX_NAME_LEN)
-    return NULL;
-  memcpy(name, path + start, len - start);
-  name[len - start] = '\0';
-  if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
+  size_t start;
+  if (vfs_path_last(path, &start, name) < 0)
     return NULL;
 
   char *dir = kmalloc(start + 1, GFP_KERNEL);

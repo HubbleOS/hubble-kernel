@@ -2,26 +2,24 @@
 title: ext2
 ---
 
-The ext2 implementation is less complete than FAT32. `fs/ext2/ext2.h` exposes primitives for superblock initialization, path parsing, directory entry lookup, file creation, directory listing, and inode reads.
+ext2 lives in `fs/ext2/`, laid out like FAT32:
 
-## VFS Adapter
+| File | What it holds |
+|------|---------------|
+| `ext2_struct.h` | The superblock, group descriptor, inode and directory entry on disk, `EXT2_FS` (a mounted filesystem) and `EXT2_Node` (an inode and its number) |
+| `ext2.h` | The driver API, the same shape as every disk filesystem's (see the [overview](overview.mdx)), plus inode access and `ext2_bmap()` |
+| `ext2.c` | The driver |
+| `ext2_vfs.c` | The VFS glue, `ext2_init_vfs()` |
 
-`fs/vfs/ext2_vfs.c` currently:
+## Supported
 
-- Allocates and initializes an `EXT2_FS` from a `VFS_Device` and partition start LBA.
-- Calls `ext2_init()` and stores the result in `fs->fs`.
-- Implements `readdir` by resolving the path from root inode `2`, reading the inode, and calling `ext2_list_dir()`.
+- Lookup that follows symlinks (relative targets from the link's directory, absolute ones from this filesystem's root), readdir, and read through direct, single, double and triple indirect blocks; holes read as zeros.
+- Writing into existing files within the first 12 (direct) blocks.
+- Block and inode allocation through the group bitmaps.
+- Permission bits are shown by `stat`.
 
-## Current Limitations
+## Limitations
 
-Several VFS operations are still stubs:
-
-- `open`
-- `read`
-- `write`
-- `close`
-- `lseek`
-- `unlink`
-- `mkdir`
-
-Treat ext2 as partially implemented read-oriented directory support until those callbacks are completed.
+- No create, mkdir, unlink, truncate or rename through the VFS yet: those calls answer `EROFS`. `ext2_create_file()` exists but only uses a directory's first block, so it is not hooked up.
+- Absolute symlink targets resolve inside the ext2 filesystem, not from `/`.
+- Writes past the 12 direct blocks fail with `EFBIG`.

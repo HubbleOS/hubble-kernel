@@ -3,7 +3,6 @@
  * @brief ATA PIO read/write implementation — LBA28 mode
  */
 #include "ata.h"
-#include <fs/fat32/fat_structs.h>
 #include <hpet/hpet.h>
 #include <hubble/printk.h>
 #include <hubble/string.h>
@@ -187,17 +186,6 @@ int ata_read_sector(void *device, uint32_t lba, void *buffer) {
 int ata_write_sector(void *device, uint32_t lba, const void *buffer) {
   ATA_Device *dev = (ATA_Device *)device;
   const uint16_t *buf = (const uint16_t *)buffer;
-
-  printk(KERN_INFO "bus: %d, device: %d, io_base: %d, ctrl_base: %d\n",
-         dev->bus, dev->device, dev->io_base, dev->ctrl_base);
-  printk(KERN_INFO "\nata_write_sector %d", lba);
-
-  for (int j = 0; j < 16; j++)
-    printk(KERN_INFO "%02X ", buf[j]);
-  printk(KERN_INFO "\n");
-
-  if (((FAT32_DirectoryEntry *)(buf))->name[0] == 0x00)
-    printk(KERN_INFO "ata_write_sector: buffer is empty\n");
 
   if (ata_wait(dev) != 0)
     return -1;

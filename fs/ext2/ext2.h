@@ -1,45 +1,73 @@
-/* -- EXT2 public API ----------------------------------------------
- * High-level interface for EXT2 filesystem operations including
- * initialisation, inode reading, path resolution, and directory
- * listing.
+/* -- EXT2 driver API ----------------------------------------------
+ * The same shape as the FAT32 driver (fs/fat32/fat32.h), so a VFS glue
+ * file (ext2_vfs.c) looks the same for both:
+ *
+ *   mount / unmount        attach to a partition, release it
+ *   read_block/write_block one allocation unit (an ext2 block)
+ *   alloc_block/free_block take or give back a unit
+ *   lookup                 path -> node (paths relative to the root)
+ *   readdir                a directory node's entries
+ *   read / write           a node's data at a byte position
+ *   create / remove        add or delete a path (FAT32 only so far)
+ *
+ * Errors are negative errno values; success is 0, or a byte count for
+ * read and write.
  * ------------------------------------------------------------------ */
 
 #pragma once
 
 #include <fs/ext2/ext2_struct.h>
+#include <fs/vfs/vfs_standart_struct.h>
 #include <stddef.h>
 #include <stdint.h>
 
-/** @brief Initialise EXT2 filesystem state. */
-int ext2_init(EXT2_FS *fs);
+/* -- Common driver API ---------------------------------------------- */
 
-/** @brief Resolve a path to an inode number, following symlinks.
- * Relative paths start at @p inode, absolute ones at the root. */
-uint32_t ext2_parse_path(EXT2_FS *fs, uint32_t inode, const char *path);
+/** @brief Read the superblock and group descriptors of the partition at
+ * @p first_lba on @p dev. */
+int ext2_mount(EXT2_FS *fs, const VFS_Device *dev, uint32_t first_lba);
 
-/** @brief Find a directory entry by name within a given inode. */
-uint32_t ext2_find_dir_entry(EXT2_FS *fs, uint32_t inode, const char *name);
+/** @brief Release what ext2_mount allocated (not @p fs itself). */
+void ext2_unmount(EXT2_FS *fs);
 
-/** @brief Create a new file under a parent inode. */
-uint32_t ext2_create_file(EXT2_FS *fs, uint32_t parent_inode, const char *name);
+/** @brief Read or write block @p block (fs->block_size bytes). */
+int ext2_read_block(EXT2_FS *fs, uint32_t block, void *buf);
+int ext2_write_block(EXT2_FS *fs, uint32_t block, const void *buf);
 
-/** @brief List contents of a directory inode. */
-Directory ext2_list_dir(EXT2_FS *fs, Ext2Inode *dir_inode);
+/** @brief Allocate a block, preferably in the group of inode @p hint.
+ * @return The block, or 0 when the disk is full */
+uint32_t ext2_alloc_block(EXT2_FS *fs, uint32_t hint);
+int ext2_free_block(EXT2_FS *fs, uint32_t block);
 
-/** @brief Map a file-relative block index to a disk block (0 = hole). */
+/** @brief Find @p path (following symlinks) and read its inode. */
+int ext2_lookup(EXT2_FS *fs, const char *path, EXT2_Node *out);
+
+/** @brief The entries of directory @p dir. */
+Directory ext2_readdir(EXT2_FS *fs, const EXT2_Node *dir);
+
+/** @brief Read up to @p size bytes at @p pos. @return Bytes read */
+int ext2_read(EXT2_FS *fs, EXT2_Node *node, uint32_t pos, void *buf,
+              uint32_t size);
+
+/** @brief Write @p size bytes at @p pos, growing the file. Only the 12
+ * direct blocks can be written so far. @return Bytes written */
+int ext2_write(EXT2_FS *fs, EXT2_Node *node, uint32_t pos, const void *buf,
+               uint32_t size);
+
+/* -- EXT2 specifics --------------------------------------------------- */
+
+/** @brief Read or write inode @p ino. */
+int ext2_read_inode(EXT2_FS *fs, uint32_t ino, Ext2Inode *out);
+int ext2_write_inode(EXT2_FS *fs, uint32_t ino, const Ext2Inode *inode);
+
+/** @brief Map block @p index of a file to a disk block (0 = hole). */
 uint32_t ext2_bmap(EXT2_FS *fs, const Ext2Inode *inode, uint32_t index);
 
-/** @brief Read an inode from disk into memory. */
-int ext2_read_inode(EXT2_FS *fs, uint32_t inode_number, Ext2Inode *out_inode);
+/** @brief Create an empty file @p name in directory @p parent_ino; only
+ * the directory's first block is used, so the VFS does not call it yet.
+ * @return The new inode number, or 0 */
+uint32_t ext2_create_file(EXT2_FS *fs, uint32_t parent_ino, const char *name);
 
-void ext2_read_block(EXT2_FS *fs, uint32_t block_number, void *buf);
-int ext2_write_inode(EXT2_FS *fs, uint32_t inode_num, Ext2Inode *inode);
-int ext2_write_group_desc(EXT2_FS *fs);
-void ext2_write_block(EXT2_FS *fs, uint32_t block_number, void *buf);
-uint32_t ext2_allocate_block(EXT2_FS *fs, uint32_t group);
-
-typedef struct {
-  EXT2_FS *fs;
-  Ext2Inode inode;
-  uint32_t inode_number;
-} EXT2_FILE;
+/** @brief Glue for vfs_mount (ext2_vfs.c). */
+struct VFS_FS;
+void ext2_init_vfs(struct VFS_FS *fs);

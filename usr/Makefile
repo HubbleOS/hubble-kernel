@@ -215,7 +215,7 @@ $(INITRAMFS_IMG): $(INITRAMFS_INPUTS)
 	@[ -e $(ROOTFS_DIR)/busybox ] || cp $(BUILD_DIR)/init.elf $(ROOTFS_DIR)/init
 	@# Mountpoints: kernel/init/fs.c and modules mount over these.
 	@mkdir -p $(ROOTFS_DIR)/bin $(ROOTFS_DIR)/proc $(ROOTFS_DIR)/dev \
-		$(ROOTFS_DIR)/ext2 $(ROOTFS_DIR)/pipe
+		$(ROOTFS_DIR)/ext2 $(ROOTFS_DIR)/fat $(ROOTFS_DIR)/pipe
 	@# /tmp: programs expect it (tmux puts its server socket there).
 	@mkdir -p -m 1777 $(ROOTFS_DIR)/tmp
 	@mkdir -p $(ROOTFS_DIR)/etc
