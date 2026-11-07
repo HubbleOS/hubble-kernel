@@ -12,7 +12,9 @@
 #include <acpi/acpi.h>
 #include <asm.h>
 #include <hpet/hpet.h>
+#include <hubble/errno.h>
 #include <hubble/printk.h>
+#include <interrupt/interrupt.h>
 #include <io.h>
 #include <mm/vmm.h>
 #include <msr.h>
@@ -525,6 +527,22 @@ void ioapic_unmask_irq(uint8_t irq) {
   uint8_t reg = IOAPIC_REDTBL_BASE + (irq * 2);
   uint32_t val = ioapic_read(reg);
   ioapic_write(reg, val & ~(1 << 16));
+}
+
+/* PCI INTx lines are level triggered and active high (QEMU's i440fx and
+ * real chipsets route them so). Only lines 0-15 have a vector stub. */
+int ioapic_request_level_irq(uint8_t irq, irq_handler_t handler) {
+  if (!apic_state.ioapic_base || irq >= 16 ||
+      irq >= apic_state.ioapic_max_redirect)
+    return -EINVAL;
+  if (!irq_install_handler_if_free(irq, handler))
+    return -EBUSY; /* someone else's: no sharing */
+
+  uint32_t low = (32u + irq) | (1u << 15); /* level, active high, fixed */
+  uint32_t high = ((uint32_t)apic_state.bsp_id) << 24;
+  ioapic_write(IOAPIC_REDTBL_BASE + irq * 2 + 1, high);
+  ioapic_write(IOAPIC_REDTBL_BASE + irq * 2, low);
+  return 0;
 }
 
 /* -- ISO Setup (static) ---------------------------------------- */

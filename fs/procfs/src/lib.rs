@@ -73,6 +73,7 @@ enum Target {
     Root,
     File(&'static files::ProcFile),           // /proc/meminfo
     Pid,                                      // /proc/42 (the task exists)
+    Net,                                      // /proc/net
     PidFile(Box<pid::Proc>, &'static pid::PidFile), // /proc/42/status
 }
 
@@ -91,6 +92,13 @@ fn lookup(path: &[u8]) -> Option<Target> {
     } else {
         pid::parse_pid(first)
     };
+
+    if first == b"net" {
+        return match rest {
+            None => Some(Target::Net),
+            Some(name) => files::find_net(name).map(Target::File),
+        };
+    }
 
     match (pid, rest) {
         (None, None) => files::find(first).map(Target::File),
@@ -124,7 +132,7 @@ unsafe extern "C" fn procfs_open(fs: *mut VfsFs, path: *const c_char) -> *mut Vf
 
     let mut text = String::new();
     let is_dir = match lookup(name) {
-        Some(Target::Root | Target::Pid) => true,
+        Some(Target::Root | Target::Pid | Target::Net) => true,
         Some(Target::File(f)) => {
             (f.generate)(&mut text);
             false
@@ -231,6 +239,7 @@ unsafe extern "C" fn procfs_readdir(_fs: *mut VfsFs, path: *const c_char) -> Dir
                 names.push((f.name.into(), false));
             }
             names.push((c"self".into(), true));
+            names.push((c"net".into(), true));
             for pid in pid::snapshot() {
                 // A number never contains a NUL.
                 names.push((CString::new(format!("{}", pid)).unwrap(), true));
@@ -238,6 +247,11 @@ unsafe extern "C" fn procfs_readdir(_fs: *mut VfsFs, path: *const c_char) -> Dir
         }
         Some(Target::Pid) => {
             for f in pid::PID_FILES {
+                names.push((f.name.into(), false));
+            }
+        }
+        Some(Target::Net) => {
+            for f in files::NET_FILES {
                 names.push((f.name.into(), false));
             }
         }

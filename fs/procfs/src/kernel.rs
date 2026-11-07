@@ -370,6 +370,12 @@ unsafe extern "C" {
     pub fn vfs_mount_fs(mountpoint: *const c_char, fs: *mut VfsFs) -> bool;
     pub fn pmm_get_stats(total_bytes: *mut u64, used_bytes: *mut u64);
     pub fn hpet_get_time_ns() -> u64;
+    pub fn net_proc_dev(buf: *mut c_char, size: usize) -> usize;
+    pub fn net_proc_route(buf: *mut c_char, size: usize) -> usize;
+    pub fn net_proc_tcp(buf: *mut c_char, size: usize, v6: bool) -> usize;
+    pub fn net_proc_udp(buf: *mut c_char, size: usize, v6: bool) -> usize;
+    pub fn net_proc_raw(buf: *mut c_char, size: usize, v6: bool) -> usize;
+    pub fn unix_proc_net(buf: *mut c_char, size: usize) -> usize;
     pub fn smp_get_cpu_count() -> u32;
     pub fn printk_get_log(dest: *mut c_char, max_len: usize) -> usize;
     pub fn printk_log_size() -> usize;

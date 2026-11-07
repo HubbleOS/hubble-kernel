@@ -1,3 +1,5 @@
 # /etc/inittab for busybox init (pid 1): a shell on the console, started
 # again whenever it exits. Format: id:runlevels:action:process
+# Boot-time setup (the network): /etc/init.d/rcS, from usr/rootfs.
+::sysinit:/etc/init.d/rcS
 ::respawn:-/bin/sh

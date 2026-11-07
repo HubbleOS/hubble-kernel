@@ -521,6 +521,19 @@ pub extern "C" fn sys_rt_sigsuspend(set: *const u64, size: usize) -> i64 {
     -EINTR
 }
 
+/// ppoll, pselect6 and epoll_pwait: block `mask` for the call. The old
+/// mask comes back on the way out to user space (after a handler runs, if
+/// one does), as with sigsuspend.
+#[unsafe(no_mangle)]
+pub extern "C" fn sig_set_temp_mask(s: *mut c_void, mask: u64) {
+    let s = unsafe { state(s) };
+    if !s.has_saved_mask {
+        s.saved_mask = s.blocked;
+        s.has_saved_mask = true;
+    }
+    s.set_blocked(mask);
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sys_pause() -> i64 {
     let p = current() as *mut SigState as *mut c_void;

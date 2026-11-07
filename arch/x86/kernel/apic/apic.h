@@ -13,6 +13,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <interrupt/interrupt.h>
+
 /* -- MMIO Mapping Flags ---------------------------------------- */
 
 #define VMM_FLAGS_PRESENT (1 << 0)
@@ -50,6 +52,14 @@ void ioapic_set_redirect(uint8_t irq, uint8_t vector, uint8_t dest_apic_id,
                          bool masked);
 void ioapic_mask_irq(uint8_t irq);
 void ioapic_unmask_irq(uint8_t irq);
+
+/**
+ * Route a level-triggered (PCI INTx) line to vector 32 + @p irq and call
+ * @p handler for it; the handler must make its device drop the line.
+ * @return 0, -EBUSY if another handler has the line, -EINVAL if it can't
+ *         be routed (no I/O APIC, or above 15)
+ */
+int ioapic_request_level_irq(uint8_t irq, irq_handler_t handler);
 
 /* -- SMP ------------------------------------------------------- */
 

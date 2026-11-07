@@ -12,14 +12,20 @@
  * socket, already connected) until accept() takes them. Names, listener
  * state and backlogs are guarded by one global lock: connecting is rare.
  *
+ * Datagram sockets (SOCK_DGRAM) can only be created, for the interface
+ * ioctls (musl's if_nametoindex opens one for SIOCGIFINDEX): naming,
+ * connecting and sending say -EOPNOTSUPP.
+ *
  * Known limit: a socket sent over itself (or a cycle of them) is never
  * freed; Linux needs a garbage collector for that case.
  */
 #include "socket.h"
 #include "stream.h"
 #include <hubble/errno.h>
+#include <hubble/stdio.h>
 #include <hubble/string.h>
 #include <mm/kmalloc.h>
+#include <net/socket.h>
 #include <smp/atomic.h>
 #include <smp/scheduler.h>
 #include <smp/spinlock.h>
@@ -53,6 +59,7 @@ typedef enum {
 
 typedef struct unix_sock {
   unix_state_t state;
+  bool dgram; /* SOCK_DGRAM: only for ioctls */
   wait_queue_t wq; /* listening: woken when a connection arrives */
 
   /* Bound name (name_len 0: unbound), listed in `bound`. */
@@ -148,6 +155,8 @@ static unix_sock_t *find_bound(const char *name, size_t len) {
 
 long unix_bind(file_t *file, const char *name, size_t len) {
   unix_sock_t *s = file->priv;
+  if (s->dgram)
+    return -EOPNOTSUPP;
   if (len == 0 || len > UNIX_NAME_MAX)
     return -EINVAL;
 
@@ -171,6 +180,8 @@ long unix_bind(file_t *file, const char *name, size_t len) {
 
 long unix_listen(file_t *file, int backlog) {
   unix_sock_t *s = file->priv;
+  if (s->dgram)
+    return -EOPNOTSUPP;
   long err = 0;
   spinlock_acquire(&names_lock);
   if (s->state == UNIX_CONNECTED || !s->name_len) {
@@ -188,6 +199,8 @@ long unix_listen(file_t *file, int backlog) {
 
 long unix_connect(file_t *file, const char *name, size_t len) {
   unix_sock_t *s = file->priv;
+  if (s->dgram)
+    return -EOPNOTSUPP;
   if (s->state == UNIX_CONNECTED)
     return -EISCONN;
   if (s->state == UNIX_LISTENING)
@@ -417,6 +430,12 @@ static struct wait_queue *unix_wait_queue(file_t *file) {
                                                           : &s->wq);
 }
 
+/* Interface requests work on any socket, as on Linux. */
+static long unix_ioctl(file_t *file, unsigned long request, void *arg) {
+  (void)file;
+  return net_if_ioctl(request, arg);
+}
+
 static void unix_stat(file_t *file, uint32_t *type, uint64_t *size) {
   (void)file;
   *type = FILE_S_IFSOCK;
@@ -460,6 +479,7 @@ static const file_ops_t unix_ops = {
     .write = unix_write,
     .poll = unix_poll,
     .wait_queue = unix_wait_queue,
+    .ioctl = unix_ioctl,
     .stat = unix_stat,
     .release = unix_release,
 };
@@ -479,6 +499,13 @@ file_t *unix_socket_create(void) {
   return file;
 }
 
+file_t *unix_dgram_create(void) {
+  file_t *file = unix_socket_create();
+  if (file)
+    ((unix_sock_t *)file->priv)->dgram = true;
+  return file;
+}
+
 int unix_socketpair(file_t **a, file_t **b) {
   *a = unix_socket_create();
   *b = unix_socket_create();
@@ -495,3 +522,34 @@ int unix_socketpair(file_t **a, file_t **b) {
 }
 
 bool unix_is_socket(file_t *file) { return file->ops == &unix_ops; }
+
+/* -- /proc/net/unix ------------------------------------------------------ */
+
+#define SO_ACCEPTCON 0x10000 /* Flags: listening */
+#define SS_UNCONNECTED 1
+#define SS_CONNECTED 3
+
+size_t unix_proc_net(char *buf, size_t size) {
+  size_t len = 0;
+#define OUT(...)                                                               \
+  do {                                                                         \
+    if (len < size)                                                            \
+      len += (size_t)snprintf(buf + len, size - len, __VA_ARGS__);             \
+  } while (0)
+  OUT("Num       RefCount Protocol Flags    Type St Inode Path\n");
+  spinlock_acquire(&names_lock);
+  for (unix_sock_t *s = bound; s; s = s->next_bound) {
+    /* An abstract name starts with a NUL; Linux shows NULs as '@'. */
+    char name[UNIX_NAME_MAX + 1];
+    size_t n = s->name_len < UNIX_NAME_MAX ? s->name_len : UNIX_NAME_MAX;
+    for (size_t i = 0; i < n; i++)
+      name[i] = s->name[i] ? s->name[i] : '@';
+    name[n] = '\0';
+    OUT("0000000000000000: 00000002 00000000 %08X 0001 %02X     0 %s\n",
+        s->state == UNIX_LISTENING ? SO_ACCEPTCON : 0,
+        s->state == UNIX_CONNECTED ? SS_CONNECTED : SS_UNCONNECTED, name);
+  }
+  spinlock_release(&names_lock);
+#undef OUT
+  return len < size ? len : (size ? size - 1 : 0);
+}

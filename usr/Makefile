@@ -197,7 +197,7 @@ $(shell mkdir -p $(BUILD_DIR); [ "$$(cat $(CONFIG_STAMP) 2>/dev/null)" = '$(CONF
 INITRAMFS_INPUTS := $(BUILD_DIR)/init.elf $(DEMOS) $(DESKTOP) $(GUI_APP_BINS) $(PELOAD) $(WIN_EXES) \
 	$(wildcard $(KERNEL_PATH)/out/modules/*.ko) \
 	$(BUSY_FILES) $(FONTS) \
-	$(KERNEL_PATH)/scripts/initramfs.py inittab $(CONFIG_STAMP) \
+	$(KERNEL_PATH)/scripts/initramfs.py inittab $(shell find rootfs -type f) $(CONFIG_STAMP) \
 	$(lastword $(MAKEFILE_LIST))
 
 # Create rootfs layout and generate initramfs image. The rootfs is rebuilt
@@ -220,6 +220,8 @@ $(INITRAMFS_IMG): $(INITRAMFS_INPUTS)
 	@mkdir -p -m 1777 $(ROOTFS_DIR)/tmp
 	@mkdir -p $(ROOTFS_DIR)/etc
 	@cp inittab $(ROOTFS_DIR)/etc/inittab
+	@# Files that go into the image as they are (/etc/init.d/rcS, ...).
+	@cp -r rootfs/. $(ROOTFS_DIR)/
 	@mkdir -p $(ROOTFS_DIR)/usr/share/fonts
 	@cp $(FONTS) $(ROOTFS_DIR)/usr/share/fonts/
 	@$(if $(HAVE_BUSYBOX),,echo "initramfs: note: no busybox ($(if $(filter n,$(CONFIG_BUSYBOX)),CONFIG_BUSYBOX=n,no $(BUSYBOX))); the image boots the minimal /init")

@@ -40,10 +40,8 @@
 #include <user/exec.h>
 
 #include <fs/vfs/vfs.h>
-#include <net/arp.h>
-#include <net/eth.h>
-#include <net/ipv4.h>
-#include <net/udp.h>
+#include <hubble/signal.h>
+#include <net/net.h>
 #include <sound/core/dev.h>
 
 /**
@@ -412,6 +410,8 @@ void kmain_thread(void) {
     while (1)
       hlt();
   }
+  itimer_init();
+  net_init(); /* before the modules: network cards register with it */
   load_boot_modules();
 
   start_init();

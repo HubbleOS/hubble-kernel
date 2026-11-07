@@ -21,6 +21,10 @@
 #   QEMU_SERIAL   -serial target (default stdio; none, file:PATH, ...)
 #   QEMU_LOG      -d items, e.g. int,cpu_reset (default int; none or empty: off)
 #   QEMU_LOG_FILE where -d writes (default /tmp/qemu-kernel.log)
+#   QEMU_NIC      network card: e1000 (default), e1000e or none, on QEMU's
+#                 user-mode network (DHCP, DNS and NAT to the host's network)
+#   QEMU_HOSTFWD  host ports forwarded to the guest, space separated, in
+#                 QEMU's hostfwd form: tcp::8080-:80 udp::5353-:53
 #   QEMU_NO_REBOOT, QEMU_NO_SHUTDOWN
 #               y (default): stop on a triple fault / keep the window
 #               after a shutdown, so the last screen stays readable
@@ -93,6 +97,19 @@ if [ -n "$DISK" ] && [ -f "$DISK" ]; then
     DISK_ARGS=(-drive "file=$DISK,format=raw,if=ide,index=0")
 fi
 
+NET_ARGS=()
+NIC="${QEMU_NIC:-e1000}"
+if [ "$NIC" = none ]; then
+    NET_ARGS=(-nic none)
+else
+    NETDEV="user,id=net0"
+    read -ra FWDS <<< "${QEMU_HOSTFWD:-}"
+    for fwd in ${FWDS[@]+"${FWDS[@]}"}; do
+        NETDEV+=",hostfwd=$fwd"
+    done
+    NET_ARGS=(-netdev "$NETDEV" -device "$NIC,netdev=net0")
+fi
+
 OPT_ARGS=()
 [ -n "${QEMU_DISPLAY:-}" ] && OPT_ARGS+=(-display "$QEMU_DISPLAY")
 [ "${QEMU_NO_REBOOT:-y}" = y ] && OPT_ARGS+=(-no-reboot)
@@ -113,6 +130,7 @@ QEMU_CMD=(
     -cdrom "$ISO_PATH"
     -boot d
     ${DISK_ARGS[@]+"${DISK_ARGS[@]}"}
+    "${NET_ARGS[@]}"
     -serial "${QEMU_SERIAL:-stdio}"
     -debugcon file:/tmp/debugcon.log
     ${OPT_ARGS[@]+"${OPT_ARGS[@]}"}

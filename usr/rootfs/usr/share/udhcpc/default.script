@@ -1,0 +1,29 @@
+#!/bin/sh
+# Called by udhcpc (busybox) as it gets, renews or loses a lease: $1 is
+# deconfig, bound, renew, leasefail or nak, and the lease is in the
+# environment ($interface, $ip, $subnet, $router, $dns, $domain).
+
+RESOLV_CONF=/etc/resolv.conf
+
+case "$1" in
+deconfig)
+    # Up, without an address, so the DHCP exchange can run.
+    ifconfig "$interface" 0.0.0.0 up
+    ;;
+bound | renew)
+    ifconfig "$interface" "$ip" ${subnet:+netmask "$subnet"}
+    if [ -n "$router" ]; then
+        route del default 2>/dev/null
+        for gw in $router; do
+            route add default gw "$gw" dev "$interface" && break
+        done
+    fi
+    : >"$RESOLV_CONF"
+    [ -n "$domain" ] && echo "search $domain" >>"$RESOLV_CONF"
+    for ns in $dns; do
+        echo "nameserver $ns" >>"$RESOLV_CONF"
+    done
+    echo "udhcpc: $interface is $ip${router:+, gateway $router}"
+    ;;
+esac
+exit 0

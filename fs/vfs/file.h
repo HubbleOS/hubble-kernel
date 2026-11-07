@@ -69,6 +69,9 @@ struct file {
   int flags;     /**< FILE_O_* status flags */
   VFS_File *vfs; /**< VFS-backed files only (NULL for pipes) */
   void *priv;    /**< The implementation's own state */
+  /** Unique to this open file, unlike its address, which a later file
+   * may reuse (epoll tells its entries apart by it). */
+  uint64_t serial;
 };
 
 /** A new file_t (one reference) for a VFS file it takes over. */

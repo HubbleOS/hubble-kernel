@@ -1,8 +1,10 @@
 /*
- * Socket syscalls (Linux x86_64 ABI) for Unix-domain stream sockets, and
- * memfd_create. The socket logic is in fs/vfs/socket.c; this file reads
- * and writes the user's structures (sockaddr_un, msghdr, cmsghdr) and
- * maps flags.
+ * Socket syscalls (Linux x86_64 ABI), and memfd_create.
+ *
+ * Unix-domain stream sockets are in fs/vfs/socket.c: this file reads and
+ * writes their user structures (sockaddr_un, msghdr, cmsghdr) and maps
+ * flags. Network sockets (AF_INET, AF_PACKET) are in net/socket.c, which
+ * handles their addresses and options itself: each call hands them on.
  */
 #include <hubble/errno.h>
 #include <hubble/string.h>
@@ -10,6 +12,7 @@
 
 #include <fs/vfs/file.h>
 #include <fs/vfs/socket.h>
+#include <net/socket.h>
 #include <smp/fdtable.h>
 #include <smp/scheduler.h>
 #include <smp/task.h>
@@ -18,6 +21,7 @@
 
 #define AF_UNIX 1
 #define SOCK_STREAM 1
+#define SOCK_DGRAM 2
 #define SOCK_TYPE_MASK 0xf
 #define SOCK_NONBLOCK 0x800
 #define SOCK_CLOEXEC 0x80000
@@ -76,7 +80,7 @@ static long sock_file(int fd, file_t **out) {
   file_t *file = fd_file(get_current_task(), fd);
   if (!file)
     return -EBADF;
-  if (!unix_is_socket(file))
+  if (!unix_is_socket(file) && !net_is_socket(file))
     return -ENOTSOCK;
   *out = file;
   return 0;
@@ -135,10 +139,12 @@ static void put_peer_addr(struct sockaddr_un *addr, socklen_t *len) {
 
 /* -- Creating and naming ---------------------------------- */
 
-static long check_type(int domain, int type, int protocol) {
+/* @p dgram: SOCK_DGRAM is allowed too (socket() only). */
+static long check_type(int domain, int type, int protocol, bool dgram) {
   if (domain != AF_UNIX)
     return -EAFNOSUPPORT;
-  if ((type & SOCK_TYPE_MASK) != SOCK_STREAM)
+  if ((type & SOCK_TYPE_MASK) != SOCK_STREAM &&
+      !(dgram && (type & SOCK_TYPE_MASK) == SOCK_DGRAM))
     return -ESOCKTNOSUPPORT;
   if (type & ~(SOCK_TYPE_MASK | SOCK_NONBLOCK | SOCK_CLOEXEC))
     return -EINVAL;
@@ -148,17 +154,25 @@ static long check_type(int domain, int type, int protocol) {
 }
 
 long sys_socket(int domain, int type, int protocol) {
-  long err = check_type(domain, type, protocol);
+  if (domain != AF_UNIX) {
+    if (type & ~(SOCK_TYPE_MASK | SOCK_NONBLOCK | SOCK_CLOEXEC))
+      return -EINVAL;
+    file_t *file;
+    long err = net_socket(domain, type & SOCK_TYPE_MASK, protocol, &file);
+    return err ? err : install(file, type);
+  }
+  long err = check_type(domain, type, protocol, true);
   if (err)
     return err;
-  file_t *file = unix_socket_create();
+  file_t *file = (type & SOCK_TYPE_MASK) == SOCK_DGRAM ? unix_dgram_create()
+                                                       : unix_socket_create();
   if (!file)
     return -ENOMEM;
   return install(file, type);
 }
 
 long sys_socketpair(int domain, int type, int protocol, int sv[2]) {
-  long err = check_type(domain, type, protocol);
+  long err = check_type(domain, type, protocol, false);
   if (err)
     return err;
   if (!sv)
@@ -188,6 +202,8 @@ long sys_bind(int fd, const struct sockaddr_un *addr, socklen_t len) {
   long err = sock_file(fd, &file);
   if (err)
     return err;
+  if (net_is_socket(file))
+    return net_bind(file, addr, len);
   char name[UNIX_NAME_MAX];
   long n = unix_name(addr, len, name);
   if (n < 0)
@@ -198,7 +214,10 @@ long sys_bind(int fd, const struct sockaddr_un *addr, socklen_t len) {
 long sys_listen(int fd, int backlog) {
   file_t *file;
   long err = sock_file(fd, &file);
-  return err ? err : unix_listen(file, backlog);
+  if (err)
+    return err;
+  return net_is_socket(file) ? net_listen(file, backlog)
+                             : unix_listen(file, backlog);
 }
 
 long sys_accept4(int fd, struct sockaddr_un *addr, socklen_t *len,
@@ -210,6 +229,12 @@ long sys_accept4(int fd, struct sockaddr_un *addr, socklen_t *len,
   if (err)
     return err;
   file_t *conn;
+  if (net_is_socket(file)) {
+    /* The address is written before the descriptor exists; a failed
+     * install closes the connection, as on Linux. */
+    err = net_accept(file, &conn, addr, len);
+    return err ? err : install(conn, flags);
+  }
   err = unix_accept(file, &conn);
   if (err)
     return err;
@@ -228,6 +253,8 @@ long sys_connect(int fd, const struct sockaddr_un *addr, socklen_t len) {
   long err = sock_file(fd, &file);
   if (err)
     return err;
+  if (net_is_socket(file))
+    return net_connect(file, addr, len);
   char name[UNIX_NAME_MAX];
   long n = unix_name(addr, len, name);
   if (n < 0)
@@ -240,6 +267,8 @@ long sys_shutdown(int fd, int how) {
   long err = sock_file(fd, &file);
   if (err)
     return err;
+  if (net_is_socket(file))
+    return net_shutdown(file, how);
   if (how != SHUT_RD && how != SHUT_WR && how != SHUT_RDWR)
     return -EINVAL;
   return unix_shutdown(file, how != SHUT_WR, how != SHUT_RD);
@@ -253,11 +282,14 @@ static bool send_nonblock(file_t *file, int flags) {
 
 long sys_sendto(int fd, const void *buf, size_t len, int flags,
                 const struct sockaddr_un *dest, socklen_t dest_len) {
-  (void)dest_len;
   file_t *file;
   long err = sock_file(fd, &file);
   if (err)
     return err;
+  if (net_is_socket(file)) {
+    struct net_iov iov = {(void *)buf, len};
+    return net_send(file, &iov, 1, dest, dest_len, flags);
+  }
   if (flags & ~(MSG_DONTWAIT | MSG_NOSIGNAL | MSG_MORE))
     return -EOPNOTSUPP;
   if (dest)
@@ -309,6 +341,9 @@ long sys_sendmsg(int fd, const struct msghdr *msg, int flags) {
     return -EFAULT;
   if (msg->msg_iovlen > UIO_MAXIOV)
     return -EMSGSIZE;
+  if (net_is_socket(file)) /* control data (IP_PKTINFO, ...): ignored */
+    return net_send(file, (const struct net_iov *)msg->msg_iov,
+                    msg->msg_iovlen, msg->msg_name, msg->msg_namelen, flags);
   if (flags & ~(MSG_DONTWAIT | MSG_NOSIGNAL | MSG_MORE))
     return -EOPNOTSUPP;
   if (msg->msg_name)
@@ -356,6 +391,10 @@ long sys_recvfrom(int fd, void *buf, size_t len, int flags,
   long err = sock_file(fd, &file);
   if (err)
     return err;
+  if (net_is_socket(file)) {
+    struct net_iov iov = {buf, len};
+    return net_recv(file, &iov, 1, src, src_len, flags, NULL);
+  }
   err = check_recv_flags(flags);
   if (err)
     return err;
@@ -421,6 +460,18 @@ long sys_recvmsg(int fd, struct msghdr *msg, int flags) {
     return -EFAULT;
   if (msg->msg_iovlen > UIO_MAXIOV)
     return -EMSGSIZE;
+  if (net_is_socket(file)) {
+    uint32_t namelen = msg->msg_name ? msg->msg_namelen : 0;
+    long n = net_recv(file, (const struct net_iov *)msg->msg_iov,
+                      msg->msg_iovlen, msg->msg_name,
+                      msg->msg_name ? &namelen : NULL, flags,
+                      &msg->msg_flags);
+    if (n >= 0) {
+      msg->msg_namelen = msg->msg_name ? namelen : 0;
+      msg->msg_controllen = 0; /* no ancillary data */
+    }
+    return n;
+  }
   err = check_recv_flags(flags);
   if (err)
     return err;
@@ -481,6 +532,8 @@ long sys_getsockopt(int fd, int level, int name, void *val, socklen_t *len) {
   long err = sock_file(fd, &file);
   if (err)
     return err;
+  if (net_is_socket(file))
+    return net_getsockopt(file, level, name, val, len);
   if (level != SOL_SOCKET)
     return -ENOPROTOOPT;
   switch (name) {
@@ -513,14 +566,40 @@ long sys_getsockopt(int fd, int level, int name, void *val, socklen_t *len) {
  * which only treats them as hints. */
 long sys_setsockopt(int fd, int level, int name, const void *val,
                     socklen_t len) {
-  (void)val, (void)len;
   file_t *file;
   long err = sock_file(fd, &file);
   if (err)
     return err;
+  if (net_is_socket(file))
+    return net_setsockopt(file, level, name, val, len);
   if (level == SOL_SOCKET && (name == SO_SNDBUF || name == SO_RCVBUF))
     return 0;
   return -ENOPROTOOPT;
+}
+
+/* -- Names ------------------------------------------------ */
+
+static long getname(int fd, void *addr, socklen_t *len, bool peer) {
+  file_t *file;
+  long err = sock_file(fd, &file);
+  if (err)
+    return err;
+  if (!addr || !len)
+    return -EFAULT;
+  if (net_is_socket(file))
+    return net_getname(file, addr, len, peer);
+  if (peer && unix_peer_pid(file) < 0)
+    return -ENOTCONN;
+  put_peer_addr(addr, len); /* bound names are not reported */
+  return 0;
+}
+
+long sys_getsockname(int fd, void *addr, socklen_t *len) {
+  return getname(fd, addr, len, false);
+}
+
+long sys_getpeername(int fd, void *addr, socklen_t *len) {
+  return getname(fd, addr, len, true);
 }
 
 /* -- memfd ------------------------------------------------ */

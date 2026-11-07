@@ -17,6 +17,7 @@
 #include <hubble/errno.h>
 #include <hubble/init.h>
 #include <hubble/module.h>
+#include <hubble/netdev.h>
 #include <hubble/platform.h>
 #include <hubble/printk.h>
 #include <hubble/string.h>
@@ -41,6 +42,14 @@ extern void console_output_enabled(void);
 extern void hpet_delay_ms(void);
 extern void waitqueue_init(void);
 extern void hpet_get_time_ns(void);
+extern void net_proc_dev(void);
+extern void ioapic_request_level_irq(void);
+extern void ioapic_mask_irq(void);
+extern void net_proc_route(void);
+extern void net_proc_tcp(void);
+extern void net_proc_udp(void);
+extern void net_proc_raw(void);
+extern void unix_proc_net(void);
 extern void smp_get_cpu_count(void);
 extern void waitqueue_sleep(void);
 extern void waitqueue_wake_all(void);
@@ -126,6 +135,11 @@ static const module_export_t g_exports[] = {
     {"strchr", (uint64_t)(uintptr_t)strchr},
     {"strrchr", (uint64_t)(uintptr_t)strrchr},
     {"pci_register_driver", (uint64_t)(uintptr_t)pci_register_driver},
+    {"netdev_register", (uint64_t)(uintptr_t)netdev_register},
+    {"netdev_rx", (uint64_t)(uintptr_t)netdev_rx},
+    {"netdev_wake", (uint64_t)(uintptr_t)netdev_wake},
+    {"ioapic_request_level_irq", (uint64_t)(uintptr_t)ioapic_request_level_irq},
+    {"ioapic_mask_irq", (uint64_t)(uintptr_t)ioapic_mask_irq},
     {"irq_install_handler", (uint64_t)(uintptr_t)irq_install_handler},
     {"pci_read_config", (uint64_t)(uintptr_t)pci_read_config},
     {"pci_write_config", (uint64_t)(uintptr_t)pci_write_config},
@@ -150,6 +164,12 @@ static const module_export_t g_exports[] = {
     {"vfs_mount_fs", (uint64_t)(uintptr_t)vfs_mount_fs},
     {"pmm_get_stats", (uint64_t)(uintptr_t)pmm_get_stats},
     {"hpet_get_time_ns", (uint64_t)(uintptr_t)hpet_get_time_ns},
+    {"net_proc_dev", (uint64_t)(uintptr_t)net_proc_dev},
+    {"net_proc_route", (uint64_t)(uintptr_t)net_proc_route},
+    {"net_proc_tcp", (uint64_t)(uintptr_t)net_proc_tcp},
+    {"net_proc_udp", (uint64_t)(uintptr_t)net_proc_udp},
+    {"net_proc_raw", (uint64_t)(uintptr_t)net_proc_raw},
+    {"unix_proc_net", (uint64_t)(uintptr_t)unix_proc_net},
     {"smp_get_cpu_count", (uint64_t)(uintptr_t)smp_get_cpu_count},
     {"_task_create_with_arg", (uint64_t)(uintptr_t)_task_create_with_arg},
     {"scheduler_add_task", (uint64_t)(uintptr_t)scheduler_add_task},

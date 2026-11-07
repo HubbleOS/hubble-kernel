@@ -65,7 +65,7 @@ CONFIG_MOD_TTY    ?= y
 CONFIG_MOD_USB    ?= y
 CONFIG_MOD_PROCFS ?= y
 CONFIG_MOD_VIDEO  ?= y
-CONFIG_MOD_NET    ?= m
+CONFIG_MOD_NET    ?= y
 mod_state = $(CONFIG_MOD_$(call uc,$(1)))
 KERNEL_MODULES := $(strip $(foreach m,$(MODULE_ORDER),$(if $(filter y m,$(call mod_state,$(m))),$(m))))
 BOOT_MODULES   := $(strip $(foreach m,$(MODULE_ORDER),$(if $(filter y,$(call mod_state,$(m))),$(m))))
@@ -510,10 +510,13 @@ QEMU_LOG       ?= int
 QEMU_LOG_FILE  ?= /tmp/qemu-kernel.log
 QEMU_NO_REBOOT ?= y
 QEMU_NO_SHUTDOWN ?= y
+QEMU_NIC       ?= e1000
+QEMU_HOSTFWD   ?=
 # The test disk from `make usr` / `make disk`, attached when it exists.
 QEMU_DISK  ?= $(if $(filter n,$(CONFIG_DISK)),,$(OUT_DIR)/disk.img)
 export QEMU_ACCEL QEMU_MEM QEMU_SMP QEMU_ARGS QEMU_DISK CMDLINE INIT \
-	QEMU_DISPLAY QEMU_SERIAL QEMU_LOG QEMU_LOG_FILE QEMU_NO_REBOOT QEMU_NO_SHUTDOWN
+	QEMU_DISPLAY QEMU_SERIAL QEMU_LOG QEMU_LOG_FILE QEMU_NO_REBOOT QEMU_NO_SHUTDOWN \
+	QEMU_NIC QEMU_HOSTFWD
 
 PHONY += run
 run: build usr
@@ -589,7 +592,7 @@ config:
 		QEMU_MEM "$(QEMU_MEM)" QEMU_SMP "$(QEMU_SMP)" QEMU_DISK "$(QEMU_DISK)" QEMU_ARGS "$(QEMU_ARGS)" \
 		QEMU_DISPLAY "$(QEMU_DISPLAY)" QEMU_SERIAL "$(QEMU_SERIAL)" QEMU_LOG "$(QEMU_LOG)" \
 		QEMU_LOG_FILE "$(QEMU_LOG_FILE)" QEMU_NO_REBOOT "$(QEMU_NO_REBOOT)" \
-		QEMU_NO_SHUTDOWN "$(QEMU_NO_SHUTDOWN)" CMDLINE "$(CMDLINE)" INIT "$(INIT)"
+		QEMU_NO_SHUTDOWN "$(QEMU_NO_SHUTDOWN)" QEMU_NIC "$(QEMU_NIC)" QEMU_HOSTFWD "$(QEMU_HOSTFWD)" CMDLINE "$(CMDLINE)" INIT "$(INIT)"
 
 PHONY += menuconfig
 menuconfig:

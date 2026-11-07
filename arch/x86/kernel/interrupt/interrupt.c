@@ -122,6 +122,12 @@ void irq_install_handler(uint8_t irq, irq_handler_t handler) {
     irq_handlers[irq] = handler;
 }
 
+bool irq_install_handler_if_free(uint8_t irq, irq_handler_t handler) {
+  irq_handler_t none = 0;
+  return __atomic_compare_exchange_n(&irq_handlers[irq], &none, handler, false,
+                                     __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+}
+
 /**
  * @brief Unregister an interrupt handler
  *

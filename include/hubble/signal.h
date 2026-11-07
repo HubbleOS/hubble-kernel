@@ -84,11 +84,20 @@ int sig_report(task_signals_t *child, int options, bool take);
 int sig_next(task_signals_t *s, registers_t *regs, bool from_syscall);
 void sig_set_restart(task_signals_t *s, uint64_t deadline_ns);
 uint64_t sig_restart(task_signals_t *s);
+/** Block @p mask until the call returns to user space (ppoll, pselect6). */
+void sig_set_temp_mask(task_signals_t *s, uint64_t mask);
 
 /* -- C (kernel/signal.c) ------------------------------------------------- */
 
 /** Send @p sig to @p task (a user task) and wake it to handle it. */
 void signal_send(struct task *task, int sig, const struct sig_info *info);
+
+/** Send @p sig to process @p pid from the kernel (timers).
+ *  @return 0, or -ESRCH when there is no such process */
+long signal_send_pid(int pid, int sig);
+
+/** Start the thread behind alarm() and setitimer() (kernel/itimer.c). */
+void itimer_init(void);
 
 /** Send @p sig to every task in process group @p pgrp (from the kernel:
  *  Ctrl-C, terminal resizes). */

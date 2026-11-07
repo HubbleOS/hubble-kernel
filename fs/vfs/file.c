@@ -73,6 +73,8 @@ file_t *file_alloc(const file_ops_t *ops, int flags, void *priv) {
   file->ops = ops;
   file->flags = flags;
   file->priv = priv;
+  static uint64_t next_serial = 1;
+  file->serial = __atomic_fetch_add(&next_serial, 1, __ATOMIC_RELAXED);
   atomic_set(&file->refs, 1);
   return file;
 }

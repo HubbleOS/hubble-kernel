@@ -2,30 +2,50 @@
 title: Network Devices and E1000
 ---
 
-`net/netdev.h` defines the network device interface expected by the stack:
+## The netdev interface
+
+`include/hubble/netdev.h` is what a card driver uses to join the stack:
 
 ```c
 struct netdev_ops {
-    int (*send)(const void *data, uint16_t len);
-    int (*recv)(void *buf, uint16_t *len);
+  int (*xmit)(struct netdev *dev, const void *frame, size_t len);
+  void (*poll)(struct netdev *dev);
+  bool (*link_up)(struct netdev *dev);
 };
 
-struct netdev_data {
-    uint8_t mac[6];
-};
+int netdev_register(struct netdev *dev);
+void netdev_rx(struct netdev *dev, const void *frame, size_t len);
+void netdev_wake(struct netdev *dev);
 ```
 
-The Ethernet layer finds a device by calling `device_find_by_type(DEV_NET)`. The returned `struct device` must provide `ops` as `struct netdev_ops` and `priv` as `struct netdev_data`.
+The driver fills in `mac`, `ops` and `priv` (its own state) and calls `netdev_register()`, which names the card (`eth0`, ...) and adds it as an lwIP interface. `mtu` defaults to 1500.
 
-## E1000 Driver
+All three callbacks run with the net lock held, from the net thread or a socket call:
 
-The E1000 driver registers itself as a PCI driver through `pci_register_driver()`. When a matching PCI device is found, `e1000_probe()`:
+- `xmit` sends one whole Ethernet frame (without the CRC) and must not block; a non-zero return means the frame was dropped.
+- `poll` hands every frame that arrived to `netdev_rx()`.
+- `link_up` reports the cable/PHY state; the stack checks it on every poll.
 
-1. Enables PCI memory space and bus mastering.
-2. Maps the BAR0 MMIO range into the kernel virtual address space.
-3. Resets and initializes the controller.
-4. Reads the MAC address.
-5. Initializes TX and RX descriptor rings.
-6. Registers a kernel device named `eth0` with type `DEV_NET`.
+`netdev_wake()` makes the net thread poll now instead of at the next tick; a driver calls it from its interrupt handler. The functions are exported to modules, so drivers can be `.ko` files.
 
-The registered callbacks are `e1000_send()` and `e1000_recv()`.
+## E1000 driver
+
+`drivers/net/e1000/` (the `net` module) drives the Intel 8254x family (82540EM, the card QEMU emulates by default, and its relatives) and the 82574L (`e1000e` in QEMU). They share registers and the legacy descriptor format; only the EEPROM read differs.
+
+`e1000_probe()`, for each matching PCI device:
+
+1. Enables memory space and bus mastering and maps BAR0.
+2. Resets the card and waits for it, then masks its interrupts.
+3. Reads the MAC from the receive address register the card loaded at reset, or else from the EEPROM (`EERD`).
+4. Clears the multicast table and sets up 64 receive and 64 transmit descriptors with 2048-byte buffers, in physical pages reached through the HHDM.
+5. Enables receive (broadcast accepted, CRC stripped) and transmit, sets link up, and registers with `netdev_register()`.
+
+Sending copies the frame into the next transmit buffer, padded to 60 bytes, and never waits: when the ring is full the frame is dropped, as on a busy card.
+
+### Interrupts
+
+The card raises its PCI INTx line (the one the firmware wrote to config space) on a received frame, a ring running low, an overrun or a link change. `ioapic_request_level_irq()` routes that line level triggered to vector 32 + line. The handler only reads ICR, which acknowledges the card and drops the line, and calls `netdev_wake()`; the frames are taken by the net thread. One handler serves every card, so cards may share a line.
+
+The line must be free (no other driver on it, and 0-15). Otherwise, or if the line keeps firing with no cause from our cards (a device without a driver sharing it), the card is only polled, which works a tick slower.
+
+In QEMU, `-device e1000` (the default with `-nic user`) or `-device e1000e` gives a card; user networking provides DHCP at 10.0.2.2 and DNS at 10.0.2.3.

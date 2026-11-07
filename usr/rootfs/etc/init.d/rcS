@@ -1,0 +1,12 @@
+#!/bin/sh
+# Boot-time setup, run once by busybox init (::sysinit: in /etc/inittab).
+
+ifconfig lo 127.0.0.1 up
+
+# Network: each Ethernet card asks for an address by DHCP. udhcpc keeps
+# running to renew the lease; -b sends it to the background if no server
+# answers, so a machine without a network still boots at once.
+for i in 0 1 2 3; do
+    ifconfig "eth$i" >/dev/null 2>&1 || continue
+    udhcpc -i "eth$i" -b -t 3 -T 1
+done

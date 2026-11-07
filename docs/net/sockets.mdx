@@ -1,0 +1,40 @@
+---
+title: Sockets
+---
+
+Network sockets are files (`file_t` with `net_sock_ops`), so `read`, `write`, `poll`, `close`, `dup` and `fcntl` work on them as on any descriptor. The socket syscalls in `arch/x86/kernel/syscalls/sys_socket.c` handle `AF_UNIX` themselves and pass every other socket to `net/socket.c`.
+
+## Families and types
+
+| Socket | Notes |
+| --- | --- |
+| `AF_INET`, `SOCK_STREAM` | TCP: `connect`, `listen`/`accept` with a backlog, `shutdown` |
+| `AF_INET`, `SOCK_DGRAM` | UDP, including broadcast with `SO_BROADCAST` |
+| `AF_INET`, `SOCK_RAW` | Any IP protocol (`ping` uses ICMP); `IPPROTO_RAW` only for ioctls |
+| `AF_PACKET`, `SOCK_RAW` / `SOCK_DGRAM` | Whole frames, or frames without the Ethernet header (`udhcpc`) |
+| `AF_NETLINK`, `SOCK_RAW` / `SOCK_DGRAM` | `NETLINK_ROUTE`: link, address and route requests and dumps (`ip`); no multicast groups |
+| `AF_UNIX`, `SOCK_DGRAM` | Only for the interface ioctls (musl's `if_nametoindex`); `bind`, `connect` and sending give `EOPNOTSUPP` |
+
+Packet sockets see every frame received on their interface; frames sent are delivered only to `ETH_P_ALL` sockets, like Linux.
+
+## Data path
+
+User memory is copied through kernel buffers outside the net lock; lwIP only ever sees kernel memory. TCP keeps received data as lwIP's pbuf chain and acknowledges it (`tcp_recved`) as it is read, so the advertised window follows the reader. UDP, raw and packet sockets queue up to 64 datagrams.
+
+A blocking call sleeps on the socket's wait queue with the lock dropped and wakes on lwIP's callbacks, a timeout (`SO_RCVTIMEO` / `SO_SNDTIMEO`) or a signal. `O_NONBLOCK` and `MSG_DONTWAIT` give `EAGAIN` instead, and a non-blocking `connect` gives `EINPROGRESS`.
+
+## Waiting on many sockets
+
+`poll`, `ppoll`, `select`, `pselect6` and `epoll` (`epoll_create1`, `epoll_ctl`, `epoll_wait`, `epoll_pwait`) work on sockets and every other file. They share one wait (`poll_fds()` in `arch/x86/kernel/syscalls/sys_poll.c`): it asks each file's `poll` hook and sleeps on the files' wait queues.
+
+- `ppoll`, `pselect6` and `epoll_pwait` block their signal mask during the wait, and the old mask comes back on the way out (after a handler, if one runs), like `sigsuspend`.
+- `select` follows Linux: readable includes hangup and error, writable includes error, and a closed fd in a set is `EBADF`.
+- epoll is level triggered. `EPOLLET` is accepted and reported the same way, which is safe for programs that read until `EAGAIN`. `EPOLLONESHOT` disables an entry after one report, until `EPOLL_CTL_MOD`. An entry goes away when its fd is closed, and regular files are refused with `EPERM`, as on Linux.
+
+## Options and ioctls
+
+- `SOL_SOCKET`: `SO_REUSEADDR`, `SO_KEEPALIVE`, `SO_BROADCAST`, `SO_RCVTIMEO`, `SO_SNDTIMEO`, `SO_BINDTODEVICE`, `SO_ERROR`, `SO_TYPE`, buffer sizes and others read back sensible values.
+- `IPPROTO_TCP`: `TCP_NODELAY`. `IPPROTO_IP`: `IP_TTL`, `IP_TOS`.
+- `FIONREAD`, `FIONBIO`, and the interface and route ioctls (`SIOCGIFCONF`, `SIOCSIFADDR`, `SIOCADDRT`, ...) from `net/ifreq.c`, on any socket, `AF_UNIX` included.
+
+`getsockname` and `getpeername` work on all of them.

@@ -95,6 +95,8 @@ long sys_accept(int fd, struct sockaddr_un *addr, uint32_t *len);
 long sys_accept4(int fd, struct sockaddr_un *addr, uint32_t *len, int flags);
 long sys_connect(int fd, const struct sockaddr_un *addr, uint32_t len);
 long sys_shutdown(int fd, int how);
+long sys_getsockname(int fd, void *addr, uint32_t *len);
+long sys_getpeername(int fd, void *addr, uint32_t *len);
 long sys_sendto(int fd, const void *buf, size_t len, int flags,
                 const struct sockaddr_un *dest, uint32_t dest_len);
 long sys_recvfrom(int fd, void *buf, size_t len, int flags,
@@ -132,6 +134,24 @@ long sys_ioctl(int fd, unsigned long request, void *arg);
 long sys_fcntl(int fd, int cmd, long arg);
 struct pollfd;
 long sys_poll(struct pollfd *fds, unsigned long nfds, int timeout_ms);
+struct kernel_timespec;
+struct kernel_timeval;
+long sys_ppoll(struct pollfd *fds, unsigned long nfds,
+               struct kernel_timespec *ts, const uint64_t *sigmask,
+               size_t sigsetsize);
+long sys_select(int nfds, uint64_t *r, uint64_t *w, uint64_t *e,
+                struct kernel_timeval *tv);
+long sys_pselect6(int nfds, uint64_t *r, uint64_t *w, uint64_t *e,
+                  struct kernel_timespec *ts, const void *sig);
+struct epoll_event;
+long sys_epoll_create(int size);
+long sys_epoll_create1(int flags);
+long sys_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
+long sys_epoll_wait(int epfd, struct epoll_event *events, int maxevents,
+                    int timeout_ms);
+long sys_epoll_pwait(int epfd, struct epoll_event *events, int maxevents,
+                     int timeout_ms, const uint64_t *sigmask,
+                     size_t sigsetsize);
 #define NS_PER_SEC 1000000000ULL
 struct kernel_timespec {
   int64_t tv_sec;
@@ -140,6 +160,11 @@ struct kernel_timespec {
 long sys_restart_syscall(void);
 long sys_nanosleep(const struct kernel_timespec *req,
                    struct kernel_timespec *rem);
+struct itimerval;
+long sys_getitimer(int which, struct itimerval *cur);
+long sys_setitimer(int which, const struct itimerval *new,
+                   struct itimerval *old);
+long sys_alarm(unsigned int seconds);
 long sys_clock_gettime(int clock_id, void *ts);
 long sys_gettimeofday(void *tv, void *tz);
 long sys_time(int64_t *tloc);

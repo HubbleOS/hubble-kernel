@@ -117,6 +117,10 @@ static long kill_tasks(int pid, int sig, task_t *sender, int code) {
   return k.found ? 0 : -ESRCH;
 }
 
+long signal_send_pid(int pid, int sig) {
+  return pid > 0 ? kill_tasks(pid, sig, NULL, SI_KERNEL) : -ESRCH;
+}
+
 void signal_send_pgrp(uint32_t pgrp, int sig) {
   if (pgrp)
     kill_tasks(-(int)pgrp, sig, NULL, SI_KERNEL);

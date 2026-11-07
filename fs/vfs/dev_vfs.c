@@ -9,6 +9,7 @@
 #include "vfs.h"
 #include "vfs_standart_struct.h"
 #include <hubble/printk.h>
+#include <hubble/random.h>
 #include <hubble/string.h>
 #include <stdbool.h>
 
@@ -21,7 +22,7 @@ uint64_t mmap_device(VFS_File *file, uint64_t offset, size_t size);
 int dev_vfs_read_device(VFS_File *file, void *buf, uint32_t size);
 Directory dev_vfs_list_devices(VFS_FS *fs, const char *path);
 
-/* -- /dev/null and /dev/zero ------------------------------ */
+/* -- /dev/null, /dev/zero, /dev/random, /dev/urandom ----- */
 
 static uint64_t null_read(uint64_t offset, size_t size, void *buf) {
   (void)offset, (void)size, (void)buf;
@@ -36,6 +37,14 @@ static uint64_t null_write(uint64_t offset, size_t size, const void *buf) {
 static uint64_t zero_read(uint64_t offset, size_t size, void *buf) {
   (void)offset;
   memset(buf, 0, size);
+  return size;
+}
+
+/* Both are getrandom()'s source, which never runs dry; writes (Linux mixes
+ * them into the pool) are taken and dropped. */
+static uint64_t random_read(uint64_t offset, size_t size, void *buf) {
+  (void)offset;
+  get_random_bytes(buf, size);
   return size;
 }
 
@@ -55,6 +64,8 @@ bool dev_vfs_init(VFS_FS *fs, VFS_Device *device, uint32_t start_lba) {
     basic_devices = true;
     dev_vfs_register("null", NULL, null_read, null_write);
     dev_vfs_register("zero", NULL, zero_read, null_write);
+    dev_vfs_register("random", NULL, random_read, null_write);
+    dev_vfs_register("urandom", NULL, random_read, null_write);
   }
   return 1;
 }

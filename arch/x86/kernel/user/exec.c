@@ -176,15 +176,99 @@ static task_t *execv_pe(const char *path, char *const argv[],
   return task;
 }
 
+/* -- Scripts ("#!") ------------------------------------------------------ */
+
+#define SHEBANG_MAX 128   /* the "#!" line read, as Linux's BINPRM_BUF_SIZE */
+#define SHEBANG_DEPTH 4   /* a script's interpreter may be a script, ... */
+
+static task_t *execv_depth(const char *path, char *const argv[],
+                           char *const envp[], int depth);
+
+/**
+ * @brief Run a script that starts with "#!interpreter [arg]"
+ *
+ * As Linux's binfmt_script: "script a b" becomes
+ * "interpreter [arg] /path/script a b", where arg is the rest of the line
+ * as one argument. @return NULL if @p path is not such a script, or its
+ * interpreter does not run
+ */
+static task_t *execv_script(const char *path, char *const argv[],
+                            char *const envp[], int depth) {
+  VFS_File *f = vfs_open(path, VFS_O_RDONLY);
+  if (IS_ERR(f) || !f)
+    return NULL;
+  char line[SHEBANG_MAX + 1];
+  int n = vfs_read(f, line, SHEBANG_MAX);
+  vfs_close(f);
+  if (n < 2 || line[0] != '#' || line[1] != '!')
+    return NULL;
+  line[n] = '\0';
+
+  char *end = strchr(line, '\n');
+  if (end)
+    *end = '\0';
+  char *interp = line + 2;
+  while (*interp == ' ' || *interp == '\t')
+    interp++;
+  char *p = interp;
+  while (*p && *p != ' ' && *p != '\t')
+    p++;
+  char *arg = NULL;
+  if (*p) {
+    *p++ = '\0';
+    while (*p == ' ' || *p == '\t')
+      p++;
+    size_t len = strlen(p);
+    while (len && (p[len - 1] == ' ' || p[len - 1] == '\t' ||
+                   p[len - 1] == '\r'))
+      p[--len] = '\0';
+    if (*p)
+      arg = p;
+  }
+  if (!*interp || depth >= SHEBANG_DEPTH)
+    return NULL;
+
+  int argc = 0;
+  if (argv)
+    while (argv[argc])
+      argc++;
+  char **sargv = kmalloc(sizeof(char *) * (argc + 4), GFP_KERNEL);
+  if (!sargv)
+    return NULL;
+  int k = 0;
+  sargv[k++] = interp;
+  if (arg)
+    sargv[k++] = arg;
+  sargv[k++] = (char *)path;
+  for (int i = 1; i < argc; i++) /* argv[0] is replaced by the path */
+    sargv[k++] = argv[i];
+  sargv[k] = NULL;
+
+  task_t *task = execv_depth(interp, sargv, envp, depth + 1);
+  kfree(sargv);
+  return task;
+}
+
 /**
  * @brief Load an ELF binary and create a task for it
+ *
+ * Windows executables go to the PE loader and "#!" scripts to their
+ * interpreter.
  *
  * @param path VFS path to the ELF executable
  * @return Pointer to the new task, or NULL on failure
  */
 task_t *execv(const char *path, char *const argv[], char *const envp[]) {
+  return execv_depth(path, argv, envp, 0);
+}
+
+static task_t *execv_depth(const char *path, char *const argv[],
+                           char *const envp[], int depth) {
   if (is_pe(path))
     return execv_pe(path, argv, envp);
+  task_t *script = execv_script(path, argv, envp, depth);
+  if (script)
+    return script;
 
   uint64_t *pml4 = vmm_create_user_pagemap();
   vm_map_t *vm_map = vm_map_create();

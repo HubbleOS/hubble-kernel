@@ -9,13 +9,15 @@
 
 use alloc::string::String;
 use core::arch::x86_64::__cpuid;
+use core::ffi::c_char;
 use core::fmt::Write;
 
 use alloc::vec;
 
 use crate::kernel::{
-    hpet_get_time_ns, pmm_get_stats, printk_get_console_level, printk_get_log, printk_log_size,
-    printk_set_console_level, smp_get_cpu_count, vfs_get_mounts,
+    hpet_get_time_ns, net_proc_dev, net_proc_raw, net_proc_route, net_proc_tcp, net_proc_udp,
+    pmm_get_stats, printk_get_console_level, printk_get_log, printk_log_size,
+    printk_set_console_level, smp_get_cpu_count, unix_proc_net, vfs_get_mounts,
 };
 use crate::pid;
 
@@ -75,8 +77,108 @@ pub static FILES: &[ProcFile] = &[
     },
 ];
 
+/// /proc/net: what ifconfig, route and netstat read.
+pub static NET_FILES: &[ProcFile] = &[
+    ProcFile {
+        name: c"dev",
+        generate: net_dev,
+        write: None,
+    },
+    ProcFile {
+        name: c"route",
+        generate: net_route,
+        write: None,
+    },
+    ProcFile {
+        name: c"tcp",
+        generate: net_tcp,
+        write: None,
+    },
+    ProcFile {
+        name: c"udp",
+        generate: net_udp,
+        write: None,
+    },
+    ProcFile {
+        name: c"raw",
+        generate: net_raw,
+        write: None,
+    },
+    ProcFile {
+        name: c"tcp6",
+        generate: net_tcp6,
+        write: None,
+    },
+    ProcFile {
+        name: c"udp6",
+        generate: net_udp6,
+        write: None,
+    },
+    ProcFile {
+        name: c"raw6",
+        generate: net_raw6,
+        write: None,
+    },
+    ProcFile {
+        name: c"unix",
+        generate: net_unix,
+        write: None,
+    },
+];
+
 pub fn find(name: &[u8]) -> Option<&'static ProcFile> {
     FILES.iter().find(|f| f.name.to_bytes() == name)
+}
+
+pub fn find_net(name: &[u8]) -> Option<&'static ProcFile> {
+    NET_FILES.iter().find(|f| f.name.to_bytes() == name)
+}
+
+/// Text the kernel writes into a buffer (as many lines as there are
+/// interfaces or sockets; 64 KiB is far more than that).
+fn from_kernel(out: &mut String, fill: impl FnOnce(*mut c_char, usize) -> usize) {
+    let mut buf = vec![0u8; 64 * 1024];
+    let n = fill(buf.as_mut_ptr() as *mut c_char, buf.len());
+    buf.truncate(n);
+    out.push_str(&String::from_utf8_lossy(&buf));
+}
+
+fn net_dev(out: &mut String) {
+    from_kernel(out, |b, n| unsafe { net_proc_dev(b, n) });
+}
+
+fn net_route(out: &mut String) {
+    from_kernel(out, |b, n| unsafe { net_proc_route(b, n) });
+}
+
+fn net_tcp(out: &mut String) {
+    from_kernel(out, |b, n| unsafe { net_proc_tcp(b, n, false) });
+}
+
+fn net_udp(out: &mut String) {
+    from_kernel(out, |b, n| unsafe { net_proc_udp(b, n, false) });
+}
+
+fn net_raw(out: &mut String) {
+    from_kernel(out, |b, n| unsafe { net_proc_raw(b, n, false) });
+}
+
+// No IPv6: these have only their header, which is what Linux shows
+// with no IPv6 sockets.
+fn net_tcp6(out: &mut String) {
+    from_kernel(out, |b, n| unsafe { net_proc_tcp(b, n, true) });
+}
+
+fn net_udp6(out: &mut String) {
+    from_kernel(out, |b, n| unsafe { net_proc_udp(b, n, true) });
+}
+
+fn net_raw6(out: &mut String) {
+    from_kernel(out, |b, n| unsafe { net_proc_raw(b, n, true) });
+}
+
+fn net_unix(out: &mut String) {
+    from_kernel(out, |b, n| unsafe { unix_proc_net(b, n) });
 }
 
 /// One line per task: pid ppid state cpu name.

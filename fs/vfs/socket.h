@@ -32,6 +32,9 @@ typedef struct {
 /** A new unconnected socket (one reference). */
 file_t *unix_socket_create(void);
 
+/** A SOCK_DGRAM socket: good only for ioctls (see socket.c). */
+file_t *unix_dgram_create(void);
+
 /** Two sockets connected to each other (socketpair). */
 int unix_socketpair(file_t **a, file_t **b);
 
@@ -74,3 +77,6 @@ long unix_peer_pid(file_t *sock);
 
 /** shutdown(2): @p read and/or @p write side. */
 long unix_shutdown(file_t *sock, bool read, bool write);
+
+/** /proc/net/unix: the bound sockets, as Linux lists them. */
+size_t unix_proc_net(char *buf, size_t size);

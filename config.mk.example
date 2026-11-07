@@ -78,8 +78,8 @@
 # CONFIG_MOD_VIDEO := y
 # MOD_VIDEO_CFLAGS :=
 
-# net.ko: e1000 network card.
-# CONFIG_MOD_NET := m
+# net.ko: Intel e1000 and e1000e (82574L) network cards.
+# CONFIG_MOD_NET := y
 # MOD_NET_CFLAGS :=
 
 # ---------------------------------------------------------------------------
@@ -143,6 +143,14 @@
 # a shutdown, so the last screen can be read. n: reboot / exit.
 # QEMU_NO_REBOOT := y
 # QEMU_NO_SHUTDOWN := y
+
+# Network card on QEMU's user-mode network: e1000, e1000e or none. The
+# guest gets 10.0.2.15 by DHCP; the host is 10.0.2.2, DNS 10.0.2.3.
+# QEMU_NIC := e1000
+
+# Host ports forwarded into the guest (space separated, QEMU's hostfwd
+# form), e.g. tcp::8080-:80 so http://localhost:8080 reaches httpd -p 80.
+# QEMU_HOSTFWD :=
 
 # Extra QEMU arguments, e.g. QEMU_ARGS := -device rtl8139
 # QEMU_ARGS :=

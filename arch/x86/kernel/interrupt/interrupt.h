@@ -76,6 +76,8 @@ void irq_clear_mask(uint8_t irq);
 
 void irq_install_handler(uint8_t irq, irq_handler_t handler);
 void irq_uninstall_handler(uint8_t irq);
+/** Install @p handler unless @p irq already has one. @return installed */
+bool irq_install_handler_if_free(uint8_t irq, irq_handler_t handler);
 
 /* -- Common Handlers ------------------------------------------- */
 

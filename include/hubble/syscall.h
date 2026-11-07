@@ -38,6 +38,9 @@
 #define SYS_writev 20
 #define SYS_access 21
 #define SYS_nanosleep 35
+#define SYS_getitimer 36
+#define SYS_alarm 37
+#define SYS_setitimer 38
 #define SYS_clone 56
 #define SYS_fork 57
 #define SYS_vfork 58
@@ -45,7 +48,15 @@
 #define SYS_exit 60
 #define SYS_wait4 61
 #define SYS_uname 63
+#define SYS_select 23
 #define SYS_madvise 28
+#define SYS_epoll_create 213
+#define SYS_epoll_wait 232
+#define SYS_epoll_ctl 233
+#define SYS_pselect6 270
+#define SYS_ppoll 271
+#define SYS_epoll_pwait 281
+#define SYS_epoll_create1 291
 #define SYS_setsockopt 54
 #define SYS_getsockopt 55
 #define SYS_getrlimit 97
@@ -67,6 +78,8 @@
 #define SYS_shutdown 48
 #define SYS_bind 49
 #define SYS_listen 50
+#define SYS_getsockname 51
+#define SYS_getpeername 52
 #define SYS_socketpair 53
 #define SYS_accept4 288
 #define SYS_memfd_create 319
